@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="header-title mb-0">
+            <i class="bi bi-calendar3 me-2"></i>일자별 소요 현황 (D+14)
+        </h2>
+        <div class="text-end">
+            <span class="badge bg-primary">소요량(발주)</span>
+            <span class="badge bg-success">입고</span>
+            <span class="badge bg-danger">재고 부족</span>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-bordered align-middle mb-0" style="font-size: 0.8rem; min-width: 1600px;">
+                    <thead class="table-light text-center">
+                        <tr>
+                            <th rowspan="2" style="width: 180px; vertical-align: middle;" class="bg-light">품목 정보</th>
+                            <th rowspan="2" style="width: 70px; vertical-align: middle;" class="bg-light">구분</th>
+                            <th rowspan="2" style="width: 90px; vertical-align: middle;" class="bg-light border-end-bold">기초재고</th>
+                            {% for dt in date_range %}
+                            <th style="width: 90px; {% if dt.weekday >= 5 %}color: #d9534f; background-color: #fff5f5;{% endif %}">
+                                {{ dt|date:"m/d" }}<br>
+                                <small>({{ dt|date:"D" }})</small>
+                            </th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in inventory_data %}
+                        <tr class="text-center">
+                            <td rowspan="3" class="text-start ps-3 fw-bold bg-white">
+                                <div class="text-primary small mb-1">{{ item.vendor_name }}</div>
+                                <div class="mb-1 text-dark">{{ item.part_no }}</div>
+                                <div class="small text-secondary fw-normal">{{ item.part_name }}</div>
+                            </td>
+                            <td class="bg-light small">소요량</td>
+                            <td rowspan="3" class="fw-bold fs-6 border-end-bold text-center bg-white">
+                                {{ item.base_stock|intcomma }}
+                            </td>
+                            {% for day in item.daily_status %}
+                            <td class="text-primary">
+                                {% if day.order_qty > 0 %}{{ day.order_qty|intcomma }}{% else %}-{% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+
+                        <tr class="text-center">
+                            <td class="bg-light small">입고량</td>
+                            {% for day in item.daily_status %}
+                            <td class="text-success">
+                                {% if day.in_qty > 0 %}{{ day.in_qty|intcomma }}{% else %}-{% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+
+                        <tr class="text-center border-bottom-bold">
+                            <td class="bg-light small fw-bold">과부족</td>
+                            {% for day in item.daily_status %}
+                            <td class="fw-bold {% if day.is_danger %}bg-danger-light text-danger{% endif %}">
+                                {{ day.stock|intcomma }}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="{{ date_range|length|add:3 }}" class="text-center py-5 text-muted">
+                                등록된 재고 데이터가 없습니다. 관리자 페이지에서 기초재고를 등록해주세요.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* 엑셀 스타일 구현을 위한 CSS */
+    .table-bordered th, .table-bordered td {
+        border: 1px solid #dee2e6 !important;
+        padding: 6px 4px !important;
+    }
+    .header-title { font-size: 1.3rem; font-weight: 700; color: #2c3e50; }
+    
+    /* 강조 선 스타일 */
+    .border-end-bold { border-right: 2px solid #adb5bd !important; }
+    .border-bottom-bold { border-bottom: 2px solid #dee2e6 !important; }
+    
+    /* 재고 부족 시 배경색 */
+    .bg-danger-light { background-color: #fff5f5 !important; }
+    
+    /* 가로 스크롤 시 좌측 품목정보 고정 (선택사항) */
+    .table-responsive {
+        max-height: 70vh;
+        overflow: auto;
+    }
+    .table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+</style>
+{% endblock %}

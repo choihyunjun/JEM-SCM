@@ -1,0 +1,20 @@
+# 가상환경
+venv/
+env/
+
+# 파이썬 캐시
+__pycache__/
+*.pyc
+
+# 로컬 데이터베이스 (깃허브에 올리지 않음)
+db.sqlite3
+
+# 로그 및 보안 파일
+*.log
+.env
+
+# VS Code 설정
+.vscode/
+
+# 사용자 업로드 이미지 등
+media/

@@ -1,0 +1,169 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="mb-3">
+    <span class="badge bg-primary me-2">메뉴</span>
+    <span class="fw-bold text-secondary">발주현황 상세조회</span>
+</div>
+
+<div class="card p-3 mb-3 shadow-sm border-0">
+    <form method="get" id="filter-form" class="row gx-2 gy-3 align-items-end">
+        {% if user.is_superuser %}
+        <div class="col-md-2">
+            <label class="form-label fw-bold small mb-1">협력사</label>
+            <select name="vendor_id" class="form-select form-select-sm">
+                <option value="">전체 업체 보기</option>
+                {% for v in vendor_list %}
+                    <option value="{{ v.id }}" {% if selected_vendor|add:0 == v.id %}selected{% endif %}>{{ v.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+
+        <div class="col-md-1">
+            <label class="form-label fw-bold small mb-1">상태</label>
+            <select name="status" class="form-select form-select-sm">
+                <option value="">전체</option>
+                <option value="unapproved" {% if status_filter == 'unapproved' %}selected{% endif %}>미확인</option>
+                <option value="approved" {% if status_filter == 'approved' %}selected{% endif %}>승인완료</option>
+            </select>
+        </div>
+
+        <div class="col-md-3">
+            <label class="form-label fw-bold small mb-1">납기일 범위</label>
+            <div class="input-group input-group-sm">
+                <input type="date" name="start_date" value="{{ start_date }}" class="form-control">
+                <span class="input-group-text px-2">~</span>
+                <input type="date" name="end_date" value="{{ end_date }}" class="form-control">
+            </div>
+        </div>
+
+        <div class="col-md-2">
+            <label class="form-label fw-bold small mb-1">품번/품명</label>
+            <input type="text" name="q" value="{{ q|default:'' }}" class="form-control form-control-sm" placeholder="검색어 입력">
+        </div>
+
+        <div class="col-md-4"> 
+            <div class="d-flex gap-1">
+                <button type="submit" class="btn btn-primary btn-sm px-2 flex-fill" style="height: 31px;">조회</button>
+                <a href="{% url 'order_list' %}" class="btn btn-secondary btn-sm px-2 flex-fill" style="height: 31px; display: flex; align-items: center; justify-content: center;">초기화</a>
+                
+                {% if user.is_superuser %}
+                <button type="button" class="btn btn-danger btn-sm px-2 flex-fill fw-bold" style="height: 31px;" onclick="deleteSelected();">
+                    <i class="bi bi-trash"></i> 삭제
+                </button>
+                {% endif %}
+
+                <a href="{% url 'order_approve_all' %}" 
+                   class="btn btn-warning btn-sm px-1 flex-fill fw-bold text-dark" 
+                   style="height: 31px; display: flex; align-items: center; justify-content: center; white-space: nowrap;"
+                   onclick="return confirm('미확인 발주를 일괄 승인하시겠습니까?');">
+                    전체승인
+                </a>
+                <a href="{% url 'order_export' %}" class="btn btn-success btn-sm px-2 flex-fill" style="height: 31px; display: flex; align-items: center; justify-content: center;">
+                    엑셀
+                </a>
+            </div>
+        </div>
+    </form>
+</div>
+
+<form id="delete-form" method="post" action="{% url 'order_delete' %}">
+    {% csrf_token %}
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm table-hover mb-0" style="font-size: 0.85rem;">
+                    <thead class="table-light">
+                        <tr class="text-center">
+                            {% if user.is_superuser %}
+                            <th style="width: 40px;"><input type="checkbox" id="checkAll"></th> 
+                            {% endif %}
+                            
+                            <th style="width: 50px;">NO</th>
+                            <th style="width: 90px;">상태</th> 
+                            <th style="width: 100px;">등록일</th> 
+                            <th style="width: 100px;">승인일</th> 
+                            <th>협력사</th>
+                            <th>품목군</th>
+                            <th>품번</th>
+                            <th>품명</th>
+                            <th style="width: 80px;">수량</th>
+                            <th style="width: 100px;">납기일</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for order in orders %}
+                        <tr class="{% if order.approved_at %}table-success{% endif %}" style="--bs-table-bg-opacity: .1;">
+                            {% if user.is_superuser %}
+                            <td class="text-center">
+                                <input type="checkbox" name="order_ids" value="{{ order.id }}">
+                            </td>
+                            {% endif %}
+                            
+                            <td class="text-center">{{ forloop.counter }}</td> 
+                            <td class="text-center">
+                                {% if order.approved_at %}
+                                    <span class="badge bg-success">승인완료</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">미확인</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center text-muted small">{{ order.created_at|date:"Y-m-d" }}</td>
+                            <td class="text-center">
+                                {% if order.approved_at %}
+                                    <span class="text-success fw-bold small">
+                                        {{ order.approved_at|date:"Y-m-d" }} <i class="bi bi-check-circle-fill"></i>
+                                    </span>
+                                {% else %}
+                                    <a href="{% url 'order_approve' order.id %}" 
+                                       class="btn btn-outline-primary btn-sm py-0" 
+                                       style="font-size: 0.75rem;"
+                                       onclick="return confirm('이 발주 건을 승인하시겠습니까?');">
+                                        발주확인
+                                    </a>
+                                {% endif %}
+                            </td>
+                            <td class="text-center fw-bold text-primary">{{ order.vendor.name }}</td>
+                            <td class="text-center">{{ order.part_group|default:"" }}</td>
+                            <td>{{ order.part_no }}</td>
+                            <td>{{ order.part_name }}</td>
+                            <td class="text-end fw-bold">{{ order.quantity|intcomma }}</td>
+                            <td class="text-center">{{ order.due_date|date:"Y-m-d" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="{% if user.is_superuser %}11{% else %}10{% endif %}" class="text-center py-5 text-muted">조회된 데이터가 없습니다.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</form>
+
+<script>
+    // 1. 전체 선택/해제 로직
+    const checkAll = document.getElementById('checkAll');
+    if (checkAll) {
+        checkAll.onclick = function() {
+            let checkboxes = document.getElementsByName('order_ids');
+            for (let checkbox of checkboxes) {
+                checkbox.checked = this.checked;
+            }
+        }
+    }
+
+    // 2. 삭제 버튼 클릭 시 확인 및 제출
+    function deleteSelected() {
+        let selected = document.querySelectorAll('input[name="order_ids"]:checked');
+        if (selected.length === 0) {
+            alert('삭제할 항목을 선택해주세요.');
+            return;
+        }
+        if (confirm('선택한 ' + selected.length + '건의 발주를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) {
+            document.getElementById('delete-form').submit();
+        }
+    }
+</script>
+{% endblock %}
