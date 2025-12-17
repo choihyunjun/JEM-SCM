@@ -62,6 +62,10 @@ def order_upload(request):
 # [3. 엑셀 업로드 처리 - 관리자 전용]
 @login_required
 def order_upload_action(request):
+    """
+    [구조적 개선] 엑셀의 협력사명과 품번이 품목 마스터(Part)에 
+    동시에 존재하는 경우에만 발주를 등록합니다.
+    """
     if not request.user.is_superuser:
         messages.error(request, "발주 등록 권한이 없습니다.")
         return redirect('order_list')
@@ -72,17 +76,23 @@ def order_upload_action(request):
             wb = openpyxl.load_workbook(excel_file)
             ws = wb.active
             created_count = 0
+            skipped_count = 0 
             
             for i, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
                 v_name, p_no, qty, due = row
-                if not v_name or not p_no: continue
+                if not v_name or not p_no: 
+                    skipped_count += 1
+                    continue
 
-                vendor = Vendor.objects.filter(name=v_name).first()
-                part_master = Part.objects.filter(part_no=p_no).first()
+                # [필터링 핵심] 품번과 협력사명이 품목 마스터와 일치하는지 동시 확인
+                part_master = Part.objects.filter(
+                    part_no=p_no, 
+                    vendor__name=v_name
+                ).select_related('vendor').first()
 
-                if vendor and part_master:
+                if part_master:
                     Order.objects.create(
-                        vendor=vendor,
+                        vendor=part_master.vendor,
                         part_no=p_no,
                         part_name=part_master.part_name,
                         part_group=part_master.part_group,
@@ -90,13 +100,16 @@ def order_upload_action(request):
                         due_date=due
                     )
                     created_count += 1
+                else:
+                    # 마스터에 해당 협력사의 품번이 없으면 등록하지 않고 스킵
+                    skipped_count += 1
             
             if created_count > 0:
-                messages.success(request, f"{created_count}건의 발주가 등록되었습니다.")
+                messages.success(request, f"{created_count}건의 발주가 등록되었습니다. (마스터 불일치 {skipped_count}건 제외)")
             else:
-                messages.warning(request, "저장된 데이터가 없습니다. 협력사명과 품번을 확인하세요.")
+                messages.warning(request, f"등록된 데이터가 없습니다. (총 {skipped_count}건이 마스터 정보와 불일치합니다.)")
         except Exception as e:
-            messages.error(request, f"오류 발생: {str(e)}")
+            messages.error(request, f"파일 처리 중 오류 발생: {str(e)}")
             
     return redirect('order_upload')
 
@@ -215,7 +228,7 @@ def inventory_list(request):
     }
     return render(request, 'inventory_list.html', context)
 
-# [8. 과부족 현황 엑셀 내보내기 - 3단계 추가]
+# [8. 과부족 현황 엑셀 내보내기]
 @login_required
 def inventory_export(request):
     user = request.user
@@ -225,7 +238,6 @@ def inventory_export(request):
     show_all = request.GET.get('show_all') == 'true'
     selected_vendor_id = request.GET.get('vendor_id')
     
-    # 리스트 조회와 동일한 필터링 적용
     if user.is_superuser:
         items = Inventory.objects.select_related('part', 'part__vendor').all()
         if selected_vendor_id:
