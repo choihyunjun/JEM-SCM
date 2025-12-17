@@ -9,6 +9,8 @@
 
 <div class="card p-3 mb-3 shadow-sm border-0">
     <form method="get" id="filter-form" class="row gx-2 gy-3 align-items-end">
+        <input type="hidden" name="sort" value="{{ current_sort|default:'due_date' }}">
+
         {% if user.is_superuser %}
         <div class="col-md-2">
             <label class="form-label fw-bold small mb-1">협력사</label>
@@ -76,21 +78,49 @@
             <div class="table-responsive">
                 <table class="table table-bordered table-sm table-hover mb-0" style="font-size: 0.85rem;">
                     <thead class="table-light">
-                        <tr class="text-center">
+                        <tr class="text-center align-middle">
                             {% if user.is_superuser %}
                             <th style="width: 40px;"><input type="checkbox" id="checkAll"></th> 
                             {% endif %}
                             
                             <th style="width: 50px;">NO</th>
                             <th style="width: 90px;">상태</th> 
-                            <th style="width: 100px;">등록일</th> 
+                            <th style="width: 100px;">
+                                <a href="?sort={% if current_sort == 'created_at' %}-created_at{% else %}created_at{% endif %}&vendor_id={{ selected_vendor|default:'' }}&status={{ status_filter|default:'' }}&start_date={{ start_date|default:'' }}&end_date={{ end_date|default:'' }}&q={{ q|default:'' }}" class="text-decoration-none text-dark fw-bold">
+                                    등록일 ↕
+                                </a>
+                            </th> 
                             <th style="width: 100px;">승인일</th> 
-                            <th>협력사</th>
-                            <th>품목군</th>
-                            <th>품번</th>
-                            <th>품명</th>
-                            <th style="width: 80px;">수량</th>
-                            <th style="width: 100px;">납기일</th>
+                            <th>
+                                <a href="?sort={% if current_sort == 'vendor__name' %}-vendor__name{% else %}vendor__name{% endif %}&vendor_id={{ selected_vendor|default:'' }}&status={{ status_filter|default:'' }}&start_date={{ start_date|default:'' }}&end_date={{ end_date|default:'' }}&q={{ q|default:'' }}" class="text-decoration-none text-dark fw-bold">
+                                    협력사 ↕
+                                </a>
+                            </th>
+                            <th>
+                                <a href="?sort={% if current_sort == 'part_group' %}-part_group{% else %}part_group{% endif %}&vendor_id={{ selected_vendor|default:'' }}&status={{ status_filter|default:'' }}&start_date={{ start_date|default:'' }}&end_date={{ end_date|default:'' }}&q={{ q|default:'' }}" class="text-decoration-none text-dark fw-bold">
+                                    품목군 ↕
+                                </a>
+                            </th>
+                            <th>
+                                <a href="?sort={% if current_sort == 'part_no' %}-part_no{% else %}part_no{% endif %}&vendor_id={{ selected_vendor|default:'' }}&status={{ status_filter|default:'' }}&start_date={{ start_date|default:'' }}&end_date={{ end_date|default:'' }}&q={{ q|default:'' }}" class="text-decoration-none text-dark fw-bold">
+                                    품번 ↕
+                                </a>
+                            </th>
+                            <th>
+                                <a href="?sort={% if current_sort == 'part_name' %}-part_name{% else %}part_name{% endif %}&vendor_id={{ selected_vendor|default:'' }}&status={{ status_filter|default:'' }}&start_date={{ start_date|default:'' }}&end_date={{ end_date|default:'' }}&q={{ q|default:'' }}" class="text-decoration-none text-dark fw-bold">
+                                    품명 ↕
+                                </a>
+                            </th>
+                            <th style="width: 80px;">
+                                <a href="?sort={% if current_sort == 'quantity' %}-quantity{% else %}quantity{% endif %}&vendor_id={{ selected_vendor|default:'' }}&status={{ status_filter|default:'' }}&start_date={{ start_date|default:'' }}&end_date={{ end_date|default:'' }}&q={{ q|default:'' }}" class="text-decoration-none text-dark fw-bold">
+                                    수량 ↕
+                                </a>
+                            </th>
+                            <th style="width: 100px;">
+                                <a href="?sort={% if current_sort == 'due_date' %}-due_date{% else %}due_date{% endif %}&vendor_id={{ selected_vendor|default:'' }}&status={{ status_filter|default:'' }}&start_date={{ start_date|default:'' }}&end_date={{ end_date|default:'' }}&q={{ q|default:'' }}" class="text-decoration-none text-dark fw-bold">
+                                    납기일 ↕
+                                </a>
+                            </th>
                         </tr>
                     </thead>
                     <tbody>
@@ -121,7 +151,7 @@
                                        class="btn btn-outline-primary btn-sm py-0" 
                                        style="font-size: 0.75rem;"
                                        onclick="return confirm('이 발주 건을 승인하시겠습니까?');">
-                                        발주확인
+                                         발주확인
                                     </a>
                                 {% endif %}
                             </td>
@@ -130,7 +160,7 @@
                             <td>{{ order.part_no }}</td>
                             <td>{{ order.part_name }}</td>
                             <td class="text-end fw-bold">{{ order.quantity|intcomma }}</td>
-                            <td class="text-center">{{ order.due_date|date:"Y-m-d" }}</td>
+                            <td class="text-center fw-bold">{{ order.due_date|date:"Y-m-d" }}</td>
                         </tr>
                         {% empty %}
                         <tr><td colspan="{% if user.is_superuser %}11{% else %}10{% endif %}" class="text-center py-5 text-muted">조회된 데이터가 없습니다.</td></tr>
@@ -143,7 +173,6 @@
 </form>
 
 <script>
-    // 1. 전체 선택/해제 로직
     const checkAll = document.getElementById('checkAll');
     if (checkAll) {
         checkAll.onclick = function() {
@@ -154,7 +183,6 @@
         }
     }
 
-    // 2. 삭제 버튼 클릭 시 확인 및 제출
     function deleteSelected() {
         let selected = document.querySelectorAll('input[name="order_ids"]:checked');
         if (selected.length === 0) {

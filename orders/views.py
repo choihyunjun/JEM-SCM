@@ -14,40 +14,55 @@ def order_list(request):
     user = request.user
     vendor_list = Vendor.objects.all().order_by('name') if user.is_superuser else []
     
+    # [수정] 정렬 기준 수신 및 'None' 문자열 오류 방지 로직
+    sort_by = request.GET.get('sort', 'due_date')
+    if not sort_by or sort_by == 'None':
+        sort_by = 'due_date'
+
     if user.is_superuser:
-        orders = Order.objects.all().order_by('-created_at')
+        # 선택된 기준 정렬 후 2차로 생성일순 정렬
+        orders = Order.objects.all().order_by(sort_by, '-created_at')
         vendor_name = "전체 관리자"
     elif hasattr(user, 'vendor'): 
-        orders = Order.objects.filter(vendor=user.vendor).order_by('-created_at')
+        orders = Order.objects.filter(vendor=user.vendor).order_by(sort_by, '-created_at')
         vendor_name = user.vendor.name
     else:
         orders = Order.objects.none()
         vendor_name = "소속 없음"
 
+    # [수정] 필터링 시 'None' 문자열 유입으로 인한 ValueError 방지
     selected_vendor = request.GET.get('vendor_id') 
-    if user.is_superuser and selected_vendor:
+    if user.is_superuser and selected_vendor and selected_vendor != 'None':
         orders = orders.filter(vendor_id=selected_vendor)
     
     status_filter = request.GET.get('status')
-    if status_filter == 'unapproved':
-        orders = orders.filter(approved_at__isnull=True)
-    elif status_filter == 'approved':
-        orders = orders.filter(approved_at__isnull=False)
+    if status_filter and status_filter != 'None':
+        if status_filter == 'unapproved':
+            orders = orders.filter(approved_at__isnull=True)
+        elif status_filter == 'approved':
+            orders = orders.filter(approved_at__isnull=False)
 
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
-    if start_date and end_date:
+    if start_date and start_date != 'None' and end_date and end_date != 'None':
         orders = orders.filter(due_date__range=[start_date, end_date])
     
     q = request.GET.get('q', '')
-    if q:
+    if q and q != 'None':
         orders = orders.filter(Q(part_no__icontains=q) | Q(part_name__icontains=q))
 
     context = {
-        'orders': orders, 'user_name': user.username, 'vendor_name': vendor_name,
-        'q': q, 'vendor_list': vendor_list, 'selected_vendor': selected_vendor,
-        'status_filter': status_filter, 'start_date': start_date, 'end_date': end_date,
+        'orders': orders, 
+        'user_name': user.username, 
+        'vendor_name': vendor_name,
+        'q': q if q != 'None' else '', 
+        'vendor_list': vendor_list, 
+        'selected_vendor': selected_vendor if selected_vendor != 'None' else '',
+        'status_filter': status_filter if status_filter != 'None' else '', 
+        'start_date': start_date if start_date != 'None' else '', 
+        'end_date': end_date if end_date != 'None' else '',
         'active_menu': 'list',
+        'current_sort': sort_by, # 현재 정렬 기준 템플릿 전달
     }
     return render(request, 'order_list.html', context)
 
@@ -62,10 +77,6 @@ def order_upload(request):
 # [3. 엑셀 업로드 처리 - 관리자 전용]
 @login_required
 def order_upload_action(request):
-    """
-    [구조적 개선] 엑셀의 협력사명과 품번이 품목 마스터(Part)에 
-    동시에 존재하는 경우에만 발주를 등록합니다.
-    """
     if not request.user.is_superuser:
         messages.error(request, "발주 등록 권한이 없습니다.")
         return redirect('order_list')
@@ -84,7 +95,6 @@ def order_upload_action(request):
                     skipped_count += 1
                     continue
 
-                # [필터링 핵심] 품번과 협력사명이 품목 마스터와 일치하는지 동시 확인
                 part_master = Part.objects.filter(
                     part_no=p_no, 
                     vendor__name=v_name
@@ -101,7 +111,6 @@ def order_upload_action(request):
                     )
                     created_count += 1
                 else:
-                    # 마스터에 해당 협력사의 품번이 없으면 등록하지 않고 스킵
                     skipped_count += 1
             
             if created_count > 0:
@@ -180,7 +189,7 @@ def order_export(request):
     wb.save(response)
     return response
 
-# [7. 과부족 조회 현황 - D+14 필터링 강화 버전]
+# [7. 과부족 조회 현황]
 @login_required
 def inventory_list(request):
     user = request.user
@@ -203,7 +212,7 @@ def inventory_list(request):
         inventory_items = Inventory.objects.none()
         vendor_name = "소속 없음"
 
-    if user.is_superuser and selected_vendor_id:
+    if user.is_superuser and selected_vendor_id and selected_vendor_id != 'None':
         inventory_items = inventory_items.filter(part__vendor_id=selected_vendor_id)
 
     if not show_all:
@@ -240,7 +249,7 @@ def inventory_export(request):
     
     if user.is_superuser:
         items = Inventory.objects.select_related('part', 'part__vendor').all()
-        if selected_vendor_id:
+        if selected_vendor_id and selected_vendor_id != 'None':
             items = items.filter(part__vendor_id=selected_vendor_id)
     elif hasattr(user, 'vendor'):
         items = Inventory.objects.select_related('part', 'part__vendor').filter(part__vendor=user.vendor)
