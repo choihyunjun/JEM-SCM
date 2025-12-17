@@ -27,6 +27,7 @@ urlpatterns = [
     path('approve/<int:order_id>/', views.order_approve, name='order_approve'),
     path('approve-all/', views.order_approve_all, name='order_approve_all'),
 
-    # 5. [신규] 과부족 조회 기능
+    # 5. 과부족 조회 및 엑셀 출력 기능
     path('inventory/', views.inventory_list, name='inventory_list'),
+    path('inventory/export/', views.inventory_export, name='inventory_export'), # <-- [신규 추가]
 ]

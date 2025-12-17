@@ -24,7 +24,6 @@ def order_list(request):
         orders = Order.objects.none()
         vendor_name = "소속 없음"
 
-    # 필터링 로직
     selected_vendor = request.GET.get('vendor_id') 
     if user.is_superuser and selected_vendor:
         orders = orders.filter(vendor_id=selected_vendor)
@@ -101,7 +100,7 @@ def order_upload_action(request):
             
     return redirect('order_upload')
 
-# [4. 선택 발주 삭제 - 관리자 전용]
+# [4. 선택 발주 삭제]
 @login_required
 def order_delete(request):
     if request.method == 'POST':
@@ -168,77 +167,104 @@ def order_export(request):
     wb.save(response)
     return response
 
-# [7. 과부족 조회 현황 - D+14 일자별 수급표 및 업체별 필터링 버전]
+# [7. 과부족 조회 현황 - D+14 필터링 강화 버전]
 @login_required
 def inventory_list(request):
-    """
-    오늘부터 D+14일까지 일자별 과부족 현황을 보여줍니다.
-    """
     user = request.user
     today = timezone.now().date()
-    # 오늘부터 14일간의 날짜 리스트 생성
+    end_date = today + timedelta(days=14)
     date_range = [today + timedelta(days=i) for i in range(15)]
     
-    # 1. 권한에 따른 데이터 필터링 [수정 핵심]
+    show_all = request.GET.get('show_all') == 'true'
+    selected_vendor_id = request.GET.get('vendor_id')
+    
+    vendor_list = []
     if user.is_superuser:
-        # 관리자는 모든 품목 조회 가능
         inventory_items = Inventory.objects.select_related('part', 'part__vendor').all()
+        vendor_list = Vendor.objects.all().order_by('name')
         vendor_name = "전체 관리자"
     elif hasattr(user, 'vendor'):
-        # 협력사 담당자는 자기 업체 품목만 조회 가능
-        inventory_items = Inventory.objects.select_related('part', 'part__vendor').filter(
-            part__vendor=user.vendor
-        )
+        inventory_items = Inventory.objects.select_related('part', 'part__vendor').filter(part__vendor=user.vendor)
         vendor_name = user.vendor.name
     else:
-        # 소속 없음
         inventory_items = Inventory.objects.none()
         vendor_name = "소속 없음"
+
+    if user.is_superuser and selected_vendor_id:
+        inventory_items = inventory_items.filter(part__vendor_id=selected_vendor_id)
+
+    if not show_all:
+        active_part_nos = Order.objects.filter(due_date__range=[today, end_date]).values_list('part_no', flat=True).distinct()
+        inventory_items = inventory_items.filter(part__part_no__in=active_part_nos)
     
     inventory_data = []
-    
     for item in inventory_items:
         daily_status = []
-        # 계산의 기초는 Inventory 모델의 base_stock (현재고)
         running_stock = item.base_stock  
-        
         for dt in date_range:
-            # 해당 날짜의 발주(소요량) 합계
-            daily_order = Order.objects.filter(
-                part_no=item.part.part_no, 
-                due_date=dt
-            ).aggregate(Sum('quantity'))['quantity__sum'] or 0
-            
-            # 해당 날짜의 입고(Incoming) 합계
-            daily_in = Incoming.objects.filter(
-                part=item.part,
-                in_date=dt
-            ).aggregate(Sum('quantity'))['quantity__sum'] or 0
-            
-            # 누적 재고 계산: 전일재고 - 오늘소요 + 오늘입고
+            daily_order = Order.objects.filter(part_no=item.part.part_no, due_date=dt).aggregate(Sum('quantity'))['quantity__sum'] or 0
+            daily_in = Incoming.objects.filter(part=item.part, in_date=dt).aggregate(Sum('quantity'))['quantity__sum'] or 0
             running_stock = running_stock - daily_order + daily_in
+            daily_status.append({'date': dt, 'order_qty': daily_order, 'in_qty': daily_in, 'stock': running_stock, 'is_danger': running_stock < 0})
             
-            daily_status.append({
-                'date': dt,
-                'order_qty': daily_order,
-                'in_qty': daily_in,
-                'stock': running_stock,
-                'is_danger': running_stock < 0
-            })
-            
-        inventory_data.append({
-            'vendor_name': item.part.vendor.name,
-            'part_no': item.part.part_no,
-            'part_name': item.part.part_name,
-            'base_stock': item.base_stock,
-            'daily_status': daily_status,
-        })
+        inventory_data.append({'vendor_name': item.part.vendor.name, 'part_no': item.part.part_no, 'part_name': item.part.part_name, 'base_stock': item.base_stock, 'daily_status': daily_status})
 
     context = {
-        'date_range': date_range,
-        'inventory_data': inventory_data,
-        'user_name': user.username,
-        'vendor_name': vendor_name,
-        'active_menu': 'inventory',
+        'date_range': date_range, 'inventory_data': inventory_data, 'user_name': user.username, 'vendor_name': vendor_name,
+        'active_menu': 'inventory', 'show_all': show_all, 'vendor_list': vendor_list, 'selected_vendor_id': selected_vendor_id,
     }
     return render(request, 'inventory_list.html', context)
+
+# [8. 과부족 현황 엑셀 내보내기 - 3단계 추가]
+@login_required
+def inventory_export(request):
+    user = request.user
+    today = timezone.now().date()
+    date_range = [today + timedelta(days=i) for i in range(15)]
+    
+    show_all = request.GET.get('show_all') == 'true'
+    selected_vendor_id = request.GET.get('vendor_id')
+    
+    # 리스트 조회와 동일한 필터링 적용
+    if user.is_superuser:
+        items = Inventory.objects.select_related('part', 'part__vendor').all()
+        if selected_vendor_id:
+            items = items.filter(part__vendor_id=selected_vendor_id)
+    elif hasattr(user, 'vendor'):
+        items = Inventory.objects.select_related('part', 'part__vendor').filter(part__vendor=user.vendor)
+    else:
+        return redirect('inventory_list')
+
+    if not show_all:
+        active_nos = Order.objects.filter(due_date__range=[today, today + timedelta(days=14)]).values_list('part_no', flat=True).distinct()
+        items = items.filter(part__part_no__in=active_nos)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "D+14_수급현황"
+
+    header = ['협력사', '품번', '품명', '구분', '기초재고'] + [dt.strftime('%m/%d') for dt in date_range]
+    ws.append(header)
+
+    for item in items:
+        running_stock = item.base_stock
+        row_order = [item.part.vendor.name, item.part.part_no, item.part.part_name, '소요량', item.base_stock]
+        row_in = ['', '', '', '입고량', '']
+        row_stock = ['', '', '', '과부족', '']
+
+        for dt in date_range:
+            d_order = Order.objects.filter(part_no=item.part.part_no, due_date=dt).aggregate(Sum('quantity'))['quantity__sum'] or 0
+            d_in = Incoming.objects.filter(part=item.part, in_date=dt).aggregate(Sum('quantity'))['quantity__sum'] or 0
+            running_stock = running_stock - d_order + d_in
+            row_order.append(d_order)
+            row_in.append(d_in)
+            row_stock.append(running_stock)
+
+        ws.append(row_order)
+        ws.append(row_in)
+        ws.append(row_stock)
+
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename=Inventory_Status_{today}.xlsx'
+    wb.save(response)
+    return response

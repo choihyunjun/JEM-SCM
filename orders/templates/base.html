@@ -15,9 +15,30 @@
         .nav-link:hover { background: #34495e; color: white; }
         .nav-link.active { background: #860505; color: white; font-weight: bold; }
         .content-area { flex-grow: 1; display: flex; flex-direction: column; overflow-x: hidden; }
-        .top-nav { background: #860505; color: white; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; }
+        
+        /* [수정 핵심] 상단바 배경과 글자색 강제 고정 */
+        .top-nav { 
+            background: #860505 !important; 
+            color: white !important; 
+            padding: 10px 20px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+        }
         .main-wrapper { padding: 20px; }
-        .header-title { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.5px; }
+        
+        /* [수정 핵심] 진영전기 SCM 제목 글자색 흰색 강제 */
+        .top-nav .header-title { 
+            font-size: 1.4rem; 
+            font-weight: 700; 
+            letter-spacing: -0.5px; 
+            color: white !important; 
+        }
+        
+        /* [수정 핵심] 상단바 내부 모든 span과 아이콘 색상 흰색 강제 */
+        .top-nav span, .top-nav i { 
+            color: white !important; 
+        }
     </style>
 </head>
 <body>

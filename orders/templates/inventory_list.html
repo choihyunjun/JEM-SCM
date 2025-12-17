@@ -3,14 +3,48 @@
 
 {% block content %}
 <div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <h2 class="header-title mb-0">
             <i class="bi bi-calendar3 me-2"></i>일자별 소요 현황 (D+14)
+            {% if not show_all %}
+                <span class="badge bg-info ms-2" style="font-size: 0.7rem; vertical-align: middle;">발주 품목만 표시 중</span>
+            {% endif %}
         </h2>
-        <div class="text-end">
-            <span class="badge bg-primary">소요량(발주)</span>
-            <span class="badge bg-success">입고</span>
-            <span class="badge bg-danger">재고 부족</span>
+        
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            {% if user.is_superuser %}
+            <form method="get" class="d-flex align-items-center me-2">
+                <input type="hidden" name="show_all" value="{{ show_all|lower }}">
+                <select name="vendor_id" class="form-select form-select-sm shadow-sm" onchange="this.form.submit()" style="width: 180px; border-color: #0d6efd;">
+                    <option value="">== 업체 전체 선택 ==</option>
+                    {% for v in vendor_list %}
+                        <option value="{{ v.id }}" {% if selected_vendor_id == v.id|stringformat:"s" %}selected{% endif %}>
+                            {{ v.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </form>
+            {% endif %}
+
+            <a href="{% url 'inventory_export' %}?show_all={{ show_all|lower }}&vendor_id={{ selected_vendor_id|default:'' }}" 
+               class="btn btn-sm btn-success shadow-sm me-2">
+                <i class="bi bi-file-earmark-excel me-1"></i>엑셀 저장
+            </a>
+
+            <div class="btn-group me-2 shadow-sm">
+                <a href="?show_all=false&vendor_id={{ selected_vendor_id|default:'' }}" class="btn btn-sm {% if not show_all %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                    📌 발주 품목만
+                </a>
+                <a href="?show_all=true&vendor_id={{ selected_vendor_id|default:'' }}" class="btn btn-sm {% if show_all %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                    🔍 전체 품목
+                </a>
+            </div>
+
+            <div class="text-end">
+                <span class="badge bg-primary">소요량(발주)</span>
+                <span class="badge bg-success">입고</span>
+                <span class="badge bg-danger">재고 부족</span>
+            </div>
         </div>
     </div>
 
@@ -70,7 +104,12 @@
                         {% empty %}
                         <tr>
                             <td colspan="{{ date_range|length|add:3 }}" class="text-center py-5 text-muted">
-                                등록된 재고 데이터가 없습니다. 관리자 페이지에서 기초재고를 등록해주세요.
+                                {% if not show_all %}
+                                    <i class="bi bi-info-circle me-2"></i>조회 조건에 맞는 발주 데이터가 없습니다. <br>
+                                    <a href="?show_all=true&vendor_id={{ selected_vendor_id|default:'' }}" class="btn btn-link btn-sm text-decoration-none mt-2">전체 품목 리스트 확인하기</a>
+                                {% else %}
+                                    <i class="bi bi-exclamation-triangle me-2"></i>표시할 품목 데이터가 없습니다.
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}
@@ -82,29 +121,12 @@
 </div>
 
 <style>
-    /* 엑셀 스타일 구현을 위한 CSS */
-    .table-bordered th, .table-bordered td {
-        border: 1px solid #dee2e6 !important;
-        padding: 6px 4px !important;
-    }
+    .table-bordered th, .table-bordered td { border: 1px solid #dee2e6 !important; padding: 6px 4px !important; }
     .header-title { font-size: 1.3rem; font-weight: 700; color: #2c3e50; }
-    
-    /* 강조 선 스타일 */
     .border-end-bold { border-right: 2px solid #adb5bd !important; }
     .border-bottom-bold { border-bottom: 2px solid #dee2e6 !important; }
-    
-    /* 재고 부족 시 배경색 */
     .bg-danger-light { background-color: #fff5f5 !important; }
-    
-    /* 가로 스크롤 시 좌측 품목정보 고정 (선택사항) */
-    .table-responsive {
-        max-height: 70vh;
-        overflow: auto;
-    }
-    .table thead th {
-        position: sticky;
-        top: 0;
-        z-index: 10;
-    }
+    .table-responsive { max-height: 75vh; overflow: auto; }
+    .table thead th { position: sticky; top: 0; z-index: 10; background-color: #f8f9fa; }
 </style>
 {% endblock %}
