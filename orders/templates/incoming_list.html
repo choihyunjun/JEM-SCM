@@ -1,0 +1,115 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="mb-4">
+    <span class="badge bg-primary me-2">입고 관리</span>
+    <span class="fw-bold text-secondary">입고 처리 및 이력 조회</span>
+</div>
+
+{% if user.is_superuser %}
+<div class="card border-success shadow-sm mb-4">
+    <div class="card-header bg-success text-white fw-bold">
+        <i class="bi bi-qr-code-scan"></i> 입고 스캔 (QR)
+    </div>
+    <div class="card-body bg-success-subtle d-flex align-items-center justify-content-between">
+        <div class="d-flex align-items-center">
+            <i class="bi bi-box-seam fs-1 text-success me-3"></i>
+            <div>
+                <h5 class="fw-bold mb-1 text-success">납품서 입고 처리</h5>
+                <small class="text-muted">납품서 하단의 QR코드를 스캔하면 즉시 <strong>재고</strong>가 증가합니다.</small>
+            </div>
+        </div>
+        
+        <form action="{% url 'receive_delivery_order_scan' %}" method="post" class="d-flex align-items-center">
+            {% csrf_token %}
+            <div class="input-group input-group-lg">
+                <span class="input-group-text bg-white text-success"><i class="bi bi-upc-scan"></i></span>
+                <input type="text" name="qr_code" class="form-control border-success" 
+                       placeholder="여기를 클릭 후 스캔" style="width: 300px;" autofocus autocomplete="off">
+                <button type="submit" class="btn btn-success fw-bold">입고확정</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<div class="card border-0 shadow-sm mb-4 bg-light">
+    <div class="card-body p-3">
+        <form method="get" class="row g-2 align-items-center">
+            <div class="col-auto">
+                <span class="fw-bold text-secondary me-2"><i class="bi bi-calendar-check"></i> 기간 조회</span>
+            </div>
+            <div class="col-auto">
+                <input type="date" name="start_date" class="form-control form-control-sm" value="{{ start_date }}">
+            </div>
+            <div class="col-auto">~</div>
+            <div class="col-auto">
+                <input type="date" name="end_date" class="form-control form-control-sm" value="{{ end_date }}">
+            </div>
+            
+            <div class="col-auto ms-4">
+                <span class="fw-bold text-secondary me-2"><i class="bi bi-search"></i> 검색</span>
+            </div>
+            <div class="col-auto">
+                <input type="text" name="q" class="form-control form-control-sm" placeholder="품번 또는 품명" value="{{ q }}">
+            </div>
+            
+            <div class="col-auto ms-auto">
+                <button type="submit" class="btn btn-primary btn-sm fw-bold px-3">
+                    <i class="bi bi-funnel-fill"></i> 조회
+                </button>
+                <a href="{% url 'incoming_list' %}" class="btn btn-secondary btn-sm fw-bold px-3">
+                    <i class="bi bi-arrow-counterclockwise"></i> 초기화
+                </a>
+                
+                <a href="{% url 'incoming_export' %}?{{ request.GET.urlencode }}" class="btn btn-success btn-sm fw-bold px-3">
+                    <i class="bi bi-file-earmark-excel-fill"></i> 엑셀 다운
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-dark text-white fw-bold d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-clock-history"></i> 입고 완료 내역</span>
+        <span class="badge bg-secondary">{{ incomings.count|default:"0" }}건</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 text-center align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>입고일자</th>
+                        <th>협력사</th>
+                        <th>품번</th>
+                        <th>품명</th>
+                        <th>입고수량</th>
+                        <th>처리일시</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in incomings %}
+                    <tr>
+                        <td><span class="badge bg-light text-dark border">{{ item.in_date|date:"Y-m-d" }}</span></td>
+                        <td class="text-start ps-4">{{ item.part.vendor.name }}</td>
+                        <td class="fw-bold text-primary">{{ item.part.part_no }}</td>
+                        <td class="text-start">{{ item.part.part_name }}</td>
+                        <td class="fw-bold text-end pe-4">{{ item.quantity|intcomma }}</td>
+                        <td class="text-muted small">{{ item.created_at|date:"Y-m-d H:i" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="py-5 text-muted">
+                            <i class="bi bi-inbox fs-1 d-block mb-3"></i>
+                            검색된 입고 내역이 없습니다.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

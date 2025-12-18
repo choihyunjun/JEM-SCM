@@ -29,6 +29,7 @@
                 <option value="">전체</option>
                 <option value="unapproved" {% if status_filter == 'unapproved' %}selected{% endif %}>미확인</option>
                 <option value="approved" {% if status_filter == 'approved' %}selected{% endif %}>승인완료</option>
+                <option value="closed" {% if status_filter == 'closed' %}selected{% endif %}>발주마감</option>
             </select>
         </div>
 
@@ -55,6 +56,9 @@
                 <button type="button" class="btn btn-danger btn-sm px-2 flex-fill fw-bold" style="height: 31px;" onclick="deleteSelected();">
                     <i class="bi bi-trash"></i> 삭제
                 </button>
+                <button type="button" class="btn btn-dark btn-sm px-2 flex-fill fw-bold" style="height: 31px;" onclick="closeSelected();">
+                    <i class="bi bi-check-all"></i> 마감처리
+                </button>
                 {% endif %}
 
                 <a href="{% url 'order_approve_all' %}" 
@@ -71,7 +75,7 @@
     </form>
 </div>
 
-<form id="delete-form" method="post" action="{% url 'order_delete' %}">
+<form id="action-form" method="post">
     {% csrf_token %}
     <div class="card shadow-sm border-0">
         <div class="card-body p-0">
@@ -125,7 +129,7 @@
                     </thead>
                     <tbody>
                         {% for order in orders %}
-                        <tr class="{% if order.approved_at %}table-success{% endif %}" style="--bs-table-bg-opacity: .1;">
+                        <tr class="{% if order.is_closed %}table-secondary text-muted{% elif order.approved_at %}table-success{% endif %}" style="--bs-table-bg-opacity: .1;">
                             {% if user.is_superuser %}
                             <td class="text-center">
                                 <input type="checkbox" name="order_ids" value="{{ order.id }}">
@@ -134,7 +138,9 @@
                             
                             <td class="text-center">{{ forloop.counter }}</td> 
                             <td class="text-center">
-                                {% if order.approved_at %}
+                                {% if order.is_closed %}
+                                    <span class="badge bg-danger">발주마감</span>
+                                {% elif order.approved_at %}
                                     <span class="badge bg-success">승인완료</span>
                                 {% else %}
                                     <span class="badge bg-secondary">미확인</span>
@@ -142,7 +148,9 @@
                             </td>
                             <td class="text-center text-muted small">{{ order.created_at|date:"Y-m-d" }}</td>
                             <td class="text-center">
-                                {% if order.approved_at %}
+                                {% if order.is_closed %}
+                                    <span class="text-muted small">-</span>
+                                {% elif order.approved_at %}
                                     <span class="text-success fw-bold small">
                                         {{ order.approved_at|date:"Y-m-d" }} <i class="bi bi-check-circle-fill"></i>
                                     </span>
@@ -183,6 +191,7 @@
         }
     }
 
+    // [수정] 삭제 기능: 폼 액션을 삭제 URL로 변경 후 제출
     function deleteSelected() {
         let selected = document.querySelectorAll('input[name="order_ids"]:checked');
         if (selected.length === 0) {
@@ -190,7 +199,23 @@
             return;
         }
         if (confirm('선택한 ' + selected.length + '건의 발주를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) {
-            document.getElementById('delete-form').submit();
+            const form = document.getElementById('action-form');
+            form.action = "{% url 'order_delete' %}"; // 삭제 URL
+            form.submit();
+        }
+    }
+
+    // [추가] 마감 기능: 폼 액션을 마감 URL로 변경 후 제출
+    function closeSelected() {
+        let selected = document.querySelectorAll('input[name="order_ids"]:checked');
+        if (selected.length === 0) {
+            alert('마감할 항목을 선택해주세요.');
+            return;
+        }
+        if (confirm('선택한 ' + selected.length + '건의 발주를 마감 처리하시겠습니까?\n마감된 발주는 라벨 발행 및 소요량 집계에서 제외됩니다.')) {
+            const form = document.getElementById('action-form');
+            form.action = "{% url 'order_close_action' %}"; // [2단계]에서 만든 URL과 매칭 필요
+            form.submit();
         }
     }
 </script>

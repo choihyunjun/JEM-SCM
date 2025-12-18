@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>라벨 인쇄</title>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.0/dist/JsBarcode.all.min.js"></script>
+    <style>
+        /* ========================================= */
+        /* [공통] 기본 스타일 */
+        /* ========================================= */
+        body {
+            font-family: 'Malgun Gothic', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0; /* 화면 배경색 */
+        }
+
+        /* 인쇄 설정 버튼 영역 (화면에만 보임) */
+        .no-print {
+            padding: 20px;
+            text-align: center;
+            background-color: #333;
+            color: white;
+            border-bottom: 1px solid #ccc;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            background-color: white;
+            color: #333;
+            text-decoration: none;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+            border: none;
+            margin: 5px;
+            font-weight: bold;
+        }
+
+        /* ========================================= */
+        /* [핵심 1] A4 용지 레이아웃 (Sheet) 정의 */
+        /* ========================================= */
+        .sheet {
+            width: 210mm;
+            height: 296mm; /* 297mm에서 미세한 오차 방지 */
+            background: white;
+            margin: 10px auto; /* 화면 중앙 정렬 */
+            padding: 10mm;     /* 용지 내부 여백 */
+            box-sizing: border-box;
+            box-shadow: 0 0 10px rgba(0,0,0,0.3); /* 종이 그림자 효과 */
+            
+            /* 그리드 시스템: 2열 4행 */
+            display: flex;
+            flex-wrap: wrap;
+            align-content: flex-start;
+        }
+
+        /* ========================================= */
+        /* [핵심 2] 개별 라벨 컨테이너 (2x4 배치) */
+        /* ========================================= */
+        .label-outer {
+            width: 50%;   /* 가로 2개 */
+            height: 25%;  /* 세로 4개 */
+            box-sizing: border-box;
+            padding: 5px; /* 라벨 사이의 간격 */
+        }
+
+        /* 실제 라벨 디자인 (테두리 및 내용물) */
+        .label-inner {
+            width: 100%;
+            height: 100%;
+            border: 2px solid black; /* 실제 인쇄되는 테두리 */
+            box-sizing: border-box;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+        }
+
+        /* 내부 요소 스타일 */
+        .header {
+            border-bottom: 2px solid black;
+            padding-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        
+        .content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+        .part-name { font-size: 16px; font-weight: bold; margin-bottom: 5px; }
+        .part-no { font-size: 32px; font-weight: 900; margin: 5px 0; letter-spacing: -1px;}
+        .snp-info { font-size: 20px; font-weight: bold; margin-top: 5px; }
+        
+        .barcode-area { text-align: center; margin-top: 5px; }
+        .page-number {
+            position: absolute;
+            bottom: 5px;
+            right: 10px;
+            font-size: 10px;
+        }
+
+        /* ========================================= */
+        /* [핵심 3] 인쇄 전용 스타일 (@media print) */
+        /* ========================================= */
+        @media print {
+            body { 
+                background: none; 
+                -webkit-print-color-adjust: exact; 
+                margin: 0;
+                padding: 0;
+            }
+            .no-print { display: none !important; }
+            
+            .sheet {
+                margin: 0;        /* 인쇄 시 브라우저 마진 제거 */
+                width: 210mm;     /* A4 고정 */
+                height: 297mm;
+                box-shadow: none; 
+                page-break-after: always; /* 시트 단위로 페이지 넘김 */
+            }
+            
+            .sheet:last-child {
+                page-break-after: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="no-print">
+        <span style="margin-right: 20px;">🖨 인쇄 미리보기</span>
+        <button onclick="window.print()" class="btn">인쇄하기</button>
+        <button onclick="window.close()" class="btn" style="background:#888; color:white;">닫기</button>
+    </div>
+
+    {% for label in box_count %}
+        
+        {% if forloop.counter0|divisibleby:8 %}
+        <div class="sheet">
+        {% endif %}
+
+            <div class="label-outer">
+                <div class="label-inner">
+                    <div class="header">
+                        <span>{{ label.vendor_name }}</span>
+                        <span>{{ label.print_date|date:"Y-m-d" }}</span>
+                    </div>
+
+                    <div class="content">
+                        <div class="part-name">{{ label.part_name }}</div>
+                        <div class="part-no">{{ label.part_no }}</div>
+                        <div class="snp-info">QTY: {{ label.snp }} EA</div>
+                    </div>
+
+                    <div class="barcode-area">
+                        <svg class="barcode"
+                             jsbarcode-format="CODE128"
+                             jsbarcode-value="{{ label.part_no }}"
+                             jsbarcode-textmargin="0"
+                             jsbarcode-fontoptions="bold"
+                             jsbarcode-height="50"
+                             jsbarcode-width="2"
+                             jsbarcode-displayValue="false"> </svg>
+                    </div>
+
+                    <div class="page-number">
+                        {{ forloop.counter }} / {{ box_count|length }}
+                    </div>
+                </div>
+            </div>
+
+        {% if forloop.counter|divisibleby:8 or forloop.last %}
+        </div> {% endif %}
+
+    {% endfor %}
+
+    <script>
+        window.onload = function() {
+            // 바코드 생성
+            JsBarcode(".barcode").init();
+            
+            // 0.5초 뒤 자동 인쇄 창 띄우기
+            setTimeout(function() {
+                window.print();
+            }, 500);
+        };
+    </script>
+</body>
+</html>

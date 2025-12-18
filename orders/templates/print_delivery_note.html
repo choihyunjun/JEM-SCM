@@ -1,0 +1,170 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>납품서 인쇄</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        body { font-family: "Malgun Gothic", sans-serif; margin: 0; padding: 20px; font-size: 12px; background: #eee; }
+        .no-print { text-align: center; margin-bottom: 20px; padding: 10px; background: #333; color: white; border-radius: 5px; }
+        .btn { background: white; color: #333; padding: 8px 15px; text-decoration: none; border-radius: 4px; cursor: pointer; border: none; font-weight: bold; margin: 0 5px; }
+        .btn:hover { background: #ddd; }
+        
+        /* A4 용지 스타일 */
+        .page { width: 210mm; min-height: 297mm; margin: 0 auto; background: white; padding: 15mm; box-sizing: border-box; border: 1px solid #ddd; box-shadow: 0 0 10px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+        
+        .title { text-align: center; font-size: 28px; font-weight: bold; text-decoration: underline; margin-bottom: 30px; letter-spacing: 5px; }
+        
+        /* 상단 헤더 (납품번호/날짜) */
+        .header-row { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 14px; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid black; padding: 6px; text-align: center; }
+        
+        .info-table { margin-bottom: 20px; border: 2px solid black; }
+        .info-label { background: #f0f0f0; font-weight: bold; }
+        
+        .list-table { margin-top: 10px; border: 2px solid black; flex-grow: 1; } /* 테이블이 남은 공간 차지 */
+        .list-table th { background: #f0f0f0; border-bottom: 2px solid black; padding: 8px; }
+        .list-table td { padding: 8px; font-size: 13px; }
+        
+        .text-left { text-align: left !important; padding-left: 10px !important; }
+        .text-right { text-align: right !important; padding-right: 10px !important; }
+        .fw-bold { font-weight: bold; }
+        .total-row { background: #f9f9f9; font-weight: bold; font-size: 14px; }
+
+        /* 하단 서명란 */
+        .footer { margin-top: 50px; display: flex; justify-content: space-between; padding: 0 30px; }
+        .sign-box { width: 40%; border-bottom: 1px solid black; padding-bottom: 5px; text-align: center; font-size: 14px; }
+
+        /* 하단 QR 영역 스타일 */
+        .qr-footer {
+            margin-top: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-top: 1px dashed #ccc;
+            padding-top: 20px;
+        }
+        .qr-label { margin-top: 5px; font-weight: bold; font-size: 11px; color: #555; }
+
+        @media print {
+            body { background: none; padding: 0; margin: 0; }
+            .no-print { display: none !important; }
+            .page { width: 100%; margin: 0; border: none; box-shadow: none; padding: 0; min-height: auto; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="no-print">
+        <span style="margin-right: 20px;">🖨 납품서 미리보기</span>
+        <button onclick="window.print()" class="btn">인쇄하기</button>
+        <button onclick="window.close()" class="btn" style="background:#888; color:white;">창 닫기</button>
+    </div>
+
+    <div class="page">
+        <div class="title">납 품 서</div>
+        
+        <div class="header-row">
+            <div>납품번호 : <b>{{ order.order_no }}</b></div>
+            <div>발행일자 : {{ print_date|date:"Y년 m월 d일" }}</div>
+        </div>
+
+        <table class="info-table">
+            <colgroup>
+                <col style="width: 30px;">
+                <col style="width: 80px;">
+                <col style="width: 150px;">
+                <col style="width: 80px;">
+                <col>
+            </colgroup>
+            <tr>
+                <td rowspan="4" class="info-label" style="background:#e0e0e0;">공<br>급<br>자</td>
+                <td class="info-label">등록번호</td>
+                <td colspan="3" style="letter-spacing: 2px; font-weight: bold;"> *** - ** - ***** </td>
+            </tr>
+            <tr>
+                <td class="info-label">상 호</td>
+                <td>{{ vendor_name }}</td>
+                <td class="info-label">성 명</td>
+                <td> (인) </td>
+            </tr>
+            <tr>
+                <td class="info-label">주 소</td>
+                <td colspan="3"> (주소 자동입력란) </td>
+            </tr>
+            <tr>
+                <td class="info-label">업 태</td>
+                <td> 제조 </td>
+                <td class="info-label">종 목</td>
+                <td> 자동차부품 </td>
+            </tr>
+        </table>
+
+        <table class="list-table">
+            <thead>
+                <tr>
+                    <th style="width: 40px;">No</th>
+                    <th style="width: 140px;">품 번</th>
+                    <th>품 명</th>
+                    <th style="width: 70px;">SNP</th>
+                    <th style="width: 70px;">BOX</th>
+                    <th style="width: 90px;">수 량</th>
+                    <th style="width: 90px;">비 고</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td>{{ forloop.counter }}</td>
+                    <td class="text-left fw-bold">{{ item.part_no }}</td>
+                    <td class="text-left">{{ item.part_name }}</td>
+                    <td class="text-right">{{ item.snp|intcomma }}</td>
+                    <td class="text-right">{{ item.box_count|intcomma }}</td>
+                    <td class="text-right fw-bold">{{ item.total_qty|intcomma }}</td>
+                    <td></td>
+                </tr>
+                {% endfor %}
+                
+                {% for i in "12345" %} 
+                <tr><td colspan="7" style="height: 30px;"></td></tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr class="total-row">
+                    <td colspan="3">합 계</td>
+                    <td>-</td>
+                    <td class="text-right">{{ total_box|intcomma }} Box</td>
+                    <td class="text-right" style="font-size: 16px;">{{ total_qty|intcomma }} EA</td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+
+        <div class="footer">
+            <div class="sign-box">인수자 : ________________ (서명)</div>
+            <div class="sign-box">납품자 : ________________ (서명)</div>
+        </div>
+
+        <div class="qr-footer">
+            <div id="qrcode"></div>
+            <div class="qr-label">SCM 입고처리용 QR</div>
+        </div>
+    </div>
+
+    <script>
+        // 납품서 번호 (예: DO-20251218-123456)
+        let qrContent = "{{ order.order_no }}";
+
+        new QRCode(document.getElementById("qrcode"), {
+            text: qrContent,
+            width: 100,
+            height: 100,
+            correctLevel : QRCode.CorrectLevel.M
+        });
+    </script>
+</body>
+</html>

@@ -16,7 +16,6 @@
         .nav-link.active { background: #860505; color: white; font-weight: bold; }
         .content-area { flex-grow: 1; display: flex; flex-direction: column; overflow-x: hidden; }
         
-        /* [수정 핵심] 상단바 배경과 글자색 강제 고정 */
         .top-nav { 
             background: #860505 !important; 
             color: white !important; 
@@ -27,7 +26,6 @@
         }
         .main-wrapper { padding: 20px; }
         
-        /* [수정 핵심] 진영전기 SCM 제목 글자색 흰색 강제 */
         .top-nav .header-title { 
             font-size: 1.4rem; 
             font-weight: 700; 
@@ -35,7 +33,6 @@
             color: white !important; 
         }
         
-        /* [수정 핵심] 상단바 내부 모든 span과 아이콘 색상 흰색 강제 */
         .top-nav span, .top-nav i { 
             color: white !important; 
         }
@@ -56,6 +53,14 @@
 
             <a href="{% url 'inventory_list' %}" class="nav-link {% if active_menu == 'inventory' %}active{% endif %}">
                 <i class="bi bi-box-seam me-2"></i> 과부족 조회
+            </a>
+
+            <a href="{% url 'label_list' %}" class="nav-link {% if active_menu == 'label' %}active{% endif %}">
+                <i class="bi bi-printer me-2"></i> 라벨 발행
+            </a>
+
+            <a href="{% url 'incoming_list' %}" class="nav-link {% if active_menu == 'incoming' %}active{% endif %}">
+                <i class="bi bi-box-arrow-in-down me-2"></i> 입고 관리
             </a>
 
             {% if user.is_superuser %}
