@@ -1,0 +1,142 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="header-title mb-0">
+            <i class="bi bi-pencil-square me-2"></i>소요량 데이터 관리
+        </h2>
+        <a href="{% url 'inventory_list' %}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> 과부족 현황으로 돌아가기
+        </a>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body bg-light">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">협력사 선택</label>
+                    <select name="vendor_id" class="form-select form-select-sm">
+                        <option value="">== 전체 업체 ==</option>
+                        {% for v in vendor_list %}
+                            <option value="{{ v.id }}" {% if selected_vendor == v.id|stringformat:"s" %}selected{% endif %}>{{ v.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">품번 검색</label>
+                    <input type="text" name="part_no" class="form-control form-control-sm" placeholder="품번 입력..." value="{{ part_no|default:'' }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold">기간 설정</label>
+                    <div class="input-group input-group-sm">
+                        <input type="date" name="start_date" class="form-control" value="{{ start_date|default:'' }}">
+                        <span class="input-group-text">~</span>
+                        <input type="date" name="end_date" class="form-control" value="{{ end_date|default:'' }}">
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-sm btn-primary w-100 fw-bold">
+                        <i class="bi bi-search me-1"></i> 조건 검색
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <form action="{% url 'demand_delete_action' %}" method="post" id="deleteForm">
+            {% csrf_token %}
+            <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                <span class="text-muted small">검색 결과: <strong>{{ demands|length }}</strong>건 (최근 500건까지 표시)</span>
+                <button type="submit" class="btn btn-sm btn-danger fw-bold" onclick="return confirm('선택한 데이터를 정말 삭제하시겠습니까?')">
+                    <i class="bi bi-trash me-1"></i> 선택 삭제
+                </button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" style="font-size: 0.85rem;">
+                    <thead class="table-dark">
+                        <tr class="text-center">
+                            <th style="width: 50px;">
+                                <input type="checkbox" class="form-check-input" id="selectAll">
+                            </th>
+                            <th>날짜</th>
+                            <th>협력사</th>
+                            <th>품번</th>
+                            <th>품명</th>
+                            <th style="width: 150px;">소요량</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for d in demands %}
+                        <tr class="text-center">
+                            <td>
+                                <input type="checkbox" name="demand_ids" value="{{ d.id }}" class="form-check-input row-checkbox">
+                            </td>
+                            <td class="fw-bold text-secondary">{{ d.due_date|date:"Y-m-d" }}</td>
+                            <td>{{ d.part.vendor.name }}</td>
+                            <td class="text-primary fw-bold">{{ d.part.part_no }}</td>
+                            <td class="text-start">{{ d.part.part_name }}</td>
+                            <td>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" class="form-control text-center bg-white" 
+                                           value="{{ d.quantity }}" readonly>
+                                    <button type="button" class="btn btn-outline-primary" 
+                                            onclick="editDemand('{{ d.part.part_no }}', '{{ d.due_date|date:'Y-m-d' }}', '{{ d.quantity }}')">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center py-5 text-muted">검색 조건에 일치하는 데이터가 없습니다.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// 전체 선택/해제 로직
+document.getElementById('selectAll').addEventListener('change', function() {
+    const checkboxes = document.querySelectorAll('.row-checkbox');
+    checkboxes.forEach(cb => cb.checked = this.checked);
+});
+
+// 과부족 시트와 동일한 수정 함수 (fetch 사용)
+function editDemand(partNo, date, currentQty) {
+    const newQty = prompt(`${date}의 소요량을 수정하시겠습니까?`, currentQty);
+    
+    if (newQty !== null && !isNaN(newQty) && newQty.trim() !== "") {
+        const formData = new FormData();
+        formData.append('part_no', partNo);
+        formData.append('due_date', date);
+        formData.append('quantity', newQty);
+        formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+        fetch("{% url 'demand_update_ajax' %}", {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert("수정 중 오류가 발생했습니다.");
+            }
+        });
+    }
+}
+</script>
+
+<style>
+    .header-title { font-size: 1.3rem; font-weight: 700; color: #2c3e50; }
+    .table th { font-weight: 600; }
+    .hover-shadow:hover { box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important; transition: 0.3s; }
+</style>
+{% endblock %}

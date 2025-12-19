@@ -7,7 +7,7 @@
         <h2 class="header-title mb-0">
             <i class="bi bi-calendar3 me-2"></i>일자별 소요 현황 (D+14)
             {% if not show_all %}
-                <span class="badge bg-info ms-2" style="font-size: 0.7rem; vertical-align: middle;">발주 품목만 표시 중</span>
+                <span class="badge bg-info ms-2" style="font-size: 0.7rem; vertical-align: middle;">소요 품목만 표시 중</span>
             {% endif %}
         </h2>
         
@@ -26,41 +26,49 @@
             </form>
             {% endif %}
 
-            <a href="{% url 'inventory_export' %}?show_all={{ show_all|lower }}&vendor_id={{ selected_vendor_id|default:'' }}" 
-               class="btn btn-sm btn-success shadow-sm me-2">
-                <i class="bi bi-file-earmark-excel me-1"></i>엑셀 저장
-            </a>
+            <div class="d-flex gap-1">
+                <a href="{% url 'inventory_export' %}?show_all={{ show_all|lower }}&vendor_id={{ selected_vendor_id|default:'' }}" 
+                   class="btn btn-sm btn-success shadow-sm">
+                    <i class="bi bi-file-earmark-excel me-1"></i>엑셀 저장
+                </a>
 
-            <div class="btn-group me-2 shadow-sm">
+                {% if user.is_superuser %}
+                <a href="{% url 'demand_manage' %}" class="btn btn-sm btn-outline-primary shadow-sm bg-white">
+                    <i class="bi bi-pencil-square me-1"></i>소요량 수정/삭제
+                </a>
+
+                <button class="btn btn-sm btn-warning shadow-sm" data-bs-toggle="modal" data-bs-target="#demandUploadModal">
+                    <i class="bi bi-cloud-arrow-up me-1"></i>소요량 업로드
+                </button>
+                <a href="{% url 'inventory_upload' %}" class="btn btn-sm btn-danger shadow-sm">
+                    <i class="bi bi-upload me-1"></i>기초재고 업로드
+                </a>
+                {% endif %}
+            </div>
+
+            <div class="btn-group shadow-sm ms-2">
                 <a href="?show_all=false&vendor_id={{ selected_vendor_id|default:'' }}" class="btn btn-sm {% if not show_all %}btn-primary{% else %}btn-outline-primary{% endif %}">
-                    📌 발주 품목만
+                    📌 소요 품목만
                 </a>
                 <a href="?show_all=true&vendor_id={{ selected_vendor_id|default:'' }}" class="btn btn-sm {% if show_all %}btn-primary{% else %}btn-outline-primary{% endif %}">
                     🔍 전체 품목
                 </a>
-            </div>
-
-            <div class="text-end">
-                <span class="badge bg-primary">소요량(발주)</span>
-                <span class="badge bg-success">입고</span>
-                <span class="badge bg-danger">재고 부족</span>
             </div>
         </div>
     </div>
 
     <div class="card shadow-sm border-0">
         <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-bordered align-middle mb-0" style="font-size: 0.8rem; min-width: 1600px;">
+            <div class="table-responsive" style="max-height: 78vh; overflow: auto;">
+                <table class="table table-bordered align-middle mb-0" style="font-size: 0.8rem; width: max-content; min-width: 100%;">
                     <thead class="table-light text-center">
                         <tr>
-                            <th rowspan="2" style="width: 180px; vertical-align: middle;" class="bg-light">품목 정보</th>
-                            <th rowspan="2" style="width: 70px; vertical-align: middle;" class="bg-light">구분</th>
-                            <th rowspan="2" style="width: 90px; vertical-align: middle;" class="bg-light border-end-bold">기초재고</th>
+                            <th rowspan="2" style="width: 180px; position: sticky; left: 0; top: 0; z-index: 30;" class="bg-light sticky-col">품목 정보</th>
+                            <th rowspan="2" style="width: 70px; position: sticky; top: 0; z-index: 20;" class="bg-light">구분</th>
+                            <th rowspan="2" style="width: 90px; position: sticky; top: 0; z-index: 20;" class="bg-light border-end-bold">기초재고</th>
                             {% for dt in date_range %}
-                            <th style="width: 90px; {% if dt.weekday >= 5 %}color: #d9534f; background-color: #fff5f5;{% endif %}">
-                                {{ dt|date:"m/d" }}<br>
-                                <small>({{ dt|date:"D" }})</small>
+                            <th class="date-cell" style="position: sticky; top: 0; z-index: 20; min-width: 85px; {% if dt.weekday >= 5 %}color: #d9534f; background-color: #fff5f5;{% endif %}">
+                                {{ dt|date:"m/d" }}<br><small>({{ dt|date:"D" }})</small>
                             </th>
                             {% endfor %}
                         </tr>
@@ -68,49 +76,44 @@
                     <tbody>
                         {% for item in inventory_data %}
                         <tr class="text-center">
-                            <td rowspan="3" class="text-start ps-3 fw-bold bg-white">
+                            <td rowspan="3" class="text-start ps-3 fw-bold bg-white sticky-col" style="position: sticky; left: 0; z-index: 10; border-right: 2px solid #adb5bd !important;">
                                 <div class="text-primary small mb-1">{{ item.vendor_name }}</div>
-                                <div class="mb-1 text-dark">{{ item.part_no }}</div>
-                                <div class="small text-secondary fw-normal">{{ item.part_name }}</div>
+                                <div class="text-dark">{{ item.part_no }}</div>
+                                <div class="small text-secondary fw-normal text-truncate" style="max-width: 150px;">{{ item.part_name }}</div>
                             </td>
                             <td class="bg-light small">소요량</td>
-                            <td rowspan="3" class="fw-bold fs-6 border-end-bold text-center bg-white">
+                            <td rowspan="3" class="fw-bold fs-6 border-end-bold bg-white">
                                 {{ item.base_stock|intcomma }}
+                                {% if item.ref_date %}
+                                <div class="text-muted" style="font-size: 0.6rem;">(실사: {{ item.ref_date|date:"m/d" }})</div>
+                                {% endif %}
                             </td>
                             {% for day in item.daily_status %}
-                            <td class="text-primary">
-                                {% if day.order_qty > 0 %}{{ day.order_qty|intcomma }}{% else %}-{% endif %}
+                            <td class="text-primary date-cell {% if user.is_superuser %}cursor-pointer hover-bg-light{% endif %}" 
+                                style="min-width: 85px;"
+                                {% if user.is_superuser %}onclick="editDemand('{{ item.part_no }}', '{{ day.date|date:'Y-m-d' }}', '{{ day.demand_qty }}')"{% endif %}>
+                                {% if day.demand_qty > 0 %}{{ day.demand_qty|intcomma }}{% else %}-{% endif %}
                             </td>
                             {% endfor %}
                         </tr>
-
                         <tr class="text-center">
                             <td class="bg-light small">입고량</td>
                             {% for day in item.daily_status %}
-                            <td class="text-success">
+                            <td class="text-success date-cell" style="min-width: 85px;">
                                 {% if day.in_qty > 0 %}{{ day.in_qty|intcomma }}{% else %}-{% endif %}
                             </td>
                             {% endfor %}
                         </tr>
-
                         <tr class="text-center border-bottom-bold">
                             <td class="bg-light small fw-bold">과부족</td>
                             {% for day in item.daily_status %}
-                            <td class="fw-bold {% if day.is_danger %}bg-danger-light text-danger{% endif %}">
+                            <td class="fw-bold date-cell {% if day.is_danger %}bg-danger-light text-danger cursor-pointer{% endif %}"
+                                style="min-width: 85px;"
+                                {% if day.is_danger %} onclick="openOrderModal('{{ item.part_no }}', '{{ item.part_name|escapejs }}', '{{ item.vendor_name|escapejs }}', '{{ day.stock|stringformat:'d' }}', '{{ day.date|date:'Y-m-d' }}')" title="클릭하여 발주 생성"{% endif %}>
                                 {{ day.stock|intcomma }}
+                                {% if day.is_danger %}<i class="bi bi-plus-circle-fill ms-1" style="font-size: 0.7rem;"></i>{% endif %}
                             </td>
                             {% endfor %}
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="{{ date_range|length|add:3 }}" class="text-center py-5 text-muted">
-                                {% if not show_all %}
-                                    <i class="bi bi-info-circle me-2"></i>조회 조건에 맞는 발주 데이터가 없습니다. <br>
-                                    <a href="?show_all=true&vendor_id={{ selected_vendor_id|default:'' }}" class="btn btn-link btn-sm text-decoration-none mt-2">전체 품목 리스트 확인하기</a>
-                                {% else %}
-                                    <i class="bi bi-exclamation-triangle me-2"></i>표시할 품목 데이터가 없습니다.
-                                {% endif %}
-                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -120,13 +123,126 @@
     </div>
 </div>
 
+<div class="modal fade" id="orderModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">부족분 발주 생성</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="quickOrderForm" method="post" action="{% url 'quick_order_action' %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">품목 정보</label>
+                        <div id="modalPartInfo" class="p-2 bg-light rounded small"></div>
+                        <input type="hidden" name="vendor_name" id="hiddenVendor">
+                        <input type="hidden" name="part_no" id="hiddenPartNo">
+                    </div>
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label class="form-label fw-bold text-danger">부족 수량</label>
+                            <input type="text" id="modalShortage" class="form-control" readonly>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label fw-bold">발주 수량</label>
+                            <input type="number" name="quantity" id="modalOrderQty" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">납기 요청일</label>
+                        <input type="date" name="due_date" id="modalDueDate" class="form-control" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary w-100 fw-bold">미확인 발주로 등록</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="demandUploadModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title fw-bold">소요량 엑셀 업로드</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted">A열:업체명 / B열:품번 / C열:소요수량 / D열:날짜(YYYY-MM-DD)</p>
+                <form action="{% url 'demand_upload_action' %}" method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <input type="file" name="demand_file" class="form-control mb-3" required>
+                    <button type="submit" class="btn btn-warning w-100 fw-bold">소요량 데이터 반영</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function editDemand(partNo, date, currentQty) {
+    const newQty = prompt(`${date}의 소요량을 수정하시겠습니까?\n(삭제하려면 0을 입력하세요)`, currentQty);
+    
+    if (newQty !== null && !isNaN(newQty) && newQty.trim() !== "") {
+        const formData = new FormData();
+        formData.append('part_no', partNo);
+        formData.append('due_date', date);
+        formData.append('quantity', newQty);
+        formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+        fetch("{% url 'demand_update_ajax' %}", {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (response.ok) {
+                location.reload(); 
+            } else {
+                alert("수정 중 오류가 발생했습니다.");
+            }
+        });
+    }
+}
+
+function openOrderModal(partNo, partName, vendor, shortage, dueDate) {
+    document.getElementById('modalPartInfo').innerHTML = `<strong>${vendor}</strong><br>${partNo} | ${partName}`;
+    document.getElementById('hiddenVendor').value = vendor;
+    document.getElementById('hiddenPartNo').value = partNo;
+    
+    const absShortage = Math.abs(parseInt(shortage));
+    document.getElementById('modalShortage').value = absShortage;
+    document.getElementById('modalOrderQty').value = absShortage;
+    document.getElementById('modalDueDate').value = dueDate;
+    
+    new bootstrap.Modal(document.getElementById('orderModal')).show();
+}
+</script>
+
 <style>
-    .table-bordered th, .table-bordered td { border: 1px solid #dee2e6 !important; padding: 6px 4px !important; }
-    .header-title { font-size: 1.3rem; font-weight: 700; color: #2c3e50; }
+    .table { table-layout: auto !important; }
+    .table-bordered th, .table-bordered td { 
+        border: 1px solid #dee2e6 !important; 
+        padding: 8px 4px !important; 
+        white-space: nowrap;
+    }
+    
+    .table thead th { 
+        background-color: #f8f9fa !important; 
+        box-shadow: inset 0 -1px 0 #dee2e6;
+    }
+
+    .sticky-col { 
+        box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+    }
+
+    .header-title { font-size: 1.2rem; font-weight: 700; color: #2c3e50; }
     .border-end-bold { border-right: 2px solid #adb5bd !important; }
     .border-bottom-bold { border-bottom: 2px solid #dee2e6 !important; }
-    .bg-danger-light { background-color: #fff5f5 !important; }
-    .table-responsive { max-height: 75vh; overflow: auto; }
-    .table thead th { position: sticky; top: 0; z-index: 10; background-color: #f8f9fa; }
+    .bg-danger-light { background-color: #fff5f5 !important; transition: 0.2s; }
+    .bg-danger-light:hover { background-color: #ffebeb !important; }
+    .cursor-pointer { cursor: pointer; }
+    .hover-bg-light:hover { background-color: #e9ecef !important; }
 </style>
 {% endblock %}

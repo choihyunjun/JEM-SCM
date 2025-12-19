@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="mb-4">
+    <span class="badge bg-danger me-2">관리자 전용</span>
+    <span class="fw-bold text-secondary">재고 실사 업로드 (초기화)</span>
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-danger text-white fw-bold">
+        <i class="bi bi-clipboard-data"></i> 엑셀로 재고 초기화
+    </div>
+    <div class="card-body p-4">
+        <div class="alert alert-warning border-warning d-flex align-items-center mb-4" role="alert">
+            <i class="bi bi-exclamation-triangle-fill fs-3 me-3 text-warning"></i>
+            <div>
+                <strong>주의하세요!</strong><br>
+                이 파일을 업로드하면 <strong>기존 재고 수량이 엑셀의 수량으로 강제 변경</strong>됩니다.<br>
+                또한, <strong>선택한 실사 기준일 이전</strong>의 모든 입고/소요 내역은 계산에서 제외됩니다.
+            </div>
+        </div>
+
+        <form action="{% url 'inventory_upload_action' %}" method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            
+            <div class="mb-4 p-3 bg-light rounded border">
+                <label for="inventory_date" class="form-label fw-bold text-primary">
+                    <i class="bi bi-calendar-check me-1"></i> 1. 재고 실사 기준일 선택
+                </label>
+                <input type="date" name="inventory_date" id="inventory_date" class="form-control form-control-lg" 
+                       value="{{ today|date:'Y-m-d' }}" required>
+                <div class="form-text mt-2 text-muted">
+                    * 실제로 재고 조사를 수행한 날짜를 선택하세요. (기본값: 오늘)
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <label for="excel_file" class="form-label fw-bold">
+                    <i class="bi bi-file-earmark-excel me-1"></i> 2. 재고 엑셀 파일 선택
+                </label>
+                <input type="file" name="excel_file" id="excel_file" class="form-control form-control-lg" accept=".xlsx, .xls" required>
+                <div class="form-text mt-2">
+                    * 엑셀 양식 순서: <strong>A열: 협력사명 / B열: 품번 / C열: 실재고수량</strong> (헤더 포함, 2행부터 데이터)
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-between pt-3">
+                <a href="{% url 'inventory_list' %}" class="btn btn-secondary fw-bold px-4">
+                    <i class="bi bi-arrow-left"></i> 취소
+                </a>
+                <button type="submit" class="btn btn-danger fw-bold px-4">
+                    <i class="bi bi-upload"></i> 재고 일괄 업데이트
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
