@@ -249,30 +249,17 @@ def delete_all_demands(request):
 @login_required
 @require_POST
 def demand_upload_action(request):
-    """
-    소요량 업로드 액션 (수정본)
-    - 엑셀 양식: A열(품번), B열(수량), C열(납기일)
-    - 품번 기준으로 마스터(Part)에서 업체 정보를 자동으로 가져옴
-    """
     if not request.user.is_superuser: return redirect('inventory_list')
     if request.FILES.get('demand_file'):
         try:
-            # 성능 최적화를 위해 read_only 모드 사용
             wb = openpyxl.load_workbook(request.FILES['demand_file'], read_only=True, data_only=True)
             ws = wb.active; c_count = 0
-            
-            # 품번을 키로 마스터 정보를 메모리에 사전(Dict) 형태로 캐싱
             all_parts = {p.part_no: p for p in Part.objects.select_related('vendor').all()}
-            
             with transaction.atomic():
                 for row in ws.iter_rows(min_row=2, values_only=True):
-                    # A열(row[0]): 품번, B열(row[1]): 수량, C열(row[2]): 납기일
                     p_no = str(row[0]).strip() if row[0] else None
                     if not p_no or p_no not in all_parts: continue
-                    
-                    part_obj = all_parts[p_no] # 마스터에서 매칭된 객체 (업체 정보 포함)
-                    
-                    # 엑셀에 업체명이 없어도 마스터 정보를 기준으로 생성/업데이트
+                    part_obj = all_parts[p_no]
                     Demand.objects.update_or_create(
                         part=part_obj, 
                         due_date=row[2], 
@@ -307,19 +294,13 @@ def inventory_upload_action(request):
     s_date = request.POST.get('inventory_date')
     if request.FILES.get('excel_file'):
         try:
-            # [✅ 성능 최적화] read_only 모드로 대용량 파일 메모리 절약
             wb = openpyxl.load_workbook(request.FILES['excel_file'], read_only=True, data_only=True)
             ws = wb.active; u_count = 0
-            
-            # 빠른 조회를 위해 품목 마스터 정보를 메모리에 캐싱
             all_parts = {p.part_no: p for p in Part.objects.all()}
-            
             with transaction.atomic():
                 for row in ws.iter_rows(min_row=2, values_only=True):
-                    # image_0db385.png 기준: A열(row[0]) 품번, B열(row[1]) 기초재고
                     p_no = str(row[0]).strip() if row[0] else None
                     if not p_no or p_no not in all_parts: continue
-                    
                     part = all_parts[p_no]
                     inv, _ = Inventory.objects.get_or_create(part=part)
                     inv.base_stock = int(row[1]) if row[1] is not None else 0
@@ -412,72 +393,23 @@ def label_print_action(request):
 @login_required
 @require_POST
 def create_delivery_order(request):
-    """
-    납품서 생성 액션 (수정본)
-    - SNP(박스당 수량)가 다르면 동일 품번이라도 별개의 품목으로 등록
-    """
-    p_nos = request.POST.getlist('part_nos[]')
-    snps = request.POST.getlist('snps[]') # 화면에서 입력받은 SNP 수량
-    b_counts = request.POST.getlist('box_counts[]') # 박스 개수
-
+    p_nos, snps, b_counts = request.POST.getlist('part_nos[]'), request.POST.getlist('snps[]'), request.POST.getlist('box_counts[]')
     with transaction.atomic():
-        # 1. 새 납품서(DeliveryOrder) 생성
         do = DeliveryOrder.objects.create(order_no="DO-"+timezone.now().strftime("%Y%m%d-%H%M%S"))
-        
         for i in range(len(p_nos)):
-            part = Part.objects.filter(part_no=p_nos[i]).first()
-            if not part: continue
-            
-            # 2. 수량 정수 변환
-            current_snp = int(snps[i])
-            current_box_count = int(b_counts[i])
-            qty = current_snp * current_box_count
-            
-            # 3. 품목 등록 (SNP가 다르면 별개의 레코드로 생성됨)
-            DeliveryOrderItem.objects.create(
-                order=do, 
-                part_no=p_nos[i], 
-                part_name=part.part_name, 
-                snp=current_snp, 
-                box_count=current_box_count, 
-                total_qty=qty
-            )
-            
-            # 4. 라벨 발행 로그 (SNP 정보 포함하여 잔량 라벨 대응)
-            LabelPrintLog.objects.create(
-                vendor=part.vendor, 
-                part=part, 
-                part_no=p_nos[i], 
-                printed_qty=qty, 
-                snp=current_snp
-            )
-            
+            part = Part.objects.filter(part_no=p_nos[i]).first(); qty = int(snps[i]) * int(b_counts[i])
+            DeliveryOrderItem.objects.create(order=do, part_no=p_nos[i], part_name=part.part_name, snp=int(snps[i]), box_count=int(b_counts[i]), total_qty=qty)
+            LabelPrintLog.objects.create(vendor=part.vendor, part=part, part_no=p_nos[i], printed_qty=qty, snp=int(snps[i]))
     return redirect('label_list')
 
 @login_required
 def label_print(request, order_id):
-    """
-    라벨 출력 (수정본)
-    - 납품서 품목에 저장된 SNP 정보를 바탕으로 라벨 생성
-    """
     order = get_object_or_404(DeliveryOrder, pk=order_id); queue = []
-    
-    # 협력사명 확인 (첫 번째 품목 기준)
     first_item = order.items.first()
     part = Part.objects.filter(part_no=first_item.part_no).first() if first_item else None
     v_name = part.vendor.name if part else "알수없음"
-    
     for item in order.items.all():
-        # 각 품목의 박스 수만큼 루프를 돌며 라벨 정보 생성
-        # 품번이 같아도 SNP(item.snp)가 다르면 각각 올바른 수량으로 생성됨
-        for _ in range(item.box_count): 
-            queue.append({
-                'vendor_name': v_name, 
-                'part_name': item.part_name, 
-                'part_no': item.part_no, 
-                'snp': item.snp, # 해당 품목에 저장된 SNP 값 사용
-                'print_date': timezone.now()
-            })
+        for _ in range(item.box_count): queue.append({'vendor_name': v_name, 'part_name': item.part_name, 'part_no': item.part_no, 'snp': item.snp, 'print_date': timezone.now()})
     return render(request, 'print_label.html', {'box_count': queue, 'vendor_name': v_name})
 
 @login_required
@@ -533,33 +465,30 @@ def incoming_cancel(request):
 
     with transaction.atomic():
         if mode == 'item':
-            # 개별 품목 취소 시 로직 유지
+            # 1. 재고 원복
             inv = Inventory.objects.get(part=target_inc.part)
             inv.base_stock -= target_inc.quantity
             inv.save()
 
             if do:
-                LabelPrintLog.objects.filter(
-                    part_no=target_inc.part.part_no, 
-                    printed_qty=target_inc.quantity,
-                    printed_at__date=do.created_at.date()
-                ).delete()
-                # 납품서 상세 품목에서 해당 항목 삭제
-                DeliveryOrderItem.objects.filter(order=do, part_no=target_inc.part.part_no).delete()
+                # 2. 라벨 기록 삭제 (수량 조건 정밀 매칭)
+                LabelPrintLog.objects.filter(part_no=target_inc.part.part_no, printed_qty=target_inc.quantity).delete()
+                
+                # 3. 납품서 상세 품목 삭제 (수량 조건 정밀 매칭)
+                DeliveryOrderItem.objects.filter(order=do, part_no=target_inc.part.part_no, total_qty=target_inc.quantity).delete()
             
+            # 4. 입고 기록 삭제
             target_inc.delete()
             messages.success(request, f"품목 {target_inc.part.part_no} 입고 취소 및 잔량이 복구되었습니다.")
 
         elif mode == 'all':
-            # [✅ 로직 개선] 전체 취소 시: 입고 기록만 삭제하고 납품서 품목 데이터는 보존하여 '0종' 방지
             all_incs = Incoming.objects.filter(delivery_order_no=do_no)
             for inc in all_incs:
                 inv = Inventory.objects.get(part=inc.part)
                 inv.base_stock -= inc.quantity
                 inv.save()
-                inc.delete() # 입고 기록 삭제
+                inc.delete()
             if do:
-                # 납품서 상태만 등록 상태로 리셋 (상세 품목 데이터는 유지됨)
                 do.is_received = False 
                 do.save()
             messages.success(request, f"납품서 {do_no} 입고 취소 완료. (품목 데이터는 보존됩니다)")
