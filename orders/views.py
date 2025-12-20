@@ -249,17 +249,30 @@ def delete_all_demands(request):
 @login_required
 @require_POST
 def demand_upload_action(request):
+    """
+    소요량 업로드 액션 (수정본)
+    - 엑셀 양식: A열(품번), B열(수량), C열(납기일)
+    - 품번 기준으로 마스터(Part)에서 업체 정보를 자동으로 가져옴
+    """
     if not request.user.is_superuser: return redirect('inventory_list')
     if request.FILES.get('demand_file'):
         try:
+            # 성능 최적화를 위해 read_only 모드 사용
             wb = openpyxl.load_workbook(request.FILES['demand_file'], read_only=True, data_only=True)
             ws = wb.active; c_count = 0
+            
+            # 품번을 키로 마스터 정보를 메모리에 사전(Dict) 형태로 캐싱
             all_parts = {p.part_no: p for p in Part.objects.select_related('vendor').all()}
+            
             with transaction.atomic():
                 for row in ws.iter_rows(min_row=2, values_only=True):
+                    # A열(row[0]): 품번, B열(row[1]): 수량, C열(row[2]): 납기일
                     p_no = str(row[0]).strip() if row[0] else None
                     if not p_no or p_no not in all_parts: continue
-                    part_obj = all_parts[p_no]
+                    
+                    part_obj = all_parts[p_no] # 마스터에서 매칭된 객체 (업체 정보 포함)
+                    
+                    # 엑셀에 업체명이 없어도 마스터 정보를 기준으로 생성/업데이트
                     Demand.objects.update_or_create(
                         part=part_obj, 
                         due_date=row[2], 
@@ -294,13 +307,19 @@ def inventory_upload_action(request):
     s_date = request.POST.get('inventory_date')
     if request.FILES.get('excel_file'):
         try:
+            # [✅ 성능 최적화] read_only 모드로 대용량 파일 메모리 절약
             wb = openpyxl.load_workbook(request.FILES['excel_file'], read_only=True, data_only=True)
             ws = wb.active; u_count = 0
+            
+            # 빠른 조회를 위해 품목 마스터 정보를 메모리에 캐싱
             all_parts = {p.part_no: p for p in Part.objects.all()}
+            
             with transaction.atomic():
                 for row in ws.iter_rows(min_row=2, values_only=True):
+                    # image_0db385.png 기준: A열(row[0]) 품번, B열(row[1]) 기초재고
                     p_no = str(row[0]).strip() if row[0] else None
                     if not p_no or p_no not in all_parts: continue
+                    
                     part = all_parts[p_no]
                     inv, _ = Inventory.objects.get_or_create(part=part)
                     inv.base_stock = int(row[1]) if row[1] is not None else 0
@@ -344,17 +363,32 @@ def label_list(request):
         q = q.filter(vendor_id=selected_v)
 
     label_data = []
+    # [✅ 핵심 수정] 마감되지 않은(is_closed=False) 발주건만 합산하여 유효 잔량 계산
     for p_no in q.values_list('part_no', flat=True).distinct():
-        order = q.filter(part_no=p_no).first()
-        total = q.filter(part_no=p_no).aggregate(Sum('quantity'))['quantity__sum'] or 0
-        printed = LabelPrintLog.objects.filter(part_no=p_no).aggregate(Sum('printed_qty'))['printed_qty__sum'] or 0
-        if total - printed > 0:
+        order_row = q.filter(part_no=p_no).first()
+        # 1. '마감 안 된' 발주건들의 총 합계량 (이번 달 납품해야 할 목표)
+        current_active_total = q.filter(part_no=p_no).aggregate(Sum('quantity'))['quantity__sum'] or 0
+        
+        # 2. '이미 마감된' 발주건들의 총 합계량 계산 (과거 이력)
+        closed_total = Order.objects.filter(part_no=p_no, is_closed=True, approved_at__isnull=False).aggregate(Sum('quantity'))['quantity__sum'] or 0
+        
+        # 3. 전체 발행 이력 조회
+        total_printed = LabelPrintLog.objects.filter(part_no=p_no).aggregate(Sum('printed_qty'))['printed_qty__sum'] or 0
+        
+        # 4. 실질적인 납품 가능 수량 계산식
+        # 원리: [전체 발행량 - 과거 마감된 수량]을 뺀 나머지가 이번 차수에 납품해야 할 잔량임
+        # 하지만 더 직관적인 방식: [현재 활성 발주량 - (전체 발행량 - 과거 마감 합계)]
+        # 💡 즉, 과거 마감된 발주량을 초과해서 발행된 수량이 있다면 그것까지 감안하여 이번 잔량 도출
+        used_for_closed = closed_total # 과거 발주는 이미 발행이 완료되었다고 간주
+        current_printed = max(0, total_printed - used_for_closed)
+        remain = current_active_total - current_printed
+        
+        if remain > 0:
             label_data.append({
                 'part_no': p_no, 
-                'part_name': order.part_name, 
-                'total_order': total, 
-                'printed': printed, 
-                'remain': total - printed
+                'part_name': order_row.part_name, 
+                'total_order': current_active_total, # 이번 달 발주량만 표시 (예: 500개)
+                'remain': remain # 남은 잔량 정확히 표시
             })
             
     return render(request, 'label_list.html', {
@@ -465,19 +499,14 @@ def incoming_cancel(request):
 
     with transaction.atomic():
         if mode == 'item':
-            # 1. 재고 원복
             inv = Inventory.objects.get(part=target_inc.part)
             inv.base_stock -= target_inc.quantity
             inv.save()
 
             if do:
-                # 2. 라벨 기록 삭제 (수량 조건 정밀 매칭)
                 LabelPrintLog.objects.filter(part_no=target_inc.part.part_no, printed_qty=target_inc.quantity).delete()
-                
-                # 3. 납품서 상세 품목 삭제 (수량 조건 정밀 매칭)
                 DeliveryOrderItem.objects.filter(order=do, part_no=target_inc.part.part_no, total_qty=target_inc.quantity).delete()
             
-            # 4. 입고 기록 삭제
             target_inc.delete()
             messages.success(request, f"품목 {target_inc.part.part_no} 입고 취소 및 잔량이 복구되었습니다.")
 
