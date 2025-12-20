@@ -18,7 +18,6 @@ from .models import Order, Vendor, Part, Inventory, Incoming, LabelPrintLog, Del
 # [0. 필수 공통 로직 및 권한 설정]
 # ==========================================
 def menu_permission_required(permission_field):
-    """UserProfile의 특정 체크박스 권한을 확인하는 데코레이터"""
     def decorator(view_func):
         @wraps(view_func)
         def _wrapped_view(request, *args, **kwargs):
@@ -288,19 +287,20 @@ def inventory_upload_action(request):
         try:
             wb = openpyxl.load_workbook(request.FILES['excel_file']); ws = wb.active; u_count = 0
             with transaction.atomic():
+                # [✅ 최종 수정] 사용자 엑셀 이미지 반영: A열 품번, B열 수량
                 for row in ws.iter_rows(min_row=2, values_only=True):
-                    # [✅ 수정] 협력사(row[0]) 무시, 품번(row[1])만 품목 마스터에서 조회
-                    p_no = str(row[1]).strip() if row[1] else None
+                    p_no = str(row[0]).strip() if row[0] else None
                     if not p_no: continue
                     
                     part = Part.objects.filter(part_no=p_no).first()
                     if part: 
                         inv, _ = Inventory.objects.get_or_create(part=part)
-                        inv.base_stock = int(row[2]) if row[2] is not None else 0
+                        # B열(row[1]) 수량 반영
+                        inv.base_stock = int(row[1]) if row[1] is not None else 0
                         inv.last_inventory_date = s_date
                         inv.save()
                         u_count += 1
-            messages.success(request, f"재고 초기화 완료: 시스템 등록 품목 {u_count}건 반영됨")
+            messages.success(request, f"재고 초기화 완료: {u_count}건 반영됨 (A열 품번 기준)")
         except Exception as e: messages.error(request, str(e))
     return redirect('inventory_list')
 
