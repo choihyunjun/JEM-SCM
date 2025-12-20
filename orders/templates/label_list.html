@@ -225,7 +225,9 @@
             totalElem.style.textDecoration = "none";
         }
     }
+
     let addedItems = []; 
+
     function addToPreview(rowId) {
         const partNo = document.getElementById('pno-' + rowId).innerText;
         const partName = document.getElementById('pname-' + rowId).innerText;
@@ -233,14 +235,26 @@
         const box = parseInt(document.getElementById('box-' + rowId).value) || 0;
         const total = snp * box;
         const remain = parseInt(document.getElementById('remain-' + rowId).getAttribute('data-val'));
+        
+        // 중복 체크용 키 생성 (품번 + SNP)
+        const itemKey = partNo + "_" + snp;
+
         if (snp <= 0 || box <= 0) { alert('SNP와 박스 수를 입력해주세요.'); return; }
         if (total > remain) { alert('잔량을 초과했습니다.'); return; }
-        if (addedItems.includes(partNo)) { alert('이미 대기 목록에 있는 품번입니다.'); return; }
+        
+        // [✅ 수정] 동일 품번이라도 SNP가 다르면 등록 가능하게 개선
+        if (addedItems.includes(itemKey)) { 
+            alert('이미 대기 목록에 동일한 품번과 SNP 수량이 존재합니다.'); 
+            return; 
+        }
+
         document.getElementById('preview-section').style.display = 'block';
         document.getElementById('info-alert').style.display = 'none';
+        
         const tbody = document.getElementById('preview-tbody');
         const newRow = document.createElement('tr');
-        newRow.id = 'preview-row-' + partNo;
+        // id에도 SNP 정보를 포함하여 유니크하게 관리
+        newRow.id = 'preview-row-' + itemKey.replace(/[^a-zA-Z0-9]/g, '_');
         newRow.innerHTML = `
             <td class="fw-bold">${partNo}
                 <input type="hidden" name="part_nos[]" value="${partNo}">
@@ -253,24 +267,30 @@
             <td>${box}</td>
             <td class="preview-total fw-bold">${total.toLocaleString()}</td>
             <td>
-                <button type="button" class="btn btn-sm btn-danger" onclick="removePreview('${partNo}')">
+                <button type="button" class="btn btn-sm btn-danger" onclick="removePreview('${itemKey}')">
                     <i class="bi bi-x-lg"></i>
                 </button>
             </td>
         `;
         tbody.appendChild(newRow);
-        addedItems.push(partNo);
+        addedItems.push(itemKey);
         updateGrandTotal();
     }
-    function removePreview(partNo) {
-        document.getElementById('preview-row-' + partNo).remove();
-        addedItems = addedItems.filter(item => item !== partNo);
+
+    function removePreview(itemKey) {
+        const safeId = itemKey.replace(/[^a-zA-Z0-9]/g, '_');
+        const element = document.getElementById('preview-row-' + safeId);
+        if (element) element.remove();
+        
+        addedItems = addedItems.filter(item => item !== itemKey);
         updateGrandTotal();
+        
         if (addedItems.length === 0) {
             document.getElementById('preview-section').style.display = 'none';
             document.getElementById('info-alert').style.display = 'block';
         }
     }
+
     function clearPreview() {
         if(confirm('목록을 비우시겠습니까?')) {
             document.getElementById('preview-tbody').innerHTML = '';
@@ -280,6 +300,7 @@
             document.getElementById('info-alert').style.display = 'block';
         }
     }
+
     function updateGrandTotal() {
         let total = 0;
         document.querySelectorAll('.preview-total').forEach(td => {
@@ -288,12 +309,14 @@
         document.getElementById('grand-total').innerText = total.toLocaleString();
         document.getElementById('preview-count').innerText = addedItems.length + '건';
     }
+
     function submitCreateOrder() {
         if (addedItems.length === 0) { alert('등록할 품목이 없습니다.'); return; }
         if (confirm(`총 ${addedItems.length}건으로 납품서를 생성(등록)하시겠습니까?`)) {
             document.getElementById('createOrderForm').submit();
         }
     }
+
     function openPrintPopup(orderId) {
         const url = "/label/print/" + orderId + "/"; 
         window.open(url, 'print_popup', 'width=1000,height=900,scrollbars=yes');

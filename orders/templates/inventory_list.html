@@ -182,7 +182,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p class="small text-muted">A열:업체명 / B열:품번 / C열:소요수량 / D열:날짜(YYYY-MM-DD)</p>
+                <p class="small text-muted">A열:품번 / B열:소요수량 / C열:날짜(YYYY-MM-DD)</p>
                 <form action="{% url 'demand_upload_action' %}" method="post" enctype="multipart/form-data">
                     {% csrf_token %}
                     <input type="file" name="demand_file" class="form-control mb-3" required>
