@@ -160,9 +160,8 @@
                         <th style="width: 50px;">NO</th>
                         <th style="width: 15%;">품번</th>
                         <th>품명</th>
-                        <th style="width: 100px;">총 발주량</th>
-                        <th style="width: 100px;">기발행량</th>
-                        <th style="width: 120px;" class="table-primary">발행가능 잔량</th>
+                        <th style="width: 120px;">총 발주 수량</th>
+                        <th style="width: 150px;" class="table-primary">납품가능 수량</th>
                         <th style="width: 120px;">SNP (박스당)</th>
                         <th style="width: 100px;">박스 수</th>
                         <th style="width: 120px;">총 발행량</th>
@@ -176,7 +175,6 @@
                         <td class="fw-bold text-primary" id="pno-{{ forloop.counter }}">{{ item.part_no }}</td>
                         <td id="pname-{{ forloop.counter }}">{{ item.part_name }}</td>
                         <td class="text-end text-muted">{{ item.total_order|intcomma }}</td>
-                        <td class="text-end text-muted">{{ item.printed|intcomma }}</td>
                         <td class="text-end fw-bold fs-5 text-danger" id="remain-{{ forloop.counter }}" data-val="{{ item.remain }}">
                             {{ item.remain|intcomma }}
                         </td>
@@ -236,13 +234,11 @@
         const total = snp * box;
         const remain = parseInt(document.getElementById('remain-' + rowId).getAttribute('data-val'));
         
-        // 중복 체크용 키 생성 (품번 + SNP)
         const itemKey = partNo + "_" + snp;
 
         if (snp <= 0 || box <= 0) { alert('SNP와 박스 수를 입력해주세요.'); return; }
         if (total > remain) { alert('잔량을 초과했습니다.'); return; }
         
-        // [✅ 수정] 동일 품번이라도 SNP가 다르면 등록 가능하게 개선
         if (addedItems.includes(itemKey)) { 
             alert('이미 대기 목록에 동일한 품번과 SNP 수량이 존재합니다.'); 
             return; 
@@ -253,7 +249,6 @@
         
         const tbody = document.getElementById('preview-tbody');
         const newRow = document.createElement('tr');
-        // id에도 SNP 정보를 포함하여 유니크하게 관리
         newRow.id = 'preview-row-' + itemKey.replace(/[^a-zA-Z0-9]/g, '_');
         newRow.innerHTML = `
             <td class="fw-bold">${partNo}
