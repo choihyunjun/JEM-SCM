@@ -14,10 +14,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-itpjrwqo%(y%2wzj301tgp7@bzl836nt8nr#9#xq+knq@59sx6'
 
 # [수정] VS Code 로컬 테스트를 위해 True로 변경 (CSS 로드 문제 해결 핵심)
-DEBUG = True
-
+DEBUG = False
 # [보안 개선] 허용할 도메인 및 IP 리스트
-ALLOWED_HOSTS = ['1.234.80.211', 'hyunjun0701.cafe24.com', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['1.234.80.211', 'hyunjun0701.cafe24.com','jem-scm.com' ,'localhost', '127.0.0.1']
 
 
 # Application definition
