@@ -86,7 +86,7 @@ def order_list(request):
         'active_menu': 'list', 'current_sort': sort_by,
     })
 
-# [2. 발주 관련 액션]
+# [2. 발주 관련 액션] (기존 코드 유지)
 @login_required
 def order_upload(request):
     if not request.user.is_superuser: return redirect('order_list')
@@ -153,7 +153,7 @@ def order_export(request):
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = 'attachment; filename=orders.xlsx'; wb.save(response); return response
 
-# [3. 과부족/소요량 로직]
+# [3. 과부족/소요량 로직] (기존 코드 유지)
 @login_required
 @menu_permission_required('can_view_inventory') 
 def inventory_list(request):
@@ -432,7 +432,7 @@ def receive_delivery_order_scan(request):
         messages.success(request, f"납품서 {do.order_no} 입고 처리가 완료되었습니다.")
     return redirect('incoming_list')
 
-# [✅ 추가] 입고 취소 로직 (부분/전체)
+# [✅ 수정 완료] 입고 취소 로직 (발행 가능 잔량 복구 포함)
 @login_required
 @require_POST
 @menu_permission_required('can_manage_incoming')
@@ -440,39 +440,57 @@ def incoming_cancel(request):
     inc_id = request.POST.get('incoming_id')
     mode = request.POST.get('cancel_mode') # 'item' or 'all'
     target_inc = get_object_or_404(Incoming, id=inc_id)
-    do_no = target_inc.delivery_order_no # 모델에 추가한 필드 참조
+    do_no = target_inc.delivery_order_no
     do = DeliveryOrder.objects.filter(order_no=do_no).first()
 
     with transaction.atomic():
         if mode == 'item':
-            # 1. 재고 차감
+            # 1. 재고 차감 (실제 재고 줄임)
             inv = Inventory.objects.get(part=target_inc.part)
             inv.base_stock -= target_inc.quantity
             inv.save()
-            # 2. 납품서 상세 내역에서 해당 품목 삭제
+
+            # 2. [핵심수정] 발행 가능 잔량 복구: LabelPrintLog에서 해당 수량만큼 삭제
+            # 납품서 생성일자 기준으로 로그를 찾아 삭제하여 '발행가능 잔량'을 다시 늘려줌
             if do:
+                LabelPrintLog.objects.filter(
+                    part_no=target_inc.part.part_no, 
+                    printed_qty=target_inc.quantity,
+                    printed_at__date=do.created_at.date()
+                ).delete()
+                # 3. 납품서 상세 내역에서 해당 품목 삭제
                 DeliveryOrderItem.objects.filter(order=do, part_no=target_inc.part.part_no).delete()
-            # 3. 입고 내역 삭제
+            
+            # 4. 입고 내역 삭제
             target_inc.delete()
-            messages.success(request, f"품목 {target_inc.part.part_no} 입고 취소 및 납품서 내역이 삭제되었습니다.")
+            messages.success(request, f"품목 {target_inc.part.part_no} 입고 취소 및 발행 가능 잔량이 복구되었습니다.")
 
         elif mode == 'all':
             if not do_no:
                 messages.error(request, "연결된 납품서 번호가 없는 데이터입니다.")
                 return redirect('incoming_list')
 
-            # 1. 해당 납품서 번호로 입고된 모든 내역 찾기
+            # 1. 해당 납품서 번호로 입고된 모든 내역 찾기 및 재고 원복
             all_incs = Incoming.objects.filter(delivery_order_no=do_no)
             for inc in all_incs:
                 inv = Inventory.objects.get(part=inc.part)
                 inv.base_stock -= inc.quantity
                 inv.save()
+                
+                # 2. [핵심수정] 전체 취소 시에도 각 품목의 라벨 발행 로그 삭제하여 잔량 복구
+                if do:
+                    LabelPrintLog.objects.filter(
+                        part_no=inc.part.part_no, 
+                        printed_qty=inc.quantity,
+                        printed_at__date=do.created_at.date()
+                    ).delete()
                 inc.delete()
-            # 2. 납품서 상태 등록완료(False)로 원복
+
+            # 3. 납품서 상태 등록완료(False)로 원복
             if do:
                 do.is_received = False
                 do.save()
-            messages.success(request, f"납품서 {do_no} 전체 입고 취소 및 상태가 등록완료로 변경되었습니다.")
+            messages.success(request, f"납품서 {do_no} 전체 입고 취소 및 발행 가능 잔량이 복구되었습니다.")
 
     return redirect('incoming_list')
 
@@ -485,7 +503,6 @@ def incoming_list(request):
     
     incomings = Incoming.objects.select_related('part', 'part__vendor').all().order_by('-in_date', '-created_at')
     
-    # [✅ 수정] 관리자용 업체 목록: 입고 이력이 있는 업체만 필터링
     vendor_ids = Incoming.objects.values_list('part__vendor_id', flat=True).distinct()
     vendor_list = Vendor.objects.filter(id__in=vendor_ids).order_by('name') if (user.is_superuser or user.profile.role == 'STAFF') else []
 
