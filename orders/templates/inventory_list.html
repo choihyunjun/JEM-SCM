@@ -107,22 +107,17 @@
                         <tr class="text-center border-bottom-bold">
                             <td class="bg-light small fw-bold">과부족</td>
                             {% for day in item.daily_status %}
-                            <td class="fw-bold date-cell 
-                                {% if day.is_danger %}
-                                    bg-danger-light text-danger 
-                                    {% if user.is_superuser or user.profile.role == 'STAFF' %}cursor-pointer{% endif %}
-                                {% endif %}"
+                            {# [✅ 정밀 수정] 재고 상태(is_danger)와 상관없이 클릭 이벤트 부여, 아이콘만 조건부 노출 #}
+                            <td class="fw-bold date-cell {% if user.is_superuser or user.profile.role == 'STAFF' %}cursor-pointer hover-bg-light{% endif %} {% if day.is_danger %}bg-danger-light text-danger{% endif %}"
                                 style="min-width: 85px;"
-                                {% if day.is_danger and user.is_superuser or user.profile.role == 'STAFF' %} 
+                                {% if user.is_superuser or user.profile.role == 'STAFF' %} 
                                     onclick="openOrderModal('{{ item.part_no }}', '{{ item.part_name|escapejs }}', '{{ item.vendor_name|escapejs }}', '{{ day.stock|stringformat:'d' }}', '{{ day.date|date:'Y-m-d' }}')" 
                                     title="클릭하여 발주 생성"
                                 {% endif %}>
                                 {{ day.stock|intcomma }}
                                 {# [✅ 최종 수정] 마이너스 재고(is_danger)일 때만 빨간색 플러스 아이콘 노출 #}
-                                {% if day.is_danger %}
-                                    {% if user.is_superuser or user.profile.role == 'STAFF' %}
-                                        <i class="bi bi-plus-circle-fill ms-1" style="font-size: 0.7rem;"></i>
-                                    {% endif %}
+                                {% if day.is_danger and user.is_superuser or user.profile.role == 'STAFF' %}
+                                    <i class="bi bi-plus-circle-fill ms-1" style="font-size: 0.7rem;"></i>
                                 {% endif %}
                             </td>
                             {% endfor %}
@@ -153,7 +148,7 @@
                     </div>
                     <div class="row">
                         <div class="col-6 mb-3">
-                            <label class="form-label fw-bold text-danger">부족 수량</label>
+                            <label class="form-label fw-bold text-danger">현 재고(과부족)</label>
                             <input type="text" id="modalShortage" class="form-control" readonly>
                         </div>
                         <div class="col-6 mb-3">
@@ -223,9 +218,12 @@ function openOrderModal(partNo, partName, vendor, shortage, dueDate) {
     document.getElementById('hiddenVendor').value = vendor;
     document.getElementById('hiddenPartNo').value = partNo;
     
-    const absShortage = Math.abs(parseInt(shortage));
-    document.getElementById('modalShortage').value = absShortage;
-    document.getElementById('modalOrderQty').value = absShortage;
+    // 부족 수량 표시 시 절댓값이 아닌 실제 재고 수치 그대로 표시 (플러스/마이너스 구분 위해)
+    document.getElementById('modalShortage').value = shortage;
+    
+    // 발주 수량은 기본적으로 부족분(절댓값)만큼 세팅하되, 플러스일 경우 0으로 세팅
+    const shortageInt = parseInt(shortage);
+    document.getElementById('modalOrderQty').value = shortageInt < 0 ? Math.abs(shortageInt) : 0;
     document.getElementById('modalDueDate').value = dueDate;
     
     new bootstrap.Modal(document.getElementById('orderModal')).show();
