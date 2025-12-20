@@ -289,9 +289,18 @@ def inventory_upload_action(request):
             wb = openpyxl.load_workbook(request.FILES['excel_file']); ws = wb.active; u_count = 0
             with transaction.atomic():
                 for row in ws.iter_rows(min_row=2, values_only=True):
-                    part = Part.objects.filter(part_no=row[1], vendor__name=row[0]).first()
-                    if part: inv, _ = Inventory.objects.get_or_create(part=part); inv.base_stock = int(row[2]); inv.last_inventory_date = s_date; inv.save(); u_count += 1
-            messages.success(request, f"재고 초기화 완료 ({u_count}건)")
+                    # [✅ 수정] 협력사(row[0]) 무시, 품번(row[1])만 품목 마스터에서 조회
+                    p_no = str(row[1]).strip() if row[1] else None
+                    if not p_no: continue
+                    
+                    part = Part.objects.filter(part_no=p_no).first()
+                    if part: 
+                        inv, _ = Inventory.objects.get_or_create(part=part)
+                        inv.base_stock = int(row[2]) if row[2] is not None else 0
+                        inv.last_inventory_date = s_date
+                        inv.save()
+                        u_count += 1
+            messages.success(request, f"재고 초기화 완료: 시스템 등록 품목 {u_count}건 반영됨")
         except Exception as e: messages.error(request, str(e))
     return redirect('inventory_list')
 
@@ -350,7 +359,6 @@ def label_list(request):
         'active_menu': 'label'
     })
 
-# [✅ 재수정 완료] 납품서 삭제 시점에 발행 가능 잔량 복구
 @login_required
 @require_POST
 def delete_delivery_order(request, order_id):
@@ -360,7 +368,6 @@ def delete_delivery_order(request, order_id):
         return redirect('label_list')
     
     with transaction.atomic():
-        # 납품서에 포함된 각 품목에 대해 라벨 발행 기록(Log)을 삭제하여 발행 가능 잔량 복구
         for item in order.items.all():
             LabelPrintLog.objects.filter(
                 part_no=item.part_no, 
@@ -425,7 +432,6 @@ def receive_delivery_order_scan(request):
         for item in do.items.all():
             part = Part.objects.filter(part_no=item.part_no).first()
             if part: 
-                # [✅ 수정] DB 필드명에 맞춰 delivery_order_no 저장
                 Incoming.objects.create(
                     part=part, 
                     quantity=item.total_qty, 
@@ -440,7 +446,6 @@ def receive_delivery_order_scan(request):
         messages.success(request, f"납품서 {do.order_no} 입고 처리가 완료되었습니다.")
     return redirect('incoming_list')
 
-# [✅ 재수정 완료] 입고 취소 로직 (한품목 즉시 복구 포함)
 @login_required
 @require_POST
 @menu_permission_required('can_manage_incoming')
@@ -453,22 +458,18 @@ def incoming_cancel(request):
 
     with transaction.atomic():
         if mode == 'item':
-            # 1. 재고 차감 (실제 재고 줄임)
             inv = Inventory.objects.get(part=target_inc.part)
             inv.base_stock -= target_inc.quantity
             inv.save()
 
-            # 2. [한품목 즉시 복구] 납품서 생성일자 기준으로 로그를 찾아 삭제하여 '발행가능 잔량' 복구
             if do:
                 LabelPrintLog.objects.filter(
                     part_no=target_inc.part.part_no, 
                     printed_qty=target_inc.quantity,
                     printed_at__date=do.created_at.date()
                 ).delete()
-                # 3. 납품서 상세 내역에서도 해당 품목 삭제
                 DeliveryOrderItem.objects.filter(order=do, part_no=target_inc.part.part_no).delete()
             
-            # 4. 입고 내역 삭제
             target_inc.delete()
             messages.success(request, f"품목 {target_inc.part.part_no} 입고 취소 및 잔량이 복구되었습니다.")
 
