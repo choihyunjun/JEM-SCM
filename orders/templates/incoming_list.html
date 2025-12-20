@@ -160,11 +160,15 @@
                         <td class="fw-bold text-end pe-4">{{ item.quantity|intcomma }}</td>
                         <td class="text-muted small">{{ item.created_at|date:"Y-m-d H:i" }}</td>
                         <td>
+                            {% if user.is_superuser or user.profile.role == 'STAFF' %}
                             <button type="button" class="btn btn-sm btn-outline-danger" 
                                     data-bs-toggle="modal" data-bs-target="#cancelModal"
                                     onclick="setCancelTarget('{{ item.id }}', '{{ item.part.part_no }}')">
                                 <i class="bi bi-x-circle"></i> 취소
                             </button>
+                            {% else %}
+                            <span class="text-muted small">-</span>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}
@@ -204,7 +208,7 @@ function confirmCancel(mode) {
     }
 }
 
-// 카메라 스캔 로직
+// 카메라 스캔 로직 (유지)
 let video = document.getElementById("video");
 let canvasElement = document.getElementById("canvas");
 let canvas = canvasElement.getContext("2d", { willReadFrequently: true });
