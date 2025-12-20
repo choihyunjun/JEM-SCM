@@ -12,7 +12,7 @@
         </h2>
         
         <div class="d-flex align-items-center gap-2 flex-wrap">
-            {% if user.is_superuser %}
+            {% if user.is_superuser or user.profile.role == 'STAFF' %}
             <form method="get" class="d-flex align-items-center me-2">
                 <input type="hidden" name="show_all" value="{{ show_all|lower }}">
                 <select name="vendor_id" class="form-select form-select-sm shadow-sm" onchange="this.form.submit()" style="width: 180px; border-color: #0d6efd;">
@@ -32,7 +32,7 @@
                     <i class="bi bi-file-earmark-excel me-1"></i>엑셀 저장
                 </a>
 
-                {% if user.is_superuser %}
+                {% if user.is_superuser or user.profile.role == 'STAFF' %}
                 <a href="{% url 'demand_manage' %}" class="btn btn-sm btn-outline-primary shadow-sm bg-white">
                     <i class="bi bi-pencil-square me-1"></i>소요량 수정/삭제
                 </a>
@@ -89,9 +89,9 @@
                                 {% endif %}
                             </td>
                             {% for day in item.daily_status %}
-                            <td class="text-primary date-cell {% if user.is_superuser %}cursor-pointer hover-bg-light{% endif %}" 
+                            <td class="text-primary date-cell {% if user.is_superuser or user.profile.role == 'STAFF' %}cursor-pointer hover-bg-light{% endif %}" 
                                 style="min-width: 85px;"
-                                {% if user.is_superuser %}onclick="editDemand('{{ item.part_no }}', '{{ day.date|date:'Y-m-d' }}', '{{ day.demand_qty }}')"{% endif %}>
+                                {% if user.is_superuser or user.profile.role == 'STAFF' %}onclick="editDemand('{{ item.part_no }}', '{{ day.date|date:'Y-m-d' }}', '{{ day.demand_qty }}')"{% endif %}>
                                 {% if day.demand_qty > 0 %}{{ day.demand_qty|intcomma }}{% else %}-{% endif %}
                             </td>
                             {% endfor %}
@@ -107,11 +107,23 @@
                         <tr class="text-center border-bottom-bold">
                             <td class="bg-light small fw-bold">과부족</td>
                             {% for day in item.daily_status %}
-                            <td class="fw-bold date-cell {% if day.is_danger %}bg-danger-light text-danger cursor-pointer{% endif %}"
+                            <td class="fw-bold date-cell 
+                                {% if day.is_danger %}
+                                    bg-danger-light text-danger 
+                                    {% if user.is_superuser or user.profile.role == 'STAFF' %}cursor-pointer{% endif %}
+                                {% endif %}"
                                 style="min-width: 85px;"
-                                {% if day.is_danger %} onclick="openOrderModal('{{ item.part_no }}', '{{ item.part_name|escapejs }}', '{{ item.vendor_name|escapejs }}', '{{ day.stock|stringformat:'d' }}', '{{ day.date|date:'Y-m-d' }}')" title="클릭하여 발주 생성"{% endif %}>
+                                {% if day.is_danger and user.is_superuser or user.profile.role == 'STAFF' %} 
+                                    onclick="openOrderModal('{{ item.part_no }}', '{{ item.part_name|escapejs }}', '{{ item.vendor_name|escapejs }}', '{{ day.stock|stringformat:'d' }}', '{{ day.date|date:'Y-m-d' }}')" 
+                                    title="클릭하여 발주 생성"
+                                {% endif %}>
                                 {{ day.stock|intcomma }}
-                                {% if day.is_danger %}<i class="bi bi-plus-circle-fill ms-1" style="font-size: 0.7rem;"></i>{% endif %}
+                                {# [✅ 최종 수정] 마이너스 재고(is_danger)일 때만 빨간색 플러스 아이콘 노출 #}
+                                {% if day.is_danger %}
+                                    {% if user.is_superuser or user.profile.role == 'STAFF' %}
+                                        <i class="bi bi-plus-circle-fill ms-1" style="font-size: 0.7rem;"></i>
+                                    {% endif %}
+                                {% endif %}
                             </td>
                             {% endfor %}
                         </tr>

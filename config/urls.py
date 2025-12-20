@@ -13,6 +13,9 @@ urlpatterns = [
     path('accounts/', include('django.contrib.auth.urls')),
     path('login-success/', views.login_success, name='login_success'),
 
+    # [추가] SCM 스타일 통합 관리자 메인 페이지
+    path('scm-admin/', views.scm_admin_main, name='scm_admin_main'),
+
     # 2. 발주 조회 및 기본 페이지
     path('', views.order_list, name='order_list'),
     path('list/', views.order_list, name='order_list_alias'),
@@ -58,6 +61,7 @@ urlpatterns = [
     path('label/print/<int:order_id>/', views.label_print, name='label_print'),
     path('label/print_note/<int:order_id>/', views.delivery_note_print, name='delivery_note_print'),
     path('label/action/', views.label_print_action, name='label_print_action'),
+    path('label/delete/<int:order_id>/', views.delete_delivery_order, name='delete_delivery_order'),
 
     # ============================================================
     # 7. 입고 관리 (스캔 및 이력 조회)
@@ -65,4 +69,7 @@ urlpatterns = [
     path('label/receive_scan/', views.receive_delivery_order_scan, name='receive_delivery_order_scan'),
     path('incoming/list/', views.incoming_list, name='incoming_list'),
     path('incoming/export/', views.incoming_export, name='incoming_export'),
+    
+    # [✅ 추가] 입고 취소 처리 기능 (부분/전체)
+    path('incoming/cancel/', views.incoming_cancel, name='incoming_cancel'),
 ]

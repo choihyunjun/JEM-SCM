@@ -1,5 +1,6 @@
 {% load humanize %}
 {% load static %}
+{% load auth_extras %}
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -47,31 +48,38 @@
         </div>
         
         <div class="nav flex-column">
+            {% if user.is_superuser or user.profile.can_view_orders %}
             <a href="{% url 'order_list' %}" class="nav-link {% if active_menu == 'list' %}active{% endif %}">
                 <i class="bi bi-list-check me-2"></i> 발주 조회 / 승인
             </a>
+            {% endif %}
 
-             <a href="{% url 'label_list' %}" class="nav-link {% if active_menu == 'label' %}active{% endif %}">
-                <i class="bi bi-printer me-2"></i> 발주서 등록 / 조회
+            {% if user.is_superuser or user.profile.can_register_orders %}
+            <a href="{% url 'label_list' %}" class="nav-link {% if active_menu == 'label' %}active{% endif %}">
+                <i class="bi bi-printer me-2"></i> 납품서 등록 / 조회
             </a>
+            {% endif %}
 
-            {% if user.is_superuser or user.vendor.can_view_inventory %}
+            {% if user.is_superuser or user.profile.can_view_inventory %}
             <a href="{% url 'inventory_list' %}" class="nav-link {% if active_menu == 'inventory' %}active{% endif %}">
                 <i class="bi bi-box-seam me-2"></i> 과부족 조회
             </a>
             {% endif %}
 
-           
-
+            {% if user.is_superuser or user.profile.can_manage_incoming %}
             <a href="{% url 'incoming_list' %}" class="nav-link {% if active_menu == 'incoming' %}active{% endif %}">
                 <i class="bi bi-box-arrow-in-down me-2"></i> 입고 관리
             </a>
+            {% endif %}
 
             {% if user.is_superuser %}
             <a href="{% url 'order_upload' %}" class="nav-link {% if active_menu == 'upload' %}active{% endif %}">
                 <i class="bi bi-cloud-upload me-2"></i> 발주 등록
             </a>
-            <a href="/admin" class="nav-link" target="_blank">
+            {% endif %}
+
+            {% if user.is_superuser or user.profile.can_access_scm_admin %}
+            <a href="{% url 'scm_admin_main' %}" class="nav-link {% if active_menu == 'admin_main' %}active{% endif %}">
                 <i class="bi bi-gear-fill me-2"></i> 관리자 페이지
             </a>
             {% endif %}
@@ -84,7 +92,7 @@
             <div class="d-flex align-items-center">
                 <span class="me-3 small">
                     <i class="bi bi-person-circle"></i> 
-                    {% if user.is_superuser %}관리자{% else %}{{ vendor_name }}{% endif %} ({{ user_name }})
+                    {% if user.is_superuser %}슈퍼관리자{% elif user.profile.role == 'STAFF' %}진영전기 직원{% else %}{{ vendor_name }}{% endif %} ({{ user_name }})
                 </span>
                 <form action="{% url 'logout' %}" method="post" class="m-0">
                     {% csrf_token %}

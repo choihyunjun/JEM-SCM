@@ -25,7 +25,7 @@
         .info-table { margin-bottom: 20px; border: 2px solid black; }
         .info-label { background: #f0f0f0; font-weight: bold; }
         
-        .list-table { margin-top: 10px; border: 2px solid black; flex-grow: 1; } /* 테이블이 남은 공간 차지 */
+        .list-table { margin-top: 10px; border: 2px solid black; flex-grow: 1; }
         .list-table th { background: #f0f0f0; border-bottom: 2px solid black; padding: 8px; }
         .list-table td { padding: 8px; font-size: 13px; }
         
@@ -84,23 +84,23 @@
             <tr>
                 <td rowspan="4" class="info-label" style="background:#e0e0e0;">공<br>급<br>자</td>
                 <td class="info-label">등록번호</td>
-                <td colspan="3" style="letter-spacing: 2px; font-weight: bold;"> *** - ** - ***** </td>
+                <td colspan="3" style="letter-spacing: 2px; font-weight: bold;">{{ vendor.biz_registration_number|default:"*** - ** - *****" }}</td>
             </tr>
             <tr>
                 <td class="info-label">상 호</td>
-                <td>{{ vendor_name }}</td>
+                <td>{{ vendor.name }}</td>
                 <td class="info-label">성 명</td>
-                <td> (인) </td>
+                <td>{{ vendor.representative|default:"" }} (인)</td>
             </tr>
             <tr>
                 <td class="info-label">주 소</td>
-                <td colspan="3"> (주소 자동입력란) </td>
+                <td colspan="3" class="text-left">{{ vendor.address|default:"(주소 정보 없음)" }}</td>
             </tr>
             <tr>
                 <td class="info-label">업 태</td>
-                <td> 제조 </td>
+                <td>{{ vendor.biz_type|default:"제조" }}</td>
                 <td class="info-label">종 목</td>
-                <td> 자동차부품 </td>
+                <td>{{ vendor.biz_item|default:"자동차부품" }}</td>
             </tr>
         </table>
 
@@ -129,7 +129,7 @@
                 </tr>
                 {% endfor %}
                 
-                {% for i in "12345" %} 
+                {% for i in "123" %} 
                 <tr><td colspan="7" style="height: 30px;"></td></tr>
                 {% endfor %}
             </tbody>
@@ -156,9 +156,7 @@
     </div>
 
     <script>
-        // 납품서 번호 (예: DO-20251218-123456)
         let qrContent = "{{ order.order_no }}";
-
         new QRCode(document.getElementById("qrcode"), {
             text: qrContent,
             width: 100,

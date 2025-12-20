@@ -1,12 +1,25 @@
 from django.db import models
 from django.contrib.auth.models import User
 
-# 1. 협력사(Vendor)
+# 1. 협력사(Vendor) - 납품서 출력을 위한 사업자등록번호 추가
 class Vendor(models.Model):
     name = models.CharField(max_length=100, verbose_name="업체명")
     code = models.CharField(max_length=20, unique=True, verbose_name='업체코드', default='V000')
     user = models.OneToOneField(User, on_delete=models.CASCADE, null=True, blank=True)
     can_view_inventory = models.BooleanField(default=True, verbose_name="과부족 조회 권한")
+
+    # --- [신규 추가 및 수정 필드] ---
+    # biz_registration_number: 납품서 '등록번호' 칸에 실제 출력될 번호
+    biz_registration_number = models.CharField(max_length=20, blank=True, null=True, verbose_name="사업자등록번호")
+    
+    # erp_code: DB 저장용 (향후 ERP 연동용, 납품서에는 출력 안함)
+    erp_code = models.CharField(max_length=50, blank=True, null=True, verbose_name="ERP 업체코드")
+    
+    representative = models.CharField(max_length=50, blank=True, null=True, verbose_name="성명(대표이사)")
+    address = models.CharField(max_length=255, blank=True, null=True, verbose_name="주소")
+    biz_type = models.CharField(max_length=100, blank=True, null=True, verbose_name="업태")
+    biz_item = models.CharField(max_length=100, blank=True, null=True, verbose_name="종목")
+    # --------------------------------------
 
     class Meta:
         verbose_name = "협력사"
@@ -36,8 +49,7 @@ class Part(models.Model):
         if is_new:
             Inventory.objects.get_or_create(part=self)
 
-# [✅ 신규 추가] 2-1. 소요량 관리 (Demand)
-# 발주와 별개로 "실제 필요한 수량"을 기록하는 테이블입니다.
+# 2-1. 소요량 관리 (Demand)
 class Demand(models.Model):
     part = models.ForeignKey(Part, on_delete=models.CASCADE, verbose_name="품목")
     due_date = models.DateField(verbose_name="소요 발생일(납기일)")
@@ -52,7 +64,6 @@ class Demand(models.Model):
         return f"{self.part.part_no} 소요: {self.quantity}개 ({self.due_date})"
 
 # 3. 발주 정보(Order) 
-# 이제 과부족 계산이 아닌, 업체와의 확정된 거래 내역으로 사용됩니다.
 class Order(models.Model):
     vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, verbose_name="협력사")
     part_group = models.CharField(max_length=50, verbose_name='품목군', blank=True, null=True)
@@ -90,6 +101,8 @@ class Incoming(models.Model):
     part = models.ForeignKey(Part, on_delete=models.CASCADE, verbose_name="품목")
     in_date = models.DateField(verbose_name="입고예정일")
     quantity = models.IntegerField(verbose_name="입고수량")
+    # [✅ 추가] 입고 취소 처리를 위한 납품서 번호 역추적 필드
+    delivery_order_no = models.CharField(max_length=50, null=True, blank=True, verbose_name="연결 납품서 번호")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -122,6 +135,9 @@ class DeliveryOrder(models.Model):
         verbose_name = "납품서"
         verbose_name_plural = "4. 납품서 관리"
 
+    def __str__(self):
+        return f"{self.order_no} ({'입고완료' if self.is_received else '등록완료'})"
+
 # 8. 납품서 상세 품목 (DeliveryOrderItem)
 class DeliveryOrderItem(models.Model):
     order = models.ForeignKey(DeliveryOrder, on_delete=models.CASCADE, related_name='items', verbose_name="납품서 번호")
@@ -134,3 +150,29 @@ class DeliveryOrderItem(models.Model):
     class Meta:
         verbose_name = "납품서 상세 품목"
         verbose_name_plural = "납품서 상세 품목"
+
+# 9. 유저 프로필 확장
+class UserProfile(models.Model):
+    ROLE_CHOICES = [
+        ('ADMIN', '1. 슈퍼관리자 (모든 메뉴 노출)'),
+        ('STAFF', '2. 진영전기 직원 (운영 메뉴 노출)'),
+        ('VENDOR', '3. 협력업체 (제한적 메뉴 노출)'),
+    ]
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='VENDOR', verbose_name="사용자 그룹")
+    
+    can_view_orders = models.BooleanField(default=False, verbose_name="[메뉴] 발주 조회/승인")
+    can_register_orders = models.BooleanField(default=False, verbose_name="[메뉴] 발주서 등록")
+    can_view_inventory = models.BooleanField(default=False, verbose_name="[메뉴] 과부족 조회")
+    can_manage_incoming = models.BooleanField(default=False, verbose_name="[메뉴] 입고 관리")
+    can_access_scm_admin = models.BooleanField(default=False, verbose_name="[메뉴] 통합 관리자 접근")
+
+    is_jinyoung_staff = models.BooleanField(default=False, verbose_name="진영전기 직원 여부(기본)")
+
+    class Meta:
+        verbose_name = "유저 권한 설정"
+        verbose_name_plural = "유저 권한 설정"
+
+    def __str__(self):
+        return f"{self.user.username} ({self.get_role_display()})"

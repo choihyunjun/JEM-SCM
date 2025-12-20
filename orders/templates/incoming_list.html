@@ -2,17 +2,19 @@
 {% load humanize %}
 
 {% block content %}
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+
 <div class="mb-4">
     <span class="badge bg-primary me-2">입고 관리</span>
     <span class="fw-bold text-secondary">입고 처리 및 이력 조회</span>
 </div>
 
-{% if user.is_superuser %}
+{% if user.is_superuser or user.profile.role == 'STAFF' %}
 <div class="card border-success shadow-sm mb-4">
     <div class="card-header bg-success text-white fw-bold">
         <i class="bi bi-qr-code-scan"></i> 입고 스캔 (QR)
     </div>
-    <div class="card-body bg-success-subtle d-flex align-items-center justify-content-between">
+    <div class="card-body bg-success-subtle d-flex align-items-center justify-content-between flex-wrap gap-3">
         <div class="d-flex align-items-center">
             <i class="bi bi-box-seam fs-1 text-success me-3"></i>
             <div>
@@ -21,12 +23,15 @@
             </div>
         </div>
         
-        <form action="{% url 'receive_delivery_order_scan' %}" method="post" class="d-flex align-items-center">
+        <form action="{% url 'receive_delivery_order_scan' %}" method="post" id="qr-form" class="d-flex align-items-center">
             {% csrf_token %}
             <div class="input-group input-group-lg">
                 <span class="input-group-text bg-white text-success"><i class="bi bi-upc-scan"></i></span>
-                <input type="text" name="qr_code" class="form-control border-success" 
-                       placeholder="여기를 클릭 후 스캔" style="width: 300px;" autofocus autocomplete="off">
+                <input type="text" name="qr_code" id="qr_input" class="form-control border-success" 
+                       placeholder="여기를 클릭 후 스캔" style="width: 250px;" autofocus autocomplete="off">
+                <button type="button" class="btn btn-outline-success border-success bg-white" onclick="startCameraScan()">
+                    <i class="bi bi-camera-fill"></i>
+                </button>
                 <button type="submit" class="btn btn-success fw-bold">입고확정</button>
             </div>
         </form>
@@ -34,11 +39,67 @@
 </div>
 {% endif %}
 
+<div class="modal fade" id="cameraModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-camera me-2"></i>QR 코드 스캔 중...</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="stopCamera()"></button>
+            </div>
+            <div class="modal-body p-0 position-relative" style="background: #000; overflow: hidden; min-height: 300px;">
+                <video id="video" style="width: 100%; height: auto; display: block;"></video>
+                <canvas id="canvas" style="display: none;"></canvas>
+                <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 200px; height: 200px; border: 2px solid rgba(25, 135, 84, 0.5); border-radius: 20px;"></div>
+            </div>
+            <div class="modal-footer justify-content-center">
+                <p class="text-muted small mb-0">납품서의 QR코드를 사각형 안에 맞춰주세요.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="cancelModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title fw-bold">입고 취소 방식 선택</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center py-4">
+                <p class="fw-bold mb-1" id="cancelTargetInfo" style="white-space: pre-wrap;"></p>
+                <p class="text-danger small fw-bold mb-4">(납품서가 단일 품목일 경우 전체취소를 눌러주세요)</p>
+                
+                <div class="d-grid gap-3">
+                    <button type="button" class="btn btn-outline-danger py-3" onclick="confirmCancel('item')">
+                        <i class="bi bi-trash me-2"></i> <strong>이 품목만</strong> 취소<br>
+                        <small>(해당 납품서에서 이 품목만 삭제됩니다)</small>
+                    </button>
+                    <button type="button" class="btn btn-danger py-3" onclick="confirmCancel('all')">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i> <strong>납품서 전체</strong> 취소<br>
+                        <small>(납품서가 '등록완료' 상태로 되돌아갑니다)</small>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="card border-0 shadow-sm mb-4 bg-light">
     <div class="card-body p-3">
         <form method="get" class="row g-2 align-items-center">
+            {% if user.is_superuser or user.profile.role == 'STAFF' %}
             <div class="col-auto">
-                <span class="fw-bold text-secondary me-2"><i class="bi bi-calendar-check"></i> 기간 조회</span>
+                <select name="vendor_id" class="form-select form-select-sm" style="width: 160px; border-color: #198754;">
+                    <option value="">== 업체 전체 ==</option>
+                    {% for v in vendor_list %}
+                        <option value="{{ v.id }}" {% if selected_vendor_id == v.id|stringformat:"s" %}selected{% endif %}>{{ v.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+
+            <div class="col-auto ms-2">
+                <span class="fw-bold text-secondary me-2"><i class="bi bi-calendar-check"></i> 기간</span>
             </div>
             <div class="col-auto">
                 <input type="date" name="start_date" class="form-control form-control-sm" value="{{ start_date }}">
@@ -48,7 +109,7 @@
                 <input type="date" name="end_date" class="form-control form-control-sm" value="{{ end_date }}">
             </div>
             
-            <div class="col-auto ms-4">
+            <div class="col-auto ms-3">
                 <span class="fw-bold text-secondary me-2"><i class="bi bi-search"></i> 검색</span>
             </div>
             <div class="col-auto">
@@ -62,7 +123,6 @@
                 <a href="{% url 'incoming_list' %}" class="btn btn-secondary btn-sm fw-bold px-3">
                     <i class="bi bi-arrow-counterclockwise"></i> 초기화
                 </a>
-                
                 <a href="{% url 'incoming_export' %}?{{ request.GET.urlencode }}" class="btn btn-success btn-sm fw-bold px-3">
                     <i class="bi bi-file-earmark-excel-fill"></i> 엑셀 다운
                 </a>
@@ -87,6 +147,7 @@
                         <th>품명</th>
                         <th>입고수량</th>
                         <th>처리일시</th>
+                        <th>관리</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -98,10 +159,17 @@
                         <td class="text-start">{{ item.part.part_name }}</td>
                         <td class="fw-bold text-end pe-4">{{ item.quantity|intcomma }}</td>
                         <td class="text-muted small">{{ item.created_at|date:"Y-m-d H:i" }}</td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-outline-danger" 
+                                    data-bs-toggle="modal" data-bs-target="#cancelModal"
+                                    onclick="setCancelTarget('{{ item.id }}', '{{ item.part.part_no }}')">
+                                <i class="bi bi-x-circle"></i> 취소
+                            </button>
+                        </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="6" class="py-5 text-muted">
+                        <td colspan="7" class="py-5 text-muted">
                             <i class="bi bi-inbox fs-1 d-block mb-3"></i>
                             검색된 입고 내역이 없습니다.
                         </td>
@@ -112,4 +180,66 @@
         </div>
     </div>
 </div>
+
+<form id="cancelForm" method="post" action="{% url 'incoming_cancel' %}">
+    {% csrf_token %}
+    <input type="hidden" name="incoming_id" id="cancel_incoming_id">
+    <input type="hidden" name="cancel_mode" id="cancel_mode">
+</form>
+
+<script>
+let currentCancelId = null;
+
+function setCancelTarget(id, partNo) {
+    currentCancelId = id;
+    document.getElementById('cancelTargetInfo').innerText = `품번: ${partNo}\n입고 내역을 취소하시겠습니까?`;
+}
+
+function confirmCancel(mode) {
+    const msg = mode === 'all' ? '해당 납품서 전체의 입고를 취소하시겠습니까?' : '이 품목의 입고만 취소하시겠습니까?';
+    if (confirm(msg)) {
+        document.getElementById('cancel_incoming_id').value = currentCancelId;
+        document.getElementById('cancel_mode').value = mode;
+        document.getElementById('cancelForm').submit();
+    }
+}
+
+// 카메라 스캔 로직
+let video = document.getElementById("video");
+let canvasElement = document.getElementById("canvas");
+let canvas = canvasElement.getContext("2d", { willReadFrequently: true });
+let scanning = false;
+let cameraModal;
+
+function startCameraScan() {
+    if (!cameraModal) { cameraModal = new bootstrap.Modal(document.getElementById('cameraModal')); }
+    cameraModal.show();
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }).then(function(stream) {
+        scanning = true; video.srcObject = stream; video.setAttribute("playsinline", true); video.play(); requestAnimationFrame(tick);
+    }).catch(function(err) { alert("카메라를 켤 수 없습니다: " + err); cameraModal.hide(); });
+}
+
+function stopCamera() {
+    scanning = false;
+    if (video.srcObject) { video.srcObject.getTracks().forEach(track => track.stop()); }
+}
+
+function tick() {
+    if (video.readyState === video.HAVE_ENOUGH_DATA && scanning) {
+        canvasElement.height = video.videoHeight; canvasElement.width = video.videoWidth;
+        canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
+        let imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
+        let code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
+        if (code) {
+            scanning = false; document.getElementById("qr_input").value = code.data;
+            stopCamera(); bootstrap.Modal.getInstance(document.getElementById('cameraModal')).hide();
+            setTimeout(() => { document.getElementById("qr-form").submit(); }, 500);
+            return;
+        }
+    }
+    if (scanning) { requestAnimationFrame(tick); }
+}
+
+document.getElementById('cameraModal').addEventListener('hidden.bs.modal', function () { stopCamera(); });
+</script>
 {% endblock %}
