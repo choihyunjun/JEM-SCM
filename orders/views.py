@@ -285,21 +285,25 @@ def inventory_upload_action(request):
     s_date = request.POST.get('inventory_date')
     if request.FILES.get('excel_file'):
         try:
-            wb = openpyxl.load_workbook(request.FILES['excel_file']); ws = wb.active; u_count = 0
+            # [✅ 성능 최적화] read_only 모드로 대용량 파일 메모리 절약
+            wb = openpyxl.load_workbook(request.FILES['excel_file'], read_only=True, data_only=True)
+            ws = wb.active; u_count = 0
+            
+            # 빠른 조회를 위해 품목 마스터 정보를 메모리에 캐싱
+            all_parts = {p.part_no: p for p in Part.objects.all()}
+            
             with transaction.atomic():
-                # [✅ 최종 수정] 사용자 엑셀 이미지 반영: A열 품번, B열 수량
                 for row in ws.iter_rows(min_row=2, values_only=True):
+                    # image_0db385.png 기준: A열(row[0]) 품번, B열(row[1]) 기초재고
                     p_no = str(row[0]).strip() if row[0] else None
-                    if not p_no: continue
+                    if not p_no or p_no not in all_parts: continue
                     
-                    part = Part.objects.filter(part_no=p_no).first()
-                    if part: 
-                        inv, _ = Inventory.objects.get_or_create(part=part)
-                        # B열(row[1]) 수량 반영
-                        inv.base_stock = int(row[1]) if row[1] is not None else 0
-                        inv.last_inventory_date = s_date
-                        inv.save()
-                        u_count += 1
+                    part = all_parts[p_no]
+                    inv, _ = Inventory.objects.get_or_create(part=part)
+                    inv.base_stock = int(row[1]) if row[1] is not None else 0
+                    inv.last_inventory_date = s_date
+                    inv.save()
+                    u_count += 1
             messages.success(request, f"재고 초기화 완료: {u_count}건 반영됨 (A열 품번 기준)")
         except Exception as e: messages.error(request, str(e))
     return redirect('inventory_list')
