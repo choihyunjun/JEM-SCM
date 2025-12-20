@@ -425,6 +425,7 @@ def receive_delivery_order_scan(request):
         for item in do.items.all():
             part = Part.objects.filter(part_no=item.part_no).first()
             if part: 
+                # [✅ 수정] DB 필드명에 맞춰 delivery_order_no 저장
                 Incoming.objects.create(
                     part=part, 
                     quantity=item.total_qty, 
@@ -439,7 +440,7 @@ def receive_delivery_order_scan(request):
         messages.success(request, f"납품서 {do.order_no} 입고 처리가 완료되었습니다.")
     return redirect('incoming_list')
 
-# [✅ 재수정 완료] 입고 취소 로직 (상태 원복만 수행)
+# [✅ 재수정 완료] 입고 취소 로직 (한품목 즉시 복구 포함)
 @login_required
 @require_POST
 @menu_permission_required('can_manage_incoming')
@@ -452,11 +453,24 @@ def incoming_cancel(request):
 
     with transaction.atomic():
         if mode == 'item':
+            # 1. 재고 차감 (실제 재고 줄임)
             inv = Inventory.objects.get(part=target_inc.part)
             inv.base_stock -= target_inc.quantity
             inv.save()
+
+            # 2. [한품목 즉시 복구] 납품서 생성일자 기준으로 로그를 찾아 삭제하여 '발행가능 잔량' 복구
+            if do:
+                LabelPrintLog.objects.filter(
+                    part_no=target_inc.part.part_no, 
+                    printed_qty=target_inc.quantity,
+                    printed_at__date=do.created_at.date()
+                ).delete()
+                # 3. 납품서 상세 내역에서도 해당 품목 삭제
+                DeliveryOrderItem.objects.filter(order=do, part_no=target_inc.part.part_no).delete()
+            
+            # 4. 입고 내역 삭제
             target_inc.delete()
-            messages.success(request, f"품목 {target_inc.part.part_no} 입고 내역이 삭제되었습니다.")
+            messages.success(request, f"품목 {target_inc.part.part_no} 입고 취소 및 잔량이 복구되었습니다.")
 
         elif mode == 'all':
             all_incs = Incoming.objects.filter(delivery_order_no=do_no)
@@ -468,7 +482,7 @@ def incoming_cancel(request):
             if do:
                 do.is_received = False 
                 do.save()
-            messages.success(request, f"납품서 {do_no} 전체 입고가 취소되어 '등록완료' 상태로 되돌아갔습니다.")
+            messages.success(request, f"납품서 {do_no} 입고 취소 완료. (납품서 삭제 시 잔량이 복구됩니다)")
 
     return redirect('incoming_list')
 
