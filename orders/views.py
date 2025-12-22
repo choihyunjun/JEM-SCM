@@ -181,46 +181,25 @@ def order_export(request):
 @login_required
 @menu_permission_required('can_view_inventory') 
 def inventory_list(request):
-    user = request.user
-    today = timezone.localtime().date()
-    
+    user = request.user; today = timezone.localtime().date()
     if user.is_superuser or not hasattr(user, 'vendor'):
         max_due = Demand.objects.aggregate(Max('due_date'))['due_date__max']
         standard_end = today + datetime.timedelta(days=31)
         end_date = max_due if max_due and max_due > standard_end else standard_end
-    else: 
-        end_date = today + datetime.timedelta(days=14)
-
-    date_range = []
-    curr_date = today
-    while curr_date <= end_date:
-        date_range.append(curr_date)
-        curr_date += timedelta(days=1)
-    
-    show_all = request.GET.get('show_all') == 'true'
-    selected_v = request.GET.get('vendor_id')
-    q = request.GET.get('q', '')
-
+    else: end_date = today + datetime.timedelta(days=14)
+    date_range = [today + datetime.timedelta(days=i) for i in range((end_date - today).days + 1)]
+    show_all = request.GET.get('show_all') == 'true'; selected_v = request.GET.get('vendor_id'); q = request.GET.get('q', '')
     if user.is_superuser or not hasattr(user, 'vendor'):
         inventory_items = Inventory.objects.select_related('part', 'part__vendor').all()
         vendor_list = Vendor.objects.all().order_by('name')
-        vendor_name = "전체 관리자"
-        if selected_v: 
-            inventory_items = inventory_items.filter(part__vendor_id=selected_v)
+        if selected_v: inventory_items = inventory_items.filter(part__vendor_id=selected_v)
     elif hasattr(user, 'vendor'):
-        inventory_items = Inventory.objects.select_related('part', 'part__vendor').filter(part__vendor=user.vendor)
-        vendor_list = []
-        vendor_name = user.vendor.name
-    else: 
-        return redirect('order_list')
-
-    if q:
-        inventory_items = inventory_items.filter(Q(part__part_no__icontains=q) | Q(part__part_name__icontains=q))
-
+        inventory_items = Inventory.objects.select_related('part', 'part__vendor').filter(part__vendor=user.vendor); vendor_list = []
+    else: return redirect('order_list')
+    if q: inventory_items = inventory_items.filter(Q(part__part_no__icontains=q) | Q(part__part_name__icontains=q))
     if not show_all:
         act_pnos = Demand.objects.filter(due_date__range=[today, end_date]).values_list('part__part_no', flat=True).distinct()
         inventory_items = inventory_items.filter(part__part_no__in=act_pnos)
-
     inventory_data = []
     for item in inventory_items:
         daily_status = []
@@ -235,11 +214,8 @@ def inventory_list(request):
             temp_stock = temp_stock - dq + iq
             daily_status.append({'date': dt, 'demand_qty': dq, 'in_qty': iq, 'stock': temp_stock, 'is_danger': temp_stock < 0})
         inventory_data.append({'vendor_name': item.part.vendor.name, 'part_no': item.part.part_no, 'part_name': item.part.part_name, 'base_stock': opening_stock, 'daily_status': daily_status})
-
     latest_inv = Inventory.objects.exclude(last_inventory_date__isnull=True).order_by('-last_inventory_date').first()
-    inventory_ref_date = latest_inv.last_inventory_date if latest_inv else None
-
-    return render(request, 'inventory_list.html', {'date_range': date_range, 'inventory_data': inventory_data, 'vendor_list': vendor_list, 'active_menu': 'inventory', 'show_all': show_all, 'selected_vendor_id': selected_v, 'user_name': user.username, 'vendor_name': vendor_name, 'q': q, 'inventory_ref_date': inventory_ref_date})
+    return render(request, 'inventory_list.html', {'date_range': date_range, 'inventory_data': inventory_data, 'vendor_list': vendor_list, 'active_menu': 'inventory', 'show_all': show_all, 'selected_vendor_id': selected_v, 'user_name': user.username, 'vendor_name': user.vendor.name if hasattr(user, 'vendor') else "관리자", 'q': q, 'inventory_ref_date': latest_inv.last_inventory_date if latest_inv else None})
 
 @login_required
 @menu_permission_required('can_view_inventory')
@@ -370,7 +346,6 @@ def label_list(request):
     order_q = Order.objects.filter(is_closed=False, approved_at__isnull=False)
     if not user.is_superuser: order_q = order_q.filter(vendor=user.vendor)
     elif selected_v: order_q = order_q.filter(vendor_id=selected_v)
-    
     if q: order_q = order_q.filter(Q(part_no__icontains=q) | Q(part_name__icontains=q))
 
     label_data = []
@@ -380,7 +355,7 @@ def label_list(request):
         total_p = LabelPrintLog.objects.filter(part_no=p_no).aggregate(Sum('printed_qty'))['printed_qty__sum'] or 0
         closed_t = Order.objects.filter(part_no=p_no, is_closed=True, approved_at__isnull=False).aggregate(Sum('quantity'))['quantity__sum'] or 0
         
-        # [✅ 수정: used_for_closed 오타 수정]
+        # [✅ 최종 오타 수정] 정의되지 않은 'used_for_closed' 변수를 'closed_t'로 교정
         current_printed = max(0, total_p - closed_t)
         remain = active_t - current_printed
         
