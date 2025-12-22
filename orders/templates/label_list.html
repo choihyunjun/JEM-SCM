@@ -10,7 +10,7 @@
 
     {% if user.is_superuser or user.profile.role == 'STAFF' %}
     <div class="d-flex align-items-center gap-2 ms-2">
-        <form method="get" class="d-flex align-items-center">
+        <form method="get" class="d-flex align-items-center gap-2">
             <select name="vendor_id" class="form-select form-select-sm shadow-sm" onchange="this.form.submit()" style="width: 180px; border-color: #198754; background-color: #f8fff9;">
                 <option value="">== 업체 전체 선택 ==</option>
                 {% for v in vendor_list %}
@@ -19,11 +19,20 @@
                     </option>
                 {% endfor %}
             </select>
+
+            <div class="input-group input-group-sm" style="width: 220px;">
+                <input type="text" name="q" value="{{ q|default:'' }}" class="form-control border-primary shadow-sm" placeholder="품번 또는 품명 검색">
+                <button class="btn btn-primary" type="submit">
+                    <i class="bi bi-search"></i>
+                </button>
+            </div>
+            
             <input type="hidden" name="status" value="{{ status_filter|default:'' }}">
         </form>
 
         <form method="get" class="d-flex align-items-center">
             <input type="hidden" name="vendor_id" value="{{ selected_vendor_id|default:'' }}">
+            <input type="hidden" name="q" value="{{ q|default:'' }}">
             <select name="status" class="form-select form-select-sm shadow-sm" onchange="this.form.submit()" style="width: 130px; border-color: #0d6efd;">
                 <option value="">== 전체 상태 ==</option>
                 <option value="registered" {% if status_filter == 'registered' %}selected{% endif %}>등록완료</option>
