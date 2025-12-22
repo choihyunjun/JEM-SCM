@@ -352,10 +352,11 @@ def label_list(request):
     for p_no in order_q.values_list('part_no', flat=True).distinct():
         order_row = order_q.filter(part_no=p_no).first()
         active_t = order_q.filter(part_no=p_no).aggregate(Sum('quantity'))['quantity__sum'] or 0
+        
+        # [✅ 복구] 방금 등록한 수량이 즉시 차감되도록 전체 이력 합산 (이미지 확인 결과 핵심 로직)
         total_p = LabelPrintLog.objects.filter(part_no=p_no).aggregate(Sum('printed_qty'))['printed_qty__sum'] or 0
         closed_t = Order.objects.filter(part_no=p_no, is_closed=True, approved_at__isnull=False).aggregate(Sum('quantity'))['quantity__sum'] or 0
         
-        # [✅ 최종 오타 수정] 정의되지 않은 'used_for_closed' 변수를 'closed_t'로 교정
         current_printed = max(0, total_p - closed_t)
         remain = active_t - current_printed
         
@@ -454,7 +455,7 @@ def incoming_export(request):
     if not request.user.is_superuser and hasattr(request.user, 'vendor'): incomings = incomings.filter(part__vendor=request.user.vendor)
     wb = openpyxl.Workbook(); ws = wb.active; ws.append(['입고일자', '협력사', '품번', '품명', '입고수량', '처리일시'])
     for i in incomings: ws.append([i.in_date, i.part.vendor.name, i.part.part_no, i.part.part_name, i.quantity, i.created_at.strftime("%Y-%m-%d %H:%M")])
-    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); response['Content-Disposition'] = 'attachment; filename=Incomings.xlsx'; wb.save(response); return response
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); response['Content-Disposition'] = f'attachment; filename=Incomings.xlsx'; wb.save(response); return response
 
 # [5. 관리자 대시보드]
 @staff_member_required
