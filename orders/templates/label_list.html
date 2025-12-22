@@ -82,7 +82,6 @@
                                 <button class="btn btn-sm btn-outline-primary fw-bold me-1" onclick="openNotePopup('{{ order.id }}')" style="width: 80px;">
                                     <i class="bi bi-file-text"></i> 납품서
                                 </button>
-                                
                                 <div class="d-inline-block" style="width: 35px; vertical-align: middle;">
                                     {% if not order.is_received %}
                                     <form action="{% url 'delete_delivery_order' order.id %}" method="post" onsubmit="return confirm('납품서를 삭제하시겠습니까?');" style="margin: 0;">
@@ -184,7 +183,7 @@
                         <td class="fw-bold text-primary" id="pno-{{ forloop.counter }}">{{ item.part_no }}</td>
                         <td id="pname-{{ forloop.counter }}">{{ item.part_name }}</td>
                         <td class="text-end text-muted">{{ item.total_order|intcomma }}</td>
-                        <td class="text-end fw-bold fs-5 text-danger" id="remain-{{ forloop.counter }}" data-val="{{ item.remain }}">
+                        <td class="text-end fw-bold fs-5 text-danger remain-cell" id="remain-{{ forloop.counter }}" data-val="{{ item.remain }}" data-pno="{{ item.part_no }}">
                             {{ item.remain|intcomma }}
                         </td>
                         <td>
@@ -246,7 +245,9 @@
         const itemKey = partNo + "_" + snp;
 
         if (snp <= 0 || box <= 0) { alert('SNP와 박스 수를 입력해주세요.'); return; }
-        if (total > remain) { alert('잔량을 초과했습니다.'); return; }
+        
+        // [중요] 단일 항목 체크는 유지하되 합계 체크를 submit에서 수행하도록 구조 개선
+        if (total > remain) { alert('해당 항목의 잔량을 초환했습니다.'); return; }
         
         if (addedItems.includes(itemKey)) { 
             alert('이미 대기 목록에 동일한 품번과 SNP 수량이 존재합니다.'); 
@@ -258,6 +259,8 @@
         
         const tbody = document.getElementById('preview-tbody');
         const newRow = document.createElement('tr');
+        newRow.className = "preview-item-row"; // 클래스 추가
+        newRow.setAttribute('data-pno', partNo); // 품번 속성 추가
         newRow.id = 'preview-row-' + itemKey.replace(/[^a-zA-Z0-9]/g, '_');
         newRow.innerHTML = `
             <td class="fw-bold">${partNo}
@@ -265,11 +268,12 @@
                 <input type="hidden" name="part_names[]" value="${partName}">
                 <input type="hidden" name="snps[]" value="${snp}">
                 <input type="hidden" name="box_counts[]" value="${box}">
+                <input type="hidden" class="row-total-val" value="${total}">
             </td>
             <td>${partName}</td>
             <td>${snp}</td>
             <td>${box}</td>
-            <td class="preview-total fw-bold">${total.toLocaleString()}</td>
+            <td class="preview-total-text fw-bold">${total.toLocaleString()}</td>
             <td>
                 <button type="button" class="btn btn-sm btn-danger" onclick="removePreview('${itemKey}')">
                     <i class="bi bi-x-lg"></i>
@@ -285,10 +289,8 @@
         const safeId = itemKey.replace(/[^a-zA-Z0-9]/g, '_');
         const element = document.getElementById('preview-row-' + safeId);
         if (element) element.remove();
-        
         addedItems = addedItems.filter(item => item !== itemKey);
         updateGrandTotal();
-        
         if (addedItems.length === 0) {
             document.getElementById('preview-section').style.display = 'none';
             document.getElementById('info-alert').style.display = 'block';
@@ -307,15 +309,37 @@
 
     function updateGrandTotal() {
         let total = 0;
-        document.querySelectorAll('.preview-total').forEach(td => {
-            total += parseInt(td.innerText.replace(/,/g, ''));
+        document.querySelectorAll('.row-total-val').forEach(input => {
+            total += parseInt(input.value);
         });
         document.getElementById('grand-total').innerText = total.toLocaleString();
         document.getElementById('preview-count').innerText = addedItems.length + '건';
     }
 
+    // [✅ 핵심 수정] 생성 버튼 클릭 시 전체 합계 잔량 검증 로직
     function submitCreateOrder() {
         if (addedItems.length === 0) { alert('등록할 품목이 없습니다.'); return; }
+
+        // 품번별 합계 계산
+        let pnoTotals = {};
+        document.querySelectorAll('.preview-item-row').forEach(row => {
+            let pno = row.getAttribute('data-pno');
+            let qty = parseInt(row.querySelector('.row-total-val').value);
+            pnoTotals[pno] = (pnoTotals[pno] || 0) + qty;
+        });
+
+        // 원본 테이블의 잔량과 비교
+        for (let pno in pnoTotals) {
+            let remainElem = document.querySelector(`.remain-cell[data-pno="${pno}"]`);
+            if (remainElem) {
+                let maxRemain = parseInt(remainElem.getAttribute('data-val'));
+                if (pnoTotals[pno] > maxRemain) {
+                    alert(`[오류] 품번 ${pno}의 총 등록 수량(${pnoTotals[pno].toLocaleString()})이 납품가능 수량(${maxRemain.toLocaleString()})을 초과했습니다.\n수량을 조절해주세요.`);
+                    return; // 발행 차단
+                }
+            }
+        }
+
         if (confirm(`총 ${addedItems.length}건으로 납품서를 생성(등록)하시겠습니까?`)) {
             document.getElementById('createOrderForm').submit();
         }
