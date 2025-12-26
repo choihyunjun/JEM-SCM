@@ -5,7 +5,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>JEM SCM 시스템</title>
+    <title>JEM 시스템</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     <style>
@@ -17,6 +17,7 @@
         .nav-link.active { background: #860505; color: white; font-weight: bold; }
         .content-area { flex-grow: 1; display: flex; flex-direction: column; overflow-x: hidden; }
         
+        /* [추가] 상단바 기본색 (빨강) */
         .top-nav { 
             background: #860505 !important; 
             color: white !important; 
@@ -25,21 +26,21 @@
             justify-content: space-between; 
             align-items: center; 
         }
+
+        /* [추가] QMS 앱일 때 상단바 색상 변경 (남색) */
+        body.is-qms .top-nav { background: #2c3e50 !important; }
+
+        /* [추가] 시스템 전환 탭 스타일 */
+        .system-tab { color: rgba(255,255,255,0.7) !important; margin-right: 15px; text-decoration: none; font-weight: bold; padding: 5px 10px; border-radius: 4px; transition: 0.3s; }
+        .system-tab:hover { color: white !important; background: rgba(255,255,255,0.1); }
+        .system-tab.active-system { color: white !important; background: rgba(255,255,255,0.2); border: 1px solid white; }
+
         .main-wrapper { padding: 20px; }
-        
-        .top-nav .header-title { 
-            font-size: 1.4rem; 
-            font-weight: 700; 
-            letter-spacing: -0.5px; 
-            color: white !important; 
-        }
-        
-        .top-nav span, .top-nav i { 
-            color: white !important; 
-        }
+        .top-nav .header-title { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.5px; color: white !important; }
+        .top-nav span, .top-nav i { color: white !important; }
     </style>
 </head>
-<body>
+<body class="{% if request.resolver_match.app_name == 'qms' %}is-qms{% endif %}">
     <div class="sidebar">
         <div class="sidebar-header">
             <a href="{% url 'order_list' %}">
@@ -48,47 +49,58 @@
         </div>
         
         <div class="nav flex-column">
-            {% if user.is_superuser or user.profile.can_view_orders %}
-            <a href="{% url 'order_list' %}" class="nav-link {% if active_menu == 'list' %}active{% endif %}">
-                <i class="bi bi-list-check me-2"></i> 발주 조회 / 승인
-            </a>
-            {% endif %}
+            {% if request.resolver_match.app_name != 'qms' %}
+                {% if user.is_superuser or user.profile.can_view_orders %}
+                <a href="{% url 'order_list' %}" class="nav-link {% if active_menu == 'list' %}active{% endif %}">
+                    <i class="bi bi-list-check me-2"></i> 발주 조회 / 승인
+                </a>
+                {% endif %}
 
-            {% if user.is_superuser or user.profile.can_register_orders %}
-            <a href="{% url 'label_list' %}" class="nav-link {% if active_menu == 'label' %}active{% endif %}">
-                <i class="bi bi-printer me-2"></i> 납품서 등록 / 조회
-            </a>
-            {% endif %}
+                {% if user.is_superuser or user.profile.can_register_orders %}
+                <a href="{% url 'label_list' %}" class="nav-link {% if active_menu == 'label' %}active{% endif %}">
+                    <i class="bi bi-printer me-2"></i> 납품서 등록 / 조회
+                </a>
+                {% endif %}
 
-            {% if user.is_superuser or user.profile.can_view_inventory %}
-            <a href="{% url 'inventory_list' %}" class="nav-link {% if active_menu == 'inventory' %}active{% endif %}">
-                <i class="bi bi-box-seam me-2"></i> 과부족 조회
-            </a>
-            {% endif %}
+                {% if user.is_superuser or user.profile.can_view_inventory %}
+                <a href="{% url 'inventory_list' %}" class="nav-link {% if active_menu == 'inventory' %}active{% endif %}">
+                    <i class="bi bi-box-seam me-2"></i> 과부족 조회
+                </a>
+                {% endif %}
 
-            {% if user.is_superuser or user.profile.can_manage_incoming %}
-            <a href="{% url 'incoming_list' %}" class="nav-link {% if active_menu == 'incoming' %}active{% endif %}">
-                <i class="bi bi-box-arrow-in-down me-2"></i> 입고 관리
-            </a>
-            {% endif %}
+                {% if user.is_superuser or user.profile.can_manage_incoming %}
+                <a href="{% url 'incoming_list' %}" class="nav-link {% if active_menu == 'incoming' %}active{% endif %}">
+                    <i class="bi bi-box-arrow-in-down me-2"></i> 입고 관리
+                </a>
+                {% endif %}
 
-            {% if user.is_superuser %}
-            <a href="{% url 'order_upload' %}" class="nav-link {% if active_menu == 'upload' %}active{% endif %}">
-                <i class="bi bi-cloud-upload me-2"></i> 발주 등록
-            </a>
-            {% endif %}
+                {% if user.is_superuser %}
+                <a href="{% url 'order_upload' %}" class="nav-link {% if active_menu == 'upload' %}active{% endif %}">
+                    <i class="bi bi-cloud-upload me-2"></i> 발주 등록
+                </a>
+                {% endif %}
 
-            {% if user.is_superuser or user.profile.can_access_scm_admin %}
-            <a href="{% url 'scm_admin_main' %}" class="nav-link {% if active_menu == 'admin_main' %}active{% endif %}">
-                <i class="bi bi-gear-fill me-2"></i> 관리자 페이지
-            </a>
+                {% if user.is_superuser or user.profile.can_access_scm_admin %}
+                <a href="{% url 'scm_admin_main' %}" class="nav-link {% if active_menu == 'admin_main' %}active{% endif %}">
+                    <i class="bi bi-gear-fill me-2"></i> 관리자 페이지
+                </a>
+                {% endif %}
+            {% else %}
+                {% block sidebar_qms %}{% endblock %}
             {% endif %}
         </div>
     </div>
 
     <div class="content-area">
         <div class="top-nav shadow-sm">
-            <span class="header-title">진영전기 SCM</span>
+            <div class="d-flex align-items-center">
+                <span class="header-title me-4">JEM 시스템</span>
+                <div class="system-tabs d-flex">
+                    <a href="{% url 'order_list' %}" class="system-tab {% if request.resolver_match.app_name != 'qms' %}active-system{% endif %}">발주관리(SCM)</a>
+                    <a href="{% url 'qms:m4_list' %}" class="system-tab {% if request.resolver_match.app_name == 'qms' %}active-system{% endif %}">품질관리(QMS)</a>
+                </div>
+            </div>
+            
             <div class="d-flex align-items-center">
                 <span class="me-3 small">
                     <i class="bi bi-person-circle"></i> 

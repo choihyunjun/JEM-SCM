@@ -1,0 +1,177 @@
+{% extends 'qms/qms_base.html' %}
+
+{% block qms_content %}
+<div class="container mt-5 mb-5" style="max-width: 900px;">
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
+        <h2 class="fw-bold text-dark">
+            <i class="bi bi-pencil-square me-2 text-primary"></i>
+            {% if mode == 'update' %}사전 4M 검토서 수정{% else %}사전 4M 검토요청서 작성{% endif %}
+        </h2>
+        <a href="{% url 'qms:m4_list' %}" class="btn btn-outline-secondary px-4">취소</a>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" class="bg-white p-5 border shadow-sm rounded-3"
+          action="{% if mode == 'update' %}{% url 'qms:m4_update' item.pk %}{% else %}{% url 'qms:m4_create' %}{% endif %}">
+        {% csrf_token %}
+
+        <div class="mb-5">
+            <h5 class="fw-bold border-start border-4 border-primary ps-2 mb-4">1. 기본 정보</h5>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold text-muted">공장</label>
+                    {{ form.factory }}
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold text-muted">제품</label>
+                    {{ form.product }}
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold text-muted">차종</label>
+                    {{ form.model_name }}
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold text-muted">발행번호 (시스템 자동)</label>
+                    <div class="form-control bg-light text-muted small">{{ item.request_no|default:"저장 시 자동 생성" }}</div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold text-muted">4M 분류</label>
+                    {{ form.m4_type }}
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold text-muted">사내/사외</label>
+                    {{ form.quality_rank }}
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold text-muted">품번</label>
+                    {{ form.part_no }}
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold text-muted">품명</label>
+                    {{ form.part_name }}
+                </div>
+            </div>
+        </div>
+
+        <div class="mb-5 p-4 rounded-3 border bg-light">
+            <h5 class="fw-bold border-start border-4 border-info ps-2 mb-4">2. 결재선 지정</h5>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold text-dark">검토자 선택</label>
+                    {{ form.reviewer_user }}
+                    <div class="form-text small text-muted">실제 서명(검토)을 진행할 담당자를 선택하세요.</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold text-dark">최종 승인자 선택</label>
+                    {{ form.approver_user }}
+                    <div class="form-text small text-muted">최종 결재 권한을 가진 관리자를 선택하세요.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mb-5">
+            <h5 class="fw-bold border-start border-4 border-primary ps-2 mb-4">3. 변경 상세 및 이미지 첨부</h5>
+            <div class="mb-4">
+                <label class="form-label small fw-bold text-muted">변경 사유</label>
+                {{ form.reason }}
+            </div>
+            
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <div class="card h-100 border-0 bg-light">
+                        <div class="card-body">
+                            <label class="form-label small fw-bold text-secondary mb-3">변경 전 (As-Is)</label>
+                            {{ form.content_before }}
+                            <div class="mt-4 p-3 bg-white rounded border border-dashed">
+                                <label class="form-label small fw-bold"><i class="bi bi-camera me-1"></i> 변경 전 사진</label>
+                                {{ form.photo_before }}
+                                {% if item.photo_before %}
+                                    <div class="mt-2 small text-primary">현재 파일: {{ item.photo_before.name }}</div>
+                                {% endif %}
+                                <div class="form-text small text-muted">도면 혹은 제품 사진 첨부</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card h-100 border-0" style="background-color: #f0f7ff;">
+                        <div class="card-body">
+                            <label class="form-label small fw-bold text-primary mb-3">변경 후 (To-Be)</label>
+                            {{ form.content_after }}
+                            <div class="mt-4 p-3 bg-white rounded border border-dashed border-primary">
+                                <label class="form-label small fw-bold text-primary"><i class="bi bi-camera-fill me-1"></i> 변경 후 사진</label>
+                                {{ form.photo_after }}
+                                {% if item.photo_after %}
+                                    <div class="mt-2 small text-primary">현재 파일: {{ item.photo_after.name }}</div>
+                                {% endif %}
+                                <div class="form-text small text-muted">도면 혹은 제품 사진 첨부</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mb-5">
+            <h5 class="fw-bold border-start border-4 border-primary ps-2 mb-4">4. 실시 계획 및 일정</h5>
+            <div class="table-responsive">
+                <table class="table table-bordered align-middle">
+                    <thead class="table-light">
+                        <tr class="small text-center">
+                            <th style="width: 25%;">단계</th>
+                            <th style="width: 25%;">예정 일정</th>
+                            <th style="width: 25%;">단계</th>
+                            <th style="width: 25%;">예정 일정</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="bg-light small">1. 공정준비</td>
+                            <td>{{ form.plan_step1 }}</td>
+                            <td class="bg-light small">5. 초품 SAMPLE 제출</td>
+                            <td>{{ form.plan_step5 }}</td>
+                        </tr>
+                        <tr>
+                            <td class="bg-light small">2. 표준류 정비</td>
+                            <td>{{ form.plan_step2 }}</td>
+                            <td class="bg-light small">6. 초품승인 완료</td>
+                            <td>{{ form.plan_step6 }}</td>
+                        </tr>
+                        <tr>
+                            <td class="bg-light small">3. 공정안정화</td>
+                            <td>{{ form.plan_step3 }}</td>
+                            <td class="bg-light small">7. 양산개시</td>
+                            <td>{{ form.plan_step7 }}</td>
+                        </tr>
+                        <tr>
+                            <td class="bg-light small">4. 초품검사</td>
+                            <td>{{ form.plan_step4 }}</td>
+                            <td class="bg-light small">8. 변경초품 납품</td>
+                            <td>{{ form.plan_step8 }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="d-grid gap-2">
+            <button type="submit" class="btn btn-primary btn-lg fw-bold shadow-sm py-3">
+                {% if mode == 'update' %}
+                    <i class="bi bi-check-lg me-2"></i>수정 내용 저장하기
+                {% else %}
+                    <i class="bi bi-send-check me-2"></i>검토 요청서 제출
+                {% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+
+<style>
+    body { background-color: #f1f5f9; font-family: 'Pretendard', sans-serif; }
+    .form-control, .form-select { border-radius: 6px; padding: 0.6rem 0.75rem; border: 1px solid #dee2e6; font-size: 0.95rem; }
+    .form-control:focus, .form-select:focus { border-color: #0d6efd; box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.1); }
+    textarea.form-control { min-height: 100px; }
+    .border-dashed { border-style: dashed !important; border-width: 2px !important; }
+    .card { transition: all 0.3s ease; }
+    .table-light th { font-weight: 700; color: #495057; }
+</style>
+{% endblock %}

@@ -14,7 +14,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-itpjrwqo%(y%2wzj301tgp7@bzl836nt8nr#9#xq+knq@59sx6'
 
 # [수정] VS Code 로컬 테스트를 위해 True로 변경 (CSS 로드 문제 해결 핵심)
-DEBUG = False
+DEBUG = True
 # [보안 개선] 허용할 도메인 및 IP 리스트
 ALLOWED_HOSTS = ['1.234.80.211', 'hyunjun0701.cafe24.com','jem-scm.com' ,'localhost', '127.0.0.1']
 
@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     'orders',
     'import_export',
     'django.contrib.humanize',
+    'qms',
 ]
 
 MIDDLEWARE = [
@@ -117,3 +118,28 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 DATA_UPLOAD_MAX_MEMORY_SIZE = 52428800
 FILE_UPLOAD_MAX_MEMORY_SIZE = 52428800
+
+
+# ==========================================
+# ▼▼▼ [구글 드라이브 & 미디어 스토리지 설정]
+# ==========================================
+
+# 1. 미디어 파일 기본 경로 설정 (FileField 등이 사용하는 경로)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# 2. Cafe24 운영 서버와 로컬 VS Code 환경 분기 처리
+# Cafe24 서버에는 '/home/hyunjun0701' 경로가 존재합니다.
+if os.path.exists('/home/hyunjun0701'):
+    # [운영 서버 전용] 구글 드라이브 연동 로직
+    # 기존에 Cafe24에서 연동하셨던 설정값이 있다면 여기에 추가될 것입니다.
+    try:
+        DEFAULT_FILE_STORAGE = 'gdstorage.storage.GoogleDriveStorage'
+        # 예: GOOGLE_DRIVE_STORAGE_JSON_KEY_FILE = os.path.join(BASE_DIR, '인증파일.json')
+    except Exception:
+        # 혹시 라이브러리가 설치 안 되어 있을 경우를 대비한 안전장치
+        DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
+else:
+    # [로컬 VS Code 전용] 
+    # 내 컴퓨터에서는 일반 폴더(media/)에 저장하여 에러를 방지합니다.
+    DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'

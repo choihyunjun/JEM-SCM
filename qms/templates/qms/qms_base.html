@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block sidebar_qms %}
+<style>
+    /* QMS 전용 트리형 소메뉴 스타일 */
+    .submenu-item { 
+        background: #1a252f !important; 
+        font-size: 0.85rem; 
+        padding-left: 40px !important; 
+        border-bottom: none !important; 
+        color: #bdc3c7 !important;
+        display: block;
+        padding: 10px 20px;
+        text-decoration: none;
+        transition: 0.3s;
+    }
+    .submenu-item:hover { background: #243342 !important; color: white !important; }
+    .submenu-item.active { color: white !important; font-weight: bold; }
+    .nav-link.dropdown-toggle::after { float: right; margin-top: 7px; }
+</style>
+
+<div class="nav flex-column">
+    <a class="nav-link dropdown-toggle" data-bs-toggle="collapse" href="#m4Submenu" role="button" aria-expanded="true">
+        <i class="bi bi-gear-wide-connected me-2"></i> 4M 변경점 관리
+    </a>
+    <div class="collapse show" id="m4Submenu">
+        <a href="{% url 'qms:m4_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'm4_list' %}active{% endif %}">
+            - 4M 신청 현황
+        </a>
+        <a href="#" class="submenu-item">- 4M 승인 완료 건</a>
+    </div>
+
+    <a class="nav-link dropdown-toggle collapsed" data-bs-toggle="collapse" href="#isirSubmenu" role="button" aria-expanded="false">
+        <i class="bi bi-file-earmark-check me-2"></i> 품질 승인(ISIR)
+    </a>
+    <div class="collapse" id="isirSubmenu">
+        <a href="#" class="submenu-item">- ISIR 제출 목록</a>
+        <a href="#" class="submenu-item">- 정기 재승인 현황</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+    <div class="qms-main-area">
+        {% block qms_content %}{% endblock %}
+    </div>
+{% endblock %}

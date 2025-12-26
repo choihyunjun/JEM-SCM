@@ -1,0 +1,102 @@
+{% extends "qms/qms_base.html" %}
+
+{% block qms_content %}
+<div class="row mb-4 align-items-center">
+    <div class="col-lg-4">
+        <h4 class="fw-bold mb-0"><i class="bi bi-list-ul me-2"></i> 4M 변경 신청 현황</h4>
+    </div>
+    <div class="col-lg-8 text-end">
+        <form method="get" class="d-inline-flex gap-2 align-items-center">
+            <select name="status" class="form-select form-select-sm" style="width: 140px;" onchange="this.form.submit()">
+                <option value="">전체 상태</option>
+                <option value="DRAFT" {% if status_filter == 'DRAFT' %}selected{% endif %}>작성중</option>
+                <option value="PENDING_REVIEW" {% if status_filter == 'PENDING_REVIEW' %}selected{% endif %}>검토대기</option>
+                <option value="PENDING_APPROVE" {% if status_filter == 'PENDING_APPROVE' %}selected{% endif %}>승인대기</option>
+                <option value="APPROVED" {% if status_filter == 'APPROVED' %}selected{% endif %}>승인완료</option>
+                <option value="REJECTED" {% if status_filter == 'REJECTED' %}selected{% endif %}>반려</option>
+            </select>
+            
+            <div class="input-group input-group-sm" style="width: 260px;">
+                <input type="text" name="q" class="form-control" placeholder="품번 또는 품명 검색" value="{{ query|default:'' }}">
+                <button class="btn btn-primary" type="submit">
+                    <i class="bi bi-search"></i>
+                </button>
+            </div>
+
+            <a href="{% url 'qms:m4_list' %}" class="btn btn-sm btn-outline-secondary" title="검색 초기화">
+                <i class="bi bi-arrow-counterclockwise"></i>
+            </a>
+
+            <a href="{% url 'qms:m4_create' %}" class="btn btn-primary btn-sm ms-2">
+                <i class="bi bi-plus-lg me-1"></i>신규 신청
+            </a>
+        </form>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th class="ps-4">관리번호</th>
+                    <th>업체</th> 
+                    <th>품번/품명</th>
+                    <th>변경구분</th>
+                    <th>상태</th>
+                    <th class="text-center">상세</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for req in requests %}
+                <tr>
+                    <td class="ps-4 fw-bold text-primary">{{ req.request_no }}</td>
+                    <td>
+                        {% if req.user.profile.vendor %}
+                            {{ req.user.profile.vendor.name }}
+                        {% else %}
+                            진영전기 ({{ req.user.last_name }}{{ req.user.first_name }})
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="fw-bold">{{ req.part_no }}</div>
+                        <div class="small text-muted">{{ req.part_name }}</div>
+                    </td>
+                    <td>{{ req.get_m4_type_display }}</td>
+                    <td>
+                        {% if req.status == 'DRAFT' %}
+                            <span class="badge rounded-pill bg-secondary bg-opacity-75">작성중</span>
+                        {% elif req.status == 'PENDING_REVIEW' %}
+                            <span class="badge rounded-pill bg-warning text-dark">검토대기</span>
+                        {% elif req.status == 'PENDING_APPROVE' %}
+                            <span class="badge rounded-pill bg-info text-dark">승인대기</span>
+                        {% elif req.status == 'APPROVED' %}
+                            <span class="badge rounded-pill bg-success">승인완료</span>
+                        {% elif req.status == 'REJECTED' %}
+                            <span class="badge rounded-pill bg-danger">반려</span>
+                        {% else %}
+                            <span class="badge rounded-pill bg-light text-dark">{{ req.get_status_display }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        <a href="{% url 'qms:m4_detail' req.pk %}" class="btn btn-sm btn-outline-secondary">보기</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center py-5 text-muted">
+                        {% if query or status_filter %}
+                            <i class="bi bi-search mb-2 d-block fs-2"></i>
+                            검색 조건에 맞는 내역이 없습니다.
+                        {% else %}
+                            <i class="bi bi-clipboard-x mb-2 d-block fs-2"></i>
+                            현재 등록된 4M 신청 내역이 없습니다.
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

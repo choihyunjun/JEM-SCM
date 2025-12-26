@@ -217,12 +217,12 @@
 
 <script>
     function calculateTotal(rowId) {
-        const snp = parseInt(document.getElementById('snp-' + rowId).value) || 0;
-        const box = parseInt(document.getElementById('box-' + rowId).value) || 0;
-        const total = snp * box;
+        var snp = parseInt(document.getElementById('snp-' + rowId).value) || 0;
+        var box = parseInt(document.getElementById('box-' + rowId).value) || 0;
+        var total = snp * box;
         document.getElementById('total-' + rowId).innerText = total.toLocaleString();
-        const remain = parseInt(document.getElementById('remain-' + rowId).getAttribute('data-val'));
-        const totalElem = document.getElementById('total-' + rowId);
+        var remain = parseInt(document.getElementById('remain-' + rowId).getAttribute('data-val'));
+        var totalElem = document.getElementById('total-' + rowId);
         if (total > remain) {
             totalElem.classList.add('text-danger');
             totalElem.style.textDecoration = "underline";
@@ -232,24 +232,22 @@
         }
     }
 
-    let addedItems = []; 
+    var addedItems = []; 
 
     function addToPreview(rowId) {
-        const partNo = document.getElementById('pno-' + rowId).innerText;
-        const partName = document.getElementById('pname-' + rowId).innerText;
-        const snp = parseInt(document.getElementById('snp-' + rowId).value) || 0;
-        const box = parseInt(document.getElementById('box-' + rowId).value) || 0;
-        const total = snp * box;
-        const remain = parseInt(document.getElementById('remain-' + rowId).getAttribute('data-val'));
+        var partNo = document.getElementById('pno-' + rowId).innerText;
+        var partName = document.getElementById('pname-' + rowId).innerText;
+        var snp = parseInt(document.getElementById('snp-' + rowId).value) || 0;
+        var box = parseInt(document.getElementById('box-' + rowId).value) || 0;
+        var total = snp * box;
+        var remain = parseInt(document.getElementById('remain-' + rowId).getAttribute('data-val'));
         
-        const itemKey = partNo + "_" + snp;
+        var itemKey = partNo + "_" + snp;
 
         if (snp <= 0 || box <= 0) { alert('SNP와 박스 수를 입력해주세요.'); return; }
+        if (total > remain) { alert('해당 항목의 잔량을 초과했습니다.'); return; }
         
-        // [중요] 단일 항목 체크는 유지하되 합계 체크를 submit에서 수행하도록 구조 개선
-        if (total > remain) { alert('해당 항목의 잔량을 초환했습니다.'); return; }
-        
-        if (addedItems.includes(itemKey)) { 
+        if (addedItems.indexOf(itemKey) !== -1) { 
             alert('이미 대기 목록에 동일한 품번과 SNP 수량이 존재합니다.'); 
             return; 
         }
@@ -257,39 +255,41 @@
         document.getElementById('preview-section').style.display = 'block';
         document.getElementById('info-alert').style.display = 'none';
         
-        const tbody = document.getElementById('preview-tbody');
-        const newRow = document.createElement('tr');
-        newRow.className = "preview-item-row"; // 클래스 추가
-        newRow.setAttribute('data-pno', partNo); // 품번 속성 추가
+        var tbody = document.getElementById('preview-tbody');
+        var newRow = document.createElement('tr');
+        newRow.className = "preview-item-row";
+        newRow.setAttribute('data-pno', partNo);
         newRow.id = 'preview-row-' + itemKey.replace(/[^a-zA-Z0-9]/g, '_');
-        newRow.innerHTML = `
-            <td class="fw-bold">${partNo}
-                <input type="hidden" name="part_nos[]" value="${partNo}">
-                <input type="hidden" name="part_names[]" value="${partName}">
-                <input type="hidden" name="snps[]" value="${snp}">
-                <input type="hidden" name="box_counts[]" value="${box}">
-                <input type="hidden" class="row-total-val" value="${total}">
-            </td>
-            <td>${partName}</td>
-            <td>${snp}</td>
-            <td>${box}</td>
-            <td class="preview-total-text fw-bold">${total.toLocaleString()}</td>
-            <td>
-                <button type="button" class="btn btn-sm btn-danger" onclick="removePreview('${itemKey}')">
-                    <i class="bi bi-x-lg"></i>
-                </button>
-            </td>
-        `;
+        
+        var html = '';
+        html += '<td class="fw-bold">' + partNo;
+        html += '  <input type="hidden" name="part_nos[]" value="' + partNo + '">';
+        html += '  <input type="hidden" name="part_names[]" value="' + partName + '">';
+        html += '  <input type="hidden" name="snps[]" value="' + snp + '">';
+        html += '  <input type="hidden" name="box_counts[]" value="' + box + '">';
+        html += '  <input type="hidden" class="row-total-val" value="' + total + '">';
+        html += '</td>';
+        html += '<td>' + partName + '</td>';
+        html += '<td>' + snp + '</td>';
+        html += '<td>' + box + '</td>';
+        html += '<td class="preview-total-text fw-bold">' + total.toLocaleString() + '</td>';
+        html += '<td>';
+        html += '  <button type="button" class="btn btn-sm btn-danger" onclick="removePreview(\'' + itemKey + '\')">';
+        html += '    <i class="bi bi-x-lg"></i>';
+        html += '  </button>';
+        html += '</td>';
+
+        newRow.innerHTML = html;
         tbody.appendChild(newRow);
         addedItems.push(itemKey);
         updateGrandTotal();
     }
 
     function removePreview(itemKey) {
-        const safeId = itemKey.replace(/[^a-zA-Z0-9]/g, '_');
-        const element = document.getElementById('preview-row-' + safeId);
+        var safeId = itemKey.replace(/[^a-zA-Z0-9]/g, '_');
+        var element = document.getElementById('preview-row-' + safeId);
         if (element) element.remove();
-        addedItems = addedItems.filter(item => item !== itemKey);
+        addedItems = addedItems.filter(function(item) { return item !== itemKey; });
         updateGrandTotal();
         if (addedItems.length === 0) {
             document.getElementById('preview-section').style.display = 'none';
@@ -308,49 +308,48 @@
     }
 
     function updateGrandTotal() {
-        let total = 0;
-        document.querySelectorAll('.row-total-val').forEach(input => {
-            total += parseInt(input.value);
-        });
+        var total = 0;
+        var inputs = document.querySelectorAll('.row-total-val');
+        for (var i = 0; i < inputs.length; i++) {
+            total += parseInt(inputs[i].value);
+        }
         document.getElementById('grand-total').innerText = total.toLocaleString();
         document.getElementById('preview-count').innerText = addedItems.length + '건';
     }
 
-    // [✅ 핵심 수정] 생성 버튼 클릭 시 전체 합계 잔량 검증 로직
     function submitCreateOrder() {
         if (addedItems.length === 0) { alert('등록할 품목이 없습니다.'); return; }
 
-        // 품번별 합계 계산
-        let pnoTotals = {};
-        document.querySelectorAll('.preview-item-row').forEach(row => {
-            let pno = row.getAttribute('data-pno');
-            let qty = parseInt(row.querySelector('.row-total-val').value);
+        var pnoTotals = {};
+        var rows = document.querySelectorAll('.preview-item-row');
+        for (var i = 0; i < rows.length; i++) {
+            var pno = rows[i].getAttribute('data-pno');
+            var qty = parseInt(rows[i].querySelector('.row-total-val').value);
             pnoTotals[pno] = (pnoTotals[pno] || 0) + qty;
-        });
+        }
 
-        // 원본 테이블의 잔량과 비교
-        for (let pno in pnoTotals) {
-            let remainElem = document.querySelector(`.remain-cell[data-pno="${pno}"]`);
+        for (var pno in pnoTotals) {
+            var remainElem = document.querySelector('.remain-cell[data-pno="' + pno + '"]');
             if (remainElem) {
-                let maxRemain = parseInt(remainElem.getAttribute('data-val'));
+                var maxRemain = parseInt(remainElem.getAttribute('data-val'));
                 if (pnoTotals[pno] > maxRemain) {
-                    alert(`[오류] 품번 ${pno}의 총 등록 수량(${pnoTotals[pno].toLocaleString()})이 납품가능 수량(${maxRemain.toLocaleString()})을 초과했습니다.\n수량을 조절해주세요.`);
-                    return; // 발행 차단
+                    alert('[오류] 품번 ' + pno + '의 총 등록 수량이 납품가능 수량을 초과했습니다.');
+                    return;
                 }
             }
         }
 
-        if (confirm(`총 ${addedItems.length}건으로 납품서를 생성(등록)하시겠습니까?`)) {
+        if (confirm('총 ' + addedItems.length + '건으로 납품서를 생성하시겠습니까?')) {
             document.getElementById('createOrderForm').submit();
         }
     }
 
     function openPrintPopup(orderId) {
-        const url = "/label/print/" + orderId + "/"; 
+        var url = "/label/print/" + orderId + "/"; 
         window.open(url, 'print_popup', 'width=1000,height=900,scrollbars=yes');
     }
     function openNotePopup(orderId) {
-        const url = "/label/print_note/" + orderId + "/";
+        var url = "/label/print_note/" + orderId + "/";
         window.open(url, 'note_popup', 'width=900,height=1000,scrollbars=yes');
     }
 </script>

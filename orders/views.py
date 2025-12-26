@@ -25,8 +25,19 @@ def menu_permission_required(permission_field):
             if request.user.is_superuser:
                 return view_func(request, *args, **kwargs)
             profile = getattr(request.user, 'profile', None)
+            
+            # 권한이 있는 경우 정상 진행
             if profile and getattr(profile, permission_field, False):
                 return view_func(request, *args, **kwargs)
+            
+            # [해결 로직] 권한이 없는데 현재 페이지가 메인(order_list)이라면 
+            # 다시 리디렉션하지 않고 경고 메시지만 띄운 채 멈춥니다.
+            if request.resolver_match.url_name == 'order_list':
+                messages.error(request, f"귀하의 계정은 '{permission_field}' 권한이 활성화되지 않았습니다. 관리자에게 문의하세요.")
+                # 권한 없는 상태의 메인 화면을 보여주거나 빈 페이지를 띄움
+                return render(request, 'order_list.html', {'orders': [], 'vendor_name': '권한 없음'})
+
+            # 메인이 아닌 다른 메뉴(예: 라벨 리스트)에서 권한이 없는 거라면 메인으로 보냄
             messages.error(request, "해당 메뉴에 대한 접근 권한이 없습니다.")
             return redirect('order_list')
         return _wrapped_view
@@ -40,6 +51,8 @@ def login_success(request):
 @menu_permission_required('can_view_orders') 
 def order_list(request):
     user = request.user
+    user_vendor = Vendor.objects.filter(user=user).first()
+    
     vendor_list = Vendor.objects.all().order_by('name') if user.is_superuser else []
     sort_by = request.GET.get('sort', 'due_date') or 'due_date'
     order_queryset = Order.objects.annotate(
@@ -53,15 +66,15 @@ def order_list(request):
     if user.is_superuser:
         orders = order_queryset.all().order_by('status_priority', sort_by, '-created_at')
         vendor_name = "전체 관리자"
-    elif hasattr(user, 'vendor'): 
-        orders = order_queryset.filter(vendor=user.vendor).order_by('status_priority', sort_by, '-created_at')
-        vendor_name = user.vendor.name
+    elif user_vendor: 
+        orders = order_queryset.filter(vendor=user_vendor).order_by('status_priority', sort_by, '-created_at')
+        vendor_name = user_vendor.name
     else:
         orders = order_queryset.all().order_by('status_priority', sort_by, '-created_at')
         vendor_name = "시스템 운영자"
 
     selected_vendor = request.GET.get('vendor_id')
-    if (user.is_superuser or not hasattr(user, 'vendor')) and selected_vendor:
+    if (user.is_superuser or not user_vendor) and selected_vendor:
         orders = orders.filter(vendor_id=selected_vendor)
     
     status_filter = request.GET.get('status')
@@ -84,7 +97,7 @@ def order_list(request):
     active_overdue = Order.objects.filter(due_date__lt=today, is_closed=False, approved_at__isnull=False)
     
     if not (user.is_superuser or (hasattr(user, 'profile') and user.profile.role == 'STAFF')):
-        active_overdue = active_overdue.filter(vendor=user.vendor)
+        active_overdue = active_overdue.filter(vendor=user_vendor) if user_vendor else active_overdue.none()
     elif selected_vendor:
         active_overdue = active_overdue.filter(vendor_id=selected_vendor)
 
@@ -97,7 +110,7 @@ def order_list(request):
         if rem > 0:
             overdue_list.append({
                 'due_date': o.due_date,
-                'vendor_name': o.vendor.name,
+                'vendor_name': o.vendor.name if o.vendor else "미지정",
                 'part_no': o.part_no,
                 'remain_qty': rem
             })
@@ -149,15 +162,17 @@ def order_close_action(request):
 @login_required
 def order_approve_all(request):
     q = Order.objects.filter(approved_at__isnull=True, is_closed=False)
-    if not request.user.is_superuser and hasattr(request.user, 'vendor'): 
-        q = q.filter(vendor=request.user.vendor)
+    user_vendor = Vendor.objects.filter(user=request.user).first()
+    if not request.user.is_superuser and user_vendor: 
+        q = q.filter(vendor=user_vendor)
     q.update(approved_at=timezone.now())
     return redirect('order_list')
 
 @login_required
 def order_approve(request, order_id):
     order = get_object_or_404(Order, pk=order_id)
-    can_approve = request.user.is_superuser or not hasattr(request.user, 'vendor') or (hasattr(request.user, 'vendor') and order.vendor == request.user.vendor)
+    user_vendor = Vendor.objects.filter(user=request.user).first()
+    can_approve = request.user.is_superuser or not user_vendor or (user_vendor and order.vendor == user_vendor)
     if can_approve:
         if not order.approved_at and not order.is_closed:
             order.approved_at = timezone.now(); order.save()
@@ -166,14 +181,15 @@ def order_approve(request, order_id):
 @login_required
 def order_export(request):
     user = request.user
-    if user.is_superuser or not hasattr(user, 'vendor'):
+    user_vendor = Vendor.objects.filter(user=user).first()
+    if user.is_superuser or not user_vendor:
         orders = Order.objects.all().order_by('-created_at')
     else:
-        orders = Order.objects.filter(vendor=user.vendor).order_by('-created_at')
+        orders = Order.objects.filter(vendor=user_vendor).order_by('-created_at')
     wb = openpyxl.Workbook(); ws = wb.active; ws.append(['상태', '등록일', '승인일', '협력사', '품목군', '품번', '품명', '수량', '납기일'])
     for o in orders:
         status = "발주마감" if o.is_closed else ("승인완료" if o.approved_at else "미확인")
-        ws.append([status, o.created_at.date(), o.approved_at.date() if o.approved_at else "-", o.vendor.name, o.part_group, o.part_no, o.part_name, o.quantity, str(o.due_date)])
+        ws.append([status, o.created_at.date(), o.approved_at.date() if o.approved_at else "-", o.vendor.name if o.vendor else "-", o.part_group, o.part_no, o.part_name, o.quantity, str(o.due_date)])
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = 'attachment; filename=orders.xlsx'; wb.save(response); return response
 
@@ -182,19 +198,20 @@ def order_export(request):
 @menu_permission_required('can_view_inventory') 
 def inventory_list(request):
     user = request.user; today = timezone.localtime().date()
-    if user.is_superuser or not hasattr(user, 'vendor'):
+    user_vendor = Vendor.objects.filter(user=user).first()
+    if user.is_superuser or not user_vendor:
         max_due = Demand.objects.aggregate(Max('due_date'))['due_date__max']
         standard_end = today + datetime.timedelta(days=31)
         end_date = max_due if max_due and max_due > standard_end else standard_end
     else: end_date = today + datetime.timedelta(days=14)
     date_range = [today + datetime.timedelta(days=i) for i in range((end_date - today).days + 1)]
     show_all = request.GET.get('show_all') == 'true'; selected_v = request.GET.get('vendor_id'); q = request.GET.get('q', '')
-    if user.is_superuser or not hasattr(user, 'vendor'):
+    if user.is_superuser or not user_vendor:
         inventory_items = Inventory.objects.select_related('part', 'part__vendor').all()
         vendor_list = Vendor.objects.all().order_by('name')
         if selected_v: inventory_items = inventory_items.filter(part__vendor_id=selected_v)
-    elif hasattr(user, 'vendor'):
-        inventory_items = Inventory.objects.select_related('part', 'part__vendor').filter(part__vendor=user.vendor); vendor_list = []
+    elif user_vendor:
+        inventory_items = Inventory.objects.select_related('part', 'part__vendor').filter(part__vendor=user_vendor); vendor_list = []
     else: return redirect('order_list')
     if q: inventory_items = inventory_items.filter(Q(part__part_no__icontains=q) | Q(part__part_name__icontains=q))
     if not show_all:
@@ -215,17 +232,18 @@ def inventory_list(request):
             daily_status.append({'date': dt, 'demand_qty': dq, 'in_qty': iq, 'stock': temp_stock, 'is_danger': temp_stock < 0})
         inventory_data.append({'vendor_name': item.part.vendor.name, 'part_no': item.part.part_no, 'part_name': item.part.part_name, 'base_stock': opening_stock, 'daily_status': daily_status})
     latest_inv = Inventory.objects.exclude(last_inventory_date__isnull=True).order_by('-last_inventory_date').first()
-    return render(request, 'inventory_list.html', {'date_range': date_range, 'inventory_data': inventory_data, 'vendor_list': vendor_list, 'active_menu': 'inventory', 'show_all': show_all, 'selected_vendor_id': selected_v, 'user_name': user.username, 'vendor_name': user.vendor.name if hasattr(user, 'vendor') else "관리자", 'q': q, 'inventory_ref_date': latest_inv.last_inventory_date if latest_inv else None})
+    return render(request, 'inventory_list.html', {'date_range': date_range, 'inventory_data': inventory_data, 'vendor_list': vendor_list, 'active_menu': 'inventory', 'show_all': show_all, 'selected_vendor_id': selected_v, 'user_name': user.username, 'vendor_name': user_vendor.name if user_vendor else "관리자", 'q': q, 'inventory_ref_date': latest_inv.last_inventory_date if latest_inv else None})
 
 @login_required
 @menu_permission_required('can_view_inventory')
 def inventory_export(request):
     user = request.user; today = timezone.localtime().date()
+    user_vendor = Vendor.objects.filter(user=user).first()
     max_due = Demand.objects.aggregate(Max('due_date'))['due_date__max']
     end_date = max_due if max_due and max_due > (today + datetime.timedelta(days=31)) else (today + datetime.timedelta(days=31))
     dr = [today + datetime.timedelta(days=i) for i in range((end_date - today).days + 1)]
     items = Inventory.objects.select_related('part', 'part__vendor').all()
-    if not user.is_superuser and hasattr(user, 'vendor'): items = items.filter(part__vendor=user.vendor)
+    if not user.is_superuser and user_vendor: items = items.filter(part__vendor=user_vendor)
     wb = openpyxl.Workbook(); ws = wb.active; ws.append(['협력사', '품번', '품명', '구분'] + [d.strftime('%m/%d') for d in dr])
     for item in items:
         ref = item.last_inventory_date or date(2000, 1, 1); stock = item.base_stock - (Demand.objects.filter(part=item.part, due_date__gt=ref, due_date__lt=today).aggregate(Sum('quantity'))['quantity__sum'] or 0) + (Incoming.objects.filter(part=item.part, in_date__gt=ref, in_date__lt=today).aggregate(Sum('quantity'))['quantity__sum'] or 0)
@@ -335,31 +353,46 @@ def inventory_upload_action(request):
 @menu_permission_required('can_register_orders') 
 def label_list(request):
     user = request.user; selected_v = request.GET.get('vendor_id'); status_filter = request.GET.get('status'); q = request.GET.get('q', '')
+    user_vendor = Vendor.objects.filter(user=user).first()
+    
     pnos_with_delivery = DeliveryOrderItem.objects.values_list('part_no', flat=True).distinct()
     vendor_ids = Part.objects.filter(part_no__in=pnos_with_delivery).values_list('vendor_id', flat=True).distinct()
-    vendor_list = Vendor.objects.filter(id__in=vendor_ids).order_by('name') if (user.is_superuser or user.profile.role == 'STAFF') else []
-    recent_orders = DeliveryOrder.objects.all().prefetch_related('items').order_by('-created_at')[:15]
-    if not (user.is_superuser or user.profile.role == 'STAFF'): recent_orders = recent_orders.filter(items__part_no__in=Part.objects.filter(vendor=user.vendor).values_list('part_no', flat=True)).distinct()
-    elif selected_v: recent_orders = recent_orders.filter(items__part_no__in=Part.objects.filter(vendor_id=selected_v).values_list('part_no', flat=True)).distinct()
+    
+    profile = getattr(user, 'profile', None)
+    is_staff_or_admin = user.is_superuser or (profile and profile.role == 'STAFF')
+    
+    vendor_list = Vendor.objects.filter(id__in=vendor_ids).order_by('name') if is_staff_or_admin else []
+    
+    # [✅ 수정 핵심] 슬라이싱 [:15]을 제거하고 먼저 필터링 가능한 쿼리셋을 만듭니다.
+    recent_orders = DeliveryOrder.objects.all().prefetch_related('items').order_by('-created_at')
+    
+    if not is_staff_or_admin:
+        recent_orders = recent_orders.filter(items__part_no__in=Part.objects.filter(vendor=user_vendor).values_list('part_no', flat=True)).distinct() if user_vendor else recent_orders.none()
+    elif selected_v: 
+        recent_orders = recent_orders.filter(items__part_no__in=Part.objects.filter(vendor_id=selected_v).values_list('part_no', flat=True)).distinct()
+    
     if status_filter == 'registered': recent_orders = recent_orders.filter(is_received=False)
     elif status_filter == 'received': recent_orders = recent_orders.filter(is_received=True)
+    
+    # [✅ 수정 핵심] 모든 필터가 적용된 후 마지막에 자릅니다.
+    recent_orders = recent_orders[:15]
+
     order_q = Order.objects.filter(is_closed=False, approved_at__isnull=False)
-    if not user.is_superuser: order_q = order_q.filter(vendor=user.vendor)
-    elif selected_v: order_q = order_q.filter(vendor_id=selected_v)
+    if not user.is_superuser: 
+        order_q = order_q.filter(vendor=user_vendor) if user_vendor else order_q.none()
+    elif selected_v: 
+        order_q = order_q.filter(vendor_id=selected_v)
+    
     if q: order_q = order_q.filter(Q(part_no__icontains=q) | Q(part_name__icontains=q))
 
     label_data = []
     for p_no in order_q.values_list('part_no', flat=True).distinct():
         order_row = order_q.filter(part_no=p_no).first()
         active_t = order_q.filter(part_no=p_no).aggregate(Sum('quantity'))['quantity__sum'] or 0
-        
-        # [✅ 복구] 방금 등록한 수량이 즉시 차감되도록 전체 이력 합산 (이미지 확인 결과 핵심 로직)
         total_p = LabelPrintLog.objects.filter(part_no=p_no).aggregate(Sum('printed_qty'))['printed_qty__sum'] or 0
         closed_t = Order.objects.filter(part_no=p_no, is_closed=True, approved_at__isnull=False).aggregate(Sum('quantity'))['quantity__sum'] or 0
-        
         current_printed = max(0, total_p - closed_t)
         remain = active_t - current_printed
-        
         if remain > 0: label_data.append({'part_no': p_no, 'part_name': order_row.part_name, 'total_order': active_t, 'remain': remain})
     return render(request, 'label_list.html', {'label_data': label_data, 'recent_orders': recent_orders, 'vendor_list': vendor_list, 'selected_vendor_id': selected_v, 'status_filter': status_filter, 'active_menu': 'label', 'q': q})
 
@@ -440,9 +473,12 @@ def incoming_cancel(request):
 @menu_permission_required('can_manage_incoming') 
 def incoming_list(request):
     user = request.user; selected_v = request.GET.get('vendor_id'); sd, ed, q = request.GET.get('start_date'), request.GET.get('end_date'), request.GET.get('q', '')
+    user_vendor = Vendor.objects.filter(user=user).first()
     incomings = Incoming.objects.select_related('part', 'part__vendor').all().order_by('-in_date', '-created_at')
-    vendor_ids = Incoming.objects.values_list('part__vendor_id', flat=True).distinct(); vendor_list = Vendor.objects.filter(id__in=vendor_ids).order_by('name') if (user.is_superuser or user.profile.role == 'STAFF') else []
-    if not user.is_superuser and user.profile.role != 'STAFF': incomings = incomings.filter(part__vendor=user.vendor)
+    profile = getattr(user, 'profile', None)
+    vendor_ids = Incoming.objects.values_list('part__vendor_id', flat=True).distinct(); vendor_list = Vendor.objects.filter(id__in=vendor_ids).order_by('name') if (user.is_superuser or (profile and profile.role == 'STAFF')) else []
+    if not user.is_superuser and (profile and profile.role != 'STAFF'): 
+        incomings = incomings.filter(part__vendor=user_vendor) if user_vendor else incomings.none()
     elif selected_v: incomings = incomings.filter(part__vendor_id=selected_v)
     if sd and ed: incomings = incomings.filter(in_date__range=[sd, ed])
     if q: incomings = incomings.filter(Q(part__part_no__icontains=q) | Q(part__part_name__icontains=q))
@@ -452,7 +488,8 @@ def incoming_list(request):
 @menu_permission_required('can_manage_incoming')
 def incoming_export(request):
     incomings = Incoming.objects.select_related('part', 'part__vendor').all()
-    if not request.user.is_superuser and hasattr(request.user, 'vendor'): incomings = incomings.filter(part__vendor=request.user.vendor)
+    user_vendor = Vendor.objects.filter(user=request.user).first()
+    if not request.user.is_superuser and user_vendor: incomings = incomings.filter(part__vendor=user_vendor)
     wb = openpyxl.Workbook(); ws = wb.active; ws.append(['입고일자', '협력사', '품번', '품명', '입고수량', '처리일시'])
     for i in incomings: ws.append([i.in_date, i.part.vendor.name, i.part.part_no, i.part.part_name, i.quantity, i.created_at.strftime("%Y-%m-%d %H:%M")])
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); response['Content-Disposition'] = f'attachment; filename=Incomings.xlsx'; wb.save(response); return response

@@ -1,0 +1,366 @@
+{% extends "qms/qms_base.html" %}
+
+{% block qms_content %}
+<div class="container mt-5 mb-5" style="max-width: 1000px;">
+    <div class="d-flex justify-content-between align-items-end mb-4 pb-3 border-bottom d-print-none">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1 small">
+                    <li class="breadcrumb-item"><a href="{% url 'qms:m4_list' %}" class="text-decoration-none">QMS</a></li>
+                    <li class="breadcrumb-item active">사전 4M 검토</li>
+                </ol>
+            </nav>
+            <h2 class="fw-bold mb-0">사전 4M 검토요청서</h2>
+        </div>
+        <div class="btn-group shadow-sm">
+            <a href="{% url 'qms:m4_list' %}" class="btn btn-white border px-3">목록</a>
+            <button onclick="window.print()" class="btn btn-dark px-3">
+                <i class="bi bi-printer-fill me-1"></i> 보고서 출력
+            </button>
+        </div>
+    </div>
+
+    <div class="bg-white p-5 border shadow-sm rounded-3 printable-content">
+        <div class="row mb-5 align-items-center">
+            <div class="col-8">
+                <div class="display-6 fw-bold text-secondary mb-2" style="font-size: 1.5rem;">{{ item.request_no }}</div>
+                <div class="text-muted small">
+                    발행일: {{ item.created_at|date:"Y-m-d" }} | 
+                    작성자: {% if item.user.last_name or item.user.first_name %}{{ item.user.last_name }}{{ item.user.first_name }}{% else %}{{ item.user.username }}{% endif %}
+                </div>
+            </div>
+            <div class="col-4 text-end">
+                {% if item.status == 'DRAFT' %}
+                    <span class="px-4 py-2 rounded-pill bg-secondary bg-opacity-10 text-secondary fw-bold border border-secondary border-opacity-25">작성 중</span>
+                {% elif item.status == 'PENDING_REVIEW' %}
+                    <span class="px-4 py-2 rounded-pill bg-warning bg-opacity-10 text-warning fw-bold border border-warning border-opacity-25">검토 대기</span>
+                {% elif item.status == 'PENDING_APPROVE' %}
+                    <span class="px-4 py-2 rounded-pill bg-info bg-opacity-10 text-info fw-bold border border-info border-opacity-25">승인 대기</span>
+                {% elif item.status == 'APPROVED' %}
+                    <span class="px-4 py-2 rounded-pill bg-success bg-opacity-10 text-success fw-bold border border-success border-opacity-25">승인 완료</span>
+                {% elif item.status == 'REJECTED' %}
+                    <span class="px-4 py-2 rounded-pill bg-danger bg-opacity-10 text-danger fw-bold border border-danger border-opacity-25">반려됨</span>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if item.status == 'REJECTED' %}
+        <div class="alert alert-danger border-0 shadow-sm mb-5 p-4 d-print-none">
+            <div class="d-flex align-items-center mb-2">
+                <i class="bi bi-exclamation-octagon-fill fs-4 me-2 text-danger"></i>
+                <h6 class="fw-bold mb-0 text-danger">반려 안내 및 사유</h6>
+            </div>
+            <hr class="text-danger opacity-25">
+            <p class="mb-0 text-dark" style="white-space: pre-wrap;">{{ item.reject_reason|default:"입력된 반려 사유가 없습니다." }}</p>
+        </div>
+        {% endif %}
+
+        <div class="row g-4 mb-5">
+            <div class="col-12"><h5 class="fw-bold border-start border-4 border-primary ps-2 mb-0">기본 정보</h5></div>
+            <div class="col-md-3">
+                <div class="text-muted small mb-1">공장</div>
+                <div class="fw-semibold">{{ item.factory|default:"-" }}</div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-muted small mb-1">제품 / 차종</div>
+                <div class="fw-semibold">{{ item.product|default:"-" }} / {{ item.model_name|default:"-" }}</div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-muted small mb-1">사내/사외 구분</div> 
+                <div class="fw-bold text-danger">{{ item.quality_rank|default:"-" }}</div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-muted small mb-1">4M 분류</div>
+                <div class="fw-semibold">{{ item.get_m4_type_display }}</div>
+            </div>
+            <div class="col-12">
+                <div class="text-muted small mb-1">품번 / 품명</div>
+                <div class="fw-semibold fs-5">{{ item.part_no }} — {{ item.part_name }}</div>
+            </div>
+        </div>
+
+        <div class="mb-5">
+            <h5 class="fw-bold border-start border-4 border-primary ps-2 mb-3">변경 상세 내용</h5>
+            <div class="p-4 bg-light rounded-3 mb-4 border text-dark">
+                <div class="text-muted small mb-2 fw-bold">변경 사유</div>
+                <div class="lh-base">{{ item.reason|linebreaksbr }}</div>
+            </div>
+            <div class="row g-0 border rounded-3 overflow-hidden shadow-sm mb-4">
+                <div class="col-md-6 border-end p-4 bg-white">
+                    <div class="badge bg-secondary mb-3 px-3">As-Is (변경 전)</div>
+                    <div class="text-secondary small lh-lg mb-4">{{ item.content_before|linebreaksbr|default:"내용 없음" }}</div>
+                    {% if item.photo_before %}
+                    <div class="text-center p-2 bg-white border rounded">
+                        <a href="javascript:void(0);" onclick="openImageModal('{{ item.photo_before.url }}', '변경 전 사진')">
+                            <img src="{{ item.photo_before.url }}" class="img-fluid rounded hover-shadow" style="max-height: 250px; cursor: zoom-in;">
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-6 p-4 bg-primary bg-opacity-10">
+                    <div class="badge bg-primary mb-3 px-3">To-Be (변경 후)</div>
+                    <div class="fw-medium small lh-lg mb-4 text-dark">{{ item.content_after|linebreaksbr|default:"내용 없음" }}</div>
+                    {% if item.photo_after %}
+                    <div class="text-center p-2 bg-white border rounded">
+                        <a href="javascript:void(0);" onclick="openImageModal('{{ item.photo_after.url }}', '변경 후 사진')">
+                            <img src="{{ item.photo_after.url }}" class="img-fluid rounded hover-shadow" style="max-height: 250px; cursor: zoom-in;">
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="mb-5">
+            <h5 class="fw-bold border-start border-4 border-primary ps-2 mb-4">실시 계획 및 일정</h5>
+            <div class="table-responsive">
+                <table class="table table-bordered align-middle text-center small m4-table">
+                    <thead class="table-light">
+                        <tr class="text-muted">
+                            <th style="width: 25%;">단계</th>
+                            <th style="width: 25%;">예정 일정</th>
+                            <th style="width: 25%;">단계</th>
+                            <th style="width: 25%;">예정 일정</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="bg-light fw-bold">1. 공정준비</td>
+                            <td>{{ item.plan_step1|date:"Y-m-d"|default:"-" }}</td>
+                            <td class="bg-light fw-bold">5. 초품 SAMPLE 제출</td>
+                            <td>{{ item.plan_step5|date:"Y-m-d"|default:"-" }}</td>
+                        </tr>
+                        <tr>
+                            <td class="bg-light fw-bold">2. 표준류 정비</td>
+                            <td>{{ item.plan_step2|date:"Y-m-d"|default:"-" }}</td>
+                            <td class="bg-light fw-bold">6. 초품승인 완료</td>
+                            <td>{{ item.plan_step6|date:"Y-m-d"|default:"-" }}</td>
+                        </tr>
+                        <tr>
+                            <td class="bg-light fw-bold">3. 공정안정화</td>
+                            <td>{{ item.plan_step3|date:"Y-m-d"|default:"-" }}</td>
+                            <td class="bg-light fw-bold">7. 양산개시</td>
+                            <td>{{ item.plan_step7|date:"Y-m-d"|default:"-" }}</td>
+                        </tr>
+                        <tr>
+                            <td class="bg-light fw-bold">4. 초품검사</td>
+                            <td>{{ item.plan_step4|date:"Y-m-d"|default:"-" }}</td>
+                            <td class="bg-light fw-bold">8. 변경초품 납품</td>
+                            <td>{{ item.plan_step8|date:"Y-m-d"|default:"-" }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="mt-5">
+            <h5 class="fw-bold border-start border-4 border-primary ps-2 mb-4">사내 검토 현황</h5>
+            <div class="table-responsive">
+                <table class="table table-bordered align-middle text-center small">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 15%;">검토부서</th>
+                            <th style="width: 15%;">발송일(품질팀 요청)</th>
+                            <th>품질팀 요청사항 및 부서 답변</th>
+                            <th style="width: 15%;">접수일(부서 회신)</th>
+                            <th style="width: 10%;" class="d-print-none">관리</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for review in item.reviews.all %}
+                        <tr>
+                            <td class="fw-bold">{{ review.department }}<br><small class="text-muted">{{ review.reviewer_name|default:"-" }}</small></td>
+                            <td class="text-muted small">{{ review.sent_at|date:"Y-m-d"|default:"-" }}</td>
+                            <td class="text-start p-3">
+                                <div class="mb-2 pb-2 border-bottom">
+                                    <span class="badge bg-dark mb-1">품질팀 요청</span>
+                                    <div class="ps-2 text-primary fw-bold" style="white-space: pre-wrap;">{{ review.request_content|default:"상세 요청 내용 없음" }}</div>
+                                </div>
+                                <div id="review-display-{{ review.id }}">
+                                    <span class="badge bg-success mb-1">부서 답변</span>
+                                    <div class="ps-2" style="white-space: pre-wrap;">{{ review.content|linebreaksbr|default:"검토 의견을 기다리는 중입니다." }}</div>
+                                </div>
+                                <div id="review-edit-{{ review.id }}" class="d-print-none mt-2" style="display:none;">
+                                    <form action="{% url 'qms:edit_m4_review' review.id %}" method="POST">
+                                        {% csrf_token %}
+                                        <div class="input-group input-group-sm shadow-sm">
+                                            <textarea name="review_content" class="form-control" rows="2" placeholder="검토 결과 답변을 입력하세요">{{ review.content }}</textarea>
+                                            <button type="submit" class="btn btn-success">답변 등록</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </td>
+                            <td class="fw-bold text-success">{{ review.received_at|date:"Y-m-d"|default:"-" }}</td>
+                            <td class="d-print-none">
+                                <button class="btn btn-link btn-sm text-decoration-none" onclick="toggleReviewEdit('{{ review.id }}')">답변달기</button>
+                                <a href="{% url 'qms:delete_m4_review' review.id %}" class="btn btn-link btn-sm text-danger text-decoration-none" onclick="return confirm('삭제하시겠습니까?')">삭제</a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="py-5 text-muted text-center">등록된 사내 검토 부서가 없습니다.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {% if item.status != 'APPROVED' %}
+        <div class="mt-4 p-4 bg-light rounded-3 border d-print-none shadow-sm">
+            <h6 class="fw-bold mb-3"><i class="bi bi-send-plus me-2 text-primary"></i>신규 검토 요청 발송</h6>
+            <form action="{% url 'qms:add_m4_review' item.pk %}" method="POST">
+                {% csrf_token %}
+                <div class="row g-2 mb-2">
+                    <div class="col-md-6">
+                        <input type="text" name="department" class="form-control form-control-sm" placeholder="검토 요청 부서 (예: 생산기술팀)" required>
+                    </div>
+                    <div class="col-md-6">
+                        <input type="text" name="reviewer_name" class="form-control form-control-sm" placeholder="검토 담당자 성함">
+                    </div>
+                </div>
+                <div class="input-group shadow-sm">
+                    <textarea name="request_content" class="form-control form-control-sm" rows="2" placeholder="해당 부서에 요청할 구체적인 검토 내용을 입력하세요" required></textarea>
+                    <button type="submit" class="btn btn-dark fw-bold px-4">발송 등록</button>
+                </div>
+            </form>
+        </div>
+        {% endif %}
+
+        <div class="d-flex justify-content-end mt-5 approval-section">
+            <div class="d-flex border text-center" style="width: 320px; background: white;">
+                <div class="flex-fill border-end">
+                    <div class="bg-light py-1 small border-bottom">등록</div>
+                    <div class="py-3">
+                        {% if item.is_submitted %}
+                            <div class="text-danger fw-bold border border-danger d-inline-block rounded-circle stamp" style="width: 42px; height: 42px; line-height: 40px; font-size: 0.75rem;">{{ item.user.last_name }}</div>
+                            <div class="small mt-1 text-muted">{{ item.submitted_at|date:"m.d" }}</div>
+                        {% else %}<div class="text-muted small py-2 mt-1">대기</div>{% endif %}
+                    </div>
+                </div>
+                <div class="flex-fill border-end">
+                    <div class="bg-light py-1 small border-bottom">검토</div>
+                    <div class="py-3">
+                        {% if item.is_reviewed %}
+                            <div class="text-primary fw-bold border border-primary d-inline-block rounded-circle stamp" style="width: 42px; height: 42px; line-height: 40px; font-size: 0.75rem;">{{ item.reviewer_user.last_name }}</div>
+                            <div class="small mt-1 text-muted">{{ item.reviewed_at|date:"m.d" }}</div>
+                        {% else %}<div class="text-muted small py-2 mt-1">대기</div>{% endif %}
+                    </div>
+                </div>
+                <div class="flex-fill">
+                    <div class="bg-light py-1 small border-bottom">승인</div>
+                    <div class="py-3">
+                        {% if item.is_approved %}
+                            <div class="text-primary fw-bold border border-primary d-inline-block rounded-circle stamp" style="width: 42px; height: 42px; line-height: 40px; font-size: 0.75rem;">{{ item.approver_user.last_name }}</div>
+                            <div class="small mt-1 text-muted">{{ item.approved_at|date:"m.d" }}</div>
+                        {% else %}<div class="text-muted small py-2 mt-1">대기</div>{% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-5 d-print-none pt-4 border-top">
+            <h5 class="fw-bold mb-4" style="color: #4a5568;"><i class="bi bi-clock-history me-2"></i>문서 수정 이력</h5>
+            <div class="list-group list-group-flush border rounded-3 overflow-hidden shadow-sm">
+                {% for log in item.change_logs.all %}
+                <div class="list-group-item bg-light bg-opacity-10 py-3 border-bottom">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="fw-bold text-primary px-2 py-1 bg-primary bg-opacity-10 rounded" style="font-size: 0.85rem;">{{ log.field_name }} 수정</span>
+                        <span class="text-muted" style="font-size: 0.8rem;">{{ log.changed_at|date:"Y-m-d H:i" }}</span>
+                    </div>
+                    <div class="ps-2 border-start border-3 border-secondary border-opacity-25 mt-2 small">
+                        <div class="mb-1"><span class="badge bg-secondary opacity-75 me-1">이전</span> <span class="text-muted text-decoration-line-through">{{ log.old_value|truncatechars:100 }}</span></div>
+                        <div><span class="badge bg-success me-1">변경</span> <span class="fw-semibold text-dark">{{ log.new_value|truncatechars:100 }}</span></div>
+                    </div>
+                    <div class="mt-2 text-end text-muted small">수정자: {{ log.user.last_name }}{{ log.user.first_name }}</div>
+                </div>
+                {% empty %}<div class="py-4 text-center text-muted">기록된 수정 이력이 없습니다.</div>{% endfor %}
+            </div>
+        </div>
+    </div> 
+
+    <div class="d-flex justify-content-center gap-3 mt-4 d-print-none pb-5">
+        {% if item.status == 'DRAFT' and item.user == user %}
+            <a href="{% url 'qms:m4_update' item.pk %}" class="btn btn-outline-primary px-5 py-2 shadow-sm fw-bold">수정하기</a>
+            <form action="{% url 'qms:m4_delete' item.pk %}" method="POST" class="d-inline" onsubmit="return confirm('정말로 이 문서를 삭제하시겠습니까?');">
+                {% csrf_token %}<button type="submit" class="btn btn-outline-danger px-5 py-2 shadow-sm fw-bold">삭제하기</button>
+            </form>
+            <form action="{% url 'qms:m4_submit' item.pk %}" method="POST" class="d-inline">{% csrf_token %}
+                <button type="submit" class="btn btn-primary px-5 py-2 shadow-sm fw-bold" onclick="return confirm('결재를 요청하시겠습니까?')">결재 상신</button>
+            </form>
+        {% elif item.status == 'REJECTED' and item.user == user %}
+            <a href="{% url 'qms:m4_update' item.pk %}" class="btn btn-outline-primary px-5 py-2 shadow-sm fw-bold">내용 수정</a>
+            <form action="{% url 'qms:m4_resubmit' item.pk %}" method="POST" class="d-inline">{% csrf_token %}
+                <button type="submit" class="btn btn-primary px-5 py-2 shadow-sm fw-bold">다시 상신하기</button>
+            </form>
+        {% elif item.status == 'PENDING_REVIEW' or item.status == 'PENDING_APPROVE' %}
+            {% if item.user == user or item.status == 'PENDING_REVIEW' and user == item.reviewer_user or item.status == 'PENDING_APPROVE' and user == item.approver_user %}
+                <a href="{% url 'qms:m4_update' item.pk %}" class="btn btn-outline-primary px-5 py-2 shadow-sm fw-bold">수정하기</a>
+            {% endif %}
+            {% if item.status == 'PENDING_REVIEW' and item.user == user %}
+                <form action="{% url 'qms:m4_cancel_approval' item.pk %}" method="POST" class="d-inline">{% csrf_token %}
+                    <button type="submit" class="btn btn-outline-danger px-5 py-2 shadow-sm fw-bold">상신 취소</button>
+                </form>
+            {% endif %}
+        {% endif %}
+    </div>
+</div>
+
+<div class="modal fade d-print-none" id="imageZoomModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content bg-transparent border-0 text-center">
+            <img src="" id="zoomedImage" class="img-fluid rounded shadow-lg" style="max-height: 90vh;">
+            <button type="button" class="btn-close btn-close-white mt-3 mx-auto" data-bs-dismiss="modal"></button>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="rejectModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-danger text-white border-0">
+                <h5 class="modal-title fw-bold">반려 사유 입력</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{% url 'qms:m4_reject' item.pk %}" method="POST">
+                {% csrf_token %}
+                <div class="modal-body p-4"><textarea name="reject_reason" class="form-control" rows="4" placeholder="반려 사유를 상세히 입력하세요..." required></textarea></div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-light border" data-bs-dismiss="modal">취소</button>
+                    <button type="submit" class="btn btn-danger px-4 fw-bold">반려 확정</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    function openImageModal(imgUrl) {
+        document.getElementById('zoomedImage').src = imgUrl;
+        new bootstrap.Modal(document.getElementById('imageZoomModal')).show();
+    }
+
+    function toggleReviewEdit(reviewId) {
+        const displayDiv = document.getElementById(`review-display-${reviewId}`);
+        const editDiv = document.getElementById(`review-edit-${reviewId}`);
+        if (editDiv.style.display === 'none') {
+            editDiv.style.display = 'block';
+            if(displayDiv) displayDiv.style.display = 'none';
+        } else {
+            editDiv.style.display = 'none';
+            if(displayDiv) displayDiv.style.display = 'block';
+        }
+    }
+</script>
+
+<style>
+    body { background-color: #f1f5f9; font-family: 'Pretendard', sans-serif; }
+    .btn-white { background: #fff; }
+    .hover-shadow:hover { cursor: zoom-in; opacity: 0.9; transition: 0.3s; }
+    @media print {
+        header, footer, nav, .navbar, .sidebar, aside, .nav, #sidebar-wrapper, .d-print-none, .btn, .btn-group { display: none !important; }
+        .container { max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
+        .bg-white { border: 1px solid #000 !important; box-shadow: none !important; }
+        .table th, .table td { border: 1px solid #444 !important; font-size: 10pt !important; padding: 5px !important; }
+        .stamp { border: 2px solid #dc3545 !important; color: #dc3545 !important; }
+    }
+</style>
+{% endblock qms_content %}
