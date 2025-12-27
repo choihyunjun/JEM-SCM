@@ -143,3 +143,10 @@ else:
     # [로컬 VS Code 전용] 
     # 내 컴퓨터에서는 일반 폴더(media/)에 저장하여 에러를 방지합니다.
     DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
+
+    # settings.py 수정
+# 403 에러 메시지에 나온 도메인을 정확히 입력해야 합니다.
+CSRF_TRUSTED_ORIGINS = [
+    'https://jem-scm.com',
+    'https://www.jem-scm.com', # www 포함 버전도 함께 넣는 것이 안전합니다.
+]
