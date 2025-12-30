@@ -28,6 +28,23 @@ class Vendor(models.Model):
     def __str__(self):
         return f"[{self.code}] {self.name}"
 
+# 1-1. 조직(회사/협력사) - 내부(진영전기) + 협력사 공통 관리
+class Organization(models.Model):
+    ORG_TYPE_CHOICES = [
+        ("INTERNAL", "내부"),
+        ("VENDOR", "협력사"),
+    ]
+
+    name = models.CharField(max_length=100, unique=True, verbose_name="조직명(회사/협력사)")
+    org_type = models.CharField(max_length=20, choices=ORG_TYPE_CHOICES, verbose_name="조직 구분")
+
+    class Meta:
+        verbose_name = "조직(회사/협력사)"
+        verbose_name_plural = "조직(회사/협력사)"
+
+    def __str__(self):
+        return f"{self.name} [{self.get_org_type_display()}]"
+
 # 2. 품목 마스터(Part)
 class Part(models.Model):
     vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, verbose_name='전담 업체')
@@ -159,9 +176,31 @@ class UserProfile(models.Model):
         ('VENDOR', '3. 협력업체 (제한적 메뉴 노출)'),
     ]
 
+    ACCOUNT_TYPE_CHOICES = [
+        ("INTERNAL", "내부"),
+        ("VENDOR", "협력사"),
+    ]
+
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='VENDOR', verbose_name="사용자 그룹")
-    
+
+    # ✅ 신규: 계정 타입 + 조직(회사/협력사)
+    account_type = models.CharField(
+        max_length=20, choices=ACCOUNT_TYPE_CHOICES, default="VENDOR", verbose_name="계정 구분"
+    )
+    org = models.ForeignKey(
+        "orders.Organization", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="user_profiles", verbose_name="소속 조직(회사/협력사)"
+    )
+
+    # ✅ 신규: 내부 인사 속성(협력사는 비워도 됨)
+    display_name = models.CharField(max_length=50, blank=True, null=True, verbose_name="표시 이름")
+    employee_no = models.CharField(max_length=30, blank=True, null=True, verbose_name="사번")
+    department = models.CharField(max_length=50, blank=True, null=True, verbose_name="부서/소속")
+    position = models.CharField(max_length=30, blank=True, null=True, verbose_name="직급")
+    job_title = models.CharField(max_length=30, blank=True, null=True, verbose_name="직책")
+
+    # 기존 메뉴 권한들
     can_view_orders = models.BooleanField(default=False, verbose_name="[메뉴] 발주 조회/승인")
     can_register_orders = models.BooleanField(default=False, verbose_name="[메뉴] 발주서 등록")
     can_view_inventory = models.BooleanField(default=False, verbose_name="[메뉴] 과부족 조회")
@@ -174,5 +213,10 @@ class UserProfile(models.Model):
         verbose_name = "유저 권한 설정"
         verbose_name_plural = "유저 권한 설정"
 
+    @property
+    def is_internal(self) -> bool:
+        return self.account_type == "INTERNAL"
+
     def __str__(self):
-        return f"{self.user.username} ({self.get_role_display()})"
+        name = self.display_name or self.user.get_full_name() or self.user.username
+        return f"{name} ({self.get_role_display()})"

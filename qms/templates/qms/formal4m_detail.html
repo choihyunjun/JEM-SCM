@@ -1,0 +1,411 @@
+{% extends "qms/qms_base.html" %}
+
+{% block qms_content %}
+{# [보정] TemplateSyntaxError 방지를 위한 개별 조건 판정 방식 사용 #}
+
+<div class="container mt-5 mb-5" style="max-width: 1300px;">
+    <div class="d-flex justify-content-between align-items-end mb-4 pb-3 border-bottom d-print-none">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1 small">
+                    <li class="breadcrumb-item"><a href="{% url 'qms:m4_list' %}" class="text-decoration-none">사전 4M</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'qms:m4_detail' pre.pk %}" class="text-decoration-none">사전 4M</a></li>
+                    <li class="breadcrumb-item active">정식 4M</li>
+                </ol>
+            </nav>
+            <h2 class="fw-bold mb-0">정식 4M</h2>
+            <div class="mt-2">
+                <span class="badge {% if formal.template_type == 'FULL' %}bg-primary{% else %}bg-secondary{% endif %}">
+                    {{ formal.get_template_type_display }} 양식
+                </span>
+                {# 최종 승인 대기 또는 완료가 아닐 때만 전환 버튼 노출 #}
+                {% if formal.approval_status != 'APPROVED' and formal.approval_status != 'PENDING_APPROVE' %}
+                    {% if actor.is_internal and formal.template_type == 'BASIC' %}
+                    <form method="post" action="{% url 'qms:formal4m_upgrade_to_full' formal.id %}" class="d-inline ms-2">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-outline-primary">확장 양식으로 전환</button>
+                    </form>
+                    {% endif %}
+                {% endif %}
+            </div>
+            <div class="text-muted small mt-1">{{ formal.formal_no }} (사전: {{ pre.request_no }})</div>
+        </div>
+        <div class="btn-group shadow-sm">
+            <a href="{% url 'qms:formal4m_list' %}" class="btn btn-white border px-3">정식 4M 목록</a>
+            <a href="{% url 'qms:m4_detail' pre.pk %}" class="btn btn-white border px-3">사전 4M</a>
+            <button onclick="window.print()" class="btn btn-dark px-3">
+                <i class="bi bi-printer-fill me-1"></i> 출력
+            </button>
+        </div>
+    </div>
+
+    <div class="bg-white p-5 border shadow-sm rounded-3 printable-content">
+        <div class="row g-4 mb-4">
+            <div class="col-md-4">
+                <div class="text-muted small mb-1">품번 / 품명</div>
+                <div class="fw-semibold">{{ pre.part_no }} — {{ pre.part_name }}</div>
+            </div>
+            <div class="col-md-4">
+                <div class="text-muted small mb-1">협력사(대상)</div>
+                <div class="fw-semibold">{% if pre.vendor_org %}{{ pre.vendor_org.name }}{% else %}-{% endif %}</div>
+            </div>
+            <div class="col-md-4">
+                <div class="text-muted small mb-1">생성일</div>
+                <div class="fw-semibold">{{ formal.created_at|date:"Y-m-d H:i" }}</div>
+            </div>
+        </div>
+
+        <div class="d-print-none mb-4">
+            <div class="p-3 border rounded-3 bg-light">
+                <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+                    <div>
+                        <div class="fw-semibold">진행 요약</div>
+
+                    </div>
+                    <div class="text-end">
+                        <div class="fw-bold">{{ progress.percent }}%</div>
+                    </div>
+                </div>
+                <div class="row g-2 mt-2 small">
+                    <div class="col-md-3">
+                        <div class="text-muted small mb-1">필수서류 업로드</div>
+                        <div class="fw-semibold">{{ progress.required_uploaded }}/{{ progress.required_total }}</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-muted small mb-1">필수서류 검토완료</div>
+                        <div class="fw-semibold text-primary">{{ progress.required_review_ok }}/{{ progress.required_total }}</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-muted small mb-1">FULL 섹션</div>
+                        <div class="fw-semibold">{% if formal.template_type == 'FULL' %}ON{% else %}OFF{% endif %}</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-muted small mb-1">유효성 평가(3개월)</div>
+                        <div class="fw-semibold">
+                            {% if formal.validity_start_date %}시작: {{ formal.validity_start_date|date:"Y-m-d" }}{% else %}-{% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                {% if actor.is_internal %}
+                <form method="post" action="{% url 'qms:formal4m_set_validity_start' formal.id %}" class="mt-3">
+                    {% csrf_token %}
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted mb-1">유효성평가 시작일 설정</label>
+                            <input type="date" name="validity_start_date" class="form-control form-control-sm" value="{% if formal.validity_start_date %}{{ formal.validity_start_date|date:'Y-m-d' }}{% endif %}" {% if formal.approval_status == 'APPROVED' %}disabled{% endif %}>
+                        </div>
+                        <div class="col-md-8 text-end">
+                            {% if formal.approval_status != 'APPROVED' %}
+                            <button class="btn btn-sm btn-outline-dark px-3" type="submit">날짜 저장</button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
+       
+        <div class="mb-4">
+            <div class="p-4 border rounded-3 bg-white shadow-sm">
+                <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
+                    <h5 class="fw-bold mb-0"><i class="bi bi-vector-pen me-2"></i>정식 4M 결재 승인</h5>
+                    <span class="badge {% if formal.approval_status == 'APPROVED' %}bg-success{% elif formal.approval_status == 'REJECTED' %}bg-danger{% else %}bg-warning text-dark{% endif %} fs-6 px-3 shadow-sm">
+                        {{ formal.get_approval_status_display }}
+                    </span>
+                </div>
+
+                {% if formal.approval_status == 'DRAFT' or formal.approval_status == 'REJECTED' %}
+                <div class="alert alert-light border py-2 small mb-4">
+                    <div class="d-flex align-items-center">
+                        {% if progress.required_review_ok == progress.required_total %}
+                            <i class="bi bi-check-circle-fill text-success me-2 fs-5"></i>
+                            <span>모든 필수 서류 검토가 완료되었습니다. 상신 버튼을 눌러 결재를 요청해 주세요.</span>
+                        {% else %}
+                            <i class="bi bi-info-circle-fill text-primary me-2 fs-5"></i>
+                            <span>
+                                <strong>검토 미완료 안내:</strong> 필수 서류 {{ progress.required_total }}건 중 {{ progress.required_review_ok }}건만 검토 완료되었습니다. 
+                                <br class="d-md-none"><span class="text-muted ms-md-2">(미비 항목이 포함된 상태로 상신할 경우 반려 사유가 될 수 있으나 상신은 가능합니다.)</span>
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="d-flex flex-wrap justify-content-between align-items-end gap-3">
+                    <div class="d-flex border text-center approval-section bg-white rounded-2 overflow-hidden shadow-xs">
+                        <div class="flex-fill border-end" style="min-width: 100px;">
+                            <div class="bg-light py-1 small border-bottom text-muted">기안</div>
+                            <div class="py-3 px-2">
+                                {% if formal.approval_is_submitted %}
+                                    <div class="text-danger fw-bold border border-danger d-inline-block rounded-circle stamp">{{ pre.user.last_name }}</div>
+                                    <div class="small mt-1 text-muted">{{ formal.approval_submitted_at|date:"m.d" }}</div>
+                                {% else %}<div class="text-muted small py-2 mt-1">대기</div>{% endif %}
+                            </div>
+                        </div>
+                        <div class="flex-fill border-end" style="min-width: 100px;">
+                            <div class="bg-light py-1 small border-bottom text-muted">검토1</div>
+                            <div class="py-3 px-2">
+                                {% if formal.approval_is_reviewed %}
+                                    <div class="text-primary fw-bold border border-primary d-inline-block rounded-circle stamp">{{ formal.approval_reviewer_user.last_name }}</div>
+                                    <div class="small mt-1 text-muted">{{ formal.approval_reviewed_at|date:"m.d" }}</div>
+                                {% elif formal.approval_reviewer_user %}
+                                    <div class="text-muted small py-2 mt-1">{{ formal.approval_reviewer_user.last_name }}</div>
+                                {% else %}<div class="text-muted small py-2 mt-1">-</div>{% endif %}
+                            </div>
+                        </div>
+                        <div class="flex-fill border-end" style="min-width: 100px;">
+                            <div class="bg-light py-1 small border-bottom text-muted">검토2</div>
+                            <div class="py-3 px-2">
+                                {% if formal.approval_reviewer_user2 %}
+                                    {% if formal.approval_is_reviewed2 %}
+                                        <div class="text-primary fw-bold border border-primary d-inline-block rounded-circle stamp">{{ formal.approval_reviewer_user2.last_name }}</div>
+                                        <div class="small mt-1 text-muted">{{ formal.approval_reviewed2_at|date:"m.d" }}</div>
+                                    {% else %}<div class="text-muted small py-2 mt-1">{{ formal.approval_reviewer_user2.last_name }}</div>{% endif %}
+                                {% else %}<div class="text-muted small py-2 mt-1">-</div>{% endif %}
+                            </div>
+                        </div>
+                        <div class="flex-fill" style="min-width: 100px;">
+                            <div class="bg-light py-1 small border-bottom text-muted">최종승인</div>
+                            <div class="py-3 px-2">
+                                {% if formal.approval_is_approved %}
+                                    <div class="text-primary fw-bold border border-primary d-inline-block rounded-circle stamp">{{ formal.approval_approver_user.last_name }}</div>
+                                    <div class="small mt-1 text-muted">{{ formal.approval_approved_at|date:"m.d" }}</div>
+                                {% elif formal.approval_approver_user %}
+                                    <div class="text-muted small py-2 mt-1">{{ formal.approval_approver_user.last_name }}</div>
+                                {% else %}<div class="text-muted small py-2 mt-1">-</div>{% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex flex-column align-items-end gap-2 d-print-none">
+                        {% if actor.is_internal and workflow_form and formal.approval_status != 'APPROVED' and formal.approval_status != 'PENDING_APPROVE' %}
+                            <button class="btn btn-xs btn-outline-secondary mb-1" type="button" data-bs-toggle="collapse" data-bs-target="#workflowCollapse">
+                                <i class="bi bi-person-plus me-1"></i>결재선 수정
+                            </button>
+                        {% endif %}
+                        <div class="d-flex align-items-center gap-2">
+                            {# 상신/재상신 #}
+                            {% if formal.approval_status == 'DRAFT' and user.id == pre.user_id %}
+                                <form method="post" action="{% url 'qms:formal4m_workflow_submit' formal.id %}" 
+                                      {% if progress.required_review_ok < progress.required_total %}onsubmit="return confirm('아직 검토 완료되지 않은 서류가 있습니다. 이대로 상신하시겠습니까?');"{% endif %}>
+                                    {% csrf_token %}
+                                    <button class="btn btn-primary btn-app-action fw-bold shadow-sm" type="submit">결재 상신</button>
+                                </form>
+                            {% elif formal.approval_status == 'REJECTED' and user.id == pre.user_id %}
+                                <form method="post" action="{% url 'qms:formal4m_workflow_resubmit' formal.id %}"
+                                      {% if progress.required_review_ok < progress.required_total %}onsubmit="return confirm('검토 미완료 항목이 있습니다. 재상신하시겠습니까?');"{% endif %}>
+                                    {% csrf_token %}
+                                    <button class="btn btn-primary btn-app-action fw-bold shadow-sm" type="submit">재상신</button>
+                                </form>
+                            {% endif %}
+
+                            {# 승인 액션 #}
+                            {% if actor.is_internal %}
+                                {% if formal.approval_status == 'PENDING_REVIEW' and user == formal.approval_reviewer_user %}
+                                    <form method="post" action="{% url 'qms:formal4m_workflow_approve' formal.id %}">
+                                        {% csrf_token %}<button class="btn btn-success btn-app-action fw-bold shadow-sm" type="submit">검토1 승인</button>
+                                    </form>
+                                {% elif formal.approval_status == 'PENDING_REVIEW2' and user == formal.approval_reviewer_user2 %}
+                                    <form method="post" action="{% url 'qms:formal4m_workflow_approve' formal.id %}">
+                                        {% csrf_token %}<button class="btn btn-success btn-app-action fw-bold shadow-sm" type="submit">검토2 승인</button>
+                                    </form>
+                                {% elif formal.approval_status == 'PENDING_APPROVE' and user == formal.approval_approver_user %}
+                                    <form method="post" action="{% url 'qms:formal4m_workflow_approve' formal.id %}">
+                                        {% csrf_token %}<button class="btn btn-success btn-app-action fw-bold shadow-sm" type="submit">최종 승인</button>
+                                    </form>
+                                {% endif %}
+
+                                {# 반려 입력창 (높이 밸런스 조정) #}
+                                {% if formal.approval_status != 'DRAFT' and formal.approval_status != 'APPROVED' and formal.approval_status != 'REJECTED' %}
+                                    {% if user == formal.approval_reviewer_user or user == formal.approval_reviewer_user2 or user == formal.approval_approver_user %}
+                                        <form method="post" action="{% url 'qms:formal4m_workflow_reject' formal.id %}" class="d-flex gap-0 shadow-sm rounded overflow-hidden" style="height: 38px;">
+                                            {% csrf_token %}
+                                            <input type="text" name="reject_reason" class="form-control form-control-sm border-end-0 rounded-0" style="width: 150px; font-size: 0.85rem;" placeholder="반려사유">
+                                            <button class="btn btn-sm btn-danger fw-bold rounded-0 px-3" type="submit">반려</button>
+                                        </form>
+                                    {% endif %}
+                                {% endif %}
+
+                                {# 취소 버튼 #}
+                                {% if formal.approval_status != 'DRAFT' and formal.approval_status != 'REJECTED' %}
+                                    {% if formal.approval_status == 'PENDING_REVIEW' and user.id == pre.user_id or formal.approval_status == 'PENDING_REVIEW2' and user == formal.approval_reviewer_user or formal.approval_status == 'PENDING_APPROVE' or formal.approval_status == 'APPROVED' and user == formal.approval_approver_user %}
+                                        <form method="post" action="{% url 'qms:formal4m_workflow_cancel' formal.id %}">
+                                            {% csrf_token %}<button class="btn btn-sm btn-outline-secondary btn-app-action" type="submit" onclick="return confirm('취소하시겠습니까?')">취소</button>
+                                        </form>
+                                    {% endif %}
+                                {% endif %}
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                {% if actor.is_internal and workflow_form and formal.approval_status != 'APPROVED' and formal.approval_status != 'PENDING_APPROVE' %}
+                <div class="collapse mt-4 p-3 border rounded-2 bg-light d-print-none" id="workflowCollapse">
+                    <form method="post" action="{% url 'qms:formal4m_workflow_set' formal.id %}" class="row g-2">
+                        {% csrf_token %}
+                        <div class="col-md-4"><label class="small text-muted mb-1">검토1</label>{{ workflow_form.approval_reviewer_user }}</div>
+                        <div class="col-md-4"><label class="small text-muted mb-1">검토2(선택)</label>{{ workflow_form.approval_reviewer_user2 }}</div>
+                        <div class="col-md-4"><label class="small text-muted mb-1 text-primary fw-bold">최종 승인자</label>{{ workflow_form.approval_approver_user }}</div>
+                        <div class="col-12 text-end mt-2"><button class="btn btn-sm btn-dark px-3" type="submit">결재선 적용</button></div>
+                    </form>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <hr class="my-4" />
+
+        <h5 class="fw-bold border-start border-4 border-primary ps-2 mb-3">제출요구서류 및 제출 서류</h5>
+        <div class="table-responsive">
+            <table class="table table-bordered align-middle small">
+                <thead class="table-light"><tr class="text-center text-muted"><th style="width: 6%;">NO</th><th>제출요구서류</th><th style="width: 22%;">첨부</th><th style="width: 25%;">검토</th><th style="width: 25%;">비고</th></tr></thead>
+                <tbody>
+                    {% for it in items %}
+                    <tr>
+                        <td class="text-center fw-bold bg-light">{{ it.seq }}</td>
+                        <td><div class="fw-semibold">{{ it.name }}</div><div class="text-muted" style="font-size: 0.8rem;">{% if it.is_required %}필수{% else %}선택{% endif %}</div></td>
+                        <td>
+                            {% if it.attachments.all %}<ul class="mb-2 ps-3">{% for a in it.attachments.all %}<li><a href="{{ a.file.url }}" target="_blank">파일보기</a> <span class="text-muted" style="font-size: 0.75rem;">({{ a.uploaded_at|date:"m-d" }})</span></li>{% endfor %}</ul>{% else %}<div class="text-muted">-</div>{% endif %}
+                            {% if formal.approval_status != 'APPROVED' and formal.approval_status != 'PENDING_APPROVE' %}
+                            <form class="d-print-none mt-2" action="{% url 'qms:formal4m_upload' formal.id it.id %}" method="POST" enctype="multipart/form-data">
+                                {% csrf_token %}<div class="input-group input-group-sm"><input type="file" name="file" class="form-control" /><button class="btn btn-outline-primary" type="submit">업로드</button></div>
+                            </form>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <div class="d-flex flex-column align-items-center gap-2">
+                                <span class="badge {% if it.review_status == 'OK' %}bg-success{% elif it.review_status == 'REJECT' %}bg-danger{% else %}bg-secondary{% endif %}">{{ it.get_review_status_display }}</span>
+                                {% if actor.is_internal %}{% if formal.approval_status != 'APPROVED' and formal.approval_status != 'PENDING_APPROVE' %}
+                                <form class="d-print-none" action="{% url 'qms:formal4m_review_update' formal.id it.id %}" method="POST">
+                                    {% csrf_token %}<div class="d-flex gap-1 align-items-center"><select name="review_status" class="form-select form-select-sm" style="width: auto; min-width: 85px; font-size: 0.75rem;">{% for v, lbl in it.REVIEW_STATUS_CHOICES %}<option value="{{ v }}" {% if it.review_status == v %}selected{% endif %}>{{ lbl }}</option>{% endfor %}</select><button class="btn btn-sm btn-dark" type="submit" style="padding: 2px 8px; font-size: 0.75rem;">저장</button></div>
+                                </form>
+                                {% endif %}{% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            <div style="white-space: pre-wrap;">{{ it.remark|default:"" }}</div>
+                            {% if actor.is_internal %}{% if formal.approval_status != 'APPROVED' and formal.approval_status != 'PENDING_APPROVE' %}
+                            <form class="d-print-none mt-2" action="{% url 'qms:formal4m_review_update' formal.id it.id %}" method="POST">
+                                {% csrf_token %}<input type="hidden" name="review_status" value="{{ it.review_status }}" /><textarea name="remark" rows="2" class="form-control form-control-sm" placeholder="비고 입력">{{ it.remark }}</textarea><div class="mt-1 text-end"><button class="btn btn-sm btn-outline-dark" type="submit">비고 저장</button></div>
+                            </form>
+                            {% endif %}{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if formal.template_type == 'FULL' %}
+        <hr class="my-5" />
+        <h5 class="fw-bold border-start border-4 border-primary ps-2 mb-3 text-secondary">4M 변경 검토 결과</h5>
+        <div class="table-responsive">
+            <table class="table table-bordered align-middle small">
+                <thead class="table-light"><tr class="text-center text-muted"><th>검사항목</th><th>규격</th><th>검사방법</th><th>판정</th><th>비고</th><th>첨부</th></tr></thead>
+                <tbody>
+                {% for r, f in inspection_rows %}
+                    <tr>
+                        <td class="fw-semibold">{{ r.inspection_item }}</td>
+                        {% if actor.is_internal and formal.approval_status != 'APPROVED' and formal.approval_status != 'PENDING_APPROVE' %}
+                            <form id="ins_form_{{ r.id }}" method="post" action="{% url 'qms:formal4m_inspection_update' formal.id r.id %}" enctype="multipart/form-data" class="d-print-none">{% csrf_token %}</form>
+                            <td><input form="ins_form_{{ r.id }}" type="text" name="spec" class="form-control form-control-sm" value="{{ r.spec|default:'' }}"></td>
+                            <td><input form="ins_form_{{ r.id }}" type="text" name="method" class="form-control form-control-sm" value="{{ r.method|default:'' }}"></td>
+                            <td><input form="ins_form_{{ r.id }}" type="text" name="judgment" class="form-control form-control-sm" value="{{ r.judgment|default:'' }}"></td>
+                            <td><input form="ins_form_{{ r.id }}" type="text" name="remark" class="form-control form-control-sm" value="{{ r.remark|default:'' }}"></td>
+                            <td><div class="d-flex gap-2 align-items-center"><input form="ins_form_{{ r.id }}" type="file" name="attachment" class="form-control form-control-sm small"><button form="ins_form_{{ r.id }}" class="btn btn-sm btn-outline-dark px-2" type="submit">저장</button></div></td>
+                        {% else %}
+                            <td>{{ r.spec|default:"-" }}</td><td>{{ r.method|default:"-" }}</td><td class="text-center">{{ r.judgment|default:"-" }}</td><td>{{ r.remark|default:"-" }}</td><td class="text-center">{% if r.attachment %}<a href="{{ r.attachment.url }}">파일</a>{% else %}-{% endif %}</td>
+                        {% endif %}
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <hr class="my-5" />
+        <h5 class="fw-bold border-start border-4 border-primary ps-2 mb-3 text-secondary">일정 계획</h5>
+        <div class="table-responsive">
+            <table class="table table-bordered align-middle small">
+                <thead class="table-light"><tr class="text-center text-muted"><th>업체</th><th>항목</th><th>진행</th><th>계획일</th><th>담당자</th><th>부서</th><th>비고</th>{% if actor.is_internal and formal.approval_status != 'APPROVED' and formal.approval_status != 'PENDING_APPROVE' %}<th style="width: 10%;" class="d-print-none">저장</th>{% endif %}</tr></thead>
+                <tbody>
+                {% for s, f in schedule_rows %}
+                    <tr>
+                        {% if actor.is_internal and formal.approval_status != 'APPROVED' and formal.approval_status != 'PENDING_APPROVE' %}
+                            <form id="sch_form_{{ s.id }}" method="post" action="{% url 'qms:formal4m_schedule_update' formal.id s.id %}" class="d-print-none">{% csrf_token %}</form>
+                            <td><input form="sch_form_{{ s.id }}" type="text" name="oem" class="form-control form-control-sm" value="{{ s.oem|default:'' }}"></td>
+                            <td><input form="sch_form_{{ s.id }}" type="text" name="item_name" class="form-control form-control-sm" value="{{ s.item_name|default:'' }}"></td>
+                            <td class="text-center"><input form="sch_form_{{ s.id }}" type="checkbox" name="is_required" class="form-check-input" {% if s.is_required %}checked{% endif %}></td>
+                            <td><input form="sch_form_{{ s.id }}" type="date" name="plan_date" class="form-control form-control-sm" value="{% if s.plan_date %}{{ s.plan_date|date:'Y-m-d' }}{% endif %}"></td>
+                            <td><input form="sch_form_{{ s.id }}" type="text" name="owner_name" class="form-control form-control-sm" value="{{ s.owner_name|default:'' }}"></td>
+                            <td><input form="sch_form_{{ s.id }}" type="text" name="department" class="form-control form-control-sm" value="{{ s.department|default:'' }}"></td>
+                            <td><input form="sch_form_{{ s.id }}" type="text" name="note" class="form-control form-control-sm" value="{{ s.note|default:'' }}"></td>
+                            <td class="text-center d-print-none"><button form="sch_form_{{ s.id }}" class="btn btn-sm btn-outline-dark" type="submit">저장</button></td>
+                        {% else %}
+                            <td>{{ s.oem|default:"-" }}</td><td>{{ s.item_name }}</td><td class="text-center">{% if s.is_required %}유{% else %}무{% endif %}</td><td class="text-center">{{ s.plan_date|date:"Y-m-d"|default:"-" }}</td><td>{{ s.owner_name|default:"-" }}</td><td>{{ s.department|default:"-" }}</td><td>{{ s.note|default:"-" }}</td>
+                        {% endif %}
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <hr class="my-5" />
+        <h5 class="fw-bold border-start border-4 border-primary ps-2 mb-3 text-secondary">단계별 기록</h5>
+        <div class="table-responsive">
+            <table class="table table-bordered align-middle small">
+                <thead class="table-light"><tr class="text-center text-muted"><th>단계</th><th>일자</th><th>비고</th><th>첨부</th>{% if formal.approval_status != 'APPROVED' %}<th style="width: 10%;" class="d-print-none">저장</th>{% endif %}</tr></thead>
+                <tbody>
+                {% for st, f in stage_rows %}
+                    <tr>
+                        <td class="fw-semibold">{{ st.get_stage_display }}</td>
+                        {% if actor.is_internal or actor.is_vendor %}{% if formal.approval_status != 'APPROVED' %}
+                            <form id="stg_form_{{ st.id }}" method="post" action="{% url 'qms:formal4m_stage_update' formal.id st.id %}" enctype="multipart/form-data" class="d-print-none">{% csrf_token %}</form>
+                            <td><input form="stg_form_{{ st.id }}" type="date" name="record_date" class="form-control form-control-sm" value="{% if st.record_date %}{{ st.record_date|date:'Y-m-d' }}{% endif %}"></td>
+                            <td><input form="stg_form_{{ st.id }}" type="text" name="remark" class="form-control form-control-sm" value="{{ st.remark|default:'' }}"></td>
+                            <td><input form="stg_form_{{ st.id }}" type="file" name="attachment" class="form-control form-control-sm small"></td>
+                            <td class="text-center d-print-none"><button form="stg_form_{{ st.id }}" class="btn btn-sm btn-outline-dark" type="submit">저장</button></td>
+                        {% else %}
+                            <td class="text-center">{{ st.record_date|date:"Y-m-d"|default:"-" }}</td><td>{{ st.remark|default:"-" }}</td><td class="text-center">{% if st.attachment %}<a href="{{ st.attachment.url }}">파일</a>{% else %}-{% endif %}</td>
+                        {% endif %}{% else %}<td class="text-center">{{ st.record_date|date:"Y-m-d"|default:"-" }}</td><td>{{ st.remark|default:"-" }}</td><td class="text-center">{% if st.attachment %}<a href="{{ st.attachment.url }}">파일</a>{% else %}-{% endif %}</td>{% endif %}
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <hr class="my-5" />
+        <h5 class="fw-bold border-start border-4 border-primary ps-2 mb-3">사내 승인 (최종승인 확정)</h5>
+        {% if actor.is_internal %}
+        <form method="post" action="{% url 'qms:formal4m_approval_update' formal.id %}" class="d-print-none p-3 border rounded bg-light bg-opacity-50">
+            {% csrf_token %}
+            <div class="row g-3">
+                <div class="col-md-3"><div class="text-muted small mb-1">사내승인 여부</div><div class="form-check"><input class="form-check-input" type="checkbox" name="is_approved" id="appr_chk" {% if approval and approval.is_approved %}checked{% endif %}><label class="form-check-label" for="appr_chk">최종 승인 확정</label></div></div>
+                <div class="col-md-3"><div class="text-muted small mb-1">승인번호</div><input type="text" name="approval_no" class="form-control form-control-sm" value="{{ approval.approval_no|default:'' }}"></div>
+                <div class="col-md-3"><div class="text-muted small mb-1">판정일자</div><input type="date" name="judgment_date" class="form-control form-control-sm" value="{{ approval.judgment_date|date:'Y-m-d' }}"></div>
+                <div class="col-md-3"><div class="text-muted small mb-1">비고</div><input type="text" name="remark" class="form-control form-control-sm" value="{{ approval.remark|default:'' }}"></div>
+            </div>
+            <div class="mt-3 text-end"><button class="btn btn-sm btn-dark px-4 shadow-sm" type="submit">승인정보 저장</button></div>
+        </form>
+        {% endif %}
+        {% endif %}
+
+        <div class="text-muted small mt-4 pt-3 border-top text-center">
+            <i class="bi bi-info-circle me-1"></i> 최종 승인 대기 또는 완료 시점부터는 품질 무결성을 위해 데이터 수정이 비활성화됩니다. (사내 승인 항목 제외)
+        </div>
+    </div>
+</div>
+
+<style>
+    .stamp { width: 50px; height: 50px; line-height: 48px; font-size: 0.85rem; text-align: center; border-width: 2px !important; }
+    .approval-section { box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .btn-app-action { height: 38px; min-width: 100px; font-size: 0.85rem; }
+    .btn-xs { padding: 0.2rem 0.5rem; font-size: 0.72rem; }
+    .shadow-xs { box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    @media print {
+        .d-print-none { display: none !important; }
+        .stamp { border: 2px solid #dc3545 !important; color: #dc3545 !important; }
+    }
+</style>
+{% endblock %}

@@ -41,6 +41,10 @@
                     <label class="form-label small fw-bold text-muted">사내/사외</label>
                     {{ form.quality_rank }}
                 </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold text-muted">협력사(대상)</label>
+                    {{ form.vendor_org }}
+                </div>
                 <div class="col-md-6">
                     <label class="form-label small fw-bold text-muted">품번</label>
                     {{ form.part_no }}
@@ -55,12 +59,17 @@
         <div class="mb-5 p-4 rounded-3 border bg-light">
             <h5 class="fw-bold border-start border-4 border-info ps-2 mb-4">2. 결재선 지정</h5>
             <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label small fw-bold text-dark">검토자 선택</label>
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold text-dark">검토1 선택</label>
                     {{ form.reviewer_user }}
-                    <div class="form-text small text-muted">실제 서명(검토)을 진행할 담당자를 선택하세요.</div>
+                    <div class="form-text small text-muted">실제 서명(검토1)을 진행할 담당자를 선택하세요.</div>
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold text-dark">검토2 선택 (선택)</label>
+                    {{ form.reviewer_user2 }}
+                    <div class="form-text small text-muted">검토 단계를 추가하려면 지정하세요. (미지정 시 검토1 → 최종 승인)</div>
+                </div>
+                <div class="col-md-4">
                     <label class="form-label small fw-bold text-dark">최종 승인자 선택</label>
                     {{ form.approver_user }}
                     <div class="form-text small text-muted">최종 결재 권한을 가진 관리자를 선택하세요.</div>

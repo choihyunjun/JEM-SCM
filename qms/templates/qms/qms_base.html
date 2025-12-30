@@ -25,9 +25,9 @@
     </a>
     <div class="collapse show" id="m4Submenu">
         <a href="{% url 'qms:m4_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'm4_list' %}active{% endif %}">
-            - 4M 신청 현황
+            - 사전 4M
         </a>
-        <a href="#" class="submenu-item">- 4M 승인 완료 건</a>
+        <a href="{% url 'qms:formal4m_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'formal4m_list' or request.resolver_match.url_name == 'formal4m_detail' or request.resolver_match.url_name == 'formal4m_detail_by_id' %}active{% endif %}">- 정식 4M</a>
     </div>
 
     <a class="nav-link dropdown-toggle collapsed" data-bs-toggle="collapse" href="#isirSubmenu" role="button" aria-expanded="false">

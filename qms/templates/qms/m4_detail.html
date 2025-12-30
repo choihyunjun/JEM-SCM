@@ -1,7 +1,7 @@
 {% extends "qms/qms_base.html" %}
 
 {% block qms_content %}
-<div class="container mt-5 mb-5" style="max-width: 1000px;">
+<div class="container mt-5 mb-5" style="max-width: 1300px;">
     <div class="d-flex justify-content-between align-items-end mb-4 pb-3 border-bottom d-print-none">
         <div>
             <nav aria-label="breadcrumb">
@@ -34,6 +34,8 @@
                     <span class="px-4 py-2 rounded-pill bg-secondary bg-opacity-10 text-secondary fw-bold border border-secondary border-opacity-25">작성 중</span>
                 {% elif item.status == 'PENDING_REVIEW' %}
                     <span class="px-4 py-2 rounded-pill bg-warning bg-opacity-10 text-warning fw-bold border border-warning border-opacity-25">검토 대기</span>
+                {% elif item.status == 'PENDING_REVIEW2' %}
+                    <span class="px-4 py-2 rounded-pill bg-warning bg-opacity-10 text-warning fw-bold border border-warning border-opacity-25">검토2 대기</span>
                 {% elif item.status == 'PENDING_APPROVE' %}
                     <span class="px-4 py-2 rounded-pill bg-info bg-opacity-10 text-info fw-bold border border-info border-opacity-25">승인 대기</span>
                 {% elif item.status == 'APPROVED' %}
@@ -41,8 +43,31 @@
                 {% elif item.status == 'REJECTED' %}
                     <span class="px-4 py-2 rounded-pill bg-danger bg-opacity-10 text-danger fw-bold border border-danger border-opacity-25">반려됨</span>
                 {% endif %}
+
+                {% if item.status == 'APPROVED' %}
+                <div class="mt-3 d-print-none">
+                    <a href="{% url 'qms:formal4m_detail' item.pk %}" class="btn btn-outline-success btn-sm">
+                        <i class="bi bi-box-arrow-in-right me-1"></i>
+                        정식 4M {% if formal %}열람{% else %}생성/열람{% endif %}
+                    </a>
+                </div>
+                {% endif %}
             </div>
         </div>
+
+        {% if item.status == 'APPROVED' %}
+        <div class="alert alert-success border-0 shadow-sm mb-5 p-4 d-print-none">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="fw-bold mb-1">정식 4M(제출서류) 단계로 이동할 수 있습니다.</div>
+                    <div class="small text-muted">※ 사전 4M 승인 완료 시, 제출서류 체크리스트를 관리하는 '정식 4M'가 자동 생성됩니다.</div>
+                </div>
+                <a class="btn btn-success fw-bold" href="{% url 'qms:formal4m_detail' item.pk %}">
+                    정식 4M 열기
+                </a>
+            </div>
+        </div>
+        {% endif %}
 
         {% if item.status == 'REJECTED' %}
         <div class="alert alert-danger border-0 shadow-sm mb-5 p-4 d-print-none">
@@ -179,6 +204,13 @@
                                 <div id="review-display-{{ review.id }}">
                                     <span class="badge bg-success mb-1">부서 답변</span>
                                     <div class="ps-2" style="white-space: pre-wrap;">{{ review.content|linebreaksbr|default:"검토 의견을 기다리는 중입니다." }}</div>
+                                    {% if review.evidence_file %}
+                                        <div class="ps-2 mt-2">
+                                            <a href="{{ review.evidence_file.url }}" class="small text-decoration-none" target="_blank">
+                                                <i class="bi bi-paperclip"></i> 증빙파일 다운로드
+                                            </a>
+                                        </div>
+                                    {% endif %}
                                 </div>
                                 <div id="review-edit-{{ review.id }}" class="d-print-none mt-2" style="display:none;">
                                     <form action="{% url 'qms:edit_m4_review' review.id %}" method="POST">
@@ -192,8 +224,10 @@
                             </td>
                             <td class="fw-bold text-success">{{ review.received_at|date:"Y-m-d"|default:"-" }}</td>
                             <td class="d-print-none">
-                                <button class="btn btn-link btn-sm text-decoration-none" onclick="toggleReviewEdit('{{ review.id }}')">답변달기</button>
-                                <a href="{% url 'qms:delete_m4_review' review.id %}" class="btn btn-link btn-sm text-danger text-decoration-none" onclick="return confirm('삭제하시겠습니까?')">삭제</a>
+                                {% if actor.is_internal %}
+                                    <button class="btn btn-link btn-sm text-decoration-none" onclick="toggleReviewEdit('{{ review.id }}')">답변달기</button>
+                                    <a href="{% url 'qms:delete_m4_review' review.id %}" class="btn btn-link btn-sm text-danger text-decoration-none" onclick="return confirm('삭제하시겠습니까?')">삭제</a>
+                                {% endif %}
                             </td>
                         </tr>
                         {% empty %}
@@ -204,7 +238,7 @@
             </div>
         </div>
 
-        {% if item.status != 'APPROVED' %}
+        {% if actor.is_internal and item.status != 'APPROVED' %}
         <div class="mt-4 p-4 bg-light rounded-3 border d-print-none shadow-sm">
             <h6 class="fw-bold mb-3"><i class="bi bi-send-plus me-2 text-primary"></i>신규 검토 요청 발송</h6>
             <form action="{% url 'qms:add_m4_review' item.pk %}" method="POST">
@@ -225,8 +259,25 @@
         </div>
         {% endif %}
 
+        {% if vendor_form %}
+        <div class="mt-4 p-4 bg-white rounded-3 border d-print-none shadow-sm">
+            <h6 class="fw-bold mb-3"><i class="bi bi-building me-2 text-success"></i>협력사 답변/증빙 제출</h6>
+            <form action="{% url 'qms:m4_vendor_response' item.pk %}" method="POST" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="mb-2">
+                    {{ vendor_form.content }}
+                </div>
+                <div class="mb-3">
+                    {{ vendor_form.evidence_file }}
+                </div>
+                <button type="submit" class="btn btn-success fw-bold px-4">답변 제출</button>
+            </form>
+            <div class="small text-muted mt-2">※ 협력사는 본인 협력사 대상 문서에 대해서만 답변/증빙 제출이 가능합니다.</div>
+        </div>
+        {% endif %}
+
         <div class="d-flex justify-content-end mt-5 approval-section">
-            <div class="d-flex border text-center" style="width: 320px; background: white;">
+            <div class="d-flex border text-center" style="width: 420px; background: white;">
                 <div class="flex-fill border-end">
                     <div class="bg-light py-1 small border-bottom">등록</div>
                     <div class="py-3">
@@ -237,12 +288,23 @@
                     </div>
                 </div>
                 <div class="flex-fill border-end">
-                    <div class="bg-light py-1 small border-bottom">검토</div>
+                    <div class="bg-light py-1 small border-bottom">검토1</div>
                     <div class="py-3">
                         {% if item.is_reviewed %}
                             <div class="text-primary fw-bold border border-primary d-inline-block rounded-circle stamp" style="width: 42px; height: 42px; line-height: 40px; font-size: 0.75rem;">{{ item.reviewer_user.last_name }}</div>
                             <div class="small mt-1 text-muted">{{ item.reviewed_at|date:"m.d" }}</div>
                         {% else %}<div class="text-muted small py-2 mt-1">대기</div>{% endif %}
+                    </div>
+                </div>
+                <div class="flex-fill border-end">
+                    <div class="bg-light py-1 small border-bottom">검토2</div>
+                    <div class="py-3">
+                        {% if item.reviewer_user2 %}
+                            {% if item.is_reviewed2 %}
+                                <div class="text-primary fw-bold border border-primary d-inline-block rounded-circle stamp" style="width: 42px; height: 42px; line-height: 40px; font-size: 0.75rem;">{{ item.reviewer_user2.last_name }}</div>
+                                <div class="small mt-1 text-muted">{{ item.reviewed2_at|date:"m.d" }}</div>
+                            {% else %}<div class="text-muted small py-2 mt-1">대기</div>{% endif %}
+                        {% else %}<div class="text-muted small py-2 mt-1">미지정</div>{% endif %}
                     </div>
                 </div>
                 <div class="flex-fill">
@@ -291,14 +353,32 @@
             <form action="{% url 'qms:m4_resubmit' item.pk %}" method="POST" class="d-inline">{% csrf_token %}
                 <button type="submit" class="btn btn-primary px-5 py-2 shadow-sm fw-bold">다시 상신하기</button>
             </form>
-        {% elif item.status == 'PENDING_REVIEW' or item.status == 'PENDING_APPROVE' %}
-            {% if item.user == user or item.status == 'PENDING_REVIEW' and user == item.reviewer_user or item.status == 'PENDING_APPROVE' and user == item.approver_user %}
+        {% elif item.status == 'PENDING_REVIEW' or item.status == 'PENDING_REVIEW2' or item.status == 'PENDING_APPROVE' %}
+            {% if item.user == user or item.status == 'PENDING_REVIEW' and user == item.reviewer_user or item.status == 'PENDING_REVIEW2' and user == item.reviewer_user2 or item.status == 'PENDING_APPROVE' and user == item.approver_user %}
                 <a href="{% url 'qms:m4_update' item.pk %}" class="btn btn-outline-primary px-5 py-2 shadow-sm fw-bold">수정하기</a>
             {% endif %}
             {% if item.status == 'PENDING_REVIEW' and item.user == user %}
                 <form action="{% url 'qms:m4_cancel_approval' item.pk %}" method="POST" class="d-inline">{% csrf_token %}
                     <button type="submit" class="btn btn-outline-danger px-5 py-2 shadow-sm fw-bold">상신 취소</button>
                 </form>
+            {% endif %}
+
+            {# 검토자/승인자 결재 버튼 (결재 절차는 views.m4_approve 로직을 그대로 사용) #}
+            {% if item.status == 'PENDING_REVIEW' and user == item.reviewer_user %}
+                <form action="{% url 'qms:m4_approve' item.pk %}" method="POST" class="d-inline">{% csrf_token %}
+                    <button type="submit" class="btn btn-success px-5 py-2 shadow-sm fw-bold" onclick="return confirm('검토 승인을 진행하시겠습니까?')">검토 승인</button>
+                </form>
+                <button type="button" class="btn btn-outline-danger px-5 py-2 shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#rejectModal">반려</button>
+            {% elif item.status == 'PENDING_REVIEW2' and user == item.reviewer_user2 %}
+                <form action="{% url 'qms:m4_approve' item.pk %}" method="POST" class="d-inline">{% csrf_token %}
+                    <button type="submit" class="btn btn-success px-5 py-2 shadow-sm fw-bold" onclick="return confirm('검토2 승인을 진행하시겠습니까?')">검토2 승인</button>
+                </form>
+                <button type="button" class="btn btn-outline-danger px-5 py-2 shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#rejectModal">반려</button>
+            {% elif item.status == 'PENDING_APPROVE' and user == item.approver_user %}
+                <form action="{% url 'qms:m4_approve' item.pk %}" method="POST" class="d-inline">{% csrf_token %}
+                    <button type="submit" class="btn btn-success px-5 py-2 shadow-sm fw-bold" onclick="return confirm('최종 승인을 진행하시겠습니까?')">최종 승인</button>
+                </form>
+                <button type="button" class="btn btn-outline-danger px-5 py-2 shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#rejectModal">반려</button>
             {% endif %}
         {% endif %}
     </div>
