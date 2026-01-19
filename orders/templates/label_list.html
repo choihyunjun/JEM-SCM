@@ -48,61 +48,150 @@
         <i class="bi bi-files"></i> 최근 생성된 납품서
     </div>
     <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-hover mb-0 text-center align-middle">
-                <thead class="table-light">
-                    <tr>
-                        <th style="width: 25%;">납품서 번호</th>
-                        <th style="width: 20%;">등록 일시</th>
-                        <th style="width: 15%;">포함 품목 수</th>
-                        <th style="width: 15%;">상태</th>
-                        <th style="width: 25%;">관리</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for order in recent_orders %}
-                    <tr class="{% if order.is_received %}table-success{% endif %}">
-                        <td class="fw-bold">{{ order.order_no }}</td>
-                        <td>{{ order.created_at|date:"Y-m-d H:i" }}</td>
-                        <td>{{ order.items.count }}종</td>
-                        <td>
-                            {% if order.is_received %}
-                                <span class="badge bg-success border border-light rounded-pill px-3 shadow-sm">
-                                    <i class="bi bi-check-circle-fill"></i> 입고완료
-                                </span>
-                            {% else %}
-                                <span class="badge bg-secondary rounded-pill px-3">등록완료</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-nowrap">
-                            <div style="min-width: 180px;">
-                                <button class="btn btn-sm btn-outline-success fw-bold me-1" onclick="openPrintPopup('{{ order.id }}')" style="width: 68px;">
-                                    <i class="bi bi-qr-code"></i> 라벨
-                                </button>
-                                <button class="btn btn-sm btn-outline-primary fw-bold me-1" onclick="openNotePopup('{{ order.id }}')" style="width: 80px;">
-                                    <i class="bi bi-file-text"></i> 납품서
-                                </button>
-                                <div class="d-inline-block" style="width: 35px; vertical-align: middle;">
-                                    {% if not order.is_received %}
-                                    <form action="{% url 'delete_delivery_order' order.id %}" method="post" onsubmit="return confirm('납품서를 삭제하시겠습니까?');" style="margin: 0;">
-                                        {% csrf_token %}
-                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="납품서 삭제">
-                                            <i class="bi bi-trash3"></i>
-                                        </button>
-                                    </form>
+
+        <ul class="nav nav-tabs mb-3" id="orderTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active fw-bold" id="active-tab" data-bs-toggle="tab" data-bs-target="#active-pane" type="button" role="tab">
+            <i class="bi bi-list-check me-1"></i> 납품/발행 현황
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link fw-bold text-danger" id="return-tab" data-bs-toggle="tab" data-bs-target="#return-pane" type="button" role="tab">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i> 부적합 / 반출 내역
+            {% if return_pending_count %}
+                <span class="badge bg-danger rounded-pill ms-1">{{ return_pending_count }}</span>
+            {% endif %}
+        </button>
+    </li>
+</ul>
+
+
+        <div class="tab-content" id="orderTabsContent">
+
+            <div class="tab-pane fade show active" id="active-pane" role="tabpanel">
+                <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                    <table class="table table-hover mb-0 text-center align-middle">
+                        <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
+                            <tr>
+                                <th style="width: 25%;">납품서 번호</th>
+                                <th style="width: 20%;">등록 일시</th>
+                                <th style="width: 15%;">포함 품목 수</th>
+                                <th style="width: 15%;">상태</th>
+                                <th style="width: 25%;">관리</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for order in orders %}
+                            <tr>
+                                <td class="fw-bold text-primary">{{ order.order_no }}</td>
+                                <td>{{ order.created_at|date:"Y-m-d H:i" }}</td>
+                                <td>{{ order.items.count }} 품목</td>
+                                <td>
+                                    {% if order.status == 'PENDING' %}
+                                        <span class="badge bg-secondary">배송중</span>
+                                    {% elif order.status == 'RECEIVED' %}
+                                        <span class="badge bg-warning text-dark">검사대기</span>
+                                    {% elif order.status == 'APPROVED' %}
+                                        <span class="badge bg-success">입고완료</span>
+                                    {% elif order.status == 'REJECTED' %}
+                                        <span class="badge bg-danger">반려(전수불량)</span>
                                     {% endif %}
-                                </div>
-                            </div>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="5" class="py-3 text-muted">조건에 맞는 납품서가 없습니다.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center gap-1 justify-content-start">
+                                        <button class="btn btn-sm btn-outline-dark" onclick="openPrintPopup('{{ order.id }}')">
+                                            <i class="bi bi-printer"></i> 라벨
+                                        </button>
+                                        <a href="{% url 'delivery_note_print' order.id %}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                                            <i class="bi bi-file-text"></i> 납품서
+                                        </a>
+                                        {% if order.status == 'PENDING' %}
+                                        <form action="{% url 'delete_delivery_order' order.id %}" method="post" class="m-0">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('정말 삭제하시겠습니까?\n(발행된 라벨 이력도 함께 삭제됩니다)')">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="5" class="text-center py-4 text-muted">내역이 없습니다.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="return-pane" role="tabpanel">
+                <div class="alert alert-danger d-flex align-items-center mb-3">
+                    <i class="bi bi-exclamation-circle-fill fs-4 me-3"></i>
+                    <div>
+                        <strong>수입검사 불합격(부적합) 내역입니다.</strong><br>
+                        반출증을 수령하신 후 <strong>[반출 확인]</strong> 버튼을 눌러주세요, 해당 수량만큼 <u>납품 가능 수량이 복구</u>되어 납품서를 추가 발행할 수 있습니다.
+                    </div>
+                </div>
+
+                <div class="card shadow-sm border-0 border-start border-danger border-4">
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>납품서 번호</th>
+                                        <th>판정 일자</th>
+                                        <th>품목</th>
+                                        <th>불량(반출) 수량</th>
+                                        <th class="text-danger">불량 사유</th>
+                                        <th>조치</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for log in return_logs %}
+                                    <tr class="{% if log.is_confirmed %}table-light text-muted{% endif %}">
+                                        <td class="small fw-bold">{{ log.delivery_order.order_no }}</td>
+                                        <td>{{ log.created_at|date:"Y-m-d" }}</td>
+                                        <td>
+                                            <span class="fw-bold">{{ log.part.part_no }}</span><br>
+                                            <span class="small">{{ log.part.part_name }}</span>
+                                        </td>
+                                        <td class="fw-bold fs-5">{{ log.quantity|intcomma }} ea</td>
+                                        <td>
+                                            <span class="badge bg-danger mb-1">수입검사 불합격</span><br>
+                                            <small>{{ log.reason|default:"-" }}</small>
+                                        </td>
+                                        <td>
+                                            {% if log.is_confirmed %}
+                                                <span class="badge bg-secondary p-2">
+                                                    <i class="bi bi-check-all me-1"></i> 확인 완료
+                                                </span>
+                                                <div class="small text-muted mt-1" style="font-size: 0.75rem;">
+                                                    {{ log.confirmed_at|date:"m/d H:i" }}
+                                                </div>
+                                            {% else %}
+                                                <form action="{% url 'confirm_return' log.id %}" method="post" style="display:inline;">
+                                                    {% csrf_token %}
+                                                    <button type="submit" class="btn btn-sm btn-danger fw-bold"
+                                                            onclick="return confirm('부적합 내용을 확인하였으며, 반출 처리에 동의하시겠습니까?\n\n(확인 시 해당 수량만큼 납품 가능 수량이 즉시 복구됩니다)')">
+                                                        <i class="bi bi-check2-circle me-1"></i> 반출 확인
+                                                    </button>
+                                                </form>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr><td colspan="6" class="text-center py-5 text-muted">부적합/반출 내역이 없습니다.</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
+
     </div>
 </div>
 
@@ -119,18 +208,20 @@
                 <table class="table table-striped mb-0 text-center align-middle">
                     <thead class="table-light">
                         <tr>
-                            <th>품번</th>
+                            <th style="width: 12%;">ERP 정보</th>
+                            <th style="width: 12%;">품번</th>
                             <th>품명</th>
-                            <th>SNP</th>
-                            <th>박스 수</th>
-                            <th>총 수량</th>
-                            <th>취소</th>
+                            <th style="width: 8%;">SNP</th>
+                            <th style="width: 8%;">박스 수</th>
+                            <th style="width: 12%;">LOT 번호(생산일)</th>
+                            <th style="width: 10%;">총 수량</th>
+                            <th style="width: 8%;">취소</th>
                         </tr>
                     </thead>
                     <tbody id="preview-tbody"></tbody>
                     <tfoot class="table-light fw-bold">
                         <tr>
-                            <td colspan="4" class="text-end">등록 합계 수량 :</td>
+                            <td colspan="6" class="text-end">등록 합계 수량 :</td>
                             <td class="text-end text-primary fs-5" id="grand-total">0</td>
                             <td></td>
                         </tr>
@@ -166,13 +257,17 @@
                 <thead class="table-light text-center text-nowrap">
                     <tr>
                         <th style="width: 50px;">NO</th>
+                        <th style="width: 120px; background-color: #f8f9fa;">ERP 번호</th>
+                        <th style="width: 60px; background-color: #f8f9fa;">순번</th>
                         <th style="width: 15%;">품번</th>
                         <th>품명</th>
-                        <th style="width: 120px;">총 발주 수량</th>
-                        <th style="width: 150px;" class="table-primary">납품가능 수량</th>
-                        <th style="width: 120px;">SNP (박스당)</th>
-                        <th style="width: 100px;">박스 수</th>
-                        <th style="width: 120px;">총 발행량</th>
+                        <th style="width: 100px;">납기일</th>
+                        <th style="width: 100px;">총 발주</th>
+                        <th style="width: 120px;" class="table-primary">납품가능</th>
+                        <th style="width: 100px;">SNP</th>
+                        <th style="width: 80px;">박스</th>
+                        <th style="width: 130px;" class="table-warning">LOT 번호(생산일)</th>
+                        <th style="width: 100px;">총 발행</th>
                         <th style="width: 80px;">기능</th>
                     </tr>
                 </thead>
@@ -180,33 +275,47 @@
                     {% for item in label_data %}
                     <tr id="row-{{ forloop.counter }}">
                         <td class="text-center">{{ forloop.counter }}</td>
+                        
+                        <td class="text-center text-secondary small">{{ item.erp_no|default:"-" }}</td>
+                        <td class="text-center text-secondary small">{{ item.erp_seq|default:"-" }}</td>
+                        
                         <td class="fw-bold text-primary" id="pno-{{ forloop.counter }}">{{ item.part_no }}</td>
                         <td id="pname-{{ forloop.counter }}">{{ item.part_name }}</td>
+                        <td class="text-center small">{{ item.due_date|date:"m/d" }}</td>
                         <td class="text-end text-muted">{{ item.total_order|intcomma }}</td>
-                        <td class="text-end fw-bold fs-5 text-danger remain-cell" id="remain-{{ forloop.counter }}" data-val="{{ item.remain }}" data-pno="{{ item.part_no }}">
+                        
+                        <td class="text-end fw-bold fs-5 text-danger remain-cell" id="remain-{{ forloop.counter }}" data-val="{{ item.remain }}">
                             {{ item.remain|intcomma }}
                         </td>
+                        
                         <td>
-                            <input type="number" class="form-control form-control-sm text-end bg-light" 
+                            <input type="number" class="form-control form-control-sm text-end bg-light"
                                    id="snp-{{ forloop.counter }}" value="0" min="1"
                                    oninput="calculateTotal({{ forloop.counter }})">
                         </td>
                         <td>
-                            <input type="number" class="form-control form-control-sm text-end" 
+                            <input type="number" class="form-control form-control-sm text-end"
                                    id="box-{{ forloop.counter }}" value="1" min="1"
                                    oninput="calculateTotal({{ forloop.counter }})">
                         </td>
+                        <td>
+                            <input type="date" class="form-control form-control-sm"
+                                   id="lot-no-{{ forloop.counter }}" title="LOT 번호(생산일)">
+                        </td>
                         <td class="text-end fw-bold" id="total-{{ forloop.counter }}">0</td>
                         <td class="text-center">
+                            <input type="hidden" id="oid-{{ forloop.counter }}" value="{{ item.order_id|default:'' }}">
+                            <input type="hidden" id="erp-str-{{ forloop.counter }}" value="{% if item.erp_no != '-' %}{{ item.erp_no }}-{{ item.erp_seq }}{% else %}-{% endif %}">
+                            
                             <button type="button" class="btn btn-outline-success btn-sm fw-bold text-nowrap" 
                                     onclick="addToPreview({{ forloop.counter }})">
-                                <i class="bi bi-plus-square"></i> 등록추가
+                                <i class="bi bi-plus-square"></i> 추가
                             </button>
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="10" class="text-center py-5 text-muted">데이터가 없습니다.</td>
+                        <td colspan="12" class="text-center py-5 text-muted">등록된 발주 내역이 없습니다.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -216,13 +325,17 @@
 </div>
 
 <script>
+    // 수량 계산 로직
     function calculateTotal(rowId) {
         var snp = parseInt(document.getElementById('snp-' + rowId).value) || 0;
         var box = parseInt(document.getElementById('box-' + rowId).value) || 0;
         var total = snp * box;
         document.getElementById('total-' + rowId).innerText = total.toLocaleString();
+        
         var remain = parseInt(document.getElementById('remain-' + rowId).getAttribute('data-val'));
         var totalElem = document.getElementById('total-' + rowId);
+        
+        // 잔량 초과 시 붉은색 표시
         if (total > remain) {
             totalElem.classList.add('text-danger');
             totalElem.style.textDecoration = "underline";
@@ -234,6 +347,7 @@
 
     var addedItems = []; 
 
+    // 대기 목록에 추가
     function addToPreview(rowId) {
         var partNo = document.getElementById('pno-' + rowId).innerText;
         var partName = document.getElementById('pname-' + rowId).innerText;
@@ -241,37 +355,54 @@
         var box = parseInt(document.getElementById('box-' + rowId).value) || 0;
         var total = snp * box;
         var remain = parseInt(document.getElementById('remain-' + rowId).getAttribute('data-val'));
-        
-        var itemKey = partNo + "_" + snp;
 
+        // [신규] Order ID 및 ERP 정보 가져오기
+        var orderId = document.getElementById('oid-' + rowId).value;
+        var erpStr = document.getElementById('erp-str-' + rowId).value;
+
+        // [LOT 정보 추가] - 날짜형식으로 통일
+        var lotNo = document.getElementById('lot-no-' + rowId).value.trim();
+
+        // 유효성 검사
         if (snp <= 0 || box <= 0) { alert('SNP와 박스 수를 입력해주세요.'); return; }
-        if (total > remain) { alert('해당 항목의 잔량을 초과했습니다.'); return; }
-        
-        if (addedItems.indexOf(itemKey) !== -1) { 
-            alert('이미 대기 목록에 동일한 품번과 SNP 수량이 존재합니다.'); 
-            return; 
+        if (total > remain) { alert('납품가능 수량을 초과했습니다.'); return; }
+        if (!lotNo) { alert('LOT 번호(생산일)를 입력해주세요.'); return; }
+
+        // 중복 방지 키 (같은 품목이라도 LOT가 다르면 별도 등록 가능)
+        var itemKey = (orderId ? orderId : partNo) + "_" + snp + "_" + lotNo;
+
+        if (addedItems.indexOf(itemKey) !== -1) {
+            alert('이미 대기 목록에 추가된 항목입니다.');
+            return;
         }
 
+        // UI 표시
         document.getElementById('preview-section').style.display = 'block';
         document.getElementById('info-alert').style.display = 'none';
         
         var tbody = document.getElementById('preview-tbody');
         var newRow = document.createElement('tr');
         newRow.className = "preview-item-row";
-        newRow.setAttribute('data-pno', partNo);
         newRow.id = 'preview-row-' + itemKey.replace(/[^a-zA-Z0-9]/g, '_');
         
         var html = '';
-        html += '<td class="fw-bold">' + partNo;
+        // [신규] ERP 정보 표시
+        html += '<td class="small text-muted">' + erpStr + '</td>';
+
+        html += '<td class="fw-bold text-primary">' + partNo;
+        // [핵심] 폼 전송 데이터 생성 (LOT 정보 추가)
         html += '  <input type="hidden" name="part_nos[]" value="' + partNo + '">';
-        html += '  <input type="hidden" name="part_names[]" value="' + partName + '">';
         html += '  <input type="hidden" name="snps[]" value="' + snp + '">';
         html += '  <input type="hidden" name="box_counts[]" value="' + box + '">';
+        html += '  <input type="hidden" name="order_ids[]" value="' + orderId + '">'; // Order ID 전송
+        html += '  <input type="hidden" name="lot_nos[]" value="' + lotNo + '">';
         html += '  <input type="hidden" class="row-total-val" value="' + total + '">';
         html += '</td>';
+
         html += '<td>' + partName + '</td>';
         html += '<td>' + snp + '</td>';
         html += '<td>' + box + '</td>';
+        html += '<td class="small text-primary fw-bold">' + lotNo + '</td>';
         html += '<td class="preview-total-text fw-bold">' + total.toLocaleString() + '</td>';
         html += '<td>';
         html += '  <button type="button" class="btn btn-sm btn-danger" onclick="removePreview(\'' + itemKey + '\')">';
@@ -291,6 +422,7 @@
         if (element) element.remove();
         addedItems = addedItems.filter(function(item) { return item !== itemKey; });
         updateGrandTotal();
+        
         if (addedItems.length === 0) {
             document.getElementById('preview-section').style.display = 'none';
             document.getElementById('info-alert').style.display = 'block';
@@ -319,26 +451,6 @@
 
     function submitCreateOrder() {
         if (addedItems.length === 0) { alert('등록할 품목이 없습니다.'); return; }
-
-        var pnoTotals = {};
-        var rows = document.querySelectorAll('.preview-item-row');
-        for (var i = 0; i < rows.length; i++) {
-            var pno = rows[i].getAttribute('data-pno');
-            var qty = parseInt(rows[i].querySelector('.row-total-val').value);
-            pnoTotals[pno] = (pnoTotals[pno] || 0) + qty;
-        }
-
-        for (var pno in pnoTotals) {
-            var remainElem = document.querySelector('.remain-cell[data-pno="' + pno + '"]');
-            if (remainElem) {
-                var maxRemain = parseInt(remainElem.getAttribute('data-val'));
-                if (pnoTotals[pno] > maxRemain) {
-                    alert('[오류] 품번 ' + pno + '의 총 등록 수량이 납품가능 수량을 초과했습니다.');
-                    return;
-                }
-            }
-        }
-
         if (confirm('총 ' + addedItems.length + '건으로 납품서를 생성하시겠습니까?')) {
             document.getElementById('createOrderForm').submit();
         }

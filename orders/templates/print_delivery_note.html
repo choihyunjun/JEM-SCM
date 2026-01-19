@@ -108,12 +108,13 @@
             <thead>
                 <tr>
                     <th style="width: 40px;">No</th>
-                    <th style="width: 140px;">품 번</th>
+                    <th style="width: 130px;">품 번</th>
                     <th>품 명</th>
                     <th style="width: 70px;">SNP</th>
                     <th style="width: 70px;">BOX</th>
                     <th style="width: 90px;">수 량</th>
-                    <th style="width: 90px;">비 고</th>
+                    <th style="width: 100px;">LOT 번호</th>
+                    <th style="width: 80px;">비 고</th>
                 </tr>
             </thead>
             <tbody>
@@ -125,12 +126,13 @@
                     <td class="text-right">{{ item.snp|intcomma }}</td>
                     <td class="text-right">{{ item.box_count|intcomma }}</td>
                     <td class="text-right fw-bold">{{ item.total_qty|intcomma }}</td>
+                    <td class="fw-bold" style="font-size: 12px;">{{ item.lot_no|date:"Y-m-d"|default:"-" }}</td>
                     <td></td>
                 </tr>
                 {% endfor %}
-                
-                {% for i in "123" %} 
-                <tr><td colspan="7" style="height: 30px;"></td></tr>
+
+                {% for i in "123" %}
+                <tr><td colspan="8" style="height: 30px;"></td></tr>
                 {% endfor %}
             </tbody>
             <tfoot>
@@ -139,7 +141,7 @@
                     <td>-</td>
                     <td class="text-right">{{ total_box|intcomma }} Box</td>
                     <td class="text-right" style="font-size: 16px;">{{ total_qty|intcomma }} EA</td>
-                    <td></td>
+                    <td colspan="2"></td>
                 </tr>
             </tfoot>
         </table>
