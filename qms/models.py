@@ -29,6 +29,22 @@ class M4Request(models.Model):
         ("METHOD", "공법(Method)"),
     ]
 
+    CHANGE_CLASS_CHOICES = [
+        ("A", "품질시스템(A)"),
+        ("B", "설계변경(B)"),
+        ("C", "공정변경(C)"),
+        ("D", "구매변경(D)"),
+    ]
+
+    change_class = models.CharField(
+        max_length=1,
+        choices=CHANGE_CLASS_CHOICES,
+        null=True,
+        blank=True,
+        verbose_name="변경구분(A/B/C/D)",
+    )
+
+
     # 기본 정보 필드
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="신청자")
 
@@ -201,6 +217,55 @@ class Formal4MRequest(models.Model):
 
     # 3개월 유효성 평가 시작일(사내 절차 기준)
     validity_start_date = models.DateField(null=True, blank=True, verbose_name="유효성평가 시작일")
+
+    # 절차서(JEM-QP-202) 기준: 변경구분(A/B/C/D)
+    CHANGE_CLASS_CHOICES = [
+        ("A", "품질시스템(A)"),
+        ("B", "설계변경(B)"),
+        ("C", "공정변경(C)"),
+        ("D", "구매변경(D)"),
+    ]
+    change_class = models.CharField(
+        max_length=1,
+        choices=CHANGE_CLASS_CHOICES,
+        null=True,
+        blank=True,
+        verbose_name="변경구분(A/B/C/D)",
+    )
+
+    # 고객 변경신고 필요 여부 및 결정(품질보증팀장 판단 근거 기록)
+    customer_notice_required = models.BooleanField(default=False, verbose_name="고객변경신고 필요")
+    customer_notice_decided_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="formal4m_customer_notice_decisions",
+        verbose_name="고객변경신고 필요여부 결정자",
+    )
+    customer_notice_decided_at = models.DateTimeField(null=True, blank=True, verbose_name="결정일시")
+    customer_notice_reason = models.TextField(null=True, blank=True, verbose_name="결정사유/근거")
+
+    # 유효성평가(3개월) 결과 및 증빙
+    VALIDITY_RESULT_CHOICES = [
+        ("ONGOING", "진행중"),
+        ("PASS", "적합"),
+        ("FAIL", "부적합"),
+    ]
+    validity_result = models.CharField(
+        max_length=10,
+        choices=VALIDITY_RESULT_CHOICES,
+        null=True,
+        blank=True,
+        verbose_name="유효성평가 결과",
+    )
+    validity_closed_at = models.DateTimeField(null=True, blank=True, verbose_name="유효성평가 완료일시")
+    validity_evidence = models.FileField(
+        upload_to="qms/formal4m/validity/",
+        null=True,
+        blank=True,
+        verbose_name="유효성평가 증빙파일",
+    )
 
     TEMPLATE_TYPE_CHOICES = [
         ("BASIC", "기본"),
@@ -423,6 +488,8 @@ class Formal4MStageRecord(models.Model):
         ("OEM_APPROVAL", "OEM승인"),
         ("INTERNAL_APPLY", "사내적용"),
         ("CUSTOMER_APPLY", "고객적용"),
+        ("MASS_PRODUCTION_REVIEW", "양산이행회의(Go/No-Go)"),
+        ("CUSTOMER_NOTICE", "고객변경신고/통보"),
         ("OTHER", "기타"),
     ]
 
@@ -432,7 +499,7 @@ class Formal4MStageRecord(models.Model):
         related_name="stage_records",
         verbose_name="정식 4M",
     )
-    stage = models.CharField(max_length=20, choices=STAGE_CHOICES, verbose_name="단계")
+    stage = models.CharField(max_length=30, choices=STAGE_CHOICES, verbose_name="단계")
     record_date = models.DateField(blank=True, null=True, verbose_name="일자")
     remark = models.CharField(max_length=200, blank=True, null=True, verbose_name="비고")
     attachment = models.FileField(
@@ -467,3 +534,52 @@ class Formal4MApproval(models.Model):
 
     def __str__(self):
         return f"{self.formal_request.formal_no} - {'승인' if self.is_approved else '미승인'}"
+
+# qms/models.py 하단에 추가
+
+from material.models import MaterialTransaction # WMS 수불 모델 참조
+
+class ImportInspection(models.Model):
+    """
+    [QMS] 수입검사 관리
+    - WMS에서 '수입검사 진행'으로 입고된 건에 대해 생성됨
+    """
+    STATUS_CHOICES = [
+        ('PENDING', '검사대기'),
+        ('APPROVED', '합격(입고승인)'),
+        ('REJECTED', '불합격(반품/폐기)'),
+    ]
+
+    # WMS 입고 트랜잭션과 1:1 연결 (어떤 입고 건인지 추적)
+    inbound_transaction = models.OneToOneField(
+        MaterialTransaction,
+        on_delete=models.CASCADE,
+        related_name='inspection',
+        verbose_name="관련 입고이력"
+    )
+
+    # LOT 정보 추가 (선입선출 관리용)
+    lot_no = models.DateField("LOT 번호(생산일)", null=True, blank=True)
+
+    status = models.CharField("검사상태", max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    
+    # 검사 결과 데이터
+    inspector = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="검사자")
+    inspected_at = models.DateTimeField("검사일시", null=True, blank=True)
+    
+    # 검사 항목 (간략화 버전)
+    check_report = models.BooleanField("성적서 확인", default=False)
+    check_visual = models.BooleanField("외관 검사", default=False)
+    check_dimension = models.BooleanField("치수/기능 검사", default=False)
+    
+    remark = models.TextField("검사 의견", blank=True, null=True)
+    attachment = models.FileField("검사 성적서/사진", upload_to="qms/inspection/", blank=True, null=True)
+
+    created_at = models.DateTimeField("요청일시", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "수입검사"
+        verbose_name_plural = "수입검사 관리"
+
+    def __str__(self):
+        return f"검사요청: {self.inbound_transaction.part.part_name}"

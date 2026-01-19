@@ -1,0 +1,132 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container" style="max-width: 800px;">
+    <div class="card shadow border-primary mb-4">
+        <div class="card-header bg-primary text-white">
+            <h4 class="m-0 fw-bold"><i class="bi bi-box-seam"></i> 납품서 입고 검수</h4>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-secondary">
+                <div class="row">
+                    <div class="col-md-6">
+                        <strong>납품서 번호:</strong> {{ order.order_no }}
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <strong>등록일:</strong> {{ order.created_at|date:"Y-m-d H:i" }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-responsive border rounded mb-4">
+                <table class="table table-bordered text-center align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>품번</th>
+                            <th>품명</th>
+                            <th>LOT 번호</th>
+                            <th>수량</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in order.items.all %}
+                        <tr>
+                            <td class="fw-bold text-primary">{{ item.part_no }}</td>
+                            <td class="text-start">{{ item.part_name }}</td>
+                            <td class="fw-bold text-info">
+                                {% if item.lot_no %}
+                                    {{ item.lot_no|date:"Y-m-d" }}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="fw-bold">{{ item.total_qty|intcomma }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <hr>
+
+            <form action="{% url 'receive_delivery_order_confirm' %}" method="post">
+                {% csrf_token %}
+                <input type="hidden" name="order_id" value="{{ order.id }}">
+
+                <div class="mb-4">
+                    <label class="form-label fw-bold fs-5 mb-3"><i class="bi bi-check-circle-fill text-primary"></i> 입고 방식 선택</label>
+                    
+                    <div class="d-flex gap-3 mb-3">
+                        <div class="form-check p-3 border rounded w-50 bg-light position-relative">
+                            <input class="form-check-input position-absolute top-50 start-0 ms-3 translate-middle-y" 
+                                   type="radio" name="inspection_needed" id="ins_yes" value="yes" checked 
+                                   onchange="toggleWarehouseSelect()" style="width: 1.2em; height: 1.2em;">
+                            <label class="form-check-label fw-bold w-100 ps-4 ms-2" for="ins_yes" style="cursor: pointer;">
+                                <span class="text-danger fs-5">🛡️ 검사 필요 (Yes)</span><br>
+                                <small class="text-muted d-block mt-1">수입검사 대기창고(8100)로 입고됩니다.</small>
+                            </label>
+                        </div>
+
+                        <div class="form-check p-3 border rounded w-50 bg-light position-relative">
+                            <input class="form-check-input position-absolute top-50 start-0 ms-3 translate-middle-y" 
+                                   type="radio" name="inspection_needed" id="ins_no" value="no" 
+                                   onchange="toggleWarehouseSelect()" style="width: 1.2em; height: 1.2em;">
+                            <label class="form-check-label fw-bold w-100 ps-4 ms-2" for="ins_no" style="cursor: pointer;">
+                                <span class="text-success fs-5">📦 무검사 / 직납 (No)</span><br>
+                                <small class="text-muted d-block mt-1">지정한 창고로 즉시 입고됩니다.</small>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="warehouse_select_area" style="display: none;" class="p-3 border border-success rounded bg-success-subtle animate__animated animate__fadeIn">
+                        <label for="direct_warehouse_code" class="form-label fw-bold text-success">
+                            <i class="bi bi-house-door-fill"></i> 입고할 창고 선택
+                        </label>
+                        <select name="direct_warehouse_code" id="direct_warehouse_code" class="form-select border-success fw-bold">
+                            {% for wh in warehouses %}
+                                <option value="{{ wh.code }}" {% if wh.code == '4200' %}selected{% endif %}>
+                                    [{{ wh.code }}] {{ wh.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text text-success fw-bold mt-2">
+                            <i class="bi bi-info-circle"></i> 선택한 창고로 재고가 즉시 반영됩니다.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-grid gap-2 mt-5">
+                    <button type="submit" class="btn btn-primary btn-lg fw-bold py-3 shadow-sm" onclick="return confirm('선택한 내용으로 입고 확정하시겠습니까?')">
+                        <i class="bi bi-box-arrow-in-down me-2"></i> 입고처리 (수입검사 의뢰)
+                    </button>
+                    <a href="{% url 'incoming_list' %}" class="btn btn-secondary py-2">취소 / 목록으로</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    function toggleWarehouseSelect() {
+        var isDirect = document.getElementById('ins_no').checked;
+        var whArea = document.getElementById('warehouse_select_area');
+        
+        if (isDirect) {
+            whArea.style.display = 'block';
+            // 애니메이션 효과 (선택사항)
+            whArea.classList.remove('animate__fadeOut');
+            whArea.classList.add('animate__fadeIn');
+        } else {
+            whArea.style.display = 'none';
+        }
+    }
+    
+    // 페이지 로드 시 초기 상태 실행
+    document.addEventListener("DOMContentLoaded", function() {
+        toggleWarehouseSelect();
+    });
+</script>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+{% endblock %}
