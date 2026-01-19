@@ -3,20 +3,22 @@
 
 {% block content %}
 <div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-3 top-control">
         <h2 class="header-title mb-0">
             <i class="bi bi-calendar3 me-2"></i>일자별 소요 현황 (D+14)
             {% if not show_all %}
                 <span class="badge bg-info ms-2" style="font-size: 0.7rem; vertical-align: middle;">소요 품목만 표시 중</span>
             {% endif %}
         </h2>
-        
-        <div class="d-flex align-items-center gap-2 flex-wrap">
+
+        <div class="top-actions">
             {% if user.is_superuser or user.profile.role == 'STAFF' %}
-            <form method="get" class="d-flex align-items-center gap-2 me-2">
+            <form method="get" class="control-block">
                 <input type="hidden" name="show_all" value="{{ show_all|lower }}">
-                
-                <select name="vendor_id" class="form-select form-select-sm shadow-sm" onchange="this.form.submit()" style="width: 180px; border-color: #0d6efd;">
+
+                <select name="vendor_id" class="form-select form-select-sm shadow-sm vendor-select"
+                        onchange="this.form.submit()">
                     <option value="">== 업체 전체 선택 ==</option>
                     {% for v in vendor_list %}
                         <option value="{{ v.id }}" {% if selected_vendor_id == v.id|stringformat:"s" %}selected{% endif %}>
@@ -25,8 +27,9 @@
                     {% endfor %}
                 </select>
 
-                <div class="input-group input-group-sm" style="width: 220px;">
-                    <input type="text" name="q" value="{{ q|default:'' }}" class="form-control border-primary shadow-sm" placeholder="품번 또는 품명 검색">
+                <div class="input-group input-group-sm search-group">
+                    <input type="text" name="q" value="{{ q|default:'' }}"
+                           class="form-control border-primary shadow-sm" placeholder="품번 또는 품명 검색">
                     <button class="btn btn-primary" type="submit">
                         <i class="bi bi-search"></i>
                     </button>
@@ -34,8 +37,8 @@
             </form>
             {% endif %}
 
-            <div class="d-flex gap-1">
-                <a href="{% url 'inventory_export' %}?show_all={{ show_all|lower }}&vendor_id={{ selected_vendor_id|default:'' }}&q={{ q|default:'' }}" 
+            <div class="control-block btn-block">
+                <a href="{% url 'inventory_export' %}?show_all={{ show_all|lower }}&vendor_id={{ selected_vendor_id|default:'' }}&q={{ q|default:'' }}"
                    class="btn btn-sm btn-success shadow-sm">
                     <i class="bi bi-file-earmark-excel me-1"></i>엑셀 저장
                 </a>
@@ -48,19 +51,27 @@
                 <button class="btn btn-sm btn-warning shadow-sm" data-bs-toggle="modal" data-bs-target="#demandUploadModal">
                     <i class="bi bi-cloud-arrow-up me-1"></i>소요량 업로드
                 </button>
+
+                {# ✅ [삭제 반영] inventory_upload 기능 제거로 버튼 비활성화 #}
+                {% comment %}
                 <a href="{% url 'inventory_upload' %}" class="btn btn-sm btn-danger shadow-sm">
                     <i class="bi bi-upload me-1"></i>기초재고 업로드
                 </a>
+                {% endcomment %}
                 {% endif %}
             </div>
 
-            <div class="btn-group shadow-sm ms-2">
-                <a href="?show_all=false&vendor_id={{ selected_vendor_id|default:'' }}&q={{ q|default:'' }}" class="btn btn-sm {% if not show_all %}btn-primary{% else %}btn-outline-primary{% endif %}">
-                    📌 소요 품목만
-                </a>
-                <a href="?show_all=true&vendor_id={{ selected_vendor_id|default:'' }}&q={{ q|default:'' }}" class="btn btn-sm {% if show_all %}btn-primary{% else %}btn-outline-primary{% endif %}">
-                    🔍 전체 품목
-                </a>
+            <div class="control-block toggle-block">
+                <div class="btn-group shadow-sm">
+                    <a href="?show_all=false&vendor_id={{ selected_vendor_id|default:'' }}&q={{ q|default:'' }}"
+                       class="btn btn-sm {% if not show_all %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                        📌 소요 품목만
+                    </a>
+                    <a href="?show_all=true&vendor_id={{ selected_vendor_id|default:'' }}&q={{ q|default:'' }}"
+                       class="btn btn-sm {% if show_all %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                        🔍 전체 품목
+                    </a>
+                </div>
             </div>
         </div>
     </div>
@@ -75,7 +86,8 @@
                             <th rowspan="2" style="width: 70px; position: sticky; top: 0; z-index: 20;" class="bg-light">구분</th>
                             <th rowspan="2" style="width: 90px; position: sticky; top: 0; z-index: 20;" class="bg-light border-end-bold">현재고</th>
                             {% for dt in date_range %}
-                            <th class="date-cell" style="position: sticky; top: 0; z-index: 20; min-width: 85px; {% if dt.weekday >= 5 %}color: #d9534f; background-color: #fff5f5;{% endif %}">
+                            <th class="date-cell"
+                                style="position: sticky; top: 0; z-index: 20; min-width: 85px; {% if dt.weekday >= 5 %}color: #d9534f; background-color: #fff5f5;{% endif %}">
                                 {{ dt|date:"m/d" }}<br><small>({{ dt|date:"D" }})</small>
                             </th>
                             {% endfor %}
@@ -84,18 +96,23 @@
                     <tbody>
                         {% for item in inventory_data %}
                         <tr class="text-center">
-                            <td rowspan="3" class="text-start ps-3 fw-bold bg-white sticky-col" style="position: sticky; left: 0; z-index: 10; border-right: 2px solid #adb5bd !important;">
+                            <td rowspan="3" class="text-start ps-3 fw-bold bg-white sticky-col"
+                                style="position: sticky; left: 0; z-index: 10; border-right: 2px solid #adb5bd !important;">
                                 <div class="text-primary small mb-1">{{ item.vendor_name }}</div>
                                 <div class="text-dark">{{ item.part_no }}</div>
                                 <div class="small text-secondary fw-normal text-truncate" style="max-width: 150px;">{{ item.part_name }}</div>
                             </td>
                             <td class="bg-light small">소요량</td>
-                            <td rowspan="3" class="fw-bold fs-6 border-end-bold bg-white">
+                            <td rowspan="3" class="fw-bold fs-6 border-end-bold bg-white cursor-pointer lot-detail-cell"
+                                data-part-no="{{ item.part_no }}"
+                                title="더블클릭하여 LOT별 상세 보기"
+                                ondblclick="showLotDetails('{{ item.part_no }}')">
                                 {{ item.base_stock|intcomma }}
                                 <div class="text-muted" style="font-size: 0.6rem;">(기준: 오늘아침)</div>
+                                <div class="text-info small" style="font-size: 0.65rem;">🔍 LOT 상세</div>
                             </td>
                             {% for day in item.daily_status %}
-                            <td class="text-primary date-cell {% if user.is_superuser or user.profile.role == 'STAFF' %}cursor-pointer hover-bg-light{% endif %}" 
+                            <td class="text-primary date-cell {% if user.is_superuser or user.profile.role == 'STAFF' %}cursor-pointer hover-bg-light{% endif %}"
                                 style="min-width: 85px;"
                                 {% if user.is_superuser or user.profile.role == 'STAFF' %}onclick="editDemand('{{ item.part_no }}', '{{ day.date|date:'Y-m-d' }}', '{{ day.demand_qty }}')"{% endif %}>
                                 {% if day.demand_qty > 0 %}{{ day.demand_qty|intcomma }}{% else %}-{% endif %}
@@ -115,8 +132,8 @@
                             {% for day in item.daily_status %}
                             <td class="fw-bold date-cell {% if user.is_superuser or user.profile.role == 'STAFF' %}cursor-pointer hover-bg-light{% endif %} {% if day.is_danger %}bg-danger-light text-danger{% endif %}"
                                 style="min-width: 85px;"
-                                {% if user.is_superuser or user.profile.role == 'STAFF' %} 
-                                    onclick="openOrderModal('{{ item.part_no }}', '{{ item.part_name|escapejs }}', '{{ item.vendor_name|escapejs }}', '{{ day.stock|stringformat:'d' }}', '{{ day.date|date:'Y-m-d' }}')" 
+                                {% if user.is_superuser or user.profile.role == 'STAFF' %}
+                                    onclick="openOrderModal('{{ item.part_no }}', '{{ item.part_name|escapejs }}', '{{ item.vendor_name|escapejs }}', '{{ day.stock|stringformat:'d' }}', '{{ day.date|date:'Y-m-d' }}')"
                                     title="클릭하여 발주 생성"
                                 {% endif %}>
                                 {{ day.stock|intcomma }}
@@ -137,7 +154,7 @@
 <div style="position: fixed; bottom: 25px; right: 35px; z-index: 9999;">
     <div class="shadow-lg border p-2" style="background-color: #212529; color: white; border-radius: 8px; font-size: 0.9rem; border-color: #495057;">
         <i class="bi bi-info-circle text-info me-1"></i>
-        기초재고 업로드 일자 : 
+        기초재고 업로드 일자 :
         <span class="text-warning fw-bold ms-1" style="text-shadow: 1px 1px 1px rgba(0,0,0,0.5);">
             {% if inventory_ref_date %}{{ inventory_ref_date|date:"Y-m-d" }}{% else %}미등록{% endif %}
         </span>
@@ -229,14 +246,171 @@ function openOrderModal(partNo, partName, vendor, shortage, dueDate) {
 </script>
 
 <style>
-    .table { table-layout: auto !important; }
-    .table-bordered th, .table-bordered td { border: 1px solid #dee2e6 !important; padding: 8px 4px !important; white-space: nowrap; }
-    .table thead th { background-color: #f8f9fa !important; box-shadow: inset 0 -1px 0 #dee2e6; }
-    .sticky-col { box-shadow: 2px 0 5px rgba(0,0,0,0.05); }
-    .header-title { font-size: 1.2rem; font-weight: 700; color: #2c3e50; }
-    .border-end-bold { border-right: 2px solid #adb5bd !important; }
-    .border-bottom-bold { border-bottom: 2px solid #dee2e6 !important; }
-    .bg-danger-light { background-color: #fff5f5 !important; transition: 0.2s; }
-    .cursor-pointer { cursor: pointer; }
+/* ✅ 상단 컨트롤 간격 강제 조정 */
+.top-actions{
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 14px;
+}
+.control-block{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.btn-block{ gap: 6px; }
+.toggle-block{ margin-left: 4px; }
+.vendor-select{ width: 180px; }
+.search-group{ width: 220px; }
+.top-control .btn,
+.top-control .form-select,
+.top-control .form-control{
+    height: 32px;
+}
+
+/* 기존 스타일 */
+.table { table-layout: auto !important; }
+.table-bordered th, .table-bordered td { border: 1px solid #dee2e6 !important; padding: 8px 4px !important; white-space: nowrap; }
+.table thead th { background-color: #f8f9fa !important; box-shadow: inset 0 -1px 0 #dee2e6; }
+.sticky-col { box-shadow: 2px 0 5px rgba(0,0,0,0.05); }
+.header-title { font-size: 1.2rem; font-weight: 700; color: #2c3e50; }
+.border-end-bold { border-right: 2px solid #adb5bd !important; }
+.border-bottom-bold { border-bottom: 2px solid #dee2e6 !important; }
+.bg-danger-light { background-color: #fff5f5 !important; transition: 0.2s; }
+.cursor-pointer { cursor: pointer; }
+.lot-detail-cell:hover { background-color: #e7f3ff !important; }
 </style>
+
+<!-- LOT 상세 보기 모달 -->
+<div class="modal fade" id="lotDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-box-seam"></i> LOT별 재고 상세
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="lotDetailContent">
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status"></div>
+                        <p class="mt-3">데이터 조회 중...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function showLotDetails(partNo) {
+    const modal = new bootstrap.Modal(document.getElementById('lotDetailModal'));
+    modal.show();
+
+    // 로딩 표시
+    document.getElementById('lotDetailContent').innerHTML = `
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-3">데이터 조회 중...</p>
+        </div>
+    `;
+
+    // AJAX 요청
+    fetch('/inventory/lot-details/' + partNo + '/')
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                throw new Error(data.error);
+            }
+
+            let html = `
+                <div class="mb-3">
+                    <h6 class="fw-bold"><i class="bi bi-info-circle text-primary"></i> 품목 정보</h6>
+                    <div class="row">
+                        <div class="col-md-4"><strong>품번:</strong> ${data.part_no}</div>
+                        <div class="col-md-4"><strong>품명:</strong> ${data.part_name}</div>
+                        <div class="col-md-4"><strong>공급처:</strong> ${data.vendor_name}</div>
+                    </div>
+                    <div class="mt-2">
+                        <span class="badge bg-info">전체 재고: ${data.total_quantity.toLocaleString()} EA</span>
+                    </div>
+                </div>
+            `;
+
+            // FIFO 경고 표시
+            if (data.fifo_warning) {
+                html += `
+                    <div class="alert alert-warning d-flex align-items-center">
+                        <i class="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
+                        <div>
+                            <strong>선입선출(FIFO) 경고!</strong><br>
+                            가장 오래된 LOT: <strong>${data.oldest_lot}</strong> (${data.oldest_days}일 경과)<br>
+                            오래된 LOT를 우선 출고해주세요.
+                        </div>
+                    </div>
+                `;
+            }
+
+            html += `
+                <h6 class="fw-bold mt-3"><i class="bi bi-list-ul text-success"></i> LOT별 상세 재고</h6>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover text-center align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>창고</th>
+                                <th>LOT 번호(생산일)</th>
+                                <th>재고수량</th>
+                                <th>보관일수</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+
+            if (data.lot_details.length === 0) {
+                html += `
+                    <tr>
+                        <td colspan="4" class="text-muted py-4">재고가 없습니다.</td>
+                    </tr>
+                `;
+            } else {
+                data.lot_details.forEach(lot => {
+                    const daysClass = lot.days_old >= 60 ? 'text-danger fw-bold' : (lot.days_old >= 30 ? 'text-warning' : '');
+                    html += `
+                        <tr>
+                            <td>${lot.warehouse} <small class="text-muted">(${lot.warehouse_code})</small></td>
+                            <td class="fw-bold text-primary">${lot.lot_no}</td>
+                            <td class="fw-bold">${lot.quantity.toLocaleString()} EA</td>
+                            <td class="${daysClass}">${lot.days_old}일</td>
+                        </tr>
+                    `;
+                });
+            }
+
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+                <div class="text-end mt-3">
+                    <small class="text-muted">
+                        <i class="bi bi-info-circle"></i>
+                        보관일수 30일 이상: <span class="text-warning">주의</span>,
+                        60일 이상: <span class="text-danger">경고</span>
+                    </small>
+                </div>
+            `;
+
+            document.getElementById('lotDetailContent').innerHTML = html;
+        })
+        .catch(error => {
+            document.getElementById('lotDetailContent').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-circle"></i>
+                    데이터 조회 실패: ${error.message}
+                </div>
+            `;
+        });
+}
+</script>
+
 {% endblock %}

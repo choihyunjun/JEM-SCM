@@ -1359,3 +1359,61 @@ def confirm_return(request, pk):
         messages.error(request, f"처리 중 오류 발생: {str(e)}")
 
     return redirect('label_list')
+# ==========================================
+# [LOT 관리] LOT별 재고 상세 조회 API
+# ==========================================
+@login_required
+def get_lot_details(request, part_no):
+    """
+    특정 품목의 LOT별 재고 상세 정보를 JSON으로 반환
+    """
+    try:
+        part = Part.objects.filter(part_no=part_no).first()
+        if not part:
+            return JsonResponse({'error': '품목을 찾을 수 없습니다.'}, status=404)
+
+        # MaterialStock에서 해당 품목의 LOT별 재고 조회
+        if MaterialStock is None:
+            return JsonResponse({'error': 'WMS 모듈이 연결되지 않았습니다.'}, status=500)
+
+        lot_stocks = MaterialStock.objects.filter(part=part, quantity__gt=0).select_related('warehouse').order_by('lot_no')
+
+        lot_data = []
+        total_qty = 0
+        oldest_lot = None
+
+        for stock in lot_stocks:
+            lot_info = {
+                'warehouse': stock.warehouse.name,
+                'warehouse_code': stock.warehouse.code,
+                'lot_no': stock.lot_no.strftime('%Y-%m-%d') if stock.lot_no else '-',
+                'quantity': stock.quantity,
+                'days_old': (timezone.now().date() - stock.lot_no).days if stock.lot_no else 0
+            }
+            lot_data.append(lot_info)
+            total_qty += stock.quantity
+
+            # 가장 오래된 LOT 추적 (FIFO 경고용)
+            if stock.lot_no and (oldest_lot is None or stock.lot_no < oldest_lot):
+                oldest_lot = stock.lot_no
+
+        # FIFO 경고 판정 (60일 이상 된 LOT가 있으면 경고)
+        fifo_warning = False
+        if oldest_lot:
+            days_old = (timezone.now().date() - oldest_lot).days
+            if days_old >= 60:
+                fifo_warning = True
+
+        return JsonResponse({
+            'part_no': part.part_no,
+            'part_name': part.part_name,
+            'vendor_name': part.vendor.name,
+            'total_quantity': total_qty,
+            'lot_details': lot_data,
+            'fifo_warning': fifo_warning,
+            'oldest_lot': oldest_lot.strftime('%Y-%m-%d') if oldest_lot else None,
+            'oldest_days': (timezone.now().date() - oldest_lot).days if oldest_lot else 0
+        })
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
