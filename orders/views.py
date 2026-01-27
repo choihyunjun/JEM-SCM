@@ -610,6 +610,9 @@ def inventory_list(request):
 
     part_qs = Part.objects.select_related('vendor').filter(vendor__isnull=False).order_by('vendor__name', 'part_name')
 
+    # 협력업체 사용자인지 여부
+    is_vendor_user = bool(user_vendor) and not user.is_superuser
+
     if user.is_superuser or not user_vendor:
         vendor_list = Vendor.objects.all().order_by('name')
         if selected_v:
@@ -617,6 +620,8 @@ def inventory_list(request):
     elif user_vendor:
         part_qs = part_qs.filter(vendor=user_vendor)
         vendor_list = []
+        # 협력업체는 자동으로 조회 실행 (조회 버튼 필요 없음)
+        search_submitted = True
     else:
         return redirect('order_list')
 
@@ -756,6 +761,7 @@ def inventory_list(request):
         'pending_order_keys': pending_order_keys,
         'pending_order_parts': pending_order_parts,
         'search_submitted': search_submitted,
+        'is_vendor_user': is_vendor_user,  # 협력업체 사용자 여부
     })
 
 @login_required
