@@ -607,7 +607,7 @@ def inventory_list(request):
     selected_v = request.GET.get('vendor_id')
     q = request.GET.get('q', '')
 
-    part_qs = Part.objects.select_related('vendor').all().order_by('vendor__name', 'part_name')
+    part_qs = Part.objects.select_related('vendor').filter(vendor__isnull=False).order_by('vendor__name', 'part_name')
 
     if user.is_superuser or not user_vendor:
         vendor_list = Vendor.objects.all().order_by('name')
