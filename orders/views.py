@@ -663,7 +663,7 @@ def inventory_list(request):
             })
 
         inventory_data.append({
-            'vendor_name': part.vendor.name,
+            'vendor_name': part.vendor.name if part.vendor else '(미연결)',
             'part_no': part.part_no,
             'part_name': part.part_name,
             'base_stock': opening_stock,
