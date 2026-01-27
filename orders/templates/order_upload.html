@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="container-fluid p-0" style="max-width: 1920px;">
-    
+
     <div class="mb-4">
         <h3 class="fw-bold text-secondary"><i class="bi bi-cloud-upload me-2"></i>발주 일괄 등록</h3>
     </div>
@@ -30,13 +30,12 @@
             <div class="alert alert-info d-inline-block text-start shadow-sm border-0 mt-2">
                 <small>
                     <i class="bi bi-info-circle-fill me-1"></i> <strong>엑셀 양식 순서 (헤더 포함, 2행부터 데이터):</strong><br>
-                    <span class="text-dark">A열: 협력사명</span> /
-                    <span class="text-primary fw-bold">B열: 품번</span> /
-                    <span class="text-dark">C열: 수량</span> /
-                    <span class="text-dark">D열: 납기일(YYYY-MM-DD)</span> /
-                    <strong class="text-secondary">E열: ERP 발주번호</strong> /
-                    <strong class="text-secondary">F열: ERP 발주순번(선택)</strong><br>
-                    <span class="text-muted ms-3">※ 품명과 품목군은 '품번'을 기준으로 시스템에서 자동 조회합니다.</span>
+                    <span class="text-primary fw-bold">A열: 품번</span> /
+                    <span class="text-dark">B열: 수량</span> /
+                    <span class="text-dark">C열: 납기일(YYYY-MM-DD)</span> /
+                    <strong class="text-secondary">D열: ERP 발주번호(선택)</strong> /
+                    <strong class="text-secondary">E열: ERP 발주순번(선택)</strong><br>
+                    <span class="text-muted ms-3">※ 협력사, 품명, 품목군은 '품번'을 기준으로 품목마스터에서 자동 조회합니다.</span>
                 </small>
             </div>
         </div>
@@ -47,12 +46,12 @@
         <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
             <h5 class="fw-bold m-0 text-success">STEP 2. 데이터 검증 및 최종 등록</h5>
             <span class="badge bg-secondary fs-6">
-                총 {{ preview_data|length }}건 / 
-                <span class="text-success-emphasis">등록 {{ valid_count }}</span> / 
+                총 {{ preview_data|length }}건 /
+                <span class="text-success-emphasis">등록 {{ valid_count }}</span> /
                 <span class="text-danger-emphasis">제외 {{ error_count }}</span>
             </span>
         </div>
-        
+
         <form action="{% url 'order_create_confirm' %}" method="post">
             {% csrf_token %}
             <div class="card-body p-0">
@@ -61,40 +60,43 @@
                         <thead class="table-light sticky-top">
                             <tr>
                                 <th style="width: 50px;">No</th>
-                                <th style="width: 150px;">협력사</th>
-                                <th style="width: 100px;">품목군</th>
                                 <th style="width: 150px;">품번</th>
-                                <th style="min-width: 200px;">품명 (자동조회)</th>
+                                <th style="min-width: 180px;">품명 <small class="text-muted">(자동)</small></th>
+                                <th style="width: 140px;">협력사 <small class="text-muted">(자동)</small></th>
+                                <th style="width: 90px;">품목군</th>
                                 <th style="width: 100px;">수량</th>
                                 <th style="width: 120px;">납기일</th>
-                                <th style="width: 150px; background-color: #f8f9fa;">ERP 번호</th>
-                                <th style="width: 80px; background-color: #f8f9fa;">순번</th>
+                                <th style="width: 140px; background-color: #f8f9fa;">ERP 번호</th>
+                                <th style="width: 70px; background-color: #f8f9fa;">순번</th>
+                                <th style="width: 180px;">상태</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for row in preview_data %}
-                            <tr class="{% if not row.part_found %}table-danger{% endif %}">
+                            <tr class="{% if not row.is_valid %}table-danger{% endif %}">
                                 <td>{{ forloop.counter }}</td>
-                                <td class="fw-bold">{{ row.vendor }}</td>
-                                <td>{{ row.part_group }}</td>
                                 <td class="text-start fw-bold">{{ row.part_no }}</td>
-                                <td class="text-start">
-                                    {% if row.part_found %}
-                                        {{ row.part_name }}
-                                    {% else %}
-                                        <span class="text-danger fw-bold"><i class="bi bi-exclamation-triangle-fill"></i> 품번 없음 (등록 제외)</span>
-                                    {% endif %}
-                                </td>
+                                <td class="text-start">{{ row.part_name|default:"-" }}</td>
+                                <td class="fw-bold">{{ row.vendor|default:"-" }}</td>
+                                <td>{{ row.part_group|default:"-" }}</td>
                                 <td class="fw-bold text-end pe-3">{{ row.quantity|intcomma }}</td>
                                 <td>{{ row.due_date }}</td>
                                 <td class="text-secondary fw-bold">{{ row.erp_order_no|default:"-" }}</td>
                                 <td class="text-muted">{{ row.erp_order_seq|default:"-" }}</td>
+                                <td>
+                                    {% if row.is_valid %}
+                                        <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>정상</span>
+                                    {% elif row.error_type == 'part_not_found' %}
+                                        <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>품번 없음</span>
+                                    {% elif row.error_type == 'vendor_not_assigned' %}
+                                        <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>협력사 미지정</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">오류</span>
+                                    {% endif %}
+                                </td>
 
-                                {% if row.part_found %}
-                                    <input type="hidden" name="vendor_list[]" value="{{ row.vendor }}">
-                                    <input type="hidden" name="part_group_list[]" value="{{ row.part_group }}">
+                                {% if row.is_valid %}
                                     <input type="hidden" name="part_no_list[]" value="{{ row.part_no }}">
-                                    <input type="hidden" name="part_name_list[]" value="{{ row.part_name }}">
                                     <input type="hidden" name="quantity_list[]" value="{{ row.quantity }}">
                                     <input type="hidden" name="due_date_list[]" value="{{ row.due_date }}">
                                     <input type="hidden" name="erp_order_no_list[]" value="{{ row.erp_order_no }}">
@@ -109,7 +111,7 @@
             <div class="card-footer bg-white p-3 text-end">
                 <a href="{% url 'order_upload' %}" class="btn btn-secondary me-2">취소 (다시 올리기)</a>
                 {% if valid_count > 0 %}
-                <button type="submit" class="btn btn-success fw-bold px-5" 
+                <button type="submit" class="btn btn-success fw-bold px-5"
                         onclick="return confirm('오류 품목 {{ error_count }}건을 제외하고 정상 품목 {{ valid_count }}건만 등록하시겠습니까?')">
                     <i class="bi bi-check-circle-fill me-2"></i> 최종 등록 확정
                 </button>
@@ -121,5 +123,214 @@
     </div>
     {% endif %}
 
+    <!-- STEP 3: 수기 발주 추가 -->
+    <div class="card shadow-sm border-0 mt-4">
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+            <h5 class="fw-bold m-0 text-info"><i class="bi bi-pencil-square me-2"></i>수기 발주 등록</h5>
+            <button type="button" class="btn btn-sm btn-outline-info" onclick="toggleManualForm()">
+                <i class="bi bi-plus-circle me-1"></i>직접 입력
+            </button>
+        </div>
+        <div class="card-body p-4" id="manualOrderForm" style="display: none;">
+            <form action="{% url 'order_create_confirm' %}" method="post" id="manualForm">
+                {% csrf_token %}
+                <div class="table-responsive">
+                    <table class="table table-bordered align-middle" id="manualTable">
+                        <thead class="table-light">
+                            <tr class="text-center">
+                                <th style="width: 180px;">품번 <span class="text-danger">*</span></th>
+                                <th style="width: 200px;">품명 <small class="text-muted">(자동)</small></th>
+                                <th style="width: 150px;">협력사 <small class="text-muted">(자동)</small></th>
+                                <th style="width: 100px;">수량 <span class="text-danger">*</span></th>
+                                <th style="width: 140px;">납기일 <span class="text-danger">*</span></th>
+                                <th style="width: 140px;">ERP 번호</th>
+                                <th style="width: 80px;">ERP 순번</th>
+                                <th style="width: 60px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="manualOrderRows">
+                            <!-- 동적 추가 -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="d-flex justify-content-between mt-3">
+                    <button type="button" class="btn btn-outline-primary" onclick="addManualRow()">
+                        <i class="bi bi-plus-lg me-1"></i>행 추가
+                    </button>
+                    <button type="submit" class="btn btn-info fw-bold px-4" id="manualSubmitBtn" disabled>
+                        <i class="bi bi-check-lg me-1"></i>수기 발주 등록
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
 </div>
+
+<script>
+// 수기 입력 폼 토글
+function toggleManualForm() {
+    const form = document.getElementById('manualOrderForm');
+    if (form.style.display === 'none') {
+        form.style.display = 'block';
+        if (document.querySelectorAll('#manualOrderRows tr').length === 0) {
+            addManualRow();
+        }
+    } else {
+        form.style.display = 'none';
+    }
+}
+
+// 수기 행 추가
+let rowIndex = 0;
+function addManualRow() {
+    const tbody = document.getElementById('manualOrderRows');
+    const today = new Date();
+    const defaultDate = today.toISOString().split('T')[0];
+
+    const row = document.createElement('tr');
+    row.id = `manualRow_${rowIndex}`;
+    row.innerHTML = `
+        <td>
+            <input type="text" class="form-control form-control-sm part-no-input"
+                   placeholder="품번 입력" data-row="${rowIndex}" required
+                   onblur="lookupPart(this)">
+            <input type="hidden" name="part_no_list[]" class="part-no-hidden">
+        </td>
+        <td><input type="text" class="form-control form-control-sm part-name-display" readonly placeholder="-"></td>
+        <td><input type="text" class="form-control form-control-sm vendor-display" readonly placeholder="-"></td>
+        <td><input type="number" name="quantity_list[]" class="form-control form-control-sm" min="1" required placeholder="수량"></td>
+        <td><input type="date" name="due_date_list[]" class="form-control form-control-sm" value="${defaultDate}" required></td>
+        <td><input type="text" name="erp_order_no_list[]" class="form-control form-control-sm" placeholder="선택"></td>
+        <td><input type="text" name="erp_order_seq_list[]" class="form-control form-control-sm" placeholder="선택"></td>
+        <td class="text-center">
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeManualRow(${rowIndex})">
+                <i class="bi bi-trash"></i>
+            </button>
+        </td>
+    `;
+    tbody.appendChild(row);
+    rowIndex++;
+    updateSubmitButton();
+}
+
+// 행 삭제
+function removeManualRow(idx) {
+    const row = document.getElementById(`manualRow_${idx}`);
+    if (row) row.remove();
+    updateSubmitButton();
+}
+
+// 품번 조회 (AJAX)
+function lookupPart(input) {
+    const partNo = input.value.trim();
+    const row = input.closest('tr');
+    const partNameField = row.querySelector('.part-name-display');
+    const vendorField = row.querySelector('.vendor-display');
+    const hiddenField = row.querySelector('.part-no-hidden');
+
+    if (!partNo) {
+        partNameField.value = '';
+        vendorField.value = '';
+        hiddenField.value = '';
+        input.classList.remove('is-valid', 'is-invalid');
+        updateSubmitButton();
+        return;
+    }
+
+    fetch(`/api/parts/search/?q=${encodeURIComponent(partNo)}&exact=1`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.results && data.results.length > 0) {
+                const part = data.results[0];
+                partNameField.value = part.part_name || '-';
+                vendorField.value = part.vendor_name || '협력사 미지정';
+                hiddenField.value = part.part_no;
+
+                if (part.vendor_name) {
+                    input.classList.remove('is-invalid');
+                    input.classList.add('is-valid');
+                } else {
+                    input.classList.remove('is-valid');
+                    input.classList.add('is-invalid');
+                    vendorField.classList.add('text-danger');
+                }
+            } else {
+                partNameField.value = '품번 없음';
+                vendorField.value = '-';
+                hiddenField.value = '';
+                input.classList.remove('is-valid');
+                input.classList.add('is-invalid');
+            }
+            updateSubmitButton();
+        })
+        .catch(err => {
+            console.error('품번 조회 오류:', err);
+            partNameField.value = '조회 실패';
+            vendorField.value = '-';
+            hiddenField.value = '';
+            input.classList.add('is-invalid');
+            updateSubmitButton();
+        });
+}
+
+// 제출 버튼 활성화 체크
+function updateSubmitButton() {
+    const rows = document.querySelectorAll('#manualOrderRows tr');
+    const submitBtn = document.getElementById('manualSubmitBtn');
+
+    let hasValidRow = false;
+    rows.forEach(row => {
+        const hiddenPartNo = row.querySelector('.part-no-hidden');
+        const quantity = row.querySelector('input[name="quantity_list[]"]');
+        const dueDate = row.querySelector('input[name="due_date_list[]"]');
+        const vendorField = row.querySelector('.vendor-display');
+
+        if (hiddenPartNo && hiddenPartNo.value &&
+            quantity && quantity.value > 0 &&
+            dueDate && dueDate.value &&
+            vendorField && vendorField.value && vendorField.value !== '협력사 미지정' && vendorField.value !== '-') {
+            hasValidRow = true;
+        }
+    });
+
+    submitBtn.disabled = !hasValidRow;
+}
+
+// 입력 변경 감지
+document.addEventListener('input', function(e) {
+    if (e.target.closest('#manualOrderRows')) {
+        updateSubmitButton();
+    }
+});
+
+// 폼 제출 전 유효성 검사
+document.getElementById('manualForm')?.addEventListener('submit', function(e) {
+    const rows = document.querySelectorAll('#manualOrderRows tr');
+    let validCount = 0;
+
+    rows.forEach(row => {
+        const hiddenPartNo = row.querySelector('.part-no-hidden');
+        if (!hiddenPartNo || !hiddenPartNo.value) {
+            row.remove();
+        } else {
+            validCount++;
+        }
+    });
+
+    if (validCount === 0) {
+        e.preventDefault();
+        alert('등록할 유효한 발주가 없습니다.');
+        return false;
+    }
+
+    return confirm(`${validCount}건의 발주를 등록하시겠습니까?`);
+});
+</script>
+
+<style>
+.part-no-input.is-valid { border-color: #198754; background-color: #f8fff8; }
+.part-no-input.is-invalid { border-color: #dc3545; background-color: #fff8f8; }
+#manualOrderRows input:focus { box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15); }
+</style>
 {% endblock %}

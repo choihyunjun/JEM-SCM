@@ -468,9 +468,9 @@ def order_upload_template(request):
         bottom=Side(style='thin')
     )
 
-    # 헤더
-    headers = ['협력사명', '품번', '수량', '납기일', 'ERP발주번호', 'ERP순번']
-    col_widths = [20, 20, 12, 15, 18, 10]
+    # 헤더 (협력사명 제거 - 품목마스터에서 자동 조회)
+    headers = ['품번', '수량', '납기일', 'ERP발주번호(선택)', 'ERP순번(선택)']
+    col_widths = [25, 12, 15, 18, 12]
 
     for col, (header, width) in enumerate(zip(headers, col_widths), 1):
         cell = ws.cell(row=1, column=col, value=header)
@@ -482,16 +482,16 @@ def order_upload_template(request):
 
     # 예시 데이터 추가
     example_data = [
-        ['세영산업', 'P9R-12323', 100, '2026-02-01', '4500012345', '001'],
-        ['덴소코리아', 'ABC-12345', 200, '2026-02-05', '4500012346', '001'],
+        ['P9R-12323', 100, '2026-02-01', '4500012345', '001'],
+        ['ABC-12345', 200, '2026-02-05', '4500012346', ''],
     ]
     for row_idx, row_data in enumerate(example_data, start=2):
         for col_idx, value in enumerate(row_data, 1):
             cell = ws.cell(row=row_idx, column=col_idx, value=value)
             cell.border = thin_border
-            if col_idx in [3]:  # 수량
+            if col_idx == 2:  # 수량
                 cell.alignment = Alignment(horizontal='right')
-            elif col_idx == 4:  # 납기일
+            elif col_idx == 3:  # 납기일
                 cell.alignment = Alignment(horizontal='center')
 
     response = HttpResponse(
@@ -518,11 +518,16 @@ def order_upload_preview(request):
         wb = openpyxl.load_workbook(request.FILES['excel_file'], data_only=True)
         ws = wb.active
 
+        # 새 양식: 품번, 수량, 납기일, ERP발주번호(선택), ERP순번(선택)
         for row in ws.iter_rows(min_row=2, values_only=True):
-            if not row[0] or not row[1] or not row[2] or not row[3]:
+            # 필수 필드: 품번, 수량, 납기일
+            if not row[0] or not row[1] or not row[2]:
                 continue
 
-            raw_date = row[3]
+            part_no = str(row[0]).strip()
+            quantity = int(row[1]) if row[1] else 0
+
+            raw_date = row[2]
             if isinstance(raw_date, datetime.datetime):
                 fmt_date = raw_date.strftime("%Y-%m-%d")
             elif isinstance(raw_date, str):
@@ -530,26 +535,32 @@ def order_upload_preview(request):
             else:
                 fmt_date = str(raw_date)
 
-            vendor_name = str(row[0]).strip()
-            part_no = str(row[1]).strip()
-            quantity = int(row[2]) if row[2] else 0
-
+            # 품번으로 품목마스터 조회
             part_obj = Part.objects.filter(part_no=part_no).first()
 
-            part_name = part_obj.part_name if part_obj else "품번 없음"
+            # 오류 상태 판단
+            error_type = None
+            if not part_obj:
+                error_type = 'part_not_found'  # 품번 없음
+            elif not part_obj.vendor:
+                error_type = 'vendor_not_assigned'  # 협력사 미지정
+
+            part_name = part_obj.part_name if part_obj else ""
             part_group = part_obj.part_group if part_obj else ""
-            part_found = True if part_obj else False
+            vendor_name = part_obj.vendor.name if part_obj and part_obj.vendor else ""
+            is_valid = error_type is None
 
             item = {
                 'vendor': vendor_name,
                 'part_no': part_no,
                 'part_name': part_name,
                 'part_group': part_group,
-                'part_found': part_found,
+                'is_valid': is_valid,
+                'error_type': error_type,
                 'quantity': quantity,
                 'due_date': fmt_date,
-                'erp_order_no': str(row[4]).strip() if len(row) > 4 and row[4] else '',
-                'erp_order_seq': str(row[5]).strip() if len(row) > 5 and row[5] else ''
+                'erp_order_no': str(row[3]).strip() if len(row) > 3 and row[3] else '',
+                'erp_order_seq': str(row[4]).strip() if len(row) > 4 and row[4] else ''
             }
             preview_data.append(item)
 
@@ -557,11 +568,11 @@ def order_upload_preview(request):
             messages.warning(request, "유효한 데이터가 없습니다. 엑셀 양식을 확인해주세요.")
             return redirect('order_upload')
 
-        valid_count = sum(1 for item in preview_data if item['part_found'])
+        valid_count = sum(1 for item in preview_data if item['is_valid'])
         error_count = len(preview_data) - valid_count
 
         if valid_count == 0:
-            messages.warning(request, "등록 가능한 정상 품목이 없습니다. 품번을 확인해주세요.")
+            messages.warning(request, "등록 가능한 정상 품목이 없습니다. 품번 또는 협력사 지정을 확인해주세요.")
         else:
             messages.info(request, f"총 {len(preview_data)}건 중 정상 {valid_count}건, 오류 {error_count}건이 확인되었습니다.")
 
@@ -583,39 +594,40 @@ def order_create_confirm(request):
     if resp:
         return resp
 
-    vendors = request.POST.getlist('vendor_list[]')
-    part_groups = request.POST.getlist('part_group_list[]')
+    # 품번으로 품목마스터에서 협력사 자동 조회
     part_nos = request.POST.getlist('part_no_list[]')
-    part_names = request.POST.getlist('part_name_list[]')
     quantities = request.POST.getlist('quantity_list[]')
     due_dates = request.POST.getlist('due_date_list[]')
     erp_orders = request.POST.getlist('erp_order_no_list[]')
     erp_seqs = request.POST.getlist('erp_order_seq_list[]')
 
     success_count = 0
+    skip_count = 0
 
     try:
         with transaction.atomic():
             for i in range(len(part_nos)):
-                vendor_obj = Vendor.objects.filter(name=vendors[i]).first()
                 part_obj = Part.objects.filter(part_no=part_nos[i]).first()
-                if not vendor_obj and part_obj:
-                    vendor_obj = part_obj.vendor
+                if not part_obj or not part_obj.vendor:
+                    skip_count += 1
+                    continue
 
-                if vendor_obj:
-                    Order.objects.create(
-                        vendor=vendor_obj,
-                        part_group=part_groups[i],
-                        part_no=part_nos[i],
-                        part_name=part_names[i],
-                        quantity=int(quantities[i]),
-                        due_date=due_dates[i],
-                        erp_order_no=erp_orders[i] if erp_orders[i] != 'None' else '',
-                        erp_order_seq=erp_seqs[i] if erp_seqs[i] != 'None' else ''
-                    )
-                    success_count += 1
+                Order.objects.create(
+                    vendor=part_obj.vendor,
+                    part_group=part_obj.part_group or '',
+                    part_no=part_obj.part_no,
+                    part_name=part_obj.part_name or '',
+                    quantity=int(quantities[i]),
+                    due_date=due_dates[i],
+                    erp_order_no=erp_orders[i] if erp_orders[i] and erp_orders[i] != 'None' else '',
+                    erp_order_seq=erp_seqs[i] if erp_seqs[i] and erp_seqs[i] != 'None' else ''
+                )
+                success_count += 1
 
-        messages.success(request, f"총 {success_count}건의 발주가 정상적으로 등록되었습니다.")
+        if skip_count > 0:
+            messages.warning(request, f"총 {success_count}건 등록, {skip_count}건 제외 (품번/협력사 미확인)")
+        else:
+            messages.success(request, f"총 {success_count}건의 발주가 정상적으로 등록되었습니다.")
         return redirect('order_list')
 
     except Exception as e:
@@ -4101,12 +4113,18 @@ def vendor_upload_confirm(request):
 def api_part_search(request):
     """품번 검색 API - 품목마스터에서 검색"""
     q = request.GET.get('q', '').strip()
-    if len(q) < 2:
+    exact = request.GET.get('exact', '0') == '1'
+
+    if not exact and len(q) < 2:
         return JsonResponse({'results': []})
 
-    parts = Part.objects.filter(
-        Q(part_no__icontains=q) | Q(part_name__icontains=q)
-    ).select_related('vendor')[:50]
+    # exact=1이면 품번 정확 일치, 아니면 부분 검색
+    if exact:
+        parts = Part.objects.filter(part_no=q).select_related('vendor')[:1]
+    else:
+        parts = Part.objects.filter(
+            Q(part_no__icontains=q) | Q(part_name__icontains=q)
+        ).select_related('vendor')[:50]
 
     results = []
     for p in parts:
