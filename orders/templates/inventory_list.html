@@ -17,10 +17,10 @@
             {% if user.is_superuser or user|has_perm:'can_scm_inventory_view' %}
             <form method="get" class="control-block">
                 <input type="hidden" name="show_all" value="{{ show_all|lower }}">
+                <input type="hidden" name="search" value="1">
 
-                <select name="vendor_id" class="form-select form-select-sm shadow-sm vendor-select"
-                        onchange="this.form.submit()">
-                    <option value="">== 업체 전체 선택 ==</option>
+                <select name="vendor_id" class="form-select form-select-sm shadow-sm vendor-select">
+                    <option value="">전체 업체</option>
                     {% for v in vendor_list %}
                         <option value="{{ v.id }}" {% if selected_vendor_id == v.id|stringformat:"s" %}selected{% endif %}>
                             {{ v.name }}
@@ -30,9 +30,9 @@
 
                 <div class="input-group input-group-sm search-group">
                     <input type="text" name="q" value="{{ q|default:'' }}"
-                           class="form-control border-primary shadow-sm" placeholder="품번 또는 품명 검색">
+                           class="form-control border-primary shadow-sm" placeholder="품번/품명">
                     <button class="btn btn-primary" type="submit">
-                        <i class="bi bi-search"></i>
+                        <i class="bi bi-search me-1"></i>조회
                     </button>
                 </div>
             </form>
@@ -57,11 +57,11 @@
 
             <div class="control-block toggle-block">
                 <div class="btn-group shadow-sm">
-                    <a href="?show_all=false&vendor_id={{ selected_vendor_id|default:'' }}&q={{ q|default:'' }}"
+                    <a href="?show_all=false&vendor_id={{ selected_vendor_id|default:'' }}&q={{ q|default:'' }}&search=1"
                        class="btn btn-sm {% if not show_all %}btn-primary{% else %}btn-outline-primary{% endif %}">
                         📌 소요 품목만
                     </a>
-                    <a href="?show_all=true&vendor_id={{ selected_vendor_id|default:'' }}&q={{ q|default:'' }}"
+                    <a href="?show_all=true&vendor_id={{ selected_vendor_id|default:'' }}&q={{ q|default:'' }}&search=1"
                        class="btn btn-sm {% if show_all %}btn-primary{% else %}btn-outline-primary{% endif %}">
                         🔍 전체 품목
                     </a>
@@ -70,6 +70,28 @@
         </div>
     </div>
 
+    {% if not search_submitted %}
+    <!-- 조회 전 안내 메시지 -->
+    <div class="card shadow-sm border-0">
+        <div class="card-body text-center py-5">
+            <i class="bi bi-search text-primary" style="font-size: 4rem;"></i>
+            <h4 class="mt-3 text-secondary">일자별 소요 현황 조회</h4>
+            <p class="text-muted mb-4">
+                업체를 선택하거나 품번/품명을 검색한 후 <strong class="text-primary">조회</strong> 버튼을 클릭하세요.<br>
+                <small>아무것도 입력하지 않고 조회하면 전체 업체가 표시됩니다.</small>
+            </p>
+            <div class="d-inline-block text-start bg-light rounded p-3">
+                <div class="small text-muted mb-2"><i class="bi bi-lightbulb me-1"></i>검색 팁</div>
+                <ul class="small mb-0 ps-3">
+                    <li>업체 선택: 특정 협력사의 품목만 조회</li>
+                    <li>품번/품명 검색: 키워드로 품목 검색</li>
+                    <li>소요 품목만 / 전체 품목: 표시 범위 선택</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <!-- 조회 결과 테이블 -->
     <div class="card shadow-sm border-0">
         <div class="card-body p-0">
             <div class="table-responsive" style="max-height: 78vh; overflow: auto;">
@@ -139,8 +161,10 @@
             </div>
         </div>
     </div>
+    {% endif %}
 </div>
 
+{% if search_submitted %}
 <div style="position: fixed; bottom: 25px; right: 35px; z-index: 9999;">
     <div class="shadow-lg border p-2" style="background-color: #212529; color: white; border-radius: 8px; font-size: 0.9rem; border-color: #495057;">
         <i class="bi bi-info-circle text-info me-1"></i>
@@ -150,6 +174,7 @@
         </span>
     </div>
 </div>
+{% endif %}
 
 <div class="modal fade" id="orderModal" tabindex="-1">
     <div class="modal-dialog">
