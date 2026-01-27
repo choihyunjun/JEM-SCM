@@ -92,6 +92,7 @@ urlpatterns = [
     path('vendor/upload/', views.vendor_upload, name='vendor_upload'),
     path('vendor/upload/preview/', views.vendor_upload_preview, name='vendor_upload_preview'),
     path('vendor/upload/confirm/', views.vendor_upload_confirm, name='vendor_upload_confirm'),
+    path('vendor/export/', views.vendor_export, name='vendor_export'),
 
     # [사용자 권한 관리]
     path('system/user-permission/', views.user_permission_manage, name='user_permission_manage'),

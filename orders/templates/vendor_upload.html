@@ -15,6 +15,17 @@
         <div class="card-body p-4 text-center bg-light">
             <form action="{% url 'vendor_upload_preview' %}" method="post" enctype="multipart/form-data">
                 {% csrf_token %}
+                <!-- 양식 선택 -->
+                <div class="btn-group mb-3" role="group">
+                    <input type="radio" class="btn-check" name="format_type" id="formatSimple" value="simple" checked>
+                    <label class="btn btn-outline-primary" for="formatSimple">
+                        <i class="bi bi-file-earmark-excel me-1"></i>심플 양식 (다운로드 파일)
+                    </label>
+                    <input type="radio" class="btn-check" name="format_type" id="formatErp" value="erp">
+                    <label class="btn btn-outline-secondary" for="formatErp">
+                        <i class="bi bi-building me-1"></i>ERP 양식 (2행 1업체)
+                    </label>
+                </div>
                 <div class="input-group input-group-lg mb-3 mx-auto" style="max-width: 700px;">
                     <input type="file" name="upload_file" class="form-control" required accept=".xlsx, .xls, .csv">
                     <button type="submit" class="btn btn-primary px-4 fw-bold">
@@ -22,7 +33,16 @@
                     </button>
                 </div>
             </form>
-            <div class="alert alert-info d-inline-block text-start shadow-sm border-0 mt-2">
+            <!-- 심플 양식 안내 -->
+            <div id="helpSimple" class="alert alert-success d-inline-block text-start shadow-sm border-0 mt-2">
+                <small>
+                    <i class="bi bi-check-circle-fill me-1"></i> <strong>심플 양식 (1행 1업체):</strong><br>
+                    <span class="text-dark">헤더: 코드, 업체명, 사업자번호, ERP코드, 대표자, 주소, 업태, 종목</span><br>
+                    <span class="text-muted ms-3">※ "엑셀 다운로드" 버튼으로 받은 파일과 동일한 형식입니다.</span>
+                </small>
+            </div>
+            <!-- ERP 양식 안내 -->
+            <div id="helpErp" class="alert alert-info d-inline-block text-start shadow-sm border-0 mt-2" style="display: none;">
                 <small>
                     <i class="bi bi-info-circle-fill me-1"></i> <strong>ERP 거래처 양식 (2행 1업체):</strong><br>
                     <span class="text-dark">1행: 코드, 거래처명, 구분, 사업자번호, 업태, 우편번호, 메일, 금융기관, 예금주</span><br>
@@ -30,6 +50,14 @@
                     <span class="text-muted ms-3">※ ERP에서 추출한 거래처 LIST 파일을 그대로 업로드하세요.</span>
                 </small>
             </div>
+            <script>
+                document.querySelectorAll('input[name="format_type"]').forEach(radio => {
+                    radio.addEventListener('change', function() {
+                        document.getElementById('helpSimple').style.display = this.value === 'simple' ? 'block' : 'none';
+                        document.getElementById('helpErp').style.display = this.value === 'erp' ? 'block' : 'none';
+                    });
+                });
+            </script>
         </div>
     </div>
 
@@ -86,6 +114,7 @@
                                     <input type="hidden" name="code_list[]" value="{{ row.code }}">
                                     <input type="hidden" name="name_list[]" value="{{ row.name }}">
                                     <input type="hidden" name="biz_reg_list[]" value="{{ row.biz_registration_number }}">
+                                    <input type="hidden" name="erp_code_list[]" value="{{ row.erp_code|default:row.code }}">
                                     <input type="hidden" name="representative_list[]" value="{{ row.representative }}">
                                     <input type="hidden" name="address_list[]" value="{{ row.address }}">
                                     <input type="hidden" name="biz_type_list[]" value="{{ row.biz_type }}">

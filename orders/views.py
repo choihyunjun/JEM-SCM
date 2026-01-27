@@ -3193,6 +3193,56 @@ def vendor_delete(request):
 
 
 @menu_permission_required('can_access_scm_admin')
+def vendor_export(request):
+    """협력사 전체 엑셀 다운로드"""
+    vendors = Vendor.objects.all().order_by('code')
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "협력사"
+
+    # 헤더
+    headers = ['코드', '업체명', '사업자번호', 'ERP코드', '대표자', '주소', '업태', '종목', '연결사용자']
+    ws.append(headers)
+
+    # 스타일
+    for col in range(1, len(headers) + 1):
+        ws.cell(row=1, column=col).font = openpyxl.styles.Font(bold=True)
+        ws.cell(row=1, column=col).fill = openpyxl.styles.PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")
+
+    # 데이터
+    for v in vendors:
+        ws.append([
+            v.code,
+            v.name,
+            v.biz_registration_number or '',
+            v.erp_code or '',
+            v.representative or '',
+            v.address or '',
+            v.biz_type or '',
+            v.biz_item or '',
+            v.user.username if v.user else '',
+        ])
+
+    # 열 너비 조정
+    ws.column_dimensions['A'].width = 10
+    ws.column_dimensions['B'].width = 25
+    ws.column_dimensions['C'].width = 15
+    ws.column_dimensions['D'].width = 12
+    ws.column_dimensions['E'].width = 10
+    ws.column_dimensions['F'].width = 40
+    ws.column_dimensions['G'].width = 15
+    ws.column_dimensions['H'].width = 15
+    ws.column_dimensions['I'].width = 15
+
+    today = timezone.localtime().strftime('%Y%m%d')
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename=vendors_{today}.xlsx'
+    wb.save(response)
+    return response
+
+
+@menu_permission_required('can_access_scm_admin')
 def vendor_link_user(request):
     """협력사에 사용자 연결 (Vendor.user OneToOneField 사용)"""
     if request.method != 'POST':
@@ -3289,11 +3339,13 @@ def vendor_upload(request):
 
 @menu_permission_required('can_access_scm_admin')
 def vendor_upload_preview(request):
-    """협력사 업로드 미리보기 (ERP 거래처 CSV 양식)"""
+    """협력사 업로드 미리보기 (심플/ERP 양식 지원)"""
     if request.method != 'POST':
         return redirect('vendor_upload')
 
     upload_file = request.FILES.get('upload_file')
+    format_type = request.POST.get('format_type', 'simple')  # simple or erp
+
     if not upload_file:
         messages.error(request, '파일을 선택해주세요.')
         return redirect('vendor_upload')
@@ -3319,56 +3371,97 @@ def vendor_upload_preview(request):
             ws = wb.active
             rows = [[cell.value or '' for cell in row] for row in ws.iter_rows()]
 
-        # ERP 양식: 2행이 1업체 (헤더 5행 스킵)
-        i = 5
-        while i < len(rows) - 1:
-            row1 = rows[i]
-            row2 = rows[i + 1] if i + 1 < len(rows) else [''] * 9
+        if format_type == 'simple':
+            # 심플 양식: 1행 헤더 + 1행/업체
+            # 컬럼: 코드, 업체명, 사업자번호, ERP코드, 대표자, 주소, 업태, 종목, (연결사용자-무시)
+            for i, row in enumerate(rows):
+                if i == 0:  # 헤더 스킵
+                    continue
+                if len(row) < 2 or not row[0] or not str(row[0]).strip():
+                    continue
 
-            # 코드가 숫자가 아니면 스킵
-            if len(row1) < 2 or not row1[0] or not str(row1[0]).strip():
-                i += 1
-                continue
+                code = str(row[0]).strip()
+                name = str(row[1]).strip() if len(row) > 1 else ''
+                biz_reg = str(row[2]).strip() if len(row) > 2 and row[2] else ''
+                erp_code = str(row[3]).strip() if len(row) > 3 and row[3] else ''
+                representative = str(row[4]).strip() if len(row) > 4 and row[4] else ''
+                address = str(row[5]).strip() if len(row) > 5 and row[5] else ''
+                biz_type = str(row[6]).strip() if len(row) > 6 and row[6] else ''
+                biz_item = str(row[7]).strip() if len(row) > 7 and row[7] else ''
 
-            code_val = str(row1[0]).strip()
-            if not code_val.isdigit():
-                i += 1
-                continue
+                if not name:
+                    continue
 
-            code = code_val
-            name = str(row1[1]).strip() if len(row1) > 1 else ''
-            biz_reg = str(row1[3]).strip() if len(row1) > 3 else ''
-            biz_type = str(row1[4]).strip() if len(row1) > 4 else ''
+                existing = Vendor.objects.filter(code=code).first()
+                if existing:
+                    status = 'update'
+                    update_count += 1
+                else:
+                    status = 'new'
+                    new_count += 1
 
-            address = str(row2[0]).strip() if len(row2) > 0 else ''
-            representative = str(row2[3]).strip() if len(row2) > 3 else ''
-            biz_item = str(row2[4]).strip() if len(row2) > 4 else ''
+                preview_data.append({
+                    'code': code,
+                    'name': name,
+                    'biz_registration_number': biz_reg,
+                    'erp_code': erp_code,
+                    'representative': representative,
+                    'address': address,
+                    'biz_type': biz_type,
+                    'biz_item': biz_item,
+                    'status': status,
+                })
+        else:
+            # ERP 양식: 2행이 1업체 (헤더 5행 스킵)
+            i = 5
+            while i < len(rows) - 1:
+                row1 = rows[i]
+                row2 = rows[i + 1] if i + 1 < len(rows) else [''] * 9
 
-            if not name:
+                # 코드가 숫자가 아니면 스킵
+                if len(row1) < 2 or not row1[0] or not str(row1[0]).strip():
+                    i += 1
+                    continue
+
+                code_val = str(row1[0]).strip()
+                if not code_val.isdigit():
+                    i += 1
+                    continue
+
+                code = code_val
+                name = str(row1[1]).strip() if len(row1) > 1 else ''
+                biz_reg = str(row1[3]).strip() if len(row1) > 3 else ''
+                biz_type = str(row1[4]).strip() if len(row1) > 4 else ''
+
+                address = str(row2[0]).strip() if len(row2) > 0 else ''
+                representative = str(row2[3]).strip() if len(row2) > 3 else ''
+                biz_item = str(row2[4]).strip() if len(row2) > 4 else ''
+
+                if not name:
+                    i += 2
+                    continue
+
+                # 기존 Vendor 존재 여부 확인
+                existing = Vendor.objects.filter(code=code).first()
+                if existing:
+                    status = 'update'
+                    update_count += 1
+                else:
+                    status = 'new'
+                    new_count += 1
+
+                preview_data.append({
+                    'code': code,
+                    'name': name,
+                    'biz_registration_number': biz_reg,
+                    'representative': representative,
+                    'address': address,
+                    'biz_type': biz_type,
+                    'biz_item': biz_item,
+                    'status': status,
+                })
+
                 i += 2
-                continue
-
-            # 기존 Vendor 존재 여부 확인
-            existing = Vendor.objects.filter(code=code).first()
-            if existing:
-                status = 'update'
-                update_count += 1
-            else:
-                status = 'new'
-                new_count += 1
-
-            preview_data.append({
-                'code': code,
-                'name': name,
-                'biz_registration_number': biz_reg,
-                'representative': representative,
-                'address': address,
-                'biz_type': biz_type,
-                'biz_item': biz_item,
-                'status': status,
-            })
-
-            i += 2
 
     except Exception as e:
         messages.error(request, f'파일 처리 중 오류: {e}')
@@ -3392,6 +3485,7 @@ def vendor_upload_confirm(request):
     code_list = request.POST.getlist('code_list[]')
     name_list = request.POST.getlist('name_list[]')
     biz_reg_list = request.POST.getlist('biz_reg_list[]')
+    erp_code_list = request.POST.getlist('erp_code_list[]')
     representative_list = request.POST.getlist('representative_list[]')
     address_list = request.POST.getlist('address_list[]')
     biz_type_list = request.POST.getlist('biz_type_list[]')
@@ -3404,6 +3498,7 @@ def vendor_upload_confirm(request):
         code = code_list[i]
         name = name_list[i] if i < len(name_list) else ''
         biz_reg = biz_reg_list[i] if i < len(biz_reg_list) else ''
+        erp_code = erp_code_list[i] if i < len(erp_code_list) else code
         rep = representative_list[i] if i < len(representative_list) else ''
         addr = address_list[i] if i < len(address_list) else ''
         biz_type = biz_type_list[i] if i < len(biz_type_list) else ''
@@ -3414,7 +3509,7 @@ def vendor_upload_confirm(request):
                 code=code,
                 defaults={
                     'name': name,
-                    'erp_code': code,
+                    'erp_code': erp_code or code,
                     'biz_registration_number': biz_reg or None,
                     'representative': rep or None,
                     'address': addr or None,
