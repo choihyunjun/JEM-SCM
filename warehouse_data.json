@@ -1,152 +1,152 @@
 [
-{
-  "model": "material.warehouse",
-  "pk": 1,
-  "fields": {
-    "name": "¼öÀÔ°Ë»ç ´ë±âÀå",
-    "code": "1000",
-    "description": "¼öÀÔ°Ë»ç ´ë±âÀå¼Ò",
-    "is_active": true
+  {
+    "model": "material.warehouse",
+    "pk": 1,
+    "fields": {
+      "name": "ìˆ˜ìž…ê²€ì‚¬ ëŒ€ê¸°ìž¥",
+      "code": "1000",
+      "description": "ìˆ˜ìž…ê²€ì‚¬ ëŒ€ê¸°ìž¥ì†Œ",
+      "is_active": true
+    }
+  },
+  {
+    "model": "material.warehouse",
+    "pk": 2,
+    "fields": {
+      "name": "ìžìž¬ì°½ê³ ",
+      "code": "2000",
+      "description": "ERP -> ë¬¼ë¥˜ì°½ê³ ",
+      "is_active": true
+    }
+  },
+  {
+    "model": "material.warehouse",
+    "pk": 5,
+    "fields": {
+      "name": "3ê³µìž¥ ì°½ê³ ",
+      "code": "3000",
+      "description": null,
+      "is_active": true
+    }
+  },
+  {
+    "model": "material.warehouse",
+    "pk": 6,
+    "fields": {
+      "name": "4ê³µìž¥_3ì¸µ ìžìž¬ì°½ê³ ",
+      "code": "4200",
+      "description": null,
+      "is_active": true
+    }
+  },
+  {
+    "model": "material.warehouse",
+    "pk": 7,
+    "fields": {
+      "name": "4ê³µìž¥_ì œì¡°í˜„ìž¥",
+      "code": "4300",
+      "description": null,
+      "is_active": true
+    }
+  },
+  {
+    "model": "material.warehouse",
+    "pk": 8,
+    "fields": {
+      "name": "ì¸ì²œA/Sì°½ê³ ",
+      "code": "4400",
+      "description": null,
+      "is_active": true
+    }
+  },
+  {
+    "model": "material.warehouse",
+    "pk": 9,
+    "fields": {
+      "name": "ìž¥ê¸°ë³´ê´€í’ˆ ì°½ê³ ",
+      "code": "4500",
+      "description": null,
+      "is_active": true
+    }
+  },
+  {
+    "model": "material.warehouse",
+    "pk": 10,
+    "fields": {
+      "name": "4ê³µìž¥_4ì¸µ ì™„ì„±í’ˆ ì°½ê³ ",
+      "code": "4600",
+      "description": null,
+      "is_active": true
+    }
+  },
+  {
+    "model": "material.warehouse",
+    "pk": 11,
+    "fields": {
+      "name": "4ê³µìž¥_ê¶Œì„  í˜„ìž¥",
+      "code": "4700",
+      "description": null,
+      "is_active": true
+    }
+  },
+  {
+    "model": "material.warehouse",
+    "pk": 12,
+    "fields": {
+      "name": "ê²©ì™¸í’ˆì°½ê³ ",
+      "code": "5000",
+      "description": null,
+      "is_active": true
+    }
+  },
+  {
+    "model": "material.warehouse",
+    "pk": 13,
+    "fields": {
+      "name": "ì¸ì²œì†¡ë„ì°½ê³ ",
+      "code": "5500",
+      "description": null,
+      "is_active": true
+    }
+  },
+  {
+    "model": "material.warehouse",
+    "pk": 14,
+    "fields": {
+      "name": "ë¶ˆëŸ‰ì°½ê³ ",
+      "code": "8000",
+      "description": null,
+      "is_active": true
+    }
+  },
+  {
+    "model": "material.warehouse",
+    "pk": 15,
+    "fields": {
+      "name": "ë¬´ì—­ì°½ê³ ",
+      "code": "9500",
+      "description": null,
+      "is_active": true
+    }
+  },
+  {
+    "model": "material.warehouse",
+    "pk": 16,
+    "fields": {
+      "name": "ìˆ˜ìž…ê²€ì‚¬ ëŒ€ê¸°ì°½ê³ ",
+      "code": "8100",
+      "description": null,
+      "is_active": true
+    }
+  },
+  {
+    "model": "material.warehouse",
+    "pk": 17,
+    "fields": {
+      "name": "ë¶€ì í•© ì°½ê³ ",
+      "code": "8200",
+      "description": null,
+      "is_active": true
+    }
   }
-},
-{
-  "model": "material.warehouse",
-  "pk": 2,
-  "fields": {
-    "name": "ÀÚÀçÃ¢°í",
-    "code": "2000",
-    "description": "ERP -> ¹°·ùÃ¢°í",
-    "is_active": true
-  }
-},
-{
-  "model": "material.warehouse",
-  "pk": 5,
-  "fields": {
-    "name": "3°øÀå Ã¢°í",
-    "code": "3000",
-    "description": null,
-    "is_active": true
-  }
-},
-{
-  "model": "material.warehouse",
-  "pk": 6,
-  "fields": {
-    "name": "4°øÀå_3Ãþ ÀÚÀçÃ¢°í",
-    "code": "4200",
-    "description": null,
-    "is_active": true
-  }
-},
-{
-  "model": "material.warehouse",
-  "pk": 7,
-  "fields": {
-    "name": "4°øÀå_Á¦Á¶ÇöÀå",
-    "code": "4300",
-    "description": null,
-    "is_active": true
-  }
-},
-{
-  "model": "material.warehouse",
-  "pk": 8,
-  "fields": {
-    "name": "ÀÎÃµA/SÃ¢°í",
-    "code": "4400",
-    "description": null,
-    "is_active": true
-  }
-},
-{
-  "model": "material.warehouse",
-  "pk": 9,
-  "fields": {
-    "name": "Àå±âº¸°üÇ° Ã¢°í",
-    "code": "4500",
-    "description": null,
-    "is_active": true
-  }
-},
-{
-  "model": "material.warehouse",
-  "pk": 10,
-  "fields": {
-    "name": "4°øÀå_4Ãþ ¿Ï¼ºÇ° Ã¢°í",
-    "code": "4600",
-    "description": null,
-    "is_active": true
-  }
-},
-{
-  "model": "material.warehouse",
-  "pk": 11,
-  "fields": {
-    "name": "4°øÀå_±Ç¼± ÇöÀå",
-    "code": "4700",
-    "description": null,
-    "is_active": true
-  }
-},
-{
-  "model": "material.warehouse",
-  "pk": 12,
-  "fields": {
-    "name": "°Ý¿ÜÇ°Ã¢°í",
-    "code": "5000",
-    "description": null,
-    "is_active": true
-  }
-},
-{
-  "model": "material.warehouse",
-  "pk": 13,
-  "fields": {
-    "name": "ÀÎÃµ¼ÛµµÃ¢°í",
-    "code": "5500",
-    "description": null,
-    "is_active": true
-  }
-},
-{
-  "model": "material.warehouse",
-  "pk": 14,
-  "fields": {
-    "name": "ºÒ·®Ã¢°í",
-    "code": "8000",
-    "description": null,
-    "is_active": true
-  }
-},
-{
-  "model": "material.warehouse",
-  "pk": 15,
-  "fields": {
-    "name": "¹«¿ªÃ¢°í",
-    "code": "9500",
-    "description": null,
-    "is_active": true
-  }
-},
-{
-  "model": "material.warehouse",
-  "pk": 16,
-  "fields": {
-    "name": "¼öÀÔ°Ë»ç ´ë±âÃ¢°í",
-    "code": "8100",
-    "description": null,
-    "is_active": true
-  }
-},
-{
-  "model": "material.warehouse",
-  "pk": 17,
-  "fields": {
-    "name": "ºÎÀûÇÕ Ã¢°í",
-    "code": "8200",
-    "description": null,
-    "is_active": true
-  }
-}
 ]
