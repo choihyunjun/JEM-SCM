@@ -480,10 +480,11 @@ def order_upload_template(request):
         cell.border = thin_border
         ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = width
 
-    # 예시 데이터 추가
+    # 예시 데이터 추가 (납기일은 실제 날짜 객체로)
+    import datetime as dt
     example_data = [
-        ['P9R-12323', 100, '2026-02-01', '4500012345', '001'],
-        ['ABC-12345', 200, '2026-02-05', '4500012346', ''],
+        ['P9R-12323', 100, dt.date(2026, 2, 1), '4500012345', '001'],
+        ['ABC-12345', 200, dt.date(2026, 2, 5), '4500012346', ''],
     ]
     for row_idx, row_data in enumerate(example_data, start=2):
         for col_idx, value in enumerate(row_data, 1):
@@ -491,8 +492,14 @@ def order_upload_template(request):
             cell.border = thin_border
             if col_idx == 2:  # 수량
                 cell.alignment = Alignment(horizontal='right')
-            elif col_idx == 3:  # 납기일
+            elif col_idx == 3:  # 납기일 - 날짜 서식 적용
                 cell.alignment = Alignment(horizontal='center')
+                cell.number_format = 'YYYY-MM-DD'
+
+    # C열 전체에 날짜 서식 적용 (사용자 입력용)
+    for row_idx in range(4, 1000):  # 4행부터 999행까지 미리 서식 지정
+        cell = ws.cell(row=row_idx, column=3)
+        cell.number_format = 'YYYY-MM-DD'
 
     response = HttpResponse(
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
