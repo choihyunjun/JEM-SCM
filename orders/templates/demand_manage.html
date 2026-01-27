@@ -17,7 +17,6 @@
             <form method="get" class="row g-3 align-items-end" id="searchForm">
                 <!-- 선택된 업체 ID들을 저장하는 hidden input -->
                 <input type="hidden" name="vendor_ids" id="hiddenVendorIds" value="{{ selected_vendor_ids|default:'' }}">
-                <input type="hidden" name="only_with_demand" id="hiddenOnlyWithDemand" value="{{ only_with_demand|yesno:'true,false' }}">
 
                 <div class="col-md-3">
                     <label class="form-label small fw-bold">협력사 선택</label>
@@ -53,19 +52,9 @@
                 </div>
             </form>
 
-            <!-- 선택된 업체 뱃지 및 필터 옵션 -->
-            <div class="d-flex justify-content-between align-items-center mt-2" style="min-height: 28px;">
-                <div id="selectedVendorBadges">
-                    <!-- JavaScript로 동적 생성 -->
-                </div>
-                <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="onlyWithDemandSwitch"
-                           {% if only_with_demand %}checked{% endif %}
-                           onchange="toggleOnlyWithDemand()">
-                    <label class="form-check-label small" for="onlyWithDemandSwitch">
-                        <i class="bi bi-funnel me-1"></i>소요량 있는 업체만
-                    </label>
-                </div>
+            <!-- 선택된 업체 뱃지 -->
+            <div id="selectedVendorBadges" class="mt-2" style="min-height: 28px;">
+                <!-- JavaScript로 동적 생성 -->
             </div>
         </div>
     </div>
@@ -140,7 +129,15 @@
                     <div class="col-md-7">
                         <input type="text" id="vendorModalSearchInput" class="form-control"
                                placeholder="업체명을 입력하세요..." autocomplete="off">
-                        <div id="vendorModalList" class="mt-2 border rounded" style="max-height: 300px; overflow-y: auto;">
+                        <!-- 소요량 있는 업체만 필터 -->
+                        <div class="form-check form-switch mt-2 mb-2 ps-5">
+                            <input class="form-check-input" type="checkbox" id="onlyWithDemandSwitch"
+                                   onchange="toggleDemandFilter()">
+                            <label class="form-check-label small text-muted" for="onlyWithDemandSwitch">
+                                <i class="bi bi-funnel me-1"></i>소요량 있는 업체만 표시
+                            </label>
+                        </div>
+                        <div id="vendorModalList" class="border rounded" style="max-height: 280px; overflow-y: auto;">
                             <div class="text-center text-muted py-4">
                                 <i class="bi bi-search fs-3 d-block mb-2"></i>
                                 검색어를 입력하면 결과가 표시됩니다
@@ -216,6 +213,13 @@ const allVendors = [
     {% endfor %}
 ];
 
+// 소요량 있는 업체 ID 목록 (필터용)
+const vendorsWithDemandIds = new Set([
+    {% for vid in vendors_with_demand_ids %}
+    '{{ vid }}',
+    {% endfor %}
+]);
+
 // 선택된 업체 저장 (id -> name 매핑)
 let selectedVendors = new Map();
 
@@ -245,19 +249,37 @@ function openVendorModal() {
     setTimeout(() => document.getElementById('vendorModalSearchInput').focus(), 300);
 }
 
+// 소요량 필터 토글 함수
+function toggleDemandFilter() {
+    const query = document.getElementById('vendorModalSearchInput').value;
+    renderVendorSearchList(query);
+}
+
+// 필터 적용된 업체 목록 반환
+function getFilteredVendors() {
+    const onlyWithDemand = document.getElementById('onlyWithDemandSwitch')?.checked || false;
+    if (onlyWithDemand) {
+        return allVendors.filter(v => vendorsWithDemandIds.has(v.id));
+    }
+    return allVendors;
+}
+
 function renderVendorSearchList(query) {
     const listContainer = document.getElementById('vendorModalList');
     const q = query.trim().toLowerCase();
+    const filteredVendors = getFilteredVendors();
 
     if (q.length === 0) {
-        // 검색어 없으면 전체 목록 표시 (최대 20개)
-        const displayVendors = allVendors.slice(0, 20);
+        // 검색어 없으면 필터된 목록 표시 (최대 20개)
+        const displayVendors = filteredVendors.slice(0, 20);
         renderVendorItems(displayVendors, listContainer, q);
-        if (allVendors.length > 20) {
+        if (filteredVendors.length > 20) {
             const moreDiv = document.createElement('div');
             moreDiv.className = 'text-center text-muted small py-2 border-top';
-            moreDiv.textContent = `외 ${allVendors.length - 20}개 업체 (검색어를 입력하세요)`;
+            moreDiv.textContent = `외 ${filteredVendors.length - 20}개 업체 (검색어를 입력하세요)`;
             listContainer.appendChild(moreDiv);
+        } else if (filteredVendors.length === 0) {
+            listContainer.innerHTML = '<div class="text-center text-muted py-3"><i class="bi bi-emoji-frown me-1"></i>소요량 있는 업체가 없습니다</div>';
         }
         return;
     }
@@ -267,7 +289,7 @@ function renderVendorSearchList(query) {
         return;
     }
 
-    const filtered = allVendors.filter(v => v.name.toLowerCase().includes(q)).slice(0, 20);
+    const filtered = filteredVendors.filter(v => v.name.toLowerCase().includes(q)).slice(0, 20);
 
     if (filtered.length === 0) {
         listContainer.innerHTML = '<div class="text-center text-muted py-3"><i class="bi bi-emoji-frown me-1"></i>검색 결과가 없습니다</div>';
@@ -276,7 +298,7 @@ function renderVendorSearchList(query) {
 
     renderVendorItems(filtered, listContainer, q);
 
-    const totalMatched = allVendors.filter(v => v.name.toLowerCase().includes(q)).length;
+    const totalMatched = filteredVendors.filter(v => v.name.toLowerCase().includes(q)).length;
     if (totalMatched > 20) {
         const moreDiv = document.createElement('div');
         moreDiv.className = 'text-center text-muted small py-2 border-top';
@@ -430,15 +452,6 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.classList.add('btn-primary');
     }
 });
-
-// 소요량 있는 업체만 필터 토글
-function toggleOnlyWithDemand() {
-    const isChecked = document.getElementById('onlyWithDemandSwitch').checked;
-    document.getElementById('hiddenOnlyWithDemand').value = isChecked ? 'true' : 'false';
-
-    // 폼 제출 (페이지 새로고침)
-    document.getElementById('searchForm').submit();
-}
 </script>
 
 <style>

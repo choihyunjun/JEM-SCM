@@ -952,7 +952,6 @@ def demand_manage(request):
     p_no = request.GET.get('part_no', '')
     sd = request.GET.get('start_date', '')
     ed = request.GET.get('end_date', '')
-    only_with_demand = request.GET.get('only_with_demand', '') == 'true'
 
     demands = Demand.objects.select_related('part', 'part__vendor').all().order_by('-due_date')
 
@@ -970,13 +969,11 @@ def demand_manage(request):
         names = list(Vendor.objects.filter(id__in=vendor_ids).values_list('name', flat=True))
         selected_vendor_names = ', '.join(names)
 
-    # 업체 목록 조회 (소요량 있는 업체만 필터 옵션)
-    if only_with_demand:
-        # 소요량이 있는 업체 ID 목록 조회
-        vendor_ids_with_demand = Demand.objects.values_list('part__vendor_id', flat=True).distinct()
-        vendor_list = Vendor.objects.filter(id__in=vendor_ids_with_demand).order_by('name')
-    else:
-        vendor_list = Vendor.objects.all().order_by('name')
+    # 전체 업체 목록 조회
+    vendor_list = Vendor.objects.all().order_by('name')
+
+    # 소요량 있는 업체 ID 목록 (모달 내 필터용)
+    vendors_with_demand_ids = list(Demand.objects.values_list('part__vendor_id', flat=True).distinct())
 
     return render(
         request,
@@ -984,13 +981,13 @@ def demand_manage(request):
         {
             'demands': demands[:500],
             'vendor_list': vendor_list,
+            'vendors_with_demand_ids': vendors_with_demand_ids,
             'active_menu': 'inventory',
             'selected_vendor_ids': vendor_ids_str,
             'selected_vendor_names': selected_vendor_names,
             'part_no': p_no,
             'start_date': sd,
             'end_date': ed,
-            'only_with_demand': only_with_demand,
         }
     )
 
