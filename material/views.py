@@ -10,7 +10,7 @@ from django.utils import timezone
 from functools import wraps
 
 # SCM(Orders) 앱 모델
-from orders.models import Part, Vendor, Inventory as OldInventory, Demand
+from orders.models import Part, Vendor, Inventory as OldInventory, Demand, InventoryUploadLog
 
 
 # =============================================================================
@@ -1303,7 +1303,7 @@ def stock_adjustment(request):
                             error_messages.append(f"행 {row_idx}: 창고 '{warehouse_code}' 없음")
                             continue
 
-                        # 품번 확인 또는 자동 생성
+                        # 품번 확인 (품목마스터 기반 - 자동 생성하지 않음)
                         try:
                             part = Part.objects.get(part_no=part_no)
                             # 기존 품목이라도 품목군이 입력되면 업데이트
@@ -1311,15 +1311,19 @@ def stock_adjustment(request):
                                 part.part_group = part_group
                                 part.save()
                         except Part.DoesNotExist:
-                            # Part에 없으면 자동 생성 (WMS 전용, vendor=None)
-                            if not part_group:
-                                part_group = '일반'  # 기본값
-                            part = Part.objects.create(
+                            # Part에 없으면 실패 로그 기록 후 스킵
+                            error_count += 1
+                            error_messages.append(f"행 {row_idx}: 품번 '{part_no}' 품목마스터에 없음")
+                            # 실패 로그 기록
+                            InventoryUploadLog.objects.create(
+                                upload_type='INVENTORY',
+                                uploaded_by=request.user,
                                 part_no=part_no,
-                                part_name=part_no,  # 품명 = 품번
-                                vendor=None,
-                                part_group=part_group
+                                part_name='',
+                                row_data=f"창고:{warehouse_code}, 품목군:{part_group}, 수량:{new_qty}, LOT:{lot_str}",
+                                error_reason=f"품목마스터에 등록되지 않은 품번"
                             )
+                            continue
 
                         # LOT 파싱 (yy.mm.dd 또는 yyyy-mm-dd 형식)
                         lot_no = None
@@ -1406,6 +1410,11 @@ def stock_adjustment(request):
 
     warehouses = Warehouse.objects.filter(is_active=True).order_by('code')
 
+    # 최근 실패 로그 조회 (기초재고 업로드)
+    recent_error_logs = InventoryUploadLog.objects.filter(
+        upload_type='INVENTORY'
+    ).order_by('-uploaded_at')[:20]
+
     context = {
         'latest_closing': latest_closing,
         'next_closable': next_closable,
@@ -1415,6 +1424,7 @@ def stock_adjustment(request):
         'search_q': search_q,
         'warehouse_filter': warehouse_filter,
         'today': today,
+        'recent_error_logs': recent_error_logs,
     }
     return render(request, 'material/stock_adjustment.html', context)
 

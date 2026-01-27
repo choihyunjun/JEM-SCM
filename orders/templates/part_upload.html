@@ -1,0 +1,164 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid p-0" style="max-width: 1920px;">
+
+    <div class="mb-4">
+        <h3 class="fw-bold text-secondary"><i class="bi bi-box-seam me-2"></i>품목마스터 일괄 등록</h3>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-white py-3">
+            <h5 class="fw-bold m-0 text-primary">STEP 1. 엑셀/CSV 파일 업로드</h5>
+        </div>
+        <div class="card-body p-4 text-center bg-light">
+            <form action="{% url 'part_upload_preview' %}" method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="input-group input-group-lg mb-3 mx-auto" style="max-width: 700px;">
+                    <input type="file" name="upload_file" class="form-control" required accept=".xlsx, .xls, .csv">
+                    <button type="submit" class="btn btn-primary px-4 fw-bold">
+                        <i class="bi bi-search me-1"></i> 데이터 미리보기
+                    </button>
+                </div>
+            </form>
+            <div class="alert alert-success d-inline-block text-start shadow-sm border-0 mt-2">
+                <small>
+                    <i class="bi bi-check-circle-fill me-1"></i> <strong>업로드 양식:</strong><br>
+                    <span class="text-dark">헤더: 품번, 품명, 품목군, 계정구분(원재료/상품/제품), 업체코드(선택)</span><br>
+                    <span class="text-muted ms-3">※ "엑셀 양식 다운로드" 버튼으로 받은 파일과 동일한 형식입니다.</span>
+                </small>
+            </div>
+            <div class="mt-3">
+                <a href="{% url 'part_upload_template' %}" class="btn btn-outline-success">
+                    <i class="bi bi-download me-1"></i>엑셀 양식 다운로드
+                </a>
+                <a href="{% url 'part_upload_template' %}?include_data=1" class="btn btn-success">
+                    <i class="bi bi-download me-1"></i>현재 데이터 포함 다운로드
+                </a>
+            </div>
+        </div>
+    </div>
+
+    {% if preview_data %}
+    <div class="card shadow border-0 border-top border-4 border-success animate__animated animate__fadeInUp">
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+            <h5 class="fw-bold m-0 text-success">STEP 2. 데이터 검증 및 최종 등록</h5>
+            <span class="badge bg-secondary fs-6">
+                총 {{ preview_data|length }}건 /
+                <span class="text-success-emphasis">신규 {{ new_count }}</span> /
+                <span class="text-info-emphasis">업데이트 {{ update_count }}</span> /
+                <span class="text-danger-emphasis">오류 {{ error_count }}</span>
+            </span>
+        </div>
+
+        <form action="{% url 'part_upload_confirm' %}" method="post">
+            {% csrf_token %}
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+                    <table class="table table-hover table-bordered mb-0 text-center align-middle" style="font-size: 0.9rem;">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th style="width: 50px;">No</th>
+                                <th style="width: 80px;">상태</th>
+                                <th style="width: 150px;">품번</th>
+                                <th style="width: 250px;">품명</th>
+                                <th style="width: 100px;">품목군</th>
+                                <th style="width: 100px;">계정구분</th>
+                                <th style="width: 150px;">연결업체</th>
+                                <th>비고</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in preview_data %}
+                            <tr class="{% if row.status == 'error' %}table-danger{% elif row.status == 'update' %}table-warning{% endif %}">
+                                <td>{{ forloop.counter }}</td>
+                                <td>
+                                    {% if row.status == 'new' %}
+                                        <span class="badge bg-success">신규</span>
+                                    {% elif row.status == 'update' %}
+                                        <span class="badge bg-warning text-dark">업데이트</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">오류</span>
+                                    {% endif %}
+                                </td>
+                                <td class="fw-bold">{{ row.part_no }}</td>
+                                <td class="text-start">{{ row.part_name }}</td>
+                                <td>{{ row.part_group|default:"일반" }}</td>
+                                <td>
+                                    <span class="badge {% if row.account_type == 'RAW' %}bg-primary{% elif row.account_type == 'PRODUCT' %}bg-info{% else %}bg-success{% endif %}">
+                                        {{ row.account_type_display }}
+                                    </span>
+                                </td>
+                                <td class="small">{{ row.vendor_name|default:"-" }}</td>
+                                <td class="text-start small text-muted">{{ row.note|default:"" }}</td>
+
+                                {% if row.status != 'error' %}
+                                    <input type="hidden" name="part_no_list[]" value="{{ row.part_no }}">
+                                    <input type="hidden" name="part_name_list[]" value="{{ row.part_name }}">
+                                    <input type="hidden" name="part_group_list[]" value="{{ row.part_group }}">
+                                    <input type="hidden" name="account_type_list[]" value="{{ row.account_type }}">
+                                    <input type="hidden" name="vendor_code_list[]" value="{{ row.vendor_code }}">
+                                {% endif %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card-footer bg-white p-3 text-end">
+                <a href="{% url 'part_upload' %}" class="btn btn-secondary me-2">취소 (다시 올리기)</a>
+                {% if new_count > 0 or update_count > 0 %}
+                <button type="submit" class="btn btn-success fw-bold px-5"
+                        onclick="return confirm('신규 {{ new_count }}건, 업데이트 {{ update_count }}건을 등록하시겠습니까?')">
+                    <i class="bi bi-check-circle-fill me-2"></i> 최종 등록 확정
+                </button>
+                {% else %}
+                <button type="button" class="btn btn-secondary px-5" disabled>등록 가능한 데이터가 없습니다</button>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+    {% endif %}
+
+    {% if result %}
+    <div class="alert alert-success shadow-sm">
+        <h5 class="fw-bold"><i class="bi bi-check-circle-fill me-2"></i>등록 완료!</h5>
+        <p class="mb-0">신규 {{ result.created }}개, 업데이트 {{ result.updated }}개 처리되었습니다.</p>
+    </div>
+    {% endif %}
+
+    {% if error_logs %}
+    <div class="card shadow-sm border-danger mt-4">
+        <div class="card-header bg-danger text-white">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>업로드 실패 로그 ({{ error_logs|length }}건)
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive" style="max-height: 300px;">
+                <table class="table table-sm table-striped mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>품번</th>
+                            <th>품명</th>
+                            <th>실패 사유</th>
+                            <th>업로드 일시</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in error_logs %}
+                        <tr>
+                            <td class="fw-bold">{{ log.part_no }}</td>
+                            <td>{{ log.part_name|default:"-" }}</td>
+                            <td class="text-danger">{{ log.error_reason }}</td>
+                            <td class="small">{{ log.uploaded_at|date:"Y-m-d H:i" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

@@ -280,14 +280,54 @@
                                        accept=".xlsx,.xls" required>
                             </div>
                             <div class="col-md-4">
-                                <button type="submit" class="btn btn-info w-100" onclick="return confirm('엑셀 파일을 업로드하여 재고를 일괄 조정하시겠습니까?\\n\\n기존 재고가 있으면 덮어쓰고, 없으면 새로 추가됩니다.');">
+                                <button type="submit" class="btn btn-info w-100" onclick="return confirm('엑셀 파일을 업로드하여 재고를 일괄 조정하시겠습니까?\\n\\n기존 재고가 있으면 덮어쓰고, 없으면 새로 추가됩니다.\\n(품목마스터에 없는 품번은 실패 처리됩니다)');">
                                     <i class="bi bi-upload me-1"></i>업로드 및 적용
                                 </button>
                             </div>
                         </div>
                     </form>
+
+                    <!-- 안내 문구 추가 -->
+                    <div class="alert alert-warning mt-3 mb-0 py-2">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>주의:</strong> 품목마스터에 등록되지 않은 품번은 자동 등록되지 않고 실패 처리됩니다.
+                        <a href="{% url 'part_upload' %}" class="alert-link">품목마스터 등록</a> 후 재고 업로드를 진행하세요.
+                    </div>
                 </div>
             </div>
+
+            <!-- 업로드 실패 로그 -->
+            {% if recent_error_logs %}
+            <div class="card mt-4">
+                <div class="card-header bg-danger text-white">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>최근 업로드 실패 로그 (품목마스터 미등록)
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+                        <table class="table table-sm table-striped mb-0">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th>품번</th>
+                                    <th>실패 사유</th>
+                                    <th>원본 데이터</th>
+                                    <th>업로드 일시</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in recent_error_logs %}
+                                <tr>
+                                    <td class="fw-bold text-danger">{{ log.part_no }}</td>
+                                    <td>{{ log.error_reason }}</td>
+                                    <td class="small text-muted">{{ log.row_data|truncatechars:40 }}</td>
+                                    <td class="small">{{ log.uploaded_at|date:"Y-m-d H:i" }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>

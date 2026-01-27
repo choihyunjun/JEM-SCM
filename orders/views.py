@@ -15,8 +15,8 @@ import openpyxl
 import datetime
 from datetime import timedelta, date
 
-# SCM 모델 임포트 (ReturnLog, VendorMonthlyPerformance, Notice, QnA, UserProfile 추가)
-from .models import Order, Vendor, Part, Inventory, Incoming, LabelPrintLog, DeliveryOrder, DeliveryOrderItem, Demand, ReturnLog, VendorMonthlyPerformance, Notice, QnA, UserProfile, Organization
+# SCM 모델 임포트 (ReturnLog, VendorMonthlyPerformance, Notice, QnA, UserProfile, InventoryUploadLog 추가)
+from .models import Order, Vendor, Part, Inventory, Incoming, LabelPrintLog, DeliveryOrder, DeliveryOrderItem, Demand, ReturnLog, VendorMonthlyPerformance, Notice, QnA, UserProfile, Organization, InventoryUploadLog
 
 # [신규] 타 앱(WMS, QMS) 모델 임포트 (연동용)
 try:
@@ -2726,6 +2726,303 @@ def part_vendor_template(request):
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
     response['Content-Disposition'] = 'attachment; filename="part_vendor_template.xlsx"'
+    wb.save(response)
+    return response
+
+
+# =============================================================================
+# 품목마스터 일괄 업로드
+# =============================================================================
+
+@login_required
+@menu_permission_required('can_access_scm_admin')
+def part_upload(request):
+    """품목마스터 일괄 업로드 페이지"""
+    # 최근 실패 로그 조회
+    error_logs = InventoryUploadLog.objects.filter(
+        upload_type='PART_MASTER'
+    ).order_by('-uploaded_at')[:20]
+
+    return render(request, 'part_upload.html', {
+        'error_logs': error_logs,
+    })
+
+
+@login_required
+@menu_permission_required('can_access_scm_admin')
+def part_upload_preview(request):
+    """품목마스터 업로드 미리보기"""
+    if request.method != 'POST':
+        return redirect('part_upload')
+
+    upload_file = request.FILES.get('upload_file')
+    if not upload_file:
+        messages.error(request, '파일을 선택해주세요.')
+        return redirect('part_upload')
+
+    try:
+        import openpyxl
+        import csv
+        import io
+
+        # 파일 확장자 확인
+        filename = upload_file.name.lower()
+        data_rows = []
+
+        if filename.endswith('.csv'):
+            # CSV 파일 처리
+            content = upload_file.read().decode('utf-8-sig')
+            reader = csv.reader(io.StringIO(content))
+            for row in reader:
+                data_rows.append(row)
+        else:
+            # 엑셀 파일 처리
+            wb = openpyxl.load_workbook(upload_file)
+            ws = wb.active
+            for row in ws.iter_rows(values_only=True):
+                data_rows.append(row)
+
+        # 첫 행은 헤더로 가정하고 스킵
+        preview_data = []
+        new_count = 0
+        update_count = 0
+        error_count = 0
+
+        # 업체 목록 미리 로드 (코드 -> 업체 매핑)
+        vendors_by_code = {v.code: v for v in Vendor.objects.all()}
+
+        # 계정구분 매핑
+        account_type_map = {
+            '원재료': 'RAW', 'RAW': 'RAW', '원자재': 'RAW',
+            '상품': 'PRODUCT', 'PRODUCT': 'PRODUCT',
+            '제품': 'FINISHED', 'FINISHED': 'FINISHED',
+        }
+        account_type_display = {
+            'RAW': '원재료', 'PRODUCT': '상품', 'FINISHED': '제품'
+        }
+
+        for row_idx, row in enumerate(data_rows[1:], start=2):  # 헤더 스킵
+            if not row or not row[0]:
+                continue
+
+            part_no = str(row[0]).strip()
+            part_name = str(row[1]).strip() if len(row) > 1 and row[1] else ''
+            part_group = str(row[2]).strip() if len(row) > 2 and row[2] else '일반'
+            account_type_raw = str(row[3]).strip() if len(row) > 3 and row[3] else '원재료'
+            vendor_code = str(row[4]).strip() if len(row) > 4 and row[4] else ''
+
+            # 계정구분 변환
+            account_type = account_type_map.get(account_type_raw.upper(), 'RAW')
+            account_type_disp = account_type_display.get(account_type, '원재료')
+
+            # 업체 조회
+            vendor = vendors_by_code.get(vendor_code) if vendor_code else None
+            vendor_name = vendor.name if vendor else ''
+
+            # 품번 검증
+            if not part_no:
+                status = 'error'
+                note = '품번 누락'
+                error_count += 1
+            elif not part_name:
+                status = 'error'
+                note = '품명 누락'
+                error_count += 1
+            elif vendor_code and not vendor:
+                status = 'error'
+                note = f'업체코드 [{vendor_code}] 없음'
+                error_count += 1
+            else:
+                # 기존 품번 존재 여부 확인
+                existing_part = Part.objects.filter(part_no=part_no).first()
+                if existing_part:
+                    status = 'update'
+                    note = '기존 품목 업데이트'
+                    update_count += 1
+                else:
+                    status = 'new'
+                    note = ''
+                    new_count += 1
+
+            preview_data.append({
+                'part_no': part_no,
+                'part_name': part_name,
+                'part_group': part_group,
+                'account_type': account_type,
+                'account_type_display': account_type_disp,
+                'vendor_code': vendor_code,
+                'vendor_name': vendor_name,
+                'status': status,
+                'note': note,
+            })
+
+        return render(request, 'part_upload.html', {
+            'preview_data': preview_data,
+            'new_count': new_count,
+            'update_count': update_count,
+            'error_count': error_count,
+        })
+
+    except Exception as e:
+        messages.error(request, f'파일 처리 중 오류: {str(e)}')
+        return redirect('part_upload')
+
+
+@login_required
+@menu_permission_required('can_access_scm_admin')
+def part_upload_confirm(request):
+    """품목마스터 업로드 확정"""
+    if request.method != 'POST':
+        return redirect('part_upload')
+
+    part_no_list = request.POST.getlist('part_no_list[]')
+    part_name_list = request.POST.getlist('part_name_list[]')
+    part_group_list = request.POST.getlist('part_group_list[]')
+    account_type_list = request.POST.getlist('account_type_list[]')
+    vendor_code_list = request.POST.getlist('vendor_code_list[]')
+
+    # 업체 목록 미리 로드
+    vendors_by_code = {v.code: v for v in Vendor.objects.all()}
+
+    created_count = 0
+    updated_count = 0
+
+    for i in range(len(part_no_list)):
+        part_no = part_no_list[i]
+        part_name = part_name_list[i] if i < len(part_name_list) else ''
+        part_group = part_group_list[i] if i < len(part_group_list) else '일반'
+        account_type = account_type_list[i] if i < len(account_type_list) else 'RAW'
+        vendor_code = vendor_code_list[i] if i < len(vendor_code_list) else ''
+
+        vendor = vendors_by_code.get(vendor_code) if vendor_code else None
+
+        # 기존 품목 확인
+        existing_part = Part.objects.filter(part_no=part_no).first()
+
+        if existing_part:
+            # 업데이트
+            existing_part.part_name = part_name
+            existing_part.part_group = part_group
+            existing_part.account_type = account_type
+            if vendor:
+                existing_part.vendor = vendor
+            existing_part.save()
+            updated_count += 1
+        else:
+            # 신규 생성
+            Part.objects.create(
+                part_no=part_no,
+                part_name=part_name,
+                part_group=part_group,
+                account_type=account_type,
+                vendor=vendor,
+            )
+            created_count += 1
+
+    messages.success(request, f'품목마스터 등록 완료: 신규 {created_count}건, 업데이트 {updated_count}건')
+
+    return render(request, 'part_upload.html', {
+        'result': {
+            'created': created_count,
+            'updated': updated_count,
+        }
+    })
+
+
+@login_required
+@menu_permission_required('can_access_scm_admin')
+def part_upload_template(request):
+    """품목마스터 업로드용 엑셀 템플릿 다운로드"""
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "품목마스터"
+
+    # 헤더 스타일
+    header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF")
+    thin_border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin')
+    )
+
+    # 헤더
+    headers = ['품번', '품명', '품목군', '계정구분', '업체코드']
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+
+    # 데이터 포함 여부
+    include_data = request.GET.get('include_data', '')
+
+    account_type_display = {'RAW': '원재료', 'PRODUCT': '상품', 'FINISHED': '제품'}
+
+    if include_data:
+        parts = Part.objects.select_related('vendor').all().order_by('part_no')
+
+        for row_idx, part in enumerate(parts, start=2):
+            ws.cell(row=row_idx, column=1, value=part.part_no).border = thin_border
+            ws.cell(row=row_idx, column=2, value=part.part_name).border = thin_border
+            ws.cell(row=row_idx, column=3, value=part.part_group or '일반').border = thin_border
+            ws.cell(row=row_idx, column=4, value=account_type_display.get(part.account_type, '원재료')).border = thin_border
+            cell_e = ws.cell(row=row_idx, column=5, value=part.vendor.code if part.vendor else '')
+            cell_e.border = thin_border
+            cell_e.number_format = '@'
+
+    # 컬럼 너비 조정
+    ws.column_dimensions['A'].width = 20
+    ws.column_dimensions['B'].width = 30
+    ws.column_dimensions['C'].width = 12
+    ws.column_dimensions['D'].width = 12
+    ws.column_dimensions['E'].width = 15
+
+    # 업체 목록 시트 추가
+    ws_vendors = wb.create_sheet(title="업체목록(참고)")
+    ws_vendors.cell(row=1, column=1, value="업체코드").fill = header_fill
+    ws_vendors.cell(row=1, column=1).font = header_font
+    ws_vendors.cell(row=1, column=2, value="업체명").fill = header_fill
+    ws_vendors.cell(row=1, column=2).font = header_font
+
+    vendors = Vendor.objects.all().order_by('name')
+    for row_idx, vendor in enumerate(vendors, start=2):
+        cell_code = ws_vendors.cell(row=row_idx, column=1, value=vendor.code)
+        cell_code.number_format = '@'
+        ws_vendors.cell(row=row_idx, column=2, value=vendor.name)
+
+    ws_vendors.column_dimensions['A'].width = 15
+    ws_vendors.column_dimensions['B'].width = 30
+
+    # 계정구분 안내 시트
+    ws_help = wb.create_sheet(title="계정구분안내")
+    ws_help.cell(row=1, column=1, value="계정구분").fill = header_fill
+    ws_help.cell(row=1, column=1).font = header_font
+    ws_help.cell(row=1, column=2, value="설명").fill = header_fill
+    ws_help.cell(row=1, column=2).font = header_font
+
+    help_data = [
+        ('원재료', '제조에 투입되는 원재료'),
+        ('상품', '외부에서 구매하여 그대로 판매하는 상품'),
+        ('제품', '자사에서 생산한 완제품'),
+    ]
+    for row_idx, (acct, desc) in enumerate(help_data, start=2):
+        ws_help.cell(row=row_idx, column=1, value=acct)
+        ws_help.cell(row=row_idx, column=2, value=desc)
+
+    ws_help.column_dimensions['A'].width = 15
+    ws_help.column_dimensions['B'].width = 40
+
+    # 응답 생성
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = 'attachment; filename="part_master_template.xlsx"'
     wb.save(response)
     return response
 

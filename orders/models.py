@@ -55,11 +55,19 @@ class Organization(models.Model):
 
 # 2. 품목 마스터(Part)
 class Part(models.Model):
+    ACCOUNT_TYPE_CHOICES = [
+        ('RAW', '원재료'),
+        ('PRODUCT', '상품'),
+        ('FINISHED', '제품'),
+    ]
+
     vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, verbose_name='전담 업체',
                                null=True, blank=True)  # nullable: WMS 전용 품목은 업체 없음
     part_group = models.CharField(max_length=50, verbose_name='품목군', default='일반')
     part_no = models.CharField(max_length=50, verbose_name='품번', unique=True)  # 품번은 전체에서 유니크
     part_name = models.CharField(max_length=100, verbose_name='품명')
+    account_type = models.CharField(max_length=10, choices=ACCOUNT_TYPE_CHOICES,
+                                    default='RAW', verbose_name='계정구분')
 
     class Meta:
         verbose_name = "품목 마스터"
@@ -478,3 +486,40 @@ class QnA(models.Model):
     def __str__(self):
         status = "답변완료" if self.is_answered else "대기중"
         return f"[{status}] {self.title}"
+
+
+# ============================================
+# 업로드 로그 (재고/품목 등록 시 실패 기록)
+# ============================================
+
+class InventoryUploadLog(models.Model):
+    """
+    재고/품목 업로드 실패 로그
+    - 품목마스터에 존재하지 않는 품번 업로드 시 기록
+    - 데이터 정합성 문제 추적용
+    """
+    UPLOAD_TYPE_CHOICES = [
+        ('INVENTORY', '기초재고'),
+        ('PART_MASTER', '품목마스터'),
+        ('DEMAND', '소요량'),
+    ]
+
+    upload_type = models.CharField("업로드 유형", max_length=20, choices=UPLOAD_TYPE_CHOICES)
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name="업로드 사용자")
+    uploaded_at = models.DateTimeField("업로드 일시", auto_now_add=True)
+
+    # 업로드 시도 데이터
+    part_no = models.CharField("품번", max_length=50)
+    part_name = models.CharField("품명", max_length=100, blank=True, null=True)
+    row_data = models.TextField("원본 행 데이터", blank=True, null=True)  # JSON 형식
+
+    # 실패 사유
+    error_reason = models.CharField("실패 사유", max_length=255)
+
+    class Meta:
+        verbose_name = "업로드 실패 로그"
+        verbose_name_plural = "업로드 실패 로그"
+        ordering = ['-uploaded_at']
+
+    def __str__(self):
+        return f"[{self.get_upload_type_display()}] {self.part_no} - {self.error_reason}"
