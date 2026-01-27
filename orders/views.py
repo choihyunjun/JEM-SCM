@@ -55,7 +55,20 @@ def _is_internal(user) -> bool:
     return _get_role(user) != 'VENDOR'
 
 def _get_user_vendor(user):
-    return Vendor.objects.filter(user=user).first()
+    """협력사 계정의 Vendor 객체 반환 - 기존 방식과 새 방식 모두 지원"""
+    # 1. 기존 방식: Vendor.user 필드로 직접 연결
+    vendor = Vendor.objects.filter(user=user).first()
+    if vendor:
+        return vendor
+
+    # 2. 새 방식: UserProfile.org.linked_vendor로 연결
+    try:
+        if hasattr(user, 'profile') and user.profile.org and user.profile.org.linked_vendor:
+            return user.profile.org.linked_vendor
+    except Exception:
+        pass
+
+    return None
 
 # [Legacy] 기존 role 기반 권한 - 폴백용으로 유지
 ROLE_MENU_PERMS = {
