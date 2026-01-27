@@ -2557,6 +2557,8 @@ def part_list(request):
 
     if wms_only == '1':
         parts = parts.filter(vendor__isnull=True)  # 업체 미연결 품목만
+    else:
+        parts = parts.filter(vendor__isnull=False)  # 기본: 업체 연결된 품목만
 
     parts = parts.order_by('-id')[:200]
 
