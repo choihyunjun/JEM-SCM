@@ -22,14 +22,19 @@
                     </button>
                 </div>
             </form>
+            <div class="mb-3">
+                <a href="{% url 'order_upload_template' %}" class="btn btn-outline-success">
+                    <i class="bi bi-download me-1"></i>엑셀 양식 다운로드
+                </a>
+            </div>
             <div class="alert alert-info d-inline-block text-start shadow-sm border-0 mt-2">
                 <small>
                     <i class="bi bi-info-circle-fill me-1"></i> <strong>엑셀 양식 순서 (헤더 포함, 2행부터 데이터):</strong><br>
-                    <span class="text-dark">A열: 협력사명</span> / 
-                    <span class="text-primary fw-bold">B열: 품번</span> / 
-                    <span class="text-dark">C열: 수량</span> / 
-                    <span class="text-dark">D열: 납기일(YYYY-MM-DD)</span> / 
-                    <strong class="text-secondary">E열: ERP 발주번호</strong> / 
+                    <span class="text-dark">A열: 협력사명</span> /
+                    <span class="text-primary fw-bold">B열: 품번</span> /
+                    <span class="text-dark">C열: 수량</span> /
+                    <span class="text-dark">D열: 납기일(YYYY-MM-DD)</span> /
+                    <strong class="text-secondary">E열: ERP 발주번호</strong> /
                     <strong class="text-secondary">F열: ERP 발주순번(선택)</strong><br>
                     <span class="text-muted ms-3">※ 품명과 품목군은 '품번'을 기준으로 시스템에서 자동 조회합니다.</span>
                 </small>

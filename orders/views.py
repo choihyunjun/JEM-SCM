@@ -450,6 +450,58 @@ def order_upload(request):
     return render(request, 'order_upload.html', {'active_menu': 'upload'})
 
 @login_required
+def order_upload_template(request):
+    """발주 등록용 엑셀 양식 다운로드"""
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "발주등록"
+
+    # 헤더 스타일
+    header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF")
+    thin_border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin')
+    )
+
+    # 헤더
+    headers = ['협력사명', '품번', '수량', '납기일', 'ERP발주번호', 'ERP순번']
+    col_widths = [20, 20, 12, 15, 18, 10]
+
+    for col, (header, width) in enumerate(zip(headers, col_widths), 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+        ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = width
+
+    # 예시 데이터 추가
+    example_data = [
+        ['세영산업', 'P9R-12323', 100, '2026-02-01', '4500012345', '001'],
+        ['덴소코리아', 'ABC-12345', 200, '2026-02-05', '4500012346', '001'],
+    ]
+    for row_idx, row_data in enumerate(example_data, start=2):
+        for col_idx, value in enumerate(row_data, 1):
+            cell = ws.cell(row=row_idx, column=col_idx, value=value)
+            cell.border = thin_border
+            if col_idx in [3]:  # 수량
+                cell.alignment = Alignment(horizontal='right')
+            elif col_idx == 4:  # 납기일
+                cell.alignment = Alignment(horizontal='center')
+
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = 'attachment; filename="order_upload_template.xlsx"'
+    wb.save(response)
+    return response
+
+@login_required
 @require_POST
 def order_upload_preview(request):
     resp = require_action_perm(request, 'order.upload')

@@ -34,6 +34,7 @@ urlpatterns = [
     path('upload/', views.order_upload, name='order_upload'),
     path('upload/preview/', views.order_upload_preview, name='order_upload_preview'),
     path('upload/confirm/', views.order_create_confirm, name='order_create_confirm'),
+    path('upload/template/', views.order_upload_template, name='order_upload_template'),
 
     path('delete/', views.order_delete, name='order_delete'),
     path('close-action/', views.order_close_action, name='order_close_action'),
