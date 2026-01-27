@@ -2502,11 +2502,11 @@ def scm_alert_dashboard(request):
                     'days_left': days_left,
                 })
 
-    # 3. 장기 미입고 발주 (납기 경과 7일 이상)
+    # 3. 미납 발주 (납기일 경과)
     overdue_orders = Order.objects.filter(
         is_closed=False,
         approved_at__isnull=False,
-        due_date__lt=today - timedelta(days=7)
+        due_date__lt=today  # 납기일이 지난 모든 발주
     ).select_related('vendor')
     if user_vendor:
         overdue_orders = overdue_orders.filter(vendor=user_vendor)

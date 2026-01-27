@@ -129,14 +129,14 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <div class="small text-muted mb-1">장기 미입고</div>
-                            <div class="h3 fw-bold mb-0 {% if overdue_count > 0 %}text-secondary{% else %}text-secondary{% endif %}">{{ overdue_count }}</div>
+                            <div class="small text-muted mb-1">미납</div>
+                            <div class="h3 fw-bold mb-0 {% if overdue_count > 0 %}text-danger{% else %}text-secondary{% endif %}">{{ overdue_count }}</div>
                         </div>
-                        <div class="bg-secondary bg-opacity-10 p-3 rounded">
-                            <i class="bi bi-calendar-x text-secondary fs-4"></i>
+                        <div class="{% if overdue_count > 0 %}bg-danger{% else %}bg-secondary{% endif %} bg-opacity-10 p-3 rounded">
+                            <i class="bi bi-calendar-x {% if overdue_count > 0 %}text-danger{% else %}text-secondary{% endif %} fs-4"></i>
                         </div>
                     </div>
-                    <div class="small text-muted mt-2">납기 경과 7일+</div>
+                    <div class="small text-muted mt-2">납기 경과</div>
                 </div>
             </div>
         </div>
@@ -218,9 +218,9 @@
                             </button>
                         </li>
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link fw-bold text-secondary px-4 py-3" id="overdue-tab" data-bs-toggle="tab" data-bs-target="#overdue-pane" type="button">
-                                <i class="bi bi-calendar-x me-1"></i>장기 미입고
-                                {% if overdue_count %}<span class="badge bg-secondary ms-1">{{ overdue_count }}</span>{% endif %}
+                            <button class="nav-link fw-bold text-danger px-4 py-3" id="overdue-tab" data-bs-toggle="tab" data-bs-target="#overdue-pane" type="button">
+                                <i class="bi bi-calendar-x me-1"></i>미납
+                                {% if overdue_count %}<span class="badge bg-danger ms-1">{{ overdue_count }}</span>{% endif %}
                             </button>
                         </li>
                     </ul>
@@ -274,11 +274,11 @@
                             </div>
                         </div>
 
-                        <!-- 장기 미입고 탭 -->
+                        <!-- 미납 탭 -->
                         <div class="tab-pane fade" id="overdue-pane" role="tabpanel">
                             <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
                                 <table class="table table-hover table-sm mb-0 text-center align-middle" style="font-size: 0.85rem;">
-                                    <thead class="table-secondary sticky-top">
+                                    <thead class="table-danger sticky-top">
                                         <tr>
                                             <th>경과일</th>
                                             <th>납기일</th>
@@ -310,7 +310,7 @@
                                         <tr>
                                             <td colspan="7" class="py-4 text-muted">
                                                 <i class="bi bi-check-circle-fill fs-2 text-success d-block mb-2"></i>
-                                                장기 미입고 품목이 없습니다
+                                                미납 품목이 없습니다
                                             </td>
                                         </tr>
                                         {% endfor %}
