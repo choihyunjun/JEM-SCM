@@ -582,6 +582,10 @@ def order_export(request):
 @login_required
 @menu_permission_required('can_view_inventory')
 def inventory_list(request):
+    """
+    과부족 현황 조회 (최적화 버전)
+    - N+1 쿼리 문제 해결: 모든 데이터를 미리 조회 후 메모리에서 처리
+    """
     user = request.user
     today = timezone.localtime().date()
     user_vendor = Vendor.objects.filter(user=user).first()
@@ -624,34 +628,76 @@ def inventory_list(request):
         combined_pnos = set(list(act_pnos) + list(wms_pnos))
         part_qs = part_qs.filter(part_no__in=combined_pnos)
 
+    # ============================================
+    # 최적화: 모든 데이터를 미리 조회 (N+1 쿼리 방지)
+    # ============================================
+    from material.models import Warehouse
+    from collections import defaultdict
+
+    # 1. 품목 리스트 확정 (쿼리 실행)
+    parts = list(part_qs)
+    part_ids = [p.id for p in parts]
+
+    # 2. 자재창고(2000, 4200) 조회
+    target_warehouses = Warehouse.objects.filter(code__in=['2000', '4200'])
+    target_wh_ids = list(target_warehouses.values_list('id', flat=True))
+
+    # 3. MaterialStock 일괄 조회 (part별 재고 합계)
+    if target_wh_ids:
+        stock_qs = MaterialStock.objects.filter(
+            part_id__in=part_ids,
+            warehouse_id__in=target_wh_ids
+        ).values('part_id').annotate(total_qty=Sum('quantity'))
+    else:
+        stock_qs = MaterialStock.objects.filter(
+            part_id__in=part_ids
+        ).values('part_id').annotate(total_qty=Sum('quantity'))
+
+    stock_map = {item['part_id']: item['total_qty'] or 0 for item in stock_qs}
+
+    # 4. Incoming 일괄 조회 (part별, 날짜별 입고량)
+    incoming_qs = Incoming.objects.filter(
+        part_id__in=part_ids,
+        in_date__range=[today, end_date]
+    ).values('part_id', 'in_date').annotate(total_qty=Sum('quantity'))
+
+    incoming_map = defaultdict(lambda: defaultdict(int))
+    for item in incoming_qs:
+        incoming_map[item['part_id']][item['in_date']] = item['total_qty'] or 0
+
+    # 5. Demand 일괄 조회 (part별, 날짜별 소요량)
+    demand_qs = Demand.objects.filter(
+        part_id__in=part_ids,
+        due_date__range=[today, end_date]
+    ).values('part_id', 'due_date').annotate(total_qty=Sum('quantity'))
+
+    demand_map = defaultdict(lambda: defaultdict(int))
+    for item in demand_qs:
+        demand_map[item['part_id']][item['due_date']] = item['total_qty'] or 0
+
+    # ============================================
+    # 메모리에서 과부족 계산
+    # ============================================
     inventory_data = []
 
-    # 자재창고(2000, 4200) 조회
-    from material.models import Warehouse
-    target_warehouses = Warehouse.objects.filter(code__in=['2000', '4200'])
-
-    for part in part_qs:
+    for part in parts:
         daily_status = []
 
-        # 2000번 + 4200번 자재창고 재고 합산
-        if target_warehouses.exists():
-            wms_stock_agg = MaterialStock.objects.filter(part=part, warehouse__in=target_warehouses).aggregate(Sum('quantity'))
-        else:
-            wms_stock_agg = MaterialStock.objects.filter(part=part).aggregate(Sum('quantity'))
-        current_wms_stock = wms_stock_agg['quantity__sum'] or 0
+        # WMS 현재 재고
+        current_wms_stock = stock_map.get(part.id, 0)
 
-        # 오늘 입고량 계산 (WMS에 이미 반영된 금일 입고)
-        today_incoming = Incoming.objects.filter(part=part, in_date=today).aggregate(Sum('quantity'))['quantity__sum'] or 0
+        # 오늘 입고량 (WMS에 이미 반영된 금일 입고)
+        today_incoming = incoming_map[part.id].get(today, 0)
 
         # 시업재고 = WMS 현재 재고 - 오늘 입고량
         opening_stock = current_wms_stock - today_incoming
         temp_stock = opening_stock
 
         for dt in date_range:
-            dq = Demand.objects.filter(part=part, due_date=dt).aggregate(Sum('quantity'))['quantity__sum'] or 0
-            iq = Incoming.objects.filter(part=part, in_date=dt).aggregate(Sum('quantity'))['quantity__sum'] or 0
+            dq = demand_map[part.id].get(dt, 0)
+            iq = incoming_map[part.id].get(dt, 0)
 
-            # 모든 날짜에 대해 입고/소요 반영 (시업재고 기준으로 계산)
+            # 입고/소요 반영
             temp_stock = temp_stock - dq + iq
 
             daily_status.append({
