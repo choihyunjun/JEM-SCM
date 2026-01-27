@@ -2215,11 +2215,16 @@ def scm_alert_dashboard(request):
         total_parts = Part.objects.count()
     total_vendors = Vendor.objects.count()
 
-    # 협력사 필터링
+    # 협력사 필터링 - 소요량이 있는 품목만 조회 (성능 최적화)
+    parts_with_demand = Demand.objects.filter(
+        due_date__gte=today,
+        due_date__lte=today + timedelta(days=7)
+    ).values_list('part_id', flat=True).distinct()
+
     if user_vendor:
-        parts = Part.objects.select_related('vendor').filter(vendor=user_vendor)
+        parts = Part.objects.select_related('vendor').filter(vendor=user_vendor, id__in=parts_with_demand)
     else:
-        parts = Part.objects.select_related('vendor').all()
+        parts = Part.objects.select_related('vendor').filter(id__in=parts_with_demand)
 
     # 1. 재고 부족 품목 (과부족 D+7 기준 부족 예상 품목)
     shortage_items = []
