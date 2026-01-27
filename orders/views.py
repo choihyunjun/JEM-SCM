@@ -93,7 +93,7 @@ ROLE_ACTION_PERMS = {
         'label.print', 'delivery.print', 'delivery.register', 'delivery.delete',
     },
     'VENDOR': {
-        'delivery.register',
+        'delivery.register', 'delivery.delete',  # 본인 납품서 삭제 가능
         'label.print', 'delivery.print',
     },
 }
@@ -1309,12 +1309,17 @@ def delete_delivery_order(request, order_id):
         return resp
 
     order = get_object_or_404(DeliveryOrder, pk=order_id)
-    
+
     # 권한 체크 (items를 통해 vendor 확인)
     first_item = order.items.first()
-    vendor = first_item.part.vendor if first_item else None
+    part = Part.objects.filter(part_no=first_item.part_no).first() if first_item else None
+    item_vendor = part.vendor if part else None
 
-    if not request.user.is_superuser and request.user.profile.vendor != vendor:
+    # 사용자의 협력사 정보 가져오기
+    user_vendor = _get_user_vendor(request.user)
+
+    # 관리자가 아니고, 협력사 계정인 경우 본인 납품서만 삭제 가능
+    if not request.user.is_superuser and user_vendor and user_vendor != item_vendor:
         messages.error(request, "삭제 권한이 없습니다.")
         return redirect('label_list')
 
