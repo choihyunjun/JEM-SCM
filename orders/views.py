@@ -1047,14 +1047,23 @@ def demand_update_ajax(request):
 # ==========================================
 
 @login_required
-@menu_permission_required('can_register_orders')
+@menu_permission_required('can_scm_label_view')
 def label_list(request):
     user = request.user
     selected_v = request.GET.get('vendor_id')
     status_filter = request.GET.get('status')
     q = request.GET.get('q', '')
 
+    # 협력업체 사용자 판별 (2가지 경로)
+    # 1. Vendor.user 필드 (구 방식)
     user_vendor = Vendor.objects.filter(user=user).first()
+    # 2. UserProfile.org → Organization.linked_vendor (신 방식)
+    if not user_vendor and not user.is_superuser:
+        try:
+            if hasattr(user, 'profile') and user.profile.org and user.profile.org.linked_vendor:
+                user_vendor = user.profile.org.linked_vendor
+        except Exception:
+            pass
 
     pnos_with_delivery = DeliveryOrderItem.objects.values_list('part_no', flat=True).distinct()
     vendor_ids = Part.objects.filter(part_no__in=pnos_with_delivery).values_list('vendor_id', flat=True).distinct()
