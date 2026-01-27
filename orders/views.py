@@ -215,12 +215,20 @@ def login_success(request):
 @menu_permission_required('can_view_orders')
 def order_list(request):
     user = request.user
+
+    # 협력업체 사용자 판별 (2가지 경로)
     user_vendor = Vendor.objects.filter(user=user).first()
+    if not user_vendor and not user.is_superuser:
+        try:
+            if hasattr(user, 'profile') and user.profile.org and user.profile.org.linked_vendor:
+                user_vendor = user.profile.org.linked_vendor
+        except Exception:
+            pass
 
     vendor_list = Vendor.objects.all().order_by('name') if user.is_superuser else []
     sort_by = request.GET.get('sort', 'due_date') or 'due_date'
 
-    order_queryset = Order.objects.annotate(
+    order_queryset = Order.objects.select_related('vendor').annotate(
         status_priority=Case(
             When(is_closed=True, then=Value(2)),
             When(approved_at__isnull=True, then=Value(0)),
@@ -316,9 +324,12 @@ def order_list(request):
                 'remain_qty': rem
             })
 
-    # ========== 알림 대시보드 요약 데이터 ==========
+    # ========== 알림 대시보드 요약 데이터 (최적화) ==========
     from material.models import MaterialStock, Warehouse
+    from collections import defaultdict
+
     target_warehouses = Warehouse.objects.filter(code__in=['2000', '4200'])
+    target_wh_ids = list(target_warehouses.values_list('id', flat=True))
 
     # 협력사 필터링을 위한 parts 쿼리
     if user_vendor:
@@ -326,27 +337,52 @@ def order_list(request):
     else:
         alert_parts = Part.objects.all()
 
-    # 1) 재고 부족 예상 품목 수
-    shortage_count = 0
-    for part in alert_parts:
-        if target_warehouses.exists():
-            wms_stock = MaterialStock.objects.filter(part=part, warehouse__in=target_warehouses).aggregate(total=Sum('quantity'))['total'] or 0
-        else:
-            wms_stock = MaterialStock.objects.filter(part=part).aggregate(total=Sum('quantity'))['total'] or 0
+    # 1) 재고 부족 예상 품목 수 (N+1 최적화: 배치 쿼리)
+    part_ids = list(alert_parts.values_list('id', flat=True))
 
-        future_demand = Demand.objects.filter(
-            part=part,
+    # 1-1) 재고 일괄 조회
+    stock_map = {}
+    if part_ids:
+        if target_wh_ids:
+            stock_qs = MaterialStock.objects.filter(
+                part_id__in=part_ids, warehouse_id__in=target_wh_ids
+            ).values('part_id').annotate(total=Sum('quantity'))
+        else:
+            stock_qs = MaterialStock.objects.filter(
+                part_id__in=part_ids
+            ).values('part_id').annotate(total=Sum('quantity'))
+        stock_map = {item['part_id']: item['total'] or 0 for item in stock_qs}
+
+    # 1-2) 소요량 일괄 조회 (향후 7일)
+    demand_map = {}
+    if part_ids:
+        demand_qs = Demand.objects.filter(
+            part_id__in=part_ids,
             due_date__gte=today,
             due_date__lte=today + timedelta(days=7)
-        ).aggregate(total=Sum('quantity'))['total'] or 0
+        ).values('part_id').annotate(total=Sum('quantity'))
+        demand_map = {item['part_id']: item['total'] or 0 for item in demand_qs}
 
-        pending_incoming = Order.objects.filter(
-            vendor=part.vendor,
-            part_no=part.part_no,
+    # 1-3) 입고 예정 일괄 조회 (향후 7일, part_no 기준)
+    part_no_map = {p.id: p.part_no for p in alert_parts.only('id', 'part_no')}
+    part_nos = list(part_no_map.values())
+    incoming_map = {}
+    if part_nos:
+        incoming_qs = Order.objects.filter(
+            part_no__in=part_nos,
             is_closed=False,
             due_date__gte=today,
             due_date__lte=today + timedelta(days=7)
-        ).aggregate(total=Sum('quantity'))['total'] or 0
+        ).values('part_no').annotate(total=Sum('quantity'))
+        incoming_map = {item['part_no']: item['total'] or 0 for item in incoming_qs}
+
+    # 1-4) 부족 품목 수 계산 (메모리에서)
+    shortage_count = 0
+    for part_id in part_ids:
+        wms_stock = stock_map.get(part_id, 0)
+        future_demand = demand_map.get(part_id, 0)
+        part_no = part_no_map.get(part_id, '')
+        pending_incoming = incoming_map.get(part_no, 0)
 
         expected_stock = wms_stock + pending_incoming - future_demand
         if expected_stock < 0:
