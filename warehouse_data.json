@@ -1,0 +1,152 @@
+[
+{
+  "model": "material.warehouse",
+  "pk": 1,
+  "fields": {
+    "name": "수입검사 대기장",
+    "code": "1000",
+    "description": "수입검사 대기장소",
+    "is_active": true
+  }
+},
+{
+  "model": "material.warehouse",
+  "pk": 2,
+  "fields": {
+    "name": "자재창고",
+    "code": "2000",
+    "description": "ERP -> 물류창고",
+    "is_active": true
+  }
+},
+{
+  "model": "material.warehouse",
+  "pk": 5,
+  "fields": {
+    "name": "3공장 창고",
+    "code": "3000",
+    "description": null,
+    "is_active": true
+  }
+},
+{
+  "model": "material.warehouse",
+  "pk": 6,
+  "fields": {
+    "name": "4공장_3층 자재창고",
+    "code": "4200",
+    "description": null,
+    "is_active": true
+  }
+},
+{
+  "model": "material.warehouse",
+  "pk": 7,
+  "fields": {
+    "name": "4공장_제조현장",
+    "code": "4300",
+    "description": null,
+    "is_active": true
+  }
+},
+{
+  "model": "material.warehouse",
+  "pk": 8,
+  "fields": {
+    "name": "인천A/S창고",
+    "code": "4400",
+    "description": null,
+    "is_active": true
+  }
+},
+{
+  "model": "material.warehouse",
+  "pk": 9,
+  "fields": {
+    "name": "장기보관품 창고",
+    "code": "4500",
+    "description": null,
+    "is_active": true
+  }
+},
+{
+  "model": "material.warehouse",
+  "pk": 10,
+  "fields": {
+    "name": "4공장_4층 완성품 창고",
+    "code": "4600",
+    "description": null,
+    "is_active": true
+  }
+},
+{
+  "model": "material.warehouse",
+  "pk": 11,
+  "fields": {
+    "name": "4공장_권선 현장",
+    "code": "4700",
+    "description": null,
+    "is_active": true
+  }
+},
+{
+  "model": "material.warehouse",
+  "pk": 12,
+  "fields": {
+    "name": "격외품창고",
+    "code": "5000",
+    "description": null,
+    "is_active": true
+  }
+},
+{
+  "model": "material.warehouse",
+  "pk": 13,
+  "fields": {
+    "name": "인천송도창고",
+    "code": "5500",
+    "description": null,
+    "is_active": true
+  }
+},
+{
+  "model": "material.warehouse",
+  "pk": 14,
+  "fields": {
+    "name": "불량창고",
+    "code": "8000",
+    "description": null,
+    "is_active": true
+  }
+},
+{
+  "model": "material.warehouse",
+  "pk": 15,
+  "fields": {
+    "name": "무역창고",
+    "code": "9500",
+    "description": null,
+    "is_active": true
+  }
+},
+{
+  "model": "material.warehouse",
+  "pk": 16,
+  "fields": {
+    "name": "수입검사 대기창고",
+    "code": "8100",
+    "description": null,
+    "is_active": true
+  }
+},
+{
+  "model": "material.warehouse",
+  "pk": 17,
+  "fields": {
+    "name": "부적합 창고",
+    "code": "8200",
+    "description": null,
+    "is_active": true
+  }
+}
+]
