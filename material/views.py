@@ -1295,10 +1295,11 @@ def stock_adjustment(request):
                             error_messages.append(f"행 {row_idx}: 창고코드 또는 품번 누락")
                             continue
 
-                        # 창고 확인
-                        try:
-                            warehouse = Warehouse.objects.get(code=warehouse_code)
-                        except Warehouse.DoesNotExist:
+                        # 창고 확인 (코드 또는 이름으로 매칭)
+                        warehouse = Warehouse.objects.filter(code=warehouse_code).first()
+                        if not warehouse:
+                            warehouse = Warehouse.objects.filter(name=warehouse_code).first()
+                        if not warehouse:
                             error_count += 1
                             error_messages.append(f"행 {row_idx}: 창고 '{warehouse_code}' 없음")
                             continue
