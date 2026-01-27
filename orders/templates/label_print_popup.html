@@ -2,52 +2,53 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>라벨 인쇄</title>
+    <title>납품 라벨 인쇄</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         /* ========================================= */
         /* [공통] 기본 스타일 */
         /* ========================================= */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body {
             font-family: 'Malgun Gothic', sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #f0f0f0; /* 화면 배경색 */
+            background-color: #666;
         }
 
         /* 인쇄 설정 버튼 영역 (화면에만 보임) */
         .no-print {
-            padding: 20px;
+            padding: 15px;
             text-align: center;
-            background-color: #e0e0e0;
-            border-bottom: 1px solid #ccc;
+            background-color: #333;
+            color: white;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
         }
 
         .btn {
-            padding: 10px 20px;
-            background-color: #333;
-            color: white;
-            text-decoration: none;
-            border-radius: 5px;
-            font-size: 14px;
-            cursor: pointer;
+            padding: 8px 20px;
+            margin: 0 5px;
             border: none;
-            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
         }
-        .btn-close { background-color: #888; }
+        .btn-print { background-color: #f39c12; color: #fff; }
+        .btn-close { background-color: #95a5a6; color: #fff; }
 
         /* ========================================= */
         /* [핵심 1] A4 용지 레이아웃 (Sheet) 정의 */
         /* ========================================= */
         .sheet {
             width: 210mm;
-            height: 296mm; /* 297mm에서 미세한 오차 방지 */
+            height: 296mm;
             background: white;
-            margin: 10px auto; /* 화면 중앙 정렬 */
-            padding: 10mm;     /* 용지 내부 여백 (프린터 물리적 여백 고려) */
+            margin: 10px auto;
+            padding: 10mm;
             box-sizing: border-box;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1); /* 종이 그림자 효과 */
-            
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+
             /* 그리드 시스템: 2열 4행 */
             display: flex;
             flex-wrap: wrap;
@@ -58,87 +59,97 @@
         /* [핵심 2] 개별 라벨 컨테이너 (2x4 배치) */
         /* ========================================= */
         .label-outer {
-            width: 50%;   /* 가로 2개 (100% / 2) */
-            height: 25%;  /* 세로 4개 (100% / 4) */
+            width: 50%;
+            height: 25%;
             box-sizing: border-box;
-            padding: 5px; /* 라벨 사이의 간격 */
+            padding: 3px;
         }
 
-        /* 실제 라벨 디자인 (테두리 및 내용물) */
+        /* 라벨 테두리 */
         .label-inner {
             width: 100%;
             height: 100%;
-            border: 1px solid black; /* 실제 인쇄되는 테두리 */
+            border: 2px solid #000;
             box-sizing: border-box;
-            padding: 10px;
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
-            position: relative;
         }
 
-        /* 내부 요소 스타일 */
-        .header {
-            border-bottom: 2px solid black;
-            padding-bottom: 5px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .vendor-name { font-size: 12px; font-weight: bold; }
-        .print-date { font-size: 10px; }
-        
-        .content {
-            flex-grow: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
+        /* 라벨 제목 */
+        .label-title {
             text-align: center;
+            font-weight: bold;
+            font-size: 11pt;
+            border-bottom: 2px solid #000;
+            padding: 4px;
+            background: #f0f0f0;
         }
-        .part-name { font-size: 14px; font-weight: bold; margin-bottom: 5px; }
-        .part-no { font-size: 24px; font-weight: 900; margin: 5px 0; font-family: monospace; }
-        .snp-info { font-size: 16px; font-weight: bold; margin-top: 5px; }
-        .lot-info { font-size: 14px; font-weight: bold; margin-top: 5px; color: #2c3e50; font-family: monospace; }
+
+        /* 라벨 내용 테이블 */
+        .label-table {
+            width: 100%;
+            height: calc(100% - 30px);
+            border-collapse: collapse;
+        }
+
+        .label-table td {
+            border: 1px solid #000;
+            padding: 3px;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .label-header {
+            background: #f0f0f0;
+            font-weight: bold;
+            font-size: 8pt;
+            width: 20%;
+        }
+
+        .label-data {
+            font-weight: bold;
+            font-size: 10pt;
+        }
+
+        .qr-cell {
+            width: 28%;
+            padding: 2px !important;
+        }
 
         .qr-area {
-            text-align: center;
-            margin-top: 5px;
             display: flex;
             justify-content: center;
             align-items: center;
+            width: 100%;
+            height: 100%;
         }
-        .qr-container {
-            display: inline-block;
-        }
-        .page-number {
-            position: absolute;
-            bottom: 5px;
-            right: 10px;
-            font-size: 10px;
+
+        .tag-id {
+            font-family: monospace;
+            font-size: 7pt;
+            color: #666;
         }
 
         /* ========================================= */
         /* [핵심 3] 인쇄 전용 스타일 (@media print) */
         /* ========================================= */
         @media print {
-            body { 
-                background: none; 
-                -webkit-print-color-adjust: exact; 
+            body {
+                background: white;
+                -webkit-print-color-adjust: exact;
                 margin: 0;
                 padding: 0;
             }
             .no-print { display: none !important; }
-            
+
             .sheet {
-                margin: 0;        /* 인쇄 시 브라우저 마진 제거 */
-                width: 210mm;     /* A4 고정 */
+                margin: 0;
+                width: 210mm;
                 height: 297mm;
-                box-shadow: none; 
-                page-break-after: always; /* 시트 단위로 페이지 넘김 */
+                box-shadow: none;
+                page-break-after: always;
             }
-            
-            /* 마지막 페이지 뒤에는 빈 종이가 나오지 않도록 */
+
             .sheet:last-child {
                 page-break-after: auto;
             }
@@ -148,9 +159,12 @@
 <body>
 
     <div class="no-print">
-        <button onclick="window.print()" class="btn">🖨 인쇄하기</button>
-        <button onclick="window.close()" class="btn btn-close">창 닫기</button>
-        <p style="font-size: 12px; color: #666;">※ 인쇄 설정: '배율' 맞춤(100%), '여백' 없음(또는 최소) 권장</p>
+        <span style="margin-right: 20px; font-size: 14pt;">
+            🏷️ <strong>납품 라벨</strong> | 총 {{ box_count|length }}장
+        </span>
+        <button onclick="window.print()" class="btn btn-print">🖨️ 인쇄하기</button>
+        <button onclick="window.close()" class="btn btn-close">✕ 닫기</button>
+        <p style="font-size: 11px; color: #ccc; margin-top: 8px;">※ 인쇄 설정: 배율 100%, 여백 없음(또는 최소) 권장</p>
     </div>
 
     {% for item in box_count %}
@@ -161,24 +175,35 @@
 
             <div class="label-outer">
                 <div class="label-inner">
-                    <div class="header">
-                        <span class="vendor-name">{{ item.vendor_name }}</span>
-                        <span class="print-date">{{ item.print_date|date:"Y-m-d" }}</span>
-                    </div>
-
-                    <div class="content">
-                        <div class="part-name">{{ item.part_name }}</div>
-                        <div class="part-no">{{ item.part_no }}</div>
-                        <div class="snp-info">QTY: {{ item.snp }} EA</div>
-                        <div class="lot-info">LOT: {{ item.lot_no|date:"Y-m-d"|default:"미지정" }}</div>
-                    </div>
-
-                    <div class="qr-area">
-                        <div id="qr_{{ forloop.counter }}" class="qr-container"></div>
-                    </div>
-
-                    <div class="page-number">
-                        {{ forloop.counter }} / {{ box_count|length }}
+                    <div class="label-title">납품 현품표</div>
+                    <table class="label-table">
+                        <tr>
+                            <td class="qr-cell" rowspan="5">
+                                <div id="qr_{{ forloop.counter }}" class="qr-area"></div>
+                            </td>
+                            <td class="label-header">업체명</td>
+                            <td class="label-data">{{ item.vendor_name }}</td>
+                        </tr>
+                        <tr>
+                            <td class="label-header">품번</td>
+                            <td class="label-data" style="font-family: monospace; font-size: 11pt;">{{ item.part_no }}</td>
+                        </tr>
+                        <tr>
+                            <td class="label-header">품명</td>
+                            <td class="label-data">{{ item.part_name }}</td>
+                        </tr>
+                        <tr>
+                            <td class="label-header">수량</td>
+                            <td class="label-data" style="font-size: 12pt; color: #2c3e50;">{{ item.snp }} EA</td>
+                        </tr>
+                        <tr>
+                            <td class="label-header">LOT</td>
+                            <td class="label-data" style="font-family: monospace;">{{ item.lot_str|default:"미지정" }}</td>
+                        </tr>
+                    </table>
+                    <div style="text-align: right; padding: 2px 5px; border-top: 1px solid #ccc; background: #fafafa;">
+                        <span class="tag-id">{{ item.tag_id }}</span>
+                        <span style="font-size: 8pt; margin-left: 10px;">{{ item.print_date|date:"Y-m-d" }}</span>
                     </div>
                 </div>
             </div>
@@ -190,20 +215,20 @@
 
     <script>
         window.onload = function() {
-            // QR 코드 생성
+            // QR 코드 생성 - WMS 현품표와 동일한 형식: TAG_ID|품번|수량|LOT
             {% for item in box_count %}
-            const qrData_{{ forloop.counter }} = "{{ item.part_no }}|{{ item.snp }}|{{ item.lot_no|date:'Y-m-d'|default:'' }}";
+            const qrData_{{ forloop.counter }} = "{{ item.tag_id }}|{{ item.part_no }}|{{ item.snp }}|{{ item.lot_str|default:'' }}";
             new QRCode(document.getElementById("qr_{{ forloop.counter }}"), {
                 text: qrData_{{ forloop.counter }},
-                width: 80,
-                height: 80,
+                width: 75,
+                height: 75,
                 colorDark: "#000000",
                 colorLight: "#ffffff",
                 correctLevel: QRCode.CorrectLevel.M
             });
             {% endfor %}
 
-            // 0.5초 뒤 자동 인쇄 (원치 않으면 주석 처리)
+            // 0.5초 뒤 자동 인쇄
             setTimeout(function() {
                 window.print();
             }, 500);

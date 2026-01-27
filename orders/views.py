@@ -1359,13 +1359,18 @@ def label_print(request, order_id):
     v_name = part.vendor.name if part else "알수없음"
 
     for item in order.items.all():
-        for _ in range(item.box_count):
+        for box_seq in range(1, item.box_count + 1):
+            # TAG_ID 생성: DLV-{order_id:05d}-{item_id:05d}-{box_seq:03d}
+            tag_id = f"DLV-{order.pk:05d}-{item.pk:05d}-{box_seq:03d}"
+            lot_str = item.lot_no.strftime('%Y-%m-%d') if item.lot_no else ''
             queue.append({
+                'tag_id': tag_id,
                 'vendor_name': v_name,
                 'part_name': item.part_name,
                 'part_no': item.part_no,
                 'snp': item.snp,
-                'lot_no': item.lot_no,  # LOT 번호 추가
+                'lot_no': item.lot_no,
+                'lot_str': lot_str,
                 'print_date': timezone.now()
             })
 
