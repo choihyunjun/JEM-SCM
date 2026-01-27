@@ -1,0 +1,458 @@
+{% extends "base.html" %}
+{% load auth_extras %}
+
+{% block title %}사용자 관리{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0" style="max-width: 1400px;">
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="fw-bold">
+        <i class="bi bi-people-fill me-2 text-primary"></i>사용자 관리
+    </h2>
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#userCreateModal">
+        <i class="bi bi-person-plus me-1"></i> 신규 사용자 등록
+    </button>
+</div>
+
+<!-- 메시지 -->
+{% if messages %}
+{% for message in messages %}
+<div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endfor %}
+{% endif %}
+
+<!-- 검색/필터 -->
+<div class="card shadow-sm mb-4">
+    <div class="card-body py-3">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small fw-bold">검색어</label>
+                <input type="text" name="q" class="form-control form-control-sm"
+                       placeholder="사용자명, 이름, 부서..." value="{{ search_q }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">역할</label>
+                <select name="role" class="form-select form-select-sm">
+                    <option value="">전체</option>
+                    {% for value, label in role_choices %}
+                    <option value="{{ value }}" {% if role_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">계정 구분</label>
+                <select name="account_type" class="form-select form-select-sm">
+                    <option value="">전체</option>
+                    <option value="INTERNAL" {% if account_type_filter == 'INTERNAL' %}selected{% endif %}>내부</option>
+                    <option value="VENDOR" {% if account_type_filter == 'VENDOR' %}selected{% endif %}>협력사</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-sm btn-dark w-100">
+                    <i class="bi bi-search me-1"></i>검색
+                </button>
+            </div>
+            <div class="col-md-3 text-end">
+                <span class="text-muted small">총 {{ users.count }}명</span>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 사용자 목록 -->
+<div class="card shadow-sm">
+    <div class="card-header bg-dark text-white py-2">
+        <i class="bi bi-list-ul me-2"></i>사용자 목록
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0 align-middle">
+                <thead class="table-light">
+                    <tr class="text-center">
+                        <th style="width: 50px;">ID</th>
+                        <th>사용자명</th>
+                        <th>표시 이름</th>
+                        <th>부서</th>
+                        <th>역할</th>
+                        <th>계정 구분</th>
+                        <th>소속 조직</th>
+                        <th>가입일</th>
+                        <th>최근 로그인</th>
+                        <th style="width: 150px;">관리</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for u in users %}
+                    <tr class="text-center">
+                        <td class="text-muted small">{{ u.id }}</td>
+                        <td class="fw-bold">{{ u.username }}</td>
+                        <td>{{ u.profile.display_name|default:'-' }}</td>
+                        <td>{{ u.profile.department|default:'-' }}</td>
+                        <td>
+                            {% if u.is_superuser %}
+                            <span class="badge bg-dark">슈퍼유저</span>
+                            {% elif u.profile.role == 'ADMIN' %}
+                            <span class="badge bg-danger">관리자</span>
+                            {% elif u.profile.role == 'STAFF' %}
+                            <span class="badge bg-primary">직원</span>
+                            {% else %}
+                            <span class="badge bg-secondary">협력업체</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if u.profile.account_type == 'INTERNAL' %}
+                            <span class="badge bg-info">내부</span>
+                            {% else %}
+                            <span class="badge bg-warning text-dark">협력사</span>
+                            {% endif %}
+                        </td>
+                        <td class="small">{{ u.profile.org.name|default:'-' }}</td>
+                        <td class="small text-muted">{{ u.date_joined|date:"Y-m-d" }}</td>
+                        <td class="small text-muted">{{ u.last_login|date:"Y-m-d H:i"|default:'-' }}</td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-outline-primary me-1"
+                                    onclick="openEditModal({{ u.id }}, '{{ u.username }}', '{{ u.profile.display_name|default:'' }}', '{{ u.profile.department|default:'' }}', '{{ u.profile.role }}', '{{ u.profile.account_type }}', '{{ u.profile.org_id|default:'' }}', '{{ u.profile.org.name|default:''|escapejs }}')">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <a href="{% url 'user_permission_manage' %}?user_id={{ u.id }}" class="btn btn-sm btn-outline-success me-1" title="권한 설정">
+                                <i class="bi bi-shield-lock"></i>
+                            </a>
+                            {% if not u.is_superuser %}
+                            <button type="button" class="btn btn-sm btn-outline-danger"
+                                    onclick="confirmDelete({{ u.id }}, '{{ u.username }}')">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="10" class="text-center py-5 text-muted">
+                            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                            등록된 사용자가 없습니다.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+</div>
+
+<!-- 신규 사용자 등록 모달 -->
+<div class="modal fade" id="userCreateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{% url 'user_create' %}">
+                {% csrf_token %}
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-person-plus me-2"></i>신규 사용자 등록</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">사용자명 (로그인 ID) <span class="text-danger">*</span></label>
+                            <input type="text" name="username" class="form-control" required placeholder="영문, 숫자">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">비밀번호 <span class="text-danger">*</span></label>
+                            <input type="password" name="password" class="form-control" required minlength="4">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">표시 이름</label>
+                            <input type="text" name="display_name" class="form-control" placeholder="예: 홍길동">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">부서</label>
+                            <input type="text" name="department" class="form-control" placeholder="예: 품질관리팀">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">역할</label>
+                            <select name="role" class="form-select">
+                                {% for value, label in role_choices %}
+                                <option value="{{ value }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">계정 구분</label>
+                            <select name="account_type" class="form-select" id="createAccountType" onchange="toggleOrgField('create')">
+                                <option value="INTERNAL">내부</option>
+                                <option value="VENDOR">협력사</option>
+                            </select>
+                        </div>
+                        <div class="col-12" id="createOrgField" style="display: none;">
+                            <label class="form-label small fw-bold">소속 조직 (협력사)</label>
+                            <div class="input-group">
+                                <input type="text" id="createOrgName" class="form-control" placeholder="협력사 검색..." readonly>
+                                <input type="hidden" name="org_id" id="createOrgId">
+                                <button type="button" class="btn btn-outline-secondary" onclick="openOrgSearchModal('create')">
+                                    <i class="bi bi-search"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline-danger" onclick="clearOrg('create')" title="초기화">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                    <button type="submit" class="btn btn-primary fw-bold">
+                        <i class="bi bi-check-lg me-1"></i>등록
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 사용자 수정 모달 -->
+<div class="modal fade" id="userEditModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{% url 'user_update' %}">
+                {% csrf_token %}
+                <input type="hidden" name="user_id" id="editUserId">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-pencil-square me-2"></i>사용자 정보 수정</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">사용자명</label>
+                            <input type="text" id="editUsername" class="form-control bg-light" readonly>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">새 비밀번호 (변경 시에만)</label>
+                            <input type="password" name="new_password" class="form-control" placeholder="변경 시에만 입력">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">표시 이름</label>
+                            <input type="text" name="display_name" id="editDisplayName" class="form-control">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">부서</label>
+                            <input type="text" name="department" id="editDepartment" class="form-control">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">역할</label>
+                            <select name="role" id="editRole" class="form-select">
+                                {% for value, label in role_choices %}
+                                <option value="{{ value }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">계정 구분</label>
+                            <select name="account_type" id="editAccountType" class="form-select" onchange="toggleOrgField('edit')">
+                                <option value="INTERNAL">내부</option>
+                                <option value="VENDOR">협력사</option>
+                            </select>
+                        </div>
+                        <div class="col-12" id="editOrgField" style="display: none;">
+                            <label class="form-label small fw-bold">소속 조직 (협력사)</label>
+                            <div class="input-group">
+                                <input type="text" id="editOrgName" class="form-control" placeholder="협력사 검색..." readonly>
+                                <input type="hidden" name="org_id" id="editOrgId">
+                                <button type="button" class="btn btn-outline-secondary" onclick="openOrgSearchModal('edit')">
+                                    <i class="bi bi-search"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline-danger" onclick="clearOrg('edit')" title="초기화">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                    <button type="submit" class="btn btn-primary fw-bold">
+                        <i class="bi bi-check-lg me-1"></i>저장
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 삭제 확인 모달 -->
+<div class="modal fade" id="userDeleteModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <form method="post" action="{% url 'user_delete' %}">
+                {% csrf_token %}
+                <input type="hidden" name="user_id" id="deleteUserId">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-exclamation-triangle me-2"></i>사용자 삭제</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <p class="mb-2">정말 삭제하시겠습니까?</p>
+                    <p class="fw-bold text-danger" id="deleteUsername"></p>
+                    <small class="text-muted">이 작업은 되돌릴 수 없습니다.</small>
+                </div>
+                <div class="modal-footer justify-content-center">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                    <button type="submit" class="btn btn-danger fw-bold">
+                        <i class="bi bi-trash me-1"></i>삭제
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 협력사 검색 모달 -->
+<div class="modal fade" id="orgSearchModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-search me-2"></i>협력사 검색</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group mb-3">
+                    <input type="text" id="orgSearchInput" class="form-control" placeholder="협력사명 입력..." autofocus>
+                    <button type="button" class="btn btn-dark" onclick="searchOrganization()">
+                        <i class="bi bi-search me-1"></i>검색
+                    </button>
+                </div>
+                <div id="orgSearchResults" style="max-height: 400px; overflow-y: auto;">
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-building fs-1 d-block mb-2"></i>
+                        협력사명을 입력하고 검색하세요
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentSearchTarget = 'create'; // 'create' or 'edit'
+let orgSearchModal = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    orgSearchModal = new bootstrap.Modal(document.getElementById('orgSearchModal'));
+
+    // Enter 키로 검색
+    document.getElementById('orgSearchInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            searchOrganization();
+        }
+    });
+});
+
+function toggleOrgField(mode) {
+    const accountType = document.getElementById(mode + 'AccountType').value;
+    const orgField = document.getElementById(mode + 'OrgField');
+    orgField.style.display = (accountType === 'VENDOR') ? 'block' : 'none';
+}
+
+function openOrgSearchModal(target) {
+    currentSearchTarget = target;
+    document.getElementById('orgSearchInput').value = '';
+    document.getElementById('orgSearchResults').innerHTML = `
+        <div class="text-center text-muted py-5">
+            <i class="bi bi-building fs-1 d-block mb-2"></i>
+            협력사명을 입력하고 검색하세요
+        </div>
+    `;
+    orgSearchModal.show();
+    setTimeout(() => document.getElementById('orgSearchInput').focus(), 300);
+}
+
+function searchOrganization() {
+    const query = document.getElementById('orgSearchInput').value.trim();
+    if (query.length < 1) {
+        alert('검색어를 입력해주세요.');
+        return;
+    }
+
+    document.getElementById('orgSearchResults').innerHTML = `
+        <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status"></div>
+            <div class="mt-2">검색 중...</div>
+        </div>
+    `;
+
+    fetch(`/api/organizations/search/?q=${encodeURIComponent(query)}`)
+        .then(response => response.json())
+        .then(data => {
+            const results = data.results;
+            if (results.length === 0) {
+                document.getElementById('orgSearchResults').innerHTML = `
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                        검색 결과가 없습니다.
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '<div class="list-group">';
+            results.forEach(org => {
+                html += `
+                    <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                            onclick="selectOrganization(${org.id}, '${org.name.replace(/'/g, "\\'")}')">
+                        <div>
+                            <i class="bi bi-building me-2 text-primary"></i>
+                            <span class="fw-bold">${org.name}</span>
+                        </div>
+                        <i class="bi bi-check-circle text-success"></i>
+                    </button>
+                `;
+            });
+            html += '</div>';
+            document.getElementById('orgSearchResults').innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('orgSearchResults').innerHTML = `
+                <div class="alert alert-danger">검색 중 오류가 발생했습니다.</div>
+            `;
+        });
+}
+
+function selectOrganization(orgId, orgName) {
+    document.getElementById(currentSearchTarget + 'OrgId').value = orgId;
+    document.getElementById(currentSearchTarget + 'OrgName').value = orgName;
+    orgSearchModal.hide();
+}
+
+function clearOrg(target) {
+    document.getElementById(target + 'OrgId').value = '';
+    document.getElementById(target + 'OrgName').value = '';
+}
+
+function openEditModal(userId, username, displayName, department, role, accountType, orgId, orgName) {
+    document.getElementById('editUserId').value = userId;
+    document.getElementById('editUsername').value = username;
+    document.getElementById('editDisplayName').value = displayName;
+    document.getElementById('editDepartment').value = department;
+    document.getElementById('editRole').value = role;
+    document.getElementById('editAccountType').value = accountType;
+    document.getElementById('editOrgId').value = orgId || '';
+    document.getElementById('editOrgName').value = orgName || '';
+    toggleOrgField('edit');
+    new bootstrap.Modal(document.getElementById('userEditModal')).show();
+}
+
+function confirmDelete(userId, username) {
+    document.getElementById('deleteUserId').value = userId;
+    document.getElementById('deleteUsername').textContent = username;
+    new bootstrap.Modal(document.getElementById('userDeleteModal')).show();
+}
+</script>
+
+{% endblock %}

@@ -1,0 +1,375 @@
+{% extends 'qms/qms_base.html' %}
+{% load humanize %}
+
+{% block title %}문서 상세 - {{ document.doc_no }}{% endblock %}
+
+{% block qms_content %}
+<div class="container-fluid p-0" style="max-width: 1400px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold mb-1">
+                <i class="bi bi-file-earmark-text me-2"></i>{{ document.doc_no }}
+            </h3>
+            <small class="text-muted">{{ document.doc_name }} | {{ document.get_category_display }}</small>
+        </div>
+        <div>
+            {% if document.status == 'APPROVED' %}
+            <span class="badge bg-success fs-6">승인</span>
+            {% elif document.status == 'REVIEW' %}
+            <span class="badge bg-warning text-dark fs-6">검토중</span>
+            {% elif document.status == 'DRAFT' %}
+            <span class="badge bg-secondary fs-6">작성중</span>
+            {% else %}
+            <span class="badge bg-danger fs-6">폐기</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- 좌측: 문서 정보 -->
+        <div class="col-lg-8">
+            <!-- 기본 정보 -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-info-circle me-1"></i>문서 정보</span>
+                    <button class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#editDocModal">
+                        <i class="bi bi-pencil me-1"></i>수정
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted">문서번호</label>
+                            <div class="fw-bold text-primary">{{ document.doc_no }}</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">문서명</label>
+                            <div class="fw-bold">{{ document.doc_name }}</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted">분류</label>
+                            <div>
+                                {% if document.category == 'MANUAL' %}
+                                <span class="badge bg-primary">매뉴얼</span>
+                                {% elif document.category == 'PROCEDURE' %}
+                                <span class="badge bg-success">절차서</span>
+                                {% elif document.category == 'INSTRUCTION' %}
+                                <span class="badge bg-info">지시서</span>
+                                {% elif document.category == 'STANDARD' %}
+                                <span class="badge bg-warning text-dark">기준서</span>
+                                {% elif document.category == 'FORM' %}
+                                <span class="badge bg-secondary">양식</span>
+                                {% else %}
+                                <span class="badge bg-dark">{{ document.get_category_display }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted">개정번호</label>
+                            <div><span class="badge bg-dark fs-6">Rev.{{ document.revision }}</span></div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted">관리부서</label>
+                            <div>{{ document.department|default:"-" }}</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted">작성자</label>
+                            <div>{{ document.author|default:"-" }}</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted">승인자</label>
+                            <div>{{ document.approver|default:"-" }}</div>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted">시행일</label>
+                            <div>{{ document.effective_date|default:"-" }}</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted">검토예정일</label>
+                            <div>{{ document.review_date|default:"-" }}</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted">폐기일</label>
+                            <div>{{ document.obsolete_date|default:"-" }}</div>
+                        </div>
+                    </div>
+                    {% if document.description %}
+                    <hr>
+                    <div>
+                        <label class="form-label small text-muted">문서 설명</label>
+                        <div>{{ document.description|linebreaks }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- 개정 이력 -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-clock-history me-1"></i>개정 이력</span>
+                    <button class="btn btn-sm btn-light" data-bs-toggle="modal" data-bs-target="#addRevisionModal">
+                        <i class="bi bi-plus-lg me-1"></i>개정 등록
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 80px;">개정</th>
+                                <th style="width: 100px;">개정일</th>
+                                <th>개정 내용</th>
+                                <th style="width: 100px;">개정자</th>
+                                <th style="width: 80px;">파일</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for rev in revisions %}
+                            <tr>
+                                <td><span class="badge bg-secondary">Rev.{{ rev.revision_no }}</span></td>
+                                <td class="small">{{ rev.revision_date }}</td>
+                                <td>{{ rev.change_summary }}</td>
+                                <td class="small">{{ rev.revised_by|default:"-" }}</td>
+                                <td>
+                                    {% if rev.file %}
+                                    <a href="{{ rev.file.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-download"></i>
+                                    </a>
+                                    {% else %}-{% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center py-4 text-muted">개정 이력이 없습니다.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 우측: 상태/파일 -->
+        <div class="col-lg-4">
+            <!-- 문서 파일 -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-primary text-white">
+                    <i class="bi bi-file-earmark me-1"></i>문서 파일
+                </div>
+                <div class="card-body text-center">
+                    {% if document.file %}
+                    <div class="mb-3">
+                        <i class="bi bi-file-earmark-pdf text-danger" style="font-size: 4rem;"></i>
+                    </div>
+                    <a href="{{ document.file.url }}" target="_blank" class="btn btn-primary btn-lg w-100">
+                        <i class="bi bi-download me-1"></i>문서 다운로드
+                    </a>
+                    <div class="mt-2 small text-muted">{{ document.file.name|truncatechars:30 }}</div>
+                    {% else %}
+                    <div class="py-4 text-muted">
+                        <i class="bi bi-file-earmark-x" style="font-size: 3rem;"></i>
+                        <div class="mt-2">파일이 없습니다.</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- 상태 변경 -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header">
+                    <i class="bi bi-toggle-on me-1"></i>상태 관리
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="update_status">
+                        <div class="mb-3">
+                            <label class="form-label small">문서 상태</label>
+                            <select name="status" class="form-select">
+                                {% for value, label in status_choices %}
+                                <option value="{{ value }}" {% if document.status == value %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-save me-1"></i>상태 변경
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- 관련 문서 -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header">
+                    <i class="bi bi-link-45deg me-1"></i>관련 정보
+                </div>
+                <div class="card-body small">
+                    {% if document.parent_doc_no %}
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">상위 문서</span>
+                        <span class="fw-bold">{{ document.parent_doc_no }}</span>
+                    </div>
+                    {% endif %}
+                    {% if document.related_doc_nos %}
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">관련 문서</span>
+                        <span>{{ document.related_doc_nos }}</span>
+                    </div>
+                    {% endif %}
+                    {% if not document.parent_doc_no and not document.related_doc_nos %}
+                    <div class="text-muted text-center py-2">관련 문서 없음</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- 메타 정보 -->
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <i class="bi bi-info-lg me-1"></i>등록 정보
+                </div>
+                <div class="card-body small">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="text-muted">등록자</span>
+                        <span>{{ document.created_by.username|default:"-" }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="text-muted">등록일시</span>
+                        <span>{{ document.created_at|date:"Y-m-d H:i" }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span class="text-muted">수정일시</span>
+                        <span>{{ document.updated_at|date:"Y-m-d H:i" }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-4">
+        <a href="{% url 'qms:qdoc_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>목록으로
+        </a>
+    </div>
+</div>
+
+<!-- 개정 등록 모달 -->
+<div class="modal fade" id="addRevisionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="add_revision">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title"><i class="bi bi-plus-lg me-1"></i>개정 이력 등록</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info small">
+                        <i class="bi bi-info-circle me-1"></i>
+                        현재 문서의 개정번호: <strong>Rev.{{ document.revision }}</strong>
+                        → 새 개정번호: <strong>Rev.{{ document.revision|add:1 }}</strong>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">개정일 <span class="text-danger">*</span></label>
+                        <input type="date" name="revision_date" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">개정 내용 <span class="text-danger">*</span></label>
+                        <textarea name="change_summary" class="form-control" rows="3" required placeholder="변경된 내용을 간략히 기술하세요."></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">개정자</label>
+                        <input type="text" name="revised_by" class="form-control" placeholder="개정 담당자">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">개정 문서파일</label>
+                        <input type="file" name="revision_file" class="form-control">
+                        <div class="form-text">개정된 문서파일이 있으면 업로드</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                    <button type="submit" class="btn btn-info">
+                        <i class="bi bi-check-lg me-1"></i>개정 등록
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 문서 수정 모달 -->
+<div class="modal fade" id="editDocModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="update">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title"><i class="bi bi-pencil me-1"></i>문서 정보 수정</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">문서번호</label>
+                            <input type="text" name="doc_no" class="form-control" value="{{ document.doc_no }}" required>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label">문서명</label>
+                            <input type="text" name="doc_name" class="form-control" value="{{ document.doc_name }}" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">분류</label>
+                            <select name="category" class="form-select">
+                                {% for value, label in category_choices %}
+                                <option value="{{ value }}" {% if document.category == value %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">관리부서</label>
+                            <input type="text" name="department" class="form-control" value="{{ document.department|default:'' }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">승인자</label>
+                            <input type="text" name="approver" class="form-control" value="{{ document.approver|default:'' }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">시행일</label>
+                            <input type="date" name="effective_date" class="form-control" value="{{ document.effective_date|date:'Y-m-d' }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">검토예정일</label>
+                            <input type="date" name="review_date" class="form-control" value="{{ document.review_date|date:'Y-m-d' }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">폐기일</label>
+                            <input type="date" name="obsolete_date" class="form-control" value="{{ document.obsolete_date|date:'Y-m-d' }}">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">문서 설명</label>
+                            <textarea name="description" class="form-control" rows="2">{{ document.description|default:'' }}</textarea>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">문서 파일 (변경 시 업로드)</label>
+                            <input type="file" name="file" class="form-control">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-lg me-1"></i>저장
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

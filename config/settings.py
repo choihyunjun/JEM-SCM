@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     "import_export",
     "django.contrib.humanize",
     "qms",
+    "material",
 ]
 
 MIDDLEWARE = [
@@ -173,5 +174,9 @@ EMAIL_BACKEND = os.getenv("DJANGO_EMAIL_BACKEND", "django.core.mail.backends.con
 
 DATA_UPLOAD_MAX_MEMORY_SIZE = int(os.getenv("DJANGO_DATA_UPLOAD_MAX", "52428800"))
 FILE_UPLOAD_MAX_MEMORY_SIZE = int(os.getenv("DJANGO_FILE_UPLOAD_MAX", "52428800"))
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 50000  # BOM 대량 데이터 처리용
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+
+

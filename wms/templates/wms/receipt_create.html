@@ -1,0 +1,80 @@
+{% extends "wms/base.html" %}
+{% block content %}
+<div class="container-fluid py-3">
+  <h4 class="mb-3">입고 등록</h4>
+
+  <div class="alert alert-info">
+    품번 입력 시 품명은 품목마스터(설정 > 품목 동기화)에서 자동 매칭됩니다.
+  </div>
+
+  <form method="post" class="card p-3">
+    {% csrf_token %}
+    <div class="row g-3">
+      <div class="col-md-3">
+        <label class="form-label">{{ form.warehouse_code.label }}</label>
+        {{ form.warehouse_code }}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">{{ form.part_no.label }}</label>
+        {{ form.part_no }}
+        <div class="form-text">입력 후 자동완성(기본)</div>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">{{ form.receipt_qty.label }}</label>
+        {{ form.receipt_qty }}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">{{ form.receipt_date.label }}</label>
+        {{ form.receipt_date }}
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label">{{ form.mfg_date.label }}</label>
+        {{ form.mfg_date }}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">{{ form.lot_no.label }}</label>
+        {{ form.lot_no }}
+      </div>
+    </div>
+
+    <div class="mt-3">
+      <button class="btn btn-primary">저장(임시)</button>
+      <a class="btn btn-outline-secondary" href="{% url 'wms:receipt_list' %}">목록</a>
+    </div>
+  </form>
+</div>
+
+<script>
+  // 아주 라이트한 자동완성(품번 일부 입력 후 추천)
+  (function(){
+    const input = document.getElementById("id_part_no");
+    if(!input) return;
+    let timer = null;
+    const datalistId = "partNoList";
+    let dl = document.getElementById(datalistId);
+    if(!dl){
+      dl = document.createElement("datalist");
+      dl.id = datalistId;
+      document.body.appendChild(dl);
+      input.setAttribute("list", datalistId);
+    }
+    input.addEventListener("input", function(){
+      const q = input.value || "";
+      if(timer) clearTimeout(timer);
+      if(q.length < 2) return;
+      timer = setTimeout(async ()=>{
+        const res = await fetch("{% url 'wms:autocomplete_item' %}?q=" + encodeURIComponent(q));
+        const data = await res.json();
+        dl.innerHTML = "";
+        (data.items || []).forEach(it=>{
+          const opt = document.createElement("option");
+          opt.value = it.part_no;
+          opt.label = it.part_name;
+          dl.appendChild(opt);
+        });
+      }, 200);
+    });
+  })();
+</script>
+{% endblock %}

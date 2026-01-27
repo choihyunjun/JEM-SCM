@@ -1,0 +1,197 @@
+# Generated manually for QMS extended models
+
+from django.conf import settings
+from django.db import migrations, models
+import django.db.models.deletion
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
+        ('orders', '0036_link_existing_vendor_organization'),
+        ('qms', '0029_m4request_internal_external'),
+    ]
+
+    operations = [
+        # 출하검사 (Outgoing Inspection)
+        migrations.CreateModel(
+            name='OutgoingInspection',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('inspection_no', models.CharField(max_length=30, unique=True, verbose_name='검사번호')),
+                ('inspection_date', models.DateField(verbose_name='검사일')),
+                ('part_no', models.CharField(max_length=50, verbose_name='품번')),
+                ('part_name', models.CharField(max_length=100, verbose_name='품명')),
+                ('lot_no', models.CharField(blank=True, max_length=50, verbose_name='LOT번호')),
+                ('total_qty', models.IntegerField(verbose_name='검사수량')),
+                ('sample_qty', models.IntegerField(default=0, verbose_name='샘플수량')),
+                ('pass_qty', models.IntegerField(default=0, verbose_name='합격수량')),
+                ('fail_qty', models.IntegerField(default=0, verbose_name='불합격수량')),
+                ('customer_name', models.CharField(blank=True, max_length=100, verbose_name='고객사')),
+                ('delivery_date', models.DateField(blank=True, null=True, verbose_name='납품예정일')),
+                ('status', models.CharField(choices=[('PENDING', '검사대기'), ('INSPECTING', '검사중'), ('PASS', '합격'), ('FAIL', '불합격'), ('CONDITIONAL', '조건부합격')], default='PENDING', max_length=15, verbose_name='검사상태')),
+                ('check_visual', models.BooleanField(default=False, verbose_name='외관검사')),
+                ('check_dimension', models.BooleanField(default=False, verbose_name='치수검사')),
+                ('check_function', models.BooleanField(default=False, verbose_name='기능검사')),
+                ('check_packing', models.BooleanField(default=False, verbose_name='포장검사')),
+                ('check_label', models.BooleanField(default=False, verbose_name='라벨검사')),
+                ('remark', models.TextField(blank=True, verbose_name='검사의견')),
+                ('attachment', models.FileField(blank=True, null=True, upload_to='qms/outgoing/', verbose_name='검사성적서')),
+                ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='등록일시')),
+                ('updated_at', models.DateTimeField(auto_now=True, verbose_name='수정일시')),
+                ('inspector', models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='outgoing_inspections', to=settings.AUTH_USER_MODEL, verbose_name='검사자')),
+            ],
+            options={
+                'verbose_name': '출하검사',
+                'verbose_name_plural': '출하검사 관리',
+                'ordering': ['-inspection_date', '-id'],
+            },
+        ),
+
+        # 부적합품 관리 (Non-conformance)
+        migrations.CreateModel(
+            name='NonConformance',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('nc_no', models.CharField(max_length=30, unique=True, verbose_name='부적합번호')),
+                ('source', models.CharField(choices=[('INCOMING', '수입검사'), ('PROCESS', '공정검사'), ('OUTGOING', '출하검사'), ('CUSTOMER', '고객클레임'), ('INTERNAL', '내부발견')], max_length=15, verbose_name='발생구분')),
+                ('status', models.CharField(choices=[('OPEN', '접수'), ('ANALYZING', '원인분석중'), ('ACTION', '조치중'), ('VERIFY', '검증중'), ('CLOSED', '완료')], default='OPEN', max_length=15, verbose_name='처리상태')),
+                ('occurred_date', models.DateField(verbose_name='발생일')),
+                ('part_no', models.CharField(max_length=50, verbose_name='품번')),
+                ('part_name', models.CharField(max_length=100, verbose_name='품명')),
+                ('lot_no', models.CharField(blank=True, max_length=50, verbose_name='LOT번호')),
+                ('defect_qty', models.IntegerField(verbose_name='불량수량')),
+                ('defect_type', models.CharField(max_length=100, verbose_name='불량유형')),
+                ('defect_detail', models.TextField(verbose_name='불량상세')),
+                ('photo', models.FileField(blank=True, null=True, upload_to='qms/nc/photos/', verbose_name='불량사진')),
+                ('cause_analysis', models.TextField(blank=True, verbose_name='원인분석')),
+                ('root_cause', models.TextField(blank=True, verbose_name='근본원인')),
+                ('disposition', models.CharField(blank=True, choices=[('RETURN', '반품'), ('REWORK', '재작업'), ('SCRAP', '폐기'), ('USE_AS_IS', '특채사용'), ('SORT', '선별')], max_length=15, verbose_name='처리방법')),
+                ('disposition_detail', models.TextField(blank=True, verbose_name='처리내역')),
+                ('closed_date', models.DateField(blank=True, null=True, verbose_name='완료일')),
+                ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='등록일시')),
+                ('updated_at', models.DateTimeField(auto_now=True, verbose_name='수정일시')),
+                ('reported_by', models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='nc_reported', to=settings.AUTH_USER_MODEL, verbose_name='보고자')),
+                ('assigned_to', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='nc_assigned', to=settings.AUTH_USER_MODEL, verbose_name='담당자')),
+                ('vendor', models.ForeignKey(blank=True, limit_choices_to={'org_type': 'VENDOR'}, null=True, on_delete=django.db.models.deletion.SET_NULL, to='orders.organization', verbose_name='협력사')),
+            ],
+            options={
+                'verbose_name': '부적합품',
+                'verbose_name_plural': '부적합품 관리',
+                'ordering': ['-occurred_date', '-id'],
+            },
+        ),
+
+        # 시정조치 (CAPA)
+        migrations.CreateModel(
+            name='CorrectiveAction',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('capa_no', models.CharField(max_length=30, unique=True, verbose_name='CAPA번호')),
+                ('capa_type', models.CharField(choices=[('CA', '시정조치'), ('PA', '예방조치')], default='CA', max_length=5, verbose_name='유형')),
+                ('status', models.CharField(choices=[('REQUESTED', '요청'), ('RECEIVED', '접수'), ('ANALYZING', '원인분석'), ('ACTION', '대책수립'), ('IMPLEMENTING', '조치이행'), ('VERIFYING', '효과검증'), ('CLOSED', '완료')], default='REQUESTED', max_length=15, verbose_name='상태')),
+                ('part_no', models.CharField(max_length=50, verbose_name='품번')),
+                ('part_name', models.CharField(max_length=100, verbose_name='품명')),
+                ('issue_title', models.CharField(max_length=200, verbose_name='문제점')),
+                ('issue_detail', models.TextField(verbose_name='문제상세')),
+                ('request_date', models.DateField(verbose_name='요청일')),
+                ('due_date', models.DateField(verbose_name='회신기한')),
+                ('cause_analysis', models.TextField(blank=True, verbose_name='원인분석(협력사)')),
+                ('corrective_action', models.TextField(blank=True, verbose_name='시정조치(협력사)')),
+                ('preventive_action', models.TextField(blank=True, verbose_name='예방조치(협력사)')),
+                ('action_date', models.DateField(blank=True, null=True, verbose_name='조치완료(예정)일')),
+                ('response_date', models.DateField(blank=True, null=True, verbose_name='회신일')),
+                ('attachment', models.FileField(blank=True, null=True, upload_to='qms/capa/', verbose_name='첨부파일')),
+                ('verification_result', models.TextField(blank=True, verbose_name='효과검증 결과')),
+                ('verified_date', models.DateField(blank=True, null=True, verbose_name='검증일')),
+                ('is_effective', models.BooleanField(blank=True, null=True, verbose_name='효과있음')),
+                ('closed_date', models.DateField(blank=True, null=True, verbose_name='완료일')),
+                ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='등록일시')),
+                ('updated_at', models.DateTimeField(auto_now=True, verbose_name='수정일시')),
+                ('vendor', models.ForeignKey(limit_choices_to={'org_type': 'VENDOR'}, on_delete=django.db.models.deletion.PROTECT, to='orders.organization', verbose_name='대상 협력사')),
+                ('non_conformance', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='capa_requests', to='qms.nonconformance', verbose_name='관련 부적합')),
+                ('requested_by', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='capa_requested', to=settings.AUTH_USER_MODEL, verbose_name='요청자')),
+                ('assigned_to', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='capa_assigned', to=settings.AUTH_USER_MODEL, verbose_name='담당자(협력사)')),
+            ],
+            options={
+                'verbose_name': '시정조치요청',
+                'verbose_name_plural': '시정조치(CAPA) 관리',
+                'ordering': ['-request_date', '-id'],
+            },
+        ),
+
+        # 협력사 클레임 (Vendor Claim)
+        migrations.CreateModel(
+            name='VendorClaim',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('claim_no', models.CharField(max_length=30, unique=True, verbose_name='클레임번호')),
+                ('claim_type', models.CharField(choices=[('QUALITY', '품질불량'), ('DELIVERY', '납기지연'), ('QUANTITY', '수량차이'), ('PACKING', '포장불량'), ('DOCUMENT', '서류미비'), ('OTHER', '기타')], max_length=15, verbose_name='클레임유형')),
+                ('status', models.CharField(choices=[('DRAFT', '작성중'), ('ISSUED', '발행'), ('RECEIVED', '접수확인'), ('PROCESSING', '처리중'), ('RESOLVED', '처리완료'), ('CLOSED', '종결')], default='DRAFT', max_length=15, verbose_name='상태')),
+                ('issue_date', models.DateField(verbose_name='발생일')),
+                ('part_no', models.CharField(max_length=50, verbose_name='품번')),
+                ('part_name', models.CharField(max_length=100, verbose_name='품명')),
+                ('lot_no', models.CharField(blank=True, max_length=50, verbose_name='LOT번호')),
+                ('claim_qty', models.IntegerField(verbose_name='클레임수량')),
+                ('claim_detail', models.TextField(verbose_name='클레임내용')),
+                ('photo', models.FileField(blank=True, null=True, upload_to='qms/claim/photos/', verbose_name='불량사진')),
+                ('vendor_response', models.TextField(blank=True, verbose_name='협력사 답변')),
+                ('compensation_type', models.CharField(blank=True, max_length=50, verbose_name='보상방법')),
+                ('compensation_amount', models.DecimalField(blank=True, decimal_places=0, max_digits=12, null=True, verbose_name='보상금액')),
+                ('resolution_detail', models.TextField(blank=True, verbose_name='처리결과')),
+                ('issued_date', models.DateField(blank=True, null=True, verbose_name='발행일')),
+                ('resolved_date', models.DateField(blank=True, null=True, verbose_name='처리완료일')),
+                ('closed_date', models.DateField(blank=True, null=True, verbose_name='종결일')),
+                ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='등록일시')),
+                ('updated_at', models.DateTimeField(auto_now=True, verbose_name='수정일시')),
+                ('vendor', models.ForeignKey(limit_choices_to={'org_type': 'VENDOR'}, on_delete=django.db.models.deletion.PROTECT, to='orders.organization', verbose_name='협력사')),
+                ('non_conformance', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='claims', to='qms.nonconformance', verbose_name='관련 부적합')),
+                ('issued_by', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='claims_issued', to=settings.AUTH_USER_MODEL, verbose_name='발행자')),
+            ],
+            options={
+                'verbose_name': '협력사클레임',
+                'verbose_name_plural': '협력사 클레임 관리',
+                'ordering': ['-issue_date', '-id'],
+            },
+        ),
+
+        # 협력사 평가 (Vendor Rating)
+        migrations.CreateModel(
+            name='VendorRating',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('year', models.IntegerField(verbose_name='연도')),
+                ('month', models.IntegerField(verbose_name='월')),
+                ('incoming_total', models.IntegerField(default=0, verbose_name='수입검사 건수')),
+                ('incoming_pass', models.IntegerField(default=0, verbose_name='수입검사 합격')),
+                ('incoming_fail', models.IntegerField(default=0, verbose_name='수입검사 불합격')),
+                ('incoming_rate', models.DecimalField(decimal_places=2, default=100, max_digits=5, verbose_name='수입검사 합격률(%)')),
+                ('delivery_total', models.IntegerField(default=0, verbose_name='납품 건수')),
+                ('delivery_ontime', models.IntegerField(default=0, verbose_name='정시납품')),
+                ('delivery_late', models.IntegerField(default=0, verbose_name='지연납품')),
+                ('delivery_rate', models.DecimalField(decimal_places=2, default=100, max_digits=5, verbose_name='납기준수율(%)')),
+                ('claim_count', models.IntegerField(default=0, verbose_name='클레임 건수')),
+                ('claim_amount', models.DecimalField(decimal_places=0, default=0, max_digits=12, verbose_name='클레임 금액')),
+                ('total_incoming_qty', models.IntegerField(default=0, verbose_name='총 입고수량')),
+                ('defect_qty', models.IntegerField(default=0, verbose_name='불량수량')),
+                ('ppm', models.DecimalField(decimal_places=2, default=0, max_digits=10, verbose_name='PPM')),
+                ('quality_score', models.DecimalField(decimal_places=2, default=0, max_digits=5, verbose_name='품질점수')),
+                ('delivery_score', models.DecimalField(decimal_places=2, default=0, max_digits=5, verbose_name='납기점수')),
+                ('total_score', models.DecimalField(decimal_places=2, default=0, max_digits=5, verbose_name='종합점수')),
+                ('grade', models.CharField(blank=True, choices=[('A', 'A등급 (우수)'), ('B', 'B등급 (양호)'), ('C', 'C등급 (보통)'), ('D', 'D등급 (불량)')], max_length=1, verbose_name='등급')),
+                ('remark', models.TextField(blank=True, verbose_name='비고')),
+                ('evaluated_at', models.DateTimeField(blank=True, null=True, verbose_name='평가일시')),
+                ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='등록일시')),
+                ('updated_at', models.DateTimeField(auto_now=True, verbose_name='수정일시')),
+                ('vendor', models.ForeignKey(limit_choices_to={'org_type': 'VENDOR'}, on_delete=django.db.models.deletion.PROTECT, to='orders.organization', verbose_name='협력사')),
+                ('evaluated_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL, verbose_name='평가자')),
+            ],
+            options={
+                'verbose_name': '협력사평가',
+                'verbose_name_plural': '협력사 평가 관리',
+                'ordering': ['-year', '-month', 'vendor'],
+                'unique_together': {('vendor', 'year', 'month')},
+            },
+        ),
+    ]

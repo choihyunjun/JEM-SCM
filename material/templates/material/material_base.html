@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% load auth_extras %}
+
+{% block sidebar_material %}
+<style>
+    /* 자재관리 전용 사이드바 스타일 */
+    .submenu-item {
+        background: #1a252f; color: #bdc3c7; padding: 10px 20px; display: block; text-decoration: none; font-size: 0.9rem;
+    }
+    .submenu-item:hover { background: #243342; color: white; }
+    .submenu-item.active { color: white; font-weight: bold; background: #2c3e50; }
+
+    /* 고정핀 버튼 스타일 */
+    .menu-pin-btn {
+        background: transparent;
+        border: none;
+        color: #6c757d;
+        padding: 5px 10px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .menu-pin-btn:hover { color: #fff; }
+    .menu-pin-btn.pinned { color: #28a745; }
+    .menu-pin-btn.pinned i { transform: rotate(45deg); }
+</style>
+
+<div class="nav flex-column">
+    <!-- 메뉴 고정핀 -->
+    <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom border-secondary mb-2">
+        <small class="text-muted">메뉴</small>
+        <button class="menu-pin-btn" id="wmsMenuPin" title="메뉴 전체 펼침/접힘 고정">
+            <i class="bi bi-pin-angle-fill"></i>
+        </button>
+    </div>
+
+    {# 재고/수불 관리 - can_wms_stock_view #}
+    {% if user|has_perm:'can_wms_stock_view' %}
+    <a class="nav-link dropdown-toggle" data-bs-toggle="collapse" href="#transactionSubmenu" role="button" aria-expanded="true">
+        <i class="bi bi-journal-text me-2"></i> 재고/수불 관리
+    </a>
+    <div class="collapse show" id="transactionSubmenu">
+        <a href="{% url 'material:stock_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'stock_list' %}active{% endif %}">- 자재 재고 현황</a>
+        <a href="{% url 'material:stock_transfer' %}" class="submenu-item {% if request.resolver_match.url_name == 'stock_transfer' %}active{% endif %}">- 재고 이동 처리</a>
+        <a href="{% url 'material:transfer_history' %}" class="submenu-item {% if request.resolver_match.url_name == 'transfer_history' %}active{% endif %}">- 재고 이동 현황</a>
+        <a href="{% url 'material:transaction_history' %}" class="submenu-item {% if request.resolver_match.url_name == 'transaction_history' %}active{% endif %}">- 기간별 수불 대장</a>
+        {% if user|has_perm:'can_wms_stock_edit' or user|has_perm:'can_wms_adjustment' %}
+        <a href="{% url 'material:stock_adjustment' %}" class="submenu-item {% if request.resolver_match.url_name == 'stock_adjustment' %}active{% endif %}">- 재고 조정(관리)</a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {# 입고 관리 - can_wms_inout_view #}
+    {% if user|has_perm:'can_wms_inout_view' or user|has_perm:'can_wms_inout' %}
+    <a class="nav-link dropdown-toggle collapsed" data-bs-toggle="collapse" href="#inboundSubmenu" role="button" aria-expanded="false">
+        <i class="bi bi-box-arrow-in-down me-2"></i> 입고 관리
+    </a>
+    <div class="collapse" id="inboundSubmenu">
+        <a href="{% url 'material:manual_incoming' %}" class="submenu-item {% if request.resolver_match.url_name == 'manual_incoming' %}active{% endif %}">- 자재 수기 입고</a>
+        <a href="{% url 'material:incoming_history' %}" class="submenu-item {% if request.resolver_match.url_name == 'incoming_history' %}active{% endif %}">- 입고 이력 조회</a>
+    </div>
+    {% endif %}
+
+    {# 출고 관리 - can_wms_inout_view #}
+    {% if user|has_perm:'can_wms_inout_view' or user|has_perm:'can_wms_inout' %}
+    <a class="nav-link dropdown-toggle collapsed" data-bs-toggle="collapse" href="#outboundSubmenu" role="button" aria-expanded="false">
+        <i class="bi bi-box-arrow-up me-2"></i> 출고 관리
+    </a>
+    <div class="collapse" id="outboundSubmenu">
+        <a href="{% url 'material:outbound_create' %}" class="submenu-item {% if request.resolver_match.url_name == 'outbound_create' %}active{% endif %}">- 생산 자재 불출</a>
+        <a href="{% url 'material:stock_return' %}" class="submenu-item {% if request.resolver_match.url_name == 'stock_return' %}active{% endif %}">
+            - 불량 반품 처리
+        </a>
+    </div>
+    {% endif %}
+
+    {# BOM 관리 - can_wms_bom_view #}
+    {% if user|has_perm:'can_wms_bom_view' or user|has_perm:'can_wms_bom' %}
+    <a class="nav-link dropdown-toggle collapsed" data-bs-toggle="collapse" href="#bomSubmenu" role="button" aria-expanded="false">
+        <i class="bi bi-diagram-3 me-2"></i> BOM 관리
+    </a>
+    <div class="collapse" id="bomSubmenu">
+        <a href="{% url 'material:bom_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'bom_list' %}active{% endif %}">- BOM 조회</a>
+        <a href="{% url 'material:bom_upload' %}" class="submenu-item {% if request.resolver_match.url_name == 'bom_upload' %}active{% endif %}">- BOM 업로드</a>
+        <a href="{% url 'material:bom_calculate' %}" class="submenu-item {% if request.resolver_match.url_name == 'bom_calculate' %}active{% endif %}">- 소요량 계산</a>
+    </div>
+    {% endif %}
+
+    {# 현장 지원 - can_wms_stock_view (기본 조회 권한) #}
+    {% if user|has_perm:'can_wms_stock_view' %}
+    <a class="nav-link dropdown-toggle collapsed" data-bs-toggle="collapse" href="#supportSubmenu" role="button" aria-expanded="false">
+        <i class="bi bi-tools me-2"></i> 현장 지원
+    </a>
+    <div class="collapse" id="supportSubmenu">
+        <a href="{% url 'material:process_tag_form' %}" class="submenu-item {% if request.resolver_match.url_name == 'process_tag_form' %}active{% endif %}">
+            - 공정 현품표 발행
+        </a>
+        <a href="{% url 'material:stock_check' %}" class="submenu-item {% if request.resolver_match.url_name == 'stock_check' %}active{% endif %}">
+            - 재고 조사 (QR)
+        </a>
+        <a href="{% url 'material:stock_check_result' %}" class="submenu-item {% if request.resolver_match.url_name == 'stock_check_result' %}active{% endif %}">
+            - 재고 조사 결과
+        </a>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}
+
+{% block content %}
+    <div class="main-wrapper">
+        {% block material_content %}{% endblock %}
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const pinBtn = document.getElementById('wmsMenuPin');
+    const storageKey = 'wmsMenuPinned';
+
+    // 저장된 상태 불러오기
+    let isPinned = localStorage.getItem(storageKey) === 'true';
+
+    function updateMenuState() {
+        const collapses = document.querySelectorAll('#sidebar_material .collapse');
+
+        if (isPinned) {
+            pinBtn.classList.add('pinned');
+            pinBtn.title = '메뉴 접기';
+            collapses.forEach(el => {
+                el.classList.add('show');
+            });
+        } else {
+            pinBtn.classList.remove('pinned');
+            pinBtn.title = '메뉴 전체 펼치기';
+            // 현재 활성 메뉴만 열어두기
+            collapses.forEach(el => {
+                if (!el.querySelector('.submenu-item.active')) {
+                    el.classList.remove('show');
+                }
+            });
+        }
+    }
+
+    // 초기 상태 적용
+    updateMenuState();
+
+    // 핀 버튼 클릭 이벤트
+    pinBtn.addEventListener('click', function() {
+        isPinned = !isPinned;
+        localStorage.setItem(storageKey, isPinned);
+        updateMenuState();
+    });
+});
+</script>
+{% endblock %}

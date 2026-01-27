@@ -1,0 +1,197 @@
+{% extends "material/material_base.html" %}
+
+{% block title %}BOM 업로드 - WMS{% endblock %}
+
+{% block material_content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="mb-0"><i class="bi bi-upload me-2"></i>BOM 업로드</h4>
+        <a href="{% url 'material:bom_list' %}" class="btn btn-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i>목록으로
+        </a>
+    </div>
+
+    <!-- 메시지 표시 -->
+    {% if messages %}
+    {% for message in messages %}
+    <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <div class="row">
+        <!-- 업로드 폼 -->
+        <div class="col-md-7">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <i class="bi bi-file-earmark-spreadsheet me-2"></i>BOM 파일 업로드
+                </div>
+                <div class="card-body">
+                    <form method="post" enctype="multipart/form-data" id="uploadForm">
+                        {% csrf_token %}
+
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">파일 선택 (CSV 또는 XLSX)</label>
+                            <input type="file" name="bom_file" class="form-control form-control-lg"
+                                   accept=".csv,.xlsx" required id="bomFile">
+                            <div class="form-text">
+                                <i class="bi bi-info-circle me-1"></i>
+                                CSV 파일은 UTF-8 인코딩으로 저장해주세요.
+                            </div>
+                        </div>
+
+                        <div class="mb-3" id="fileInfo" style="display:none;">
+                            <div class="alert alert-info mb-0">
+                                <i class="bi bi-file-earmark me-2"></i>
+                                <span id="fileName"></span>
+                                <span class="badge bg-primary ms-2" id="fileSize"></span>
+                            </div>
+                        </div>
+
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-success btn-lg" id="submitBtn">
+                                <i class="bi bi-cloud-upload me-2"></i>업로드 및 등록
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- 업로드 가이드 -->
+        <div class="col-md-5">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <i class="bi bi-question-circle me-2"></i>엑셀 파일 형식 안내
+                </div>
+                <div class="card-body">
+                    <h6 class="fw-bold mb-3">필수 컬럼 (헤더명 그대로)</h6>
+                    <div class="small">
+                        <table class="table table-sm table-bordered">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>구분</th>
+                                    <th>컬럼명</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td rowspan="4" class="align-middle"><strong>모품</strong></td>
+                                    <td>모품번</td>
+                                </tr>
+                                <tr><td>모품명</td></tr>
+                                <tr><td>계정구분 (제품/반제품)</td></tr>
+                                <tr><td>BOM등록여부</td></tr>
+                                <tr>
+                                    <td rowspan="6" class="align-middle"><strong>자품</strong></td>
+                                    <td>순번</td>
+                                </tr>
+                                <tr><td>자품번</td></tr>
+                                <tr><td>자품명</td></tr>
+                                <tr><td>정미수량</td></tr>
+                                <tr><td>필요수량</td></tr>
+                                <tr><td>사급구분</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <hr>
+
+                    <h6 class="fw-bold mb-3">파일 구조 예시</h6>
+                    <div class="alert alert-secondary small mb-0">
+                        <code>
+                        No, 모품번, 모품명, ..., 순번, 자품번, 자품명, 필요수량, ...<br>
+                        1, 064133-0010, KNOB BLACK, ..., 1, INK053, INK-BLACK, 0.000800, ...<br>
+                        , , , ..., 2, INK039, INK-RED, 0.000500, ...<br>
+                        2, 064133-0020, KNOB WHITE, ..., 1, INK054, INK-WHITE, 0.001000, ...
+                        </code>
+                    </div>
+                    <div class="form-text mt-2">
+                        <i class="bi bi-lightbulb me-1"></i>
+                        모품번이 있는 행에서 새 제품이 시작됩니다.<br>
+                        모품번이 비어있으면 직전 모품의 자품으로 추가됩니다.
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header bg-warning text-dark">
+                    <i class="bi bi-exclamation-triangle me-2"></i>주의사항
+                </div>
+                <div class="card-body small">
+                    <ul class="mb-0">
+                        <li>기존에 같은 모품번이 있으면 <strong>업데이트</strong> 됩니다.</li>
+                        <li>같은 모품-순번-자품번 조합이 있으면 <strong>덮어쓰기</strong> 됩니다.</li>
+                        <li>숫자 필드에 쉼표(,)가 있어도 자동 처리됩니다.</li>
+                        <li>날짜는 YYYY-MM-DD 형식을 권장합니다.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- 현재 BOM 데이터 현황 및 전체 삭제 -->
+            {% if product_count > 0 or bom_count > 0 %}
+            <div class="card mt-3 border-danger">
+                <div class="card-header bg-danger text-white">
+                    <i class="bi bi-database me-2"></i>현재 등록된 BOM 데이터
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <span class="badge bg-primary fs-6 me-2">모품: {{ product_count }}건</span>
+                            <span class="badge bg-secondary fs-6">BOM 항목: {{ bom_count }}건</span>
+                        </div>
+                    </div>
+                    <form method="post" action="{% url 'material:bom_delete_all' %}" id="deleteAllForm">
+                        {% csrf_token %}
+                        <button type="button" class="btn btn-outline-danger w-100" onclick="confirmDeleteAll()">
+                            <i class="bi bi-trash me-2"></i>BOM 전체 삭제
+                        </button>
+                    </form>
+                    <div class="form-text text-danger mt-2">
+                        <i class="bi bi-exclamation-circle me-1"></i>
+                        전체 삭제 시 모든 BOM 데이터가 영구 삭제됩니다!
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('bomFile').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        document.getElementById('fileInfo').style.display = 'block';
+        document.getElementById('fileName').textContent = file.name;
+
+        const size = file.size;
+        let sizeText = '';
+        if (size < 1024) {
+            sizeText = size + ' B';
+        } else if (size < 1024 * 1024) {
+            sizeText = (size / 1024).toFixed(1) + ' KB';
+        } else {
+            sizeText = (size / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+        document.getElementById('fileSize').textContent = sizeText;
+    }
+});
+
+document.getElementById('uploadForm').addEventListener('submit', function() {
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>처리 중...';
+});
+
+function confirmDeleteAll() {
+    if (confirm('정말로 모든 BOM 데이터를 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다!')) {
+        if (confirm('한 번 더 확인합니다.\n\n모품 {{ product_count }}건, BOM 항목 {{ bom_count }}건이 모두 삭제됩니다.\n\n계속하시겠습니까?')) {
+            document.getElementById('deleteAllForm').submit();
+        }
+    }
+}
+</script>
+{% endblock %}

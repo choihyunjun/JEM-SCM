@@ -1,0 +1,93 @@
+{% extends 'material/material_base.html' %}
+{% load humanize %}
+
+{% block title %}재고 실사 결과{% endblock %}
+
+{% block material_content %}
+<div class="container-fluid" style="max-width: 1800px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold mb-0">
+            <i class="bi bi-clipboard-data me-2"></i>재고 실사 결과
+        </h3>
+        <a href="{% url 'material:stock_check' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>실사 검색
+        </a>
+    </div>
+
+    {% if stocks %}
+    <div class="card shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-list-ul me-2"></i>검색 결과 ({{ stocks|length }}건)</span>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>창고</th>
+                        <th>품번</th>
+                        <th>품명</th>
+                        <th>LOT</th>
+                        <th class="text-end">시스템 수량</th>
+                        <th class="text-end">실사 수량</th>
+                        <th class="text-end">차이</th>
+                        <th>상태</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stock in stocks %}
+                    <tr>
+                        <td>{{ stock.warehouse.name }}</td>
+                        <td class="fw-bold">{{ stock.part.part_no }}</td>
+                        <td>{{ stock.part.part_name|truncatechars:30 }}</td>
+                        <td class="small">{{ stock.lot_no|date:"Y-m-d"|default:"-" }}</td>
+                        <td class="text-end">{{ stock.quantity|intcomma }}</td>
+                        <td class="text-end">
+                            <input type="number" class="form-control form-control-sm text-end actual-qty"
+                                   data-stock-id="{{ stock.id }}"
+                                   value="{{ stock.quantity }}"
+                                   style="width: 100px;">
+                        </td>
+                        <td class="text-end diff-qty">0</td>
+                        <td class="status-cell">
+                            <span class="badge bg-success">일치</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-warning">
+        <i class="bi bi-exclamation-triangle me-2"></i>검색 결과가 없습니다.
+    </div>
+    {% endif %}
+</div>
+
+<script>
+document.querySelectorAll('.actual-qty').forEach(input => {
+    input.addEventListener('change', function() {
+        const row = this.closest('tr');
+        const systemQty = parseInt(row.cells[4].textContent.replace(/,/g, ''));
+        const actualQty = parseInt(this.value) || 0;
+        const diff = actualQty - systemQty;
+
+        const diffCell = row.querySelector('.diff-qty');
+        const statusCell = row.querySelector('.status-cell');
+
+        diffCell.textContent = diff > 0 ? '+' + diff.toLocaleString() : diff.toLocaleString();
+
+        if (diff === 0) {
+            diffCell.className = 'text-end diff-qty';
+            statusCell.innerHTML = '<span class="badge bg-success">일치</span>';
+        } else if (diff > 0) {
+            diffCell.className = 'text-end diff-qty fw-bold text-primary';
+            statusCell.innerHTML = '<span class="badge bg-warning">초과</span>';
+        } else {
+            diffCell.className = 'text-end diff-qty fw-bold text-danger';
+            statusCell.innerHTML = '<span class="badge bg-danger">부족</span>';
+        }
+    });
+});
+</script>
+{% endblock %}

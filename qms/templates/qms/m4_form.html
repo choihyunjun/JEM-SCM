@@ -21,13 +21,28 @@
                     <label class="form-label small fw-bold text-muted">공장</label>
                     {{ form.factory }}
                 </div>
+                <!-- 품번 (검색 팝업) -->
                 <div class="col-md-4">
-                    <label class="form-label small fw-bold text-muted">제품</label>
-                    {{ form.product }}
+                    <label class="form-label small fw-bold text-muted">품번 <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <input type="text" name="part_no" id="partNo" class="form-control" required
+                               value="{{ form.part_no.value|default:'' }}" placeholder="품번 검색" readonly>
+                        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#partSearchModal">
+                            <i class="bi bi-search"></i>
+                        </button>
+                    </div>
                 </div>
+                <!-- 품명 (자동입력) -->
                 <div class="col-md-4">
-                    <label class="form-label small fw-bold text-muted">차종</label>
-                    {{ form.model_name }}
+                    <label class="form-label small fw-bold text-muted">품명</label>
+                    <input type="text" name="part_name" id="partName" class="form-control bg-light" readonly
+                           value="{{ form.part_name.value|default:'' }}" placeholder="품번 선택 시 자동입력">
+                </div>
+                <!-- 품목군 (자동입력) -->
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold text-muted">품목군</label>
+                    <input type="text" name="model_name" id="modelName" class="form-control bg-light" readonly
+                           value="{{ form.model_name.value|default:'' }}" placeholder="품번 선택 시 자동입력">
                 </div>
                 <div class="col-md-4">
                     <label class="form-label small fw-bold text-muted">발행번호 (시스템 자동)</label>
@@ -38,20 +53,37 @@
                     {{ form.m4_type }}
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label small fw-bold text-muted">사내/사외</label>
-                    {{ form.quality_rank }}
+                    <label class="form-label small fw-bold text-muted">변경구분(A/B/C/D)</label>
+                    {{ form.change_class }}
                 </div>
+                <!-- 사내/사외 체크박스 -->
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold text-muted">사내/사외</label>
+                    <div class="d-flex gap-4 mt-2">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="is_internal" id="isInternal" value="true"
+                                   {% if form.is_internal.value %}checked{% endif %}>
+                            <label class="form-check-label" for="isInternal">사내</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="is_external" id="isExternal" value="true"
+                                   {% if form.is_external.value %}checked{% endif %}>
+                            <label class="form-check-label" for="isExternal">사외</label>
+                        </div>
+                    </div>
+                </div>
+                <!-- 협력사 (검색 팝업) -->
                 <div class="col-md-4">
                     <label class="form-label small fw-bold text-muted">협력사(대상)</label>
-                    {{ form.vendor_org }}
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label small fw-bold text-muted">품번</label>
-                    {{ form.part_no }}
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label small fw-bold text-muted">품명</label>
-                    {{ form.part_name }}
+                    <div class="input-group">
+                        <input type="text" id="vendorName" class="form-control" readonly
+                               value="{% if form.vendor_org.value %}{{ form.vendor_org.value }}{% elif item.vendor_org %}{{ item.vendor_org.name }}{% endif %}"
+                               placeholder="협력사 검색">
+                        <input type="hidden" name="vendor_org" id="vendorOrgId" value="{{ form.vendor_org.value|default:'' }}">
+                        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#vendorSearchModal">
+                            <i class="bi bi-search"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -59,19 +91,55 @@
         <div class="mb-5 p-4 rounded-3 border bg-light">
             <h5 class="fw-bold border-start border-4 border-info ps-2 mb-4">2. 결재선 지정</h5>
             <div class="row g-3">
+                <!-- 검토1 (검색 팝업) -->
                 <div class="col-md-4">
-                    <label class="form-label small fw-bold text-dark">검토1 선택</label>
-                    {{ form.reviewer_user }}
+                    <label class="form-label small fw-bold text-dark">검토1 선택 <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <input type="text" id="reviewer1Name" class="form-control" readonly
+                               value="{% if item.reviewer_user %}{{ item.reviewer_user.profile.department|default:'' }} {{ item.reviewer_user.profile.display_name|default:item.reviewer_user.username }}{% endif %}"
+                               placeholder="검토1 검색" required>
+                        <input type="hidden" name="reviewer_user" id="reviewer1Id" value="{{ form.reviewer_user.value|default:'' }}">
+                        <button type="button" class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#employeeSearchModal" onclick="setEmployeeTarget('reviewer1')">
+                            <i class="bi bi-search"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="clearEmployee('reviewer1')" title="선택 취소">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    </div>
                     <div class="form-text small text-muted">실제 서명(검토1)을 진행할 담당자를 선택하세요.</div>
                 </div>
+                <!-- 검토2 (검색 팝업, 선택사항) -->
                 <div class="col-md-4">
                     <label class="form-label small fw-bold text-dark">검토2 선택 (선택)</label>
-                    {{ form.reviewer_user2 }}
+                    <div class="input-group">
+                        <input type="text" id="reviewer2Name" class="form-control" readonly
+                               value="{% if item.reviewer_user2 %}{{ item.reviewer_user2.profile.department|default:'' }} {{ item.reviewer_user2.profile.display_name|default:item.reviewer_user2.username }}{% endif %}"
+                               placeholder="검토2 검색 (선택)">
+                        <input type="hidden" name="reviewer_user2" id="reviewer2Id" value="{{ form.reviewer_user2.value|default:'' }}">
+                        <button type="button" class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#employeeSearchModal" onclick="setEmployeeTarget('reviewer2')">
+                            <i class="bi bi-search"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="clearEmployee('reviewer2')" title="선택 취소">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    </div>
                     <div class="form-text small text-muted">검토 단계를 추가하려면 지정하세요. (미지정 시 검토1 → 최종 승인)</div>
                 </div>
+                <!-- 최종 승인자 (검색 팝업) -->
                 <div class="col-md-4">
-                    <label class="form-label small fw-bold text-dark">최종 승인자 선택</label>
-                    {{ form.approver_user }}
+                    <label class="form-label small fw-bold text-dark">최종 승인자 선택 <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <input type="text" id="approverName" class="form-control" readonly
+                               value="{% if item.approver_user %}{{ item.approver_user.profile.department|default:'' }} {{ item.approver_user.profile.display_name|default:item.approver_user.username }}{% endif %}"
+                               placeholder="최종 승인자 검색" required>
+                        <input type="hidden" name="approver_user" id="approverId" value="{{ form.approver_user.value|default:'' }}">
+                        <button type="button" class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#employeeSearchModal" onclick="setEmployeeTarget('approver')">
+                            <i class="bi bi-search"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="clearEmployee('approver')" title="선택 취소">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    </div>
                     <div class="form-text small text-muted">최종 결재 권한을 가진 관리자를 선택하세요.</div>
                 </div>
             </div>
@@ -83,7 +151,7 @@
                 <label class="form-label small fw-bold text-muted">변경 사유</label>
                 {{ form.reason }}
             </div>
-            
+
             <div class="row g-4">
                 <div class="col-md-6">
                     <div class="card h-100 border-0 bg-light">
@@ -174,6 +242,92 @@
     </form>
 </div>
 
+<!-- 품번 검색 팝업 -->
+<div class="modal fade" id="partSearchModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-search me-2"></i>품번 검색</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group mb-3">
+                    <input type="text" id="partSearchInput" class="form-control" placeholder="품번 또는 품명으로 검색 (2자 이상)...">
+                    <button type="button" class="btn btn-primary" onclick="searchParts()">
+                        <i class="bi bi-search"></i> 검색
+                    </button>
+                </div>
+                <div id="partSearchResults" style="max-height: 400px; overflow-y: auto;">
+                    <table class="table table-hover table-sm">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th>품번</th>
+                                <th>품명</th>
+                                <th>품목군</th>
+                                <th>협력사</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="partSearchBody">
+                            <tr><td colspan="5" class="text-center text-muted py-4">검색어를 입력하세요</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 협력사 검색 팝업 -->
+<div class="modal fade" id="vendorSearchModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-building me-2"></i>협력사 검색</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group mb-3">
+                    <input type="text" id="vendorSearchInput" class="form-control" placeholder="협력사명 검색...">
+                    <button type="button" class="btn btn-primary" onclick="searchVendors()">
+                        <i class="bi bi-search"></i> 검색
+                    </button>
+                </div>
+                <div id="vendorSearchResults" style="max-height: 300px; overflow-y: auto;">
+                    <div class="list-group" id="vendorSearchBody">
+                        <div class="list-group-item text-center text-muted">검색어를 입력하세요</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 직원 검색 팝업 (결재선용) -->
+<div class="modal fade" id="employeeSearchModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-person-badge me-2"></i>직원 검색</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group mb-3">
+                    <input type="text" id="employeeSearchInput" class="form-control" placeholder="이름 또는 부서명 검색...">
+                    <button type="button" class="btn btn-info text-white" onclick="searchEmployees()">
+                        <i class="bi bi-search"></i> 검색
+                    </button>
+                </div>
+                <div id="employeeSearchResults" style="max-height: 350px; overflow-y: auto;">
+                    <div class="list-group" id="employeeSearchBody">
+                        <div class="list-group-item text-center text-muted">이름 또는 부서명으로 검색하세요</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <style>
     body { background-color: #f1f5f9; font-family: 'Pretendard', sans-serif; }
     .form-control, .form-select { border-radius: 6px; padding: 0.6rem 0.75rem; border: 1px solid #dee2e6; font-size: 0.95rem; }
@@ -183,4 +337,180 @@
     .card { transition: all 0.3s ease; }
     .table-light th { font-weight: 700; color: #495057; }
 </style>
+
+<script>
+// 품번 검색
+function searchParts() {
+    const query = document.getElementById('partSearchInput').value.trim();
+    if (query.length < 2) {
+        alert('2자 이상 입력해주세요.');
+        return;
+    }
+
+    fetch(`/api/parts/search/?q=${encodeURIComponent(query)}`)
+        .then(response => response.json())
+        .then(data => {
+            const tbody = document.getElementById('partSearchBody');
+            const results = data.results || [];
+            if (results.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">검색 결과가 없습니다</td></tr>';
+                return;
+            }
+            tbody.innerHTML = results.map(p => `
+                <tr style="cursor:pointer;" onclick="selectPart('${escapeHtml(p.part_no)}', '${escapeHtml(p.part_name)}', '${escapeHtml(p.part_group || '')}', '${p.vendor_id || ''}', '${escapeHtml(p.vendor_name || '')}')">
+                    <td class="fw-bold text-primary">${escapeHtml(p.part_no)}</td>
+                    <td>${escapeHtml(p.part_name)}</td>
+                    <td>${escapeHtml(p.part_group || '-')}</td>
+                    <td>${escapeHtml(p.vendor_name || '-')}</td>
+                    <td><button type="button" class="btn btn-sm btn-outline-primary">선택</button></td>
+                </tr>
+            `).join('');
+        })
+        .catch(err => {
+            console.error(err);
+            alert('검색 중 오류가 발생했습니다.');
+        });
+}
+
+function selectPart(partNo, partName, partGroup, vendorId, vendorName) {
+    document.getElementById('partNo').value = partNo;
+    document.getElementById('partName').value = partName;
+    document.getElementById('modelName').value = partGroup;
+
+    // 협력사도 자동 선택
+    if (vendorId) {
+        document.getElementById('vendorOrgId').value = vendorId;
+        document.getElementById('vendorName').value = vendorName;
+    }
+
+    bootstrap.Modal.getInstance(document.getElementById('partSearchModal')).hide();
+}
+
+// 협력사 검색 (Organization)
+function searchVendors() {
+    const query = document.getElementById('vendorSearchInput').value.trim();
+    if (query.length < 1) {
+        alert('검색어를 입력해주세요.');
+        return;
+    }
+
+    fetch(`/api/organizations/search/?q=${encodeURIComponent(query)}`)
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('vendorSearchBody');
+            const results = data.results || [];
+            if (results.length === 0) {
+                container.innerHTML = '<div class="list-group-item text-center text-muted">검색 결과가 없습니다</div>';
+                return;
+            }
+            container.innerHTML = results.map(v => `
+                <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                        onclick="selectVendor('${v.id}', '${escapeHtml(v.name)}')">
+                    <span class="fw-bold">${escapeHtml(v.name)}</span>
+                    <span class="badge bg-primary">선택</span>
+                </button>
+            `).join('');
+        })
+        .catch(err => {
+            console.error(err);
+            alert('검색 중 오류가 발생했습니다.');
+        });
+}
+
+function selectVendor(vendorId, vendorName) {
+    document.getElementById('vendorOrgId').value = vendorId;
+    document.getElementById('vendorName').value = vendorName;
+    bootstrap.Modal.getInstance(document.getElementById('vendorSearchModal')).hide();
+}
+
+// HTML escape 함수
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// ===== 직원 검색 (결재선용) =====
+let currentEmployeeTarget = null; // 'reviewer1', 'reviewer2', 'approver'
+
+function setEmployeeTarget(target) {
+    currentEmployeeTarget = target;
+    // 모달 열릴 때 검색어 초기화
+    document.getElementById('employeeSearchInput').value = '';
+    document.getElementById('employeeSearchBody').innerHTML = '<div class="list-group-item text-center text-muted">이름 또는 부서명으로 검색하세요</div>';
+}
+
+function searchEmployees() {
+    const query = document.getElementById('employeeSearchInput').value.trim();
+    if (query.length < 1) {
+        alert('검색어를 입력해주세요.');
+        return;
+    }
+
+    fetch(`/api/employees/search/?q=${encodeURIComponent(query)}`)
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('employeeSearchBody');
+            const results = data.results || [];
+            if (results.length === 0) {
+                container.innerHTML = '<div class="list-group-item text-center text-muted">검색 결과가 없습니다</div>';
+                return;
+            }
+            container.innerHTML = results.map(emp => `
+                <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                        onclick="selectEmployee('${emp.id}', '${escapeHtml(emp.label)}')">
+                    <div>
+                        ${emp.department ? `<span class="badge bg-secondary me-2">${escapeHtml(emp.department)}</span>` : ''}
+                        <span class="fw-bold">${escapeHtml(emp.display_name)}</span>
+                    </div>
+                    <span class="badge bg-info">선택</span>
+                </button>
+            `).join('');
+        })
+        .catch(err => {
+            console.error(err);
+            alert('검색 중 오류가 발생했습니다.');
+        });
+}
+
+function selectEmployee(empId, empName) {
+    if (currentEmployeeTarget === 'reviewer1') {
+        document.getElementById('reviewer1Id').value = empId;
+        document.getElementById('reviewer1Name').value = empName;
+    } else if (currentEmployeeTarget === 'reviewer2') {
+        document.getElementById('reviewer2Id').value = empId;
+        document.getElementById('reviewer2Name').value = empName;
+    } else if (currentEmployeeTarget === 'approver') {
+        document.getElementById('approverId').value = empId;
+        document.getElementById('approverName').value = empName;
+    }
+    bootstrap.Modal.getInstance(document.getElementById('employeeSearchModal')).hide();
+}
+
+function clearEmployee(target) {
+    if (target === 'reviewer1') {
+        document.getElementById('reviewer1Id').value = '';
+        document.getElementById('reviewer1Name').value = '';
+    } else if (target === 'reviewer2') {
+        document.getElementById('reviewer2Id').value = '';
+        document.getElementById('reviewer2Name').value = '';
+    } else if (target === 'approver') {
+        document.getElementById('approverId').value = '';
+        document.getElementById('approverName').value = '';
+    }
+}
+
+// Enter 키로 검색
+document.getElementById('partSearchInput')?.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); searchParts(); }
+});
+document.getElementById('vendorSearchInput')?.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); searchVendors(); }
+});
+document.getElementById('employeeSearchInput')?.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); searchEmployees(); }
+});
+</script>
+
 {% endblock %}

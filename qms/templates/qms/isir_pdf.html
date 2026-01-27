@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ISIR - {{ isir.isir_no }}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 15mm;
+        }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Malgun Gothic', '맑은 고딕', Arial, sans-serif;
+            font-size: 10pt;
+            line-height: 1.4;
+            color: #333;
+        }
+        .header {
+            text-align: center;
+            border-bottom: 3px double #333;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        .header h1 {
+            font-size: 18pt;
+            margin-bottom: 5px;
+        }
+        .header .subtitle {
+            font-size: 11pt;
+            color: #666;
+        }
+        .meta-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            font-size: 9pt;
+        }
+        .section {
+            margin-bottom: 15px;
+            page-break-inside: avoid;
+        }
+        .section-title {
+            background: #333;
+            color: #fff;
+            padding: 5px 10px;
+            font-size: 10pt;
+            font-weight: bold;
+            margin-bottom: 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 9pt;
+        }
+        th, td {
+            border: 1px solid #333;
+            padding: 6px 8px;
+            text-align: left;
+            vertical-align: top;
+        }
+        th {
+            background: #f0f0f0;
+            font-weight: bold;
+            width: 20%;
+        }
+        .result-pass {
+            color: #0a0;
+            font-weight: bold;
+        }
+        .result-fail {
+            color: #c00;
+            font-weight: bold;
+        }
+        .result-pending {
+            color: #888;
+        }
+        .two-col {
+            display: flex;
+            gap: 15px;
+        }
+        .two-col > div {
+            flex: 1;
+        }
+        .checklist-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0;
+        }
+        .checklist-item {
+            border: 1px solid #333;
+            padding: 4px 6px;
+            font-size: 8pt;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin: -1px 0 0 -1px;
+        }
+        .checklist-item.checked {
+            background: #e8f5e9;
+        }
+        .checkbox {
+            width: 12px;
+            height: 12px;
+            border: 1px solid #333;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10pt;
+        }
+        .checkbox.checked::after {
+            content: '✓';
+        }
+        .approval-table {
+            width: 60%;
+            margin-left: auto;
+        }
+        .approval-table th {
+            text-align: center;
+            width: 25%;
+        }
+        .approval-table td {
+            text-align: center;
+            height: 40px;
+        }
+        .signature-line {
+            border-bottom: 1px solid #333;
+            height: 30px;
+            margin: 5px 10px;
+        }
+        .footer {
+            margin-top: 20px;
+            padding-top: 10px;
+            border-top: 1px solid #ccc;
+            font-size: 8pt;
+            color: #666;
+            text-align: center;
+        }
+        .cpk-value {
+            font-size: 14pt;
+            font-weight: bold;
+        }
+        .cpk-good { color: #0a0; }
+        .cpk-marginal { color: #f90; }
+        .cpk-bad { color: #c00; }
+        @media print {
+            .no-print {
+                display: none;
+            }
+        }
+        .print-btn {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 10px 20px;
+            background: #0066cc;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 12pt;
+            border-radius: 5px;
+        }
+        .print-btn:hover {
+            background: #0055aa;
+        }
+    </style>
+</head>
+<body>
+    <button class="print-btn no-print" onclick="window.print()">인쇄 / PDF 저장</button>
+
+    <div class="header">
+        <h1>초도품 검사 성적서 (ISIR)</h1>
+        <div class="subtitle">Initial Sample Inspection Report</div>
+    </div>
+
+    <div class="meta-info">
+        <div>문서번호: {{ isir.isir_no }}</div>
+        <div>발행일: {{ isir.created_at|date:"Y-m-d" }}</div>
+    </div>
+
+    <!-- 기본 정보 -->
+    <div class="section">
+        <div class="section-title">1. 기본 정보</div>
+        <table>
+            <tr>
+                <th>협력사</th>
+                <td>{{ isir.vendor.name }}</td>
+                <th>품번</th>
+                <td>{{ isir.part_no }}</td>
+            </tr>
+            <tr>
+                <th>품명</th>
+                <td colspan="3">{{ isir.part_name }}</td>
+            </tr>
+            <tr>
+                <th>검사일</th>
+                <td>{{ isir.inspection_date|date:"Y-m-d" }}</td>
+                <th>검사자</th>
+                <td>{{ isir.inspector|default:"-" }}</td>
+            </tr>
+            <tr>
+                <th>승인상태</th>
+                <td>{{ isir.get_result_display }}</td>
+                <th>승인일</th>
+                <td>{{ isir.approval_date|date:"Y-m-d"|default:"-" }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- 검사 결과 -->
+    <div class="section">
+        <div class="section-title">2. 검사 결과</div>
+        <table>
+            <tr>
+                <th>검사 수량</th>
+                <td>{{ isir.sample_qty }}</td>
+                <th>합격 수량</th>
+                <td>{{ isir.pass_qty }}</td>
+            </tr>
+            <tr>
+                <th>불합격 수량</th>
+                <td>{{ isir.fail_qty }}</td>
+                <th>합격률</th>
+                <td>
+                    {% if isir.sample_qty > 0 %}
+                        {{ isir.pass_qty|floatformat:0 }}% ({{ isir.pass_qty }} / {{ isir.sample_qty }})
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+            </tr>
+            <tr>
+                <th>판정</th>
+                <td colspan="3" class="{% if isir.result == 'PASS' %}result-pass{% elif isir.result == 'FAIL' %}result-fail{% else %}result-pending{% endif %}">
+                    {{ isir.get_result_display }}
+                </td>
+            </tr>
+            {% if isir.remarks %}
+            <tr>
+                <th>비고</th>
+                <td colspan="3">{{ isir.remarks }}</td>
+            </tr>
+            {% endif %}
+        </table>
+    </div>
+
+    <!-- 공정능력 데이터 (SPC) -->
+    {% if isir.cpk_value or isir.ppk_value %}
+    <div class="section">
+        <div class="section-title">3. 공정능력 데이터 (SPC)</div>
+        <table>
+            <tr>
+                <th>측정 특성</th>
+                <td colspan="3">{{ isir.cpk_characteristic|default:"-" }}</td>
+            </tr>
+            <tr>
+                <th>Cpk</th>
+                <td class="cpk-value {% if isir.cpk_value >= 1.33 %}cpk-good{% elif isir.cpk_value >= 1.0 %}cpk-marginal{% else %}cpk-bad{% endif %}">
+                    {{ isir.cpk_value|floatformat:2|default:"-" }}
+                </td>
+                <th>Ppk</th>
+                <td class="cpk-value {% if isir.ppk_value >= 1.33 %}cpk-good{% elif isir.ppk_value >= 1.0 %}cpk-marginal{% else %}cpk-bad{% endif %}">
+                    {{ isir.ppk_value|floatformat:2|default:"-" }}
+                </td>
+            </tr>
+            <tr>
+                <th>공정평균</th>
+                <td>{{ isir.process_mean|floatformat:4|default:"-" }}</td>
+                <th>표준편차</th>
+                <td>{{ isir.process_std|floatformat:6|default:"-" }}</td>
+            </tr>
+            <tr>
+                <th>USL (상한규격)</th>
+                <td>{{ isir.usl|floatformat:4|default:"-" }}</td>
+                <th>LSL (하한규격)</th>
+                <td>{{ isir.lsl|floatformat:4|default:"-" }}</td>
+            </tr>
+            <tr>
+                <th>샘플 수</th>
+                <td colspan="3">{{ isir.spc_sample_size|default:"-" }}</td>
+            </tr>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- MSA 결과 -->
+    {% if isir.msa_grr_percent or isir.msa_result %}
+    <div class="section">
+        <div class="section-title">4. 측정시스템분석 (MSA)</div>
+        <table>
+            <tr>
+                <th>Gage R&R (%)</th>
+                <td class="{% if isir.msa_grr_percent <= 10 %}cpk-good{% elif isir.msa_grr_percent <= 30 %}cpk-marginal{% else %}cpk-bad{% endif %}">
+                    {{ isir.msa_grr_percent|floatformat:2|default:"-" }}%
+                </td>
+                <th>NDC (구별범주수)</th>
+                <td>{{ isir.msa_ndc|default:"-" }}</td>
+            </tr>
+            <tr>
+                <th>MSA 판정</th>
+                <td colspan="3" class="{% if isir.msa_result == 'ACCEPT' %}result-pass{% elif isir.msa_result == 'REJECT' %}result-fail{% else %}result-pending{% endif %}">
+                    {% if isir.msa_result == 'ACCEPT' %}적합
+                    {% elif isir.msa_result == 'CONDITIONAL' %}조건부 적합
+                    {% elif isir.msa_result == 'REJECT' %}부적합
+                    {% else %}-{% endif %}
+                </td>
+            </tr>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- PPAP 체크리스트 -->
+    {% if checklist %}
+    <div class="section">
+        <div class="section-title">5. PPAP 체크리스트</div>
+        <div class="checklist-grid">
+            {% for elem in ppap_elements %}
+            <div class="checklist-item {% if elem.checked %}checked{% endif %}">
+                <span class="checkbox {% if elem.checked %}checked{% endif %}"></span>
+                <span>{{ forloop.counter }}. {{ elem.name }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% if checklist.remark %}
+        <table style="margin-top: 5px;">
+            <tr>
+                <th style="width: 15%;">비고</th>
+                <td>{{ checklist.remark }}</td>
+            </tr>
+        </table>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- 첨부파일 목록 -->
+    {% if attachments %}
+    <div class="section">
+        <div class="section-title">6. 첨부파일</div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 5%;">No.</th>
+                    <th style="width: 20%;">유형</th>
+                    <th style="width: 50%;">파일명</th>
+                    <th style="width: 25%;">등록일</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for att in attachments %}
+                <tr>
+                    <td>{{ forloop.counter }}</td>
+                    <td>{{ att.get_file_type_display }}</td>
+                    <td>{{ att.file.name|slice:"-50:" }}</td>
+                    <td>{{ att.uploaded_at|date:"Y-m-d H:i" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- 결재란 -->
+    <div class="section" style="margin-top: 30px;">
+        <table class="approval-table">
+            <tr>
+                <th>작성</th>
+                <th>검토</th>
+                <th>승인</th>
+            </tr>
+            <tr>
+                <td>
+                    <div class="signature-line"></div>
+                    <small>{{ isir.inspector|default:"" }}</small>
+                </td>
+                <td>
+                    <div class="signature-line"></div>
+                </td>
+                <td>
+                    <div class="signature-line"></div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="footer">
+        본 문서는 {{ isir.created_at|date:"Y년 m월 d일" }}에 발행되었습니다.
+    </div>
+
+    <script>
+        // 브라우저에서 열렸을 때 자동으로 인쇄 대화상자 띄우기 (선택사항)
+        // window.onload = function() { window.print(); }
+    </script>
+</body>
+</html>

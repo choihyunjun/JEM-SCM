@@ -1,0 +1,396 @@
+{% extends 'material/material_base.html' %}
+{% load humanize %}
+
+{% block material_content %}
+<div class="container-fluid p-0" style="max-width: 1800px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold text-success"><i class="bi bi-speedometer2 me-2"></i>WMS 대시보드</h3>
+        <div>
+            <span class="badge bg-light text-dark me-2"><i class="bi bi-calendar me-1"></i>{{ today }}</span>
+            <span class="badge bg-success">WMS v2.0</span>
+        </div>
+    </div>
+
+    <!-- 1행: 핵심 KPI 카드 -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3 col-sm-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small text-muted mb-1">총 재고 품목</div>
+                            <div class="h3 fw-bold mb-0 text-success">{{ total_parts|intcomma }}</div>
+                        </div>
+                        <div class="bg-success bg-opacity-10 p-3 rounded">
+                            <i class="bi bi-box-seam text-success fs-4"></i>
+                        </div>
+                    </div>
+                    <div class="small text-muted mt-2">총 {{ total_qty|intcomma }} EA</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 col-sm-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small text-muted mb-1">금일 입고</div>
+                            <div class="h3 fw-bold mb-0 text-primary">{{ today_in_count }}</div>
+                        </div>
+                        <div class="bg-primary bg-opacity-10 p-3 rounded">
+                            <i class="bi bi-arrow-down-square text-primary fs-4"></i>
+                        </div>
+                    </div>
+                    <div class="small text-muted mt-2">{{ today_in_qty|intcomma }} EA</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 col-sm-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small text-muted mb-1">금일 출고</div>
+                            <div class="h3 fw-bold mb-0 text-danger">{{ today_out_count }}</div>
+                        </div>
+                        <div class="bg-danger bg-opacity-10 p-3 rounded">
+                            <i class="bi bi-arrow-up-square text-danger fs-4"></i>
+                        </div>
+                    </div>
+                    <div class="small text-muted mt-2">{{ today_out_qty|intcomma }} EA</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 col-sm-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small text-muted mb-1">FIFO 경고</div>
+                            <div class="h3 fw-bold mb-0 {% if fifo_warning_count > 0 %}text-warning{% else %}text-secondary{% endif %}">{{ fifo_warning_count }}</div>
+                        </div>
+                        <div class="{% if fifo_warning_count > 0 %}bg-warning{% else %}bg-secondary{% endif %} bg-opacity-10 p-3 rounded">
+                            <i class="bi bi-exclamation-triangle {% if fifo_warning_count > 0 %}text-warning{% else %}text-secondary{% endif %} fs-4"></i>
+                        </div>
+                    </div>
+                    <div class="small text-muted mt-2">30일 이상 경과 LOT</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2행: 월간 통계, BOM, 현품표 -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3 col-sm-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small text-muted mb-1">이번달 입고</div>
+                            <div class="h3 fw-bold mb-0 text-info">{{ month_in_count }}</div>
+                        </div>
+                        <div class="bg-info bg-opacity-10 p-3 rounded">
+                            <i class="bi bi-calendar-check text-info fs-4"></i>
+                        </div>
+                    </div>
+                    <div class="small text-muted mt-2">{{ month_in_qty|intcomma }} EA</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 col-sm-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small text-muted mb-1">이번달 출고</div>
+                            <div class="h3 fw-bold mb-0" style="color: #e67e22;">{{ month_out_count }}</div>
+                        </div>
+                        <div class="p-3 rounded" style="background: rgba(230,126,34,0.1);">
+                            <i class="bi bi-calendar-x fs-4" style="color: #e67e22;"></i>
+                        </div>
+                    </div>
+                    <div class="small text-muted mt-2">{{ month_out_qty|intcomma }} EA</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 col-sm-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small text-muted mb-1">BOM 등록</div>
+                            <div class="h3 fw-bold mb-0" style="color: purple;">{{ bom_stats.product_count }}</div>
+                        </div>
+                        <div class="p-3 rounded" style="background: rgba(128,0,128,0.1);">
+                            <i class="bi bi-diagram-3 fs-4" style="color: purple;"></i>
+                        </div>
+                    </div>
+                    <div class="small text-muted mt-2">구성품목: {{ bom_stats.bom_item_count }}개</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 col-sm-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small text-muted mb-1">현품표 발행</div>
+                            <div class="h3 fw-bold mb-0" style="color: teal;">{{ tag_stats.today_printed }}</div>
+                        </div>
+                        <div class="p-3 rounded" style="background: rgba(0,128,128,0.1);">
+                            <i class="bi bi-qr-code fs-4" style="color: teal;"></i>
+                        </div>
+                    </div>
+                    <div class="small text-muted mt-2">미사용: {{ tag_stats.pending }}개</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- 좌측: 창고별 재고 + FIFO 경고 -->
+        <div class="col-lg-4">
+            <!-- 창고별 재고 현황 -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-building me-2"></i>창고별 재고 현황</span>
+                    <a href="{% url 'material:stock_list' %}" class="btn btn-sm btn-outline-light">전체보기</a>
+                </div>
+                <div class="card-body p-0">
+                    {% if warehouse_stats %}
+                    <div class="list-group list-group-flush">
+                        {% for wh in warehouse_stats %}
+                        <a href="{% url 'material:stock_list' %}?warehouse_id={{ wh.warehouse__id }}&search_triggered=yes" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="badge bg-secondary me-2">{{ wh.warehouse__code }}</span>
+                                <span>{{ wh.warehouse__name }}</span>
+                            </div>
+                            <div class="text-end">
+                                <span class="fw-bold text-success">{{ wh.total_qty|intcomma }}</span>
+                                <small class="text-muted ms-1">EA</small>
+                                <br>
+                                <small class="text-muted">{{ wh.part_count }}품목</small>
+                            </div>
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                        등록된 재고가 없습니다
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- FIFO 경고 -->
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-warning text-dark">
+                    <i class="bi bi-exclamation-triangle me-2"></i>FIFO 경고 (30일+ 경과)
+                </div>
+                <div class="card-body p-0" style="max-height: 280px; overflow-y: auto;">
+                    {% if fifo_warnings %}
+                    <table class="table table-sm table-hover mb-0" style="font-size: 0.85rem;">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th>품번</th>
+                                <th>LOT</th>
+                                <th class="text-end">수량</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for stock in fifo_warnings %}
+                            <tr>
+                                <td><small>{{ stock.part.part_no }}</small></td>
+                                <td><span class="badge bg-warning text-dark">{{ stock.lot_no }}</span></td>
+                                <td class="text-end fw-bold">{{ stock.quantity|intcomma }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-check-circle text-success fs-1 d-block mb-2"></i>
+                        FIFO 경고 없음
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 중앙: 최근 입출고 이력 -->
+        <div class="col-lg-5">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-clock-history me-2"></i>최근 입출고 이력</span>
+                    <a href="{% url 'material:transaction_history' %}" class="btn btn-sm btn-outline-light">전체보기</a>
+                </div>
+                <div class="card-body p-0" style="max-height: 500px; overflow-y: auto;">
+                    {% if recent_transactions %}
+                    <table class="table table-sm table-hover mb-0" style="font-size: 0.85rem;">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th>일시</th>
+                                <th>구분</th>
+                                <th>품번</th>
+                                <th>위치</th>
+                                <th class="text-end">수량</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for tx in recent_transactions %}
+                            <tr>
+                                <td><small class="text-muted">{{ tx.date|date:"m/d H:i" }}</small></td>
+                                <td>
+                                    {% if 'IN' in tx.transaction_type %}
+                                    <span class="badge bg-primary">{{ tx.get_transaction_type_display }}</span>
+                                    {% elif 'OUT' in tx.transaction_type %}
+                                    <span class="badge bg-danger">{{ tx.get_transaction_type_display }}</span>
+                                    {% elif tx.transaction_type == 'TRANSFER' %}
+                                    <span class="badge bg-info">{{ tx.get_transaction_type_display }}</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">{{ tx.get_transaction_type_display }}</span>
+                                    {% endif %}
+                                </td>
+                                <td><small>{{ tx.part.part_no }}</small></td>
+                                <td>
+                                    {% if tx.warehouse_from and tx.warehouse_to %}
+                                    <small>{{ tx.warehouse_from.code }}<i class="bi bi-arrow-right mx-1"></i>{{ tx.warehouse_to.code }}</small>
+                                    {% elif tx.warehouse_to %}
+                                    <small><i class="bi bi-arrow-right me-1"></i>{{ tx.warehouse_to.code }}</small>
+                                    {% elif tx.warehouse_from %}
+                                    <small>{{ tx.warehouse_from.code }}<i class="bi bi-arrow-right mx-1"></i></small>
+                                    {% else %}
+                                    <small class="text-muted">-</small>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    {% if tx.quantity > 0 %}
+                                    <span class="text-primary fw-bold">+{{ tx.quantity|intcomma }}</span>
+                                    {% else %}
+                                    <span class="text-danger fw-bold">{{ tx.quantity|intcomma }}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                        입출고 이력이 없습니다
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 우측: 품목군별 현황 + 빠른 메뉴 + 마감 -->
+        <div class="col-lg-3">
+            <!-- 품목군별 재고 -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-info text-white">
+                    <i class="bi bi-pie-chart me-2"></i>품목군별 재고
+                </div>
+                <div class="card-body p-0">
+                    {% if part_group_stats %}
+                    <div class="list-group list-group-flush">
+                        {% for pg in part_group_stats %}
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>{{ pg.part__part_group|default:'미지정' }}</span>
+                            <div class="text-end">
+                                <span class="badge bg-info">{{ pg.part_count }}품목</span>
+                                <br>
+                                <small class="text-muted">{{ pg.total_qty|intcomma }} EA</small>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                        데이터 없음
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- 빠른 메뉴 -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-secondary text-white">
+                    <i class="bi bi-lightning me-2"></i>빠른 바로가기
+                </div>
+                <div class="card-body">
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <a href="{% url 'material:stock_list' %}" class="btn btn-outline-success w-100 py-3">
+                                <i class="bi bi-box-seam d-block fs-4 mb-1"></i>
+                                <small>재고현황</small>
+                            </a>
+                        </div>
+                        <div class="col-6">
+                            <a href="{% url 'material:manual_incoming' %}" class="btn btn-outline-primary w-100 py-3">
+                                <i class="bi bi-plus-circle d-block fs-4 mb-1"></i>
+                                <small>수동입고</small>
+                            </a>
+                        </div>
+                        <div class="col-6">
+                            <a href="{% url 'material:stock_move' %}" class="btn btn-outline-info w-100 py-3">
+                                <i class="bi bi-arrow-left-right d-block fs-4 mb-1"></i>
+                                <small>재고이동</small>
+                            </a>
+                        </div>
+                        <div class="col-6">
+                            <a href="{% url 'material:bom_list' %}" class="btn btn-outline-secondary w-100 py-3">
+                                <i class="bi bi-diagram-3 d-block fs-4 mb-1"></i>
+                                <small>BOM관리</small>
+                            </a>
+                        </div>
+                        <div class="col-6">
+                            <a href="{% url 'material:transaction_history' %}" class="btn btn-outline-dark w-100 py-3">
+                                <i class="bi bi-clock-history d-block fs-4 mb-1"></i>
+                                <small>수불이력</small>
+                            </a>
+                        </div>
+                        <div class="col-6">
+                            <a href="{% url 'material:process_tag_form' %}" class="btn w-100 py-3" style="border-color: teal; color: teal;">
+                                <i class="bi bi-qr-code d-block fs-4 mb-1"></i>
+                                <small>현품표</small>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 마감 현황 -->
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-dark text-white">
+                    <i class="bi bi-lock me-2"></i>재고 마감 현황
+                </div>
+                <div class="card-body">
+                    {% if closing_info %}
+                    <div class="alert alert-success mb-0">
+                        <div class="fw-bold mb-2">{{ closing_info.month }} 마감 완료</div>
+                        <small class="text-muted">
+                            <i class="bi bi-person me-1"></i>{{ closing_info.closed_by }}<br>
+                            <i class="bi bi-calendar me-1"></i>{{ closing_info.closed_at|date:"Y-m-d H:i" }}
+                        </small>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-secondary mb-0">
+                        <i class="bi bi-info-circle me-1"></i>
+                        마감 이력이 없습니다
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

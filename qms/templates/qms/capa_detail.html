@@ -1,0 +1,215 @@
+{% extends 'qms/qms_base.html' %}
+{% load humanize %}
+
+{% block title %}시정조치 상세 - {{ capa.capa_no }}{% endblock %}
+
+{% block qms_content %}
+<div class="container-fluid p-0" style="max-width: 1200px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold">
+            <i class="bi bi-tools me-2"></i>{{ capa.capa_no }}
+            <span class="badge bg-{% if capa.capa_type == 'CA' %}primary{% else %}info{% endif %} ms-2">
+                {{ capa.get_capa_type_display }}
+            </span>
+            <span class="badge bg-{% if capa.status == 'CLOSED' %}success{% elif capa.is_overdue %}danger{% else %}warning{% endif %}">
+                {{ capa.get_status_display }}
+            </span>
+        </h3>
+        <a href="{% url 'qms:capa_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>목록으로
+        </a>
+    </div>
+
+    {% if capa.is_overdue %}
+    <div class="alert alert-danger">
+        <i class="bi bi-exclamation-circle me-2"></i>
+        <strong>기한 초과!</strong> 회신기한 {{ capa.due_date }}을 초과했습니다. 즉시 조치가 필요합니다.
+    </div>
+    {% endif %}
+
+    <div class="row">
+        <!-- 요청 정보 -->
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-dark text-white">
+                    <i class="bi bi-file-text me-2"></i>요청 정보
+                </div>
+                <div class="card-body">
+                    <table class="table table-borderless mb-0">
+                        <tr>
+                            <th class="text-muted" style="width: 100px;">CAPA번호</th>
+                            <td class="fw-bold">{{ capa.capa_no }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">협력사</th>
+                            <td>{{ capa.vendor.name }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">품번</th>
+                            <td>{{ capa.part_no }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">품명</th>
+                            <td>{{ capa.part_name }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">요청일</th>
+                            <td>{{ capa.request_date }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">회신기한</th>
+                            <td class="{% if capa.is_overdue %}text-danger fw-bold{% endif %}">{{ capa.due_date }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">요청자</th>
+                            <td>{{ capa.requested_by.username }}</td>
+                        </tr>
+                        {% if capa.non_conformance %}
+                        <tr>
+                            <th class="text-muted">관련 부적합</th>
+                            <td><a href="{% url 'qms:nc_detail' pk=capa.non_conformance.pk %}">{{ capa.non_conformance.nc_no }}</a></td>
+                        </tr>
+                        {% endif %}
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 문제 내용 -->
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-danger text-white">
+                    <i class="bi bi-exclamation-circle me-2"></i>문제 내용
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <div class="small text-muted">문제점</div>
+                        <div class="h5 fw-bold">{{ capa.issue_title }}</div>
+                    </div>
+                    <div>
+                        <div class="small text-muted">문제 상세</div>
+                        <div class="p-3 bg-light rounded">{{ capa.issue_detail }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 협력사 회신 -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-warning">
+            <i class="bi bi-reply me-2"></i>협력사 회신
+        </div>
+        <div class="card-body">
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="vendor_response">
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-12">
+                        <label class="form-label fw-bold">원인분석</label>
+                        <textarea name="cause_analysis" class="form-control" rows="3" placeholder="불량 발생 원인을 분석하세요">{{ capa.cause_analysis }}</textarea>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">시정조치</label>
+                        <textarea name="corrective_action" class="form-control" rows="3" placeholder="현재 불량에 대한 시정조치">{{ capa.corrective_action }}</textarea>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">예방조치</label>
+                        <textarea name="preventive_action" class="form-control" rows="3" placeholder="재발 방지를 위한 예방조치">{{ capa.preventive_action }}</textarea>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">조치완료(예정)일</label>
+                        <input type="date" name="action_date" class="form-control" value="{{ capa.action_date|date:'Y-m-d' }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">첨부파일</label>
+                        {% if capa.attachment %}
+                        <div class="mb-2">
+                            <a href="{{ capa.attachment.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-file-earmark me-1"></i>기존 파일 보기
+                            </a>
+                        </div>
+                        {% endif %}
+                        <input type="file" name="attachment" class="form-control">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">회신일</label>
+                        <div class="form-control bg-light">{{ capa.response_date|default:'미회신' }}</div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-end">
+                    <button type="submit" class="btn btn-warning"><i class="bi bi-check-lg me-1"></i>회신 저장</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 효과 검증 -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-info text-white">
+            <i class="bi bi-clipboard-check me-2"></i>효과 검증 (내부)
+        </div>
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="verify">
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-8">
+                        <label class="form-label fw-bold">검증 결과</label>
+                        <textarea name="verification_result" class="form-control" rows="3" placeholder="조치 효과 검증 결과를 입력하세요">{{ capa.verification_result }}</textarea>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">효과 판정</label>
+                        <div class="mt-2">
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="is_effective" id="effective_yes" value="yes" {% if capa.is_effective == True %}checked{% endif %}>
+                                <label class="form-check-label text-success" for="effective_yes">효과 있음</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="is_effective" id="effective_no" value="no" {% if capa.is_effective == False %}checked{% endif %}>
+                                <label class="form-check-label text-danger" for="effective_no">효과 없음</label>
+                            </div>
+                        </div>
+                        {% if capa.verified_date %}
+                        <div class="small text-muted mt-2">검증일: {{ capa.verified_date }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-end">
+                    <button type="submit" class="btn btn-info"><i class="bi bi-check-lg me-1"></i>검증 저장</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 상태 변경 -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-secondary text-white">
+            <i class="bi bi-gear me-2"></i>상태 변경
+        </div>
+        <div class="card-body">
+            <form method="post" class="d-flex gap-3 align-items-center">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="update_status">
+                <label class="form-label mb-0 fw-bold">상태:</label>
+                <select name="status" class="form-select" style="width: 200px;">
+                    {% for value, label in status_choices %}
+                    <option value="{{ value }}" {% if capa.status == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-secondary"><i class="bi bi-check-lg me-1"></i>변경</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

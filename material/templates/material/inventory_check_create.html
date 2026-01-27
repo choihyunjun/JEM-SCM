@@ -1,0 +1,65 @@
+{% extends 'material/material_base.html' %}
+
+{% block title %}재고조사 시작{% endblock %}
+
+{% block material_content %}
+<div class="container-fluid p-0" style="max-width: 600px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold mb-0">
+            <i class="bi bi-qr-code-scan me-2"></i>재고조사 시작
+        </h3>
+        <a href="{% url 'material:inventory_check_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>목록
+        </a>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <i class="bi bi-gear me-2"></i>조사 설정
+        </div>
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">대상 창고 <span class="text-danger">*</span></label>
+                    <select name="warehouse" class="form-select" required>
+                        <option value="">창고 선택...</option>
+                        {% for wh in warehouses %}
+                        <option value="{{ wh.id }}">{{ wh.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">조사할 창고를 선택하세요.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">조사일</label>
+                    <input type="date" name="check_date" class="form-control" value="{% now 'Y-m-d' %}">
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label fw-bold">비고</label>
+                    <textarea name="remark" class="form-control" rows="2" placeholder="조사 목적이나 메모..."></textarea>
+                </div>
+
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i class="bi bi-play-fill me-2"></i>조사 시작
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="alert alert-info mt-4">
+        <i class="bi bi-info-circle me-2"></i>
+        <strong>재고조사 방법</strong>
+        <ol class="mb-0 mt-2">
+            <li>대상 창고 선택 후 조사 시작</li>
+            <li>현품표 QR코드를 스캔</li>
+            <li>시스템 재고와 자동 비교</li>
+            <li>조사 완료 후 결과 확인</li>
+        </ol>
+    </div>
+</div>
+{% endblock %}

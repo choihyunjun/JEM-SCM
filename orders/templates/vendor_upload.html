@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid p-0" style="max-width: 1920px;">
+
+    <div class="mb-4">
+        <h3 class="fw-bold text-secondary"><i class="bi bi-building-add me-2"></i>협력사(거래처) 일괄 등록</h3>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-white py-3">
+            <h5 class="fw-bold m-0 text-primary">STEP 1. 엑셀/CSV 파일 업로드</h5>
+        </div>
+        <div class="card-body p-4 text-center bg-light">
+            <form action="{% url 'vendor_upload_preview' %}" method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="input-group input-group-lg mb-3 mx-auto" style="max-width: 700px;">
+                    <input type="file" name="upload_file" class="form-control" required accept=".xlsx, .xls, .csv">
+                    <button type="submit" class="btn btn-primary px-4 fw-bold">
+                        <i class="bi bi-search me-1"></i> 데이터 미리보기
+                    </button>
+                </div>
+            </form>
+            <div class="alert alert-info d-inline-block text-start shadow-sm border-0 mt-2">
+                <small>
+                    <i class="bi bi-info-circle-fill me-1"></i> <strong>ERP 거래처 양식 (2행 1업체):</strong><br>
+                    <span class="text-dark">1행: 코드, 거래처명, 구분, 사업자번호, 업태, 우편번호, 메일, 금융기관, 예금주</span><br>
+                    <span class="text-dark">2행: 주소, (빈칸), (빈칸), 대표자명, 종목, 담당사원, 홈페이지, 계좌번호</span><br>
+                    <span class="text-muted ms-3">※ ERP에서 추출한 거래처 LIST 파일을 그대로 업로드하세요.</span>
+                </small>
+            </div>
+        </div>
+    </div>
+
+    {% if preview_data %}
+    <div class="card shadow border-0 border-top border-4 border-success animate__animated animate__fadeInUp">
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+            <h5 class="fw-bold m-0 text-success">STEP 2. 데이터 검증 및 최종 등록</h5>
+            <span class="badge bg-secondary fs-6">
+                총 {{ preview_data|length }}건 /
+                <span class="text-success-emphasis">신규 {{ new_count }}</span> /
+                <span class="text-info-emphasis">업데이트 {{ update_count }}</span> /
+                <span class="text-danger-emphasis">오류 {{ error_count }}</span>
+            </span>
+        </div>
+
+        <form action="{% url 'vendor_upload_confirm' %}" method="post">
+            {% csrf_token %}
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+                    <table class="table table-hover table-bordered mb-0 text-center align-middle" style="font-size: 0.9rem;">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th style="width: 50px;">No</th>
+                                <th style="width: 80px;">상태</th>
+                                <th style="width: 80px;">코드</th>
+                                <th style="width: 180px;">거래처명</th>
+                                <th style="width: 140px;">사업자번호</th>
+                                <th style="width: 80px;">대표자</th>
+                                <th>주소</th>
+                                <th style="width: 100px;">업태/종목</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in preview_data %}
+                            <tr class="{% if row.status == 'error' %}table-danger{% elif row.status == 'update' %}table-warning{% endif %}">
+                                <td>{{ forloop.counter }}</td>
+                                <td>
+                                    {% if row.status == 'new' %}
+                                        <span class="badge bg-success">신규</span>
+                                    {% elif row.status == 'update' %}
+                                        <span class="badge bg-warning text-dark">업데이트</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">오류</span>
+                                    {% endif %}
+                                </td>
+                                <td class="fw-bold">{{ row.code }}</td>
+                                <td class="text-start fw-bold">{{ row.name }}</td>
+                                <td>{{ row.biz_registration_number|default:"-" }}</td>
+                                <td>{{ row.representative|default:"-" }}</td>
+                                <td class="text-start small">{{ row.address|default:"-"|truncatechars:40 }}</td>
+                                <td class="small">{{ row.biz_type|default:"" }}/{{ row.biz_item|default:"" }}</td>
+
+                                {% if row.status != 'error' %}
+                                    <input type="hidden" name="code_list[]" value="{{ row.code }}">
+                                    <input type="hidden" name="name_list[]" value="{{ row.name }}">
+                                    <input type="hidden" name="biz_reg_list[]" value="{{ row.biz_registration_number }}">
+                                    <input type="hidden" name="representative_list[]" value="{{ row.representative }}">
+                                    <input type="hidden" name="address_list[]" value="{{ row.address }}">
+                                    <input type="hidden" name="biz_type_list[]" value="{{ row.biz_type }}">
+                                    <input type="hidden" name="biz_item_list[]" value="{{ row.biz_item }}">
+                                {% endif %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card-footer bg-white p-3 text-end">
+                <a href="{% url 'vendor_upload' %}" class="btn btn-secondary me-2">취소 (다시 올리기)</a>
+                {% if new_count > 0 or update_count > 0 %}
+                <button type="submit" class="btn btn-success fw-bold px-5"
+                        onclick="return confirm('신규 {{ new_count }}건, 업데이트 {{ update_count }}건을 등록하시겠습니까?')">
+                    <i class="bi bi-check-circle-fill me-2"></i> 최종 등록 확정
+                </button>
+                {% else %}
+                <button type="button" class="btn btn-secondary px-5" disabled>등록 가능한 데이터가 없습니다</button>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+    {% endif %}
+
+    {% if result %}
+    <div class="alert alert-success shadow-sm">
+        <h5 class="fw-bold"><i class="bi bi-check-circle-fill me-2"></i>등록 완료!</h5>
+        <p class="mb-0">신규 {{ result.created }}개, 업데이트 {{ result.updated }}개 처리되었습니다.</p>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

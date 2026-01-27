@@ -1,0 +1,604 @@
+{% extends 'qms/qms_base.html' %}
+{% load humanize %}
+
+{% block title %}4M 변경관리 - {{ cr.request_no }}{% endblock %}
+
+{% block qms_content %}
+<div class="container-fluid px-3" style="max-width: 1200px;">
+
+    <!-- 헤더 -->
+    <div class="d-flex justify-content-between align-items-start mb-3">
+        <div>
+            <h5 class="fw-bold mb-1">
+                <a href="{% url 'qms:change_request_list' %}" class="text-decoration-none text-muted">
+                    <i class="bi bi-arrow-left me-2"></i>
+                </a>
+                {{ cr.request_no }}
+                <span class="badge bg-{{ cr.phase_display_class }} ms-2">{{ cr.get_phase_display }}</span>
+            </h5>
+            <small class="text-muted">
+                {{ cr.part_no }} | {{ cr.part_name }} | {{ cr.vendor.name }}
+            </small>
+        </div>
+        <div class="d-flex gap-2">
+            {% if can_edit %}
+            <a href="{% url 'qms:change_request_edit' cr.pk %}" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-pencil me-1"></i>수정
+            </a>
+            {% endif %}
+            {% if can_submit %}
+            <form method="post" action="{% url 'qms:change_request_submit' cr.pk %}" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-primary btn-sm"
+                        onclick="return confirm('결재 상신하시겠습니까?')">
+                    <i class="bi bi-send me-1"></i>결재 상신
+                </button>
+            </form>
+            {% endif %}
+            {% if cr.phase == 'APPROVED' and not is_vendor %}
+            <form method="post" action="{% url 'qms:change_request_phase_change' cr.pk %}" class="d-inline">
+                {% csrf_token %}
+                <input type="hidden" name="new_phase" value="FORMAL">
+                <button type="submit" class="btn btn-success btn-sm"
+                        onclick="return confirm('정식 4M 단계로 전환하시겠습니까?')">
+                    <i class="bi bi-arrow-right-circle me-1"></i>정식 4M 전환
+                </button>
+            </form>
+            {% endif %}
+            {% if cr.phase == 'FORMAL' and not is_vendor %}
+            <form method="post" action="{% url 'qms:change_request_phase_change' cr.pk %}" class="d-inline">
+                {% csrf_token %}
+                <input type="hidden" name="new_phase" value="VALIDATION">
+                <button type="submit" class="btn btn-info btn-sm"
+                        onclick="return confirm('유효성 평가 단계로 전환하시겠습니까?')">
+                    <i class="bi bi-clipboard-check me-1"></i>유효성 평가 전환
+                </button>
+            </form>
+            {% endif %}
+            {% if cr.phase == 'VALIDATION' and cr.validity_result != 'PENDING' and not is_vendor %}
+            <form method="post" action="{% url 'qms:change_request_phase_change' cr.pk %}" class="d-inline">
+                {% csrf_token %}
+                <input type="hidden" name="new_phase" value="CLOSED">
+                <button type="submit" class="btn btn-dark btn-sm"
+                        onclick="return confirm('완료 처리하시겠습니까?')">
+                    <i class="bi bi-check-circle me-1"></i>완료
+                </button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- 반려 안내 -->
+    {% if cr.phase == 'REJECTED' %}
+    <div class="alert alert-danger mb-3">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        <strong>반려됨:</strong> {{ cr.reject_reason }}
+    </div>
+    {% endif %}
+
+    <!-- 내 결재 대기 -->
+    {% if my_pending_step %}
+    <div class="card border-warning mb-3">
+        <div class="card-header bg-warning text-dark fw-bold py-2">
+            <i class="bi bi-bell-fill me-2"></i>결재 대기중 - {{ my_pending_step.step_name }}
+        </div>
+        <div class="card-body">
+            <form method="post" action="{% url 'qms:approval_step_process' my_pending_step.pk %}">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label class="form-label fw-bold">의견</label>
+                    <textarea name="comment" class="form-control" rows="2" placeholder="의견을 입력하세요 (반려 시 필수)"></textarea>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="submit" name="action" value="approve" class="btn btn-success">
+                        <i class="bi bi-check-lg me-1"></i>승인
+                    </button>
+                    <button type="submit" name="action" value="reject" class="btn btn-danger">
+                        <i class="bi bi-x-lg me-1"></i>반려
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 탭 메뉴 -->
+    <ul class="nav nav-tabs mb-3" id="detailTabs" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-info">
+                <i class="bi bi-info-circle me-1"></i>기본 정보
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-approval">
+                <i class="bi bi-check2-square me-1"></i>결재 현황
+                {% if approval_steps %}
+                <span class="badge bg-secondary">{{ approval_steps.count }}</span>
+                {% endif %}
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-vendor">
+                <i class="bi bi-building me-1"></i>협력사 회신
+                {% if vendor_responses %}
+                <span class="badge bg-secondary">{{ vendor_responses.count }}</span>
+                {% endif %}
+            </button>
+        </li>
+        {% if cr.phase in 'FORMAL,VALIDATION,CLOSED' %}
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-docs">
+                <i class="bi bi-file-earmark-text me-1"></i>제출 서류
+                {% if documents %}
+                <span class="badge bg-secondary">{{ documents.count }}</span>
+                {% endif %}
+            </button>
+        </li>
+        {% endif %}
+        {% if cr.phase in 'VALIDATION,CLOSED' %}
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-validity">
+                <i class="bi bi-clipboard-check me-1"></i>유효성 평가
+            </button>
+        </li>
+        {% endif %}
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-history">
+                <i class="bi bi-clock-history me-1"></i>변경 이력
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+
+        <!-- 기본 정보 탭 -->
+        <div class="tab-pane fade show active" id="tab-info">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-header bg-light fw-bold py-2">변경 정보</div>
+                        <div class="card-body">
+                            <table class="table table-sm mb-0">
+                                <tr><th style="width: 120px;">4M 유형</th><td>{{ cr.get_change_type_display }}</td></tr>
+                                <tr><th>변경 등급</th><td>{{ cr.get_change_grade_display|default:"-" }}</td></tr>
+                                <tr><th>품번</th><td class="fw-bold text-primary">{{ cr.part_no }}</td></tr>
+                                <tr><th>품명</th><td>{{ cr.part_name }}</td></tr>
+                                <tr><th>차종/모델</th><td>{{ cr.model_name|default:"-" }}</td></tr>
+                                <tr><th>협력사</th><td>{{ cr.vendor.name }}</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-header bg-light fw-bold py-2">일정</div>
+                        <div class="card-body">
+                            <table class="table table-sm mb-0">
+                                <tr><th style="width: 120px;">신청자</th><td>{{ cr.created_by.username }}</td></tr>
+                                <tr><th>신청일</th><td>{{ cr.created_at|date:"Y-m-d H:i" }}</td></tr>
+                                <tr><th>목표완료일</th><td>{{ cr.target_date|date:"Y-m-d"|default:"-" }}</td></tr>
+                                <tr><th>정식 시작일</th><td>{{ cr.formal_start_date|date:"Y-m-d"|default:"-" }}</td></tr>
+                                <tr><th>유효성 기한</th><td>{{ cr.validation_due_date|date:"Y-m-d"|default:"-" }}</td></tr>
+                                <tr><th>완료일</th><td>{{ cr.closed_date|date:"Y-m-d"|default:"-" }}</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-header bg-light fw-bold py-2">변경 내용</div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold text-muted small">변경 사유</label>
+                                <div class="bg-light p-2 rounded" style="white-space: pre-wrap;">{{ cr.reason|default:"-" }}</div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label fw-bold text-danger small">변경 전</label>
+                                    <div class="bg-danger-subtle p-2 rounded" style="white-space: pre-wrap;">{{ cr.content_before|default:"-" }}</div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label fw-bold text-success small">변경 후</label>
+                                    <div class="bg-success-subtle p-2 rounded" style="white-space: pre-wrap;">{{ cr.content_after|default:"-" }}</div>
+                                </div>
+                            </div>
+                            {% if cr.affected_items %}
+                            <div>
+                                <label class="form-label fw-bold text-muted small">영향받는 특성/항목</label>
+                                <div class="bg-light p-2 rounded" style="white-space: pre-wrap;">{{ cr.affected_items }}</div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 결재 현황 탭 -->
+        <div class="tab-pane fade" id="tab-approval">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    {% if approval_steps %}
+                    <div class="d-flex justify-content-center mb-4">
+                        {% for step in approval_steps %}
+                        <div class="text-center mx-3">
+                            <div class="rounded-circle d-inline-flex align-items-center justify-content-center
+                                {% if step.status == 'APPROVED' %}bg-success{% elif step.status == 'REJECTED' %}bg-danger{% elif step.status == 'PENDING' %}bg-warning{% else %}bg-secondary{% endif %} text-white"
+                                 style="width: 50px; height: 50px;">
+                                {% if step.status == 'APPROVED' %}
+                                <i class="bi bi-check-lg fs-4"></i>
+                                {% elif step.status == 'REJECTED' %}
+                                <i class="bi bi-x-lg fs-4"></i>
+                                {% elif step.status == 'PENDING' %}
+                                <i class="bi bi-hourglass-split fs-5"></i>
+                                {% else %}
+                                <i class="bi bi-circle fs-5"></i>
+                                {% endif %}
+                            </div>
+                            <div class="mt-2 fw-bold small">{{ step.step_name }}</div>
+                            <div class="small text-muted">{{ step.assignee.username }}</div>
+                            {% if step.processed_at %}
+                            <div class="small text-muted">{{ step.processed_at|date:"m/d H:i" }}</div>
+                            {% endif %}
+                        </div>
+                        {% if not forloop.last %}
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-arrow-right text-muted fs-4"></i>
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                    <table class="table table-sm">
+                        <thead class="table-light">
+                            <tr>
+                                <th>단계</th>
+                                <th>결재자</th>
+                                <th>상태</th>
+                                <th>의견</th>
+                                <th>처리일시</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for step in approval_steps %}
+                            <tr>
+                                <td class="fw-bold">{{ step.step_name }}</td>
+                                <td>{{ step.assignee.username }}</td>
+                                <td>
+                                    <span class="badge
+                                        {% if step.status == 'APPROVED' %}bg-success
+                                        {% elif step.status == 'REJECTED' %}bg-danger
+                                        {% elif step.status == 'PENDING' %}bg-warning text-dark
+                                        {% else %}bg-secondary{% endif %}">
+                                        {{ step.get_status_display }}
+                                    </span>
+                                </td>
+                                <td>{{ step.comment|default:"-" }}</td>
+                                <td>{{ step.processed_at|date:"Y-m-d H:i"|default:"-" }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                        결재자가 지정되지 않았습니다.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 협력사 회신 탭 -->
+        <div class="tab-pane fade" id="tab-vendor">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
+                    <span class="fw-bold">협력사 회신</span>
+                    {% if not is_vendor %}
+                    <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#vendorRequestModal">
+                        <i class="bi bi-plus-lg me-1"></i>회신 요청
+                    </button>
+                    {% endif %}
+                </div>
+                <div class="card-body p-0">
+                    {% if vendor_responses %}
+                    <div class="accordion accordion-flush" id="vendorResponseAccordion">
+                        {% for vr in vendor_responses %}
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed py-2" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#vr{{ vr.pk }}">
+                                    <span class="badge {% if vr.status == 'RESPONDED' %}bg-success{% else %}bg-warning text-dark{% endif %} me-2">
+                                        {{ vr.get_status_display }}
+                                    </span>
+                                    <strong>{{ vr.request_title }}</strong>
+                                    <small class="text-muted ms-2">{{ vr.requested_at|date:"Y-m-d" }}</small>
+                                </button>
+                            </h2>
+                            <div id="vr{{ vr.pk }}" class="accordion-collapse collapse" data-bs-parent="#vendorResponseAccordion">
+                                <div class="accordion-body">
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold text-muted small">요청 내용 ({{ vr.requested_by.username }})</label>
+                                        <div class="bg-light p-2 rounded" style="white-space: pre-wrap;">{{ vr.request_content }}</div>
+                                    </div>
+                                    {% if vr.status == 'RESPONDED' %}
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold text-success small">
+                                            회신 내용 ({{ vr.responded_by.username }} - {{ vr.responded_at|date:"Y-m-d H:i" }})
+                                        </label>
+                                        <div class="bg-success-subtle p-2 rounded" style="white-space: pre-wrap;">{{ vr.response_content }}</div>
+                                    </div>
+                                    {% if vr.attachments.exists %}
+                                    <div>
+                                        <label class="form-label fw-bold text-muted small">첨부파일</label>
+                                        <ul class="list-unstyled">
+                                            {% for att in vr.attachments.all %}
+                                            <li><a href="{{ att.file.url }}" target="_blank"><i class="bi bi-paperclip me-1"></i>{{ att.file_name }}</a></li>
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
+                                    {% endif %}
+                                    {% elif is_vendor %}
+                                    <form method="post" action="{% url 'qms:vendor_response_submit' vr.pk %}" enctype="multipart/form-data">
+                                        {% csrf_token %}
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold">회신 내용</label>
+                                            <textarea name="response_content" class="form-control" rows="4" required></textarea>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold">첨부파일</label>
+                                            <input type="file" name="attachments" class="form-control" multiple>
+                                        </div>
+                                        <button type="submit" class="btn btn-success">
+                                            <i class="bi bi-send me-1"></i>회신 제출
+                                        </button>
+                                    </form>
+                                    {% else %}
+                                    <div class="alert alert-warning mb-0">
+                                        <i class="bi bi-hourglass-split me-2"></i>협력사 회신 대기 중...
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                        협력사 회신 요청이 없습니다.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 제출 서류 탭 -->
+        {% if cr.phase in 'FORMAL,VALIDATION,CLOSED' %}
+        <div class="tab-pane fade" id="tab-docs">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-0">
+                    <table class="table table-sm mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 200px;">서류명</th>
+                                <th style="width: 80px;">필수</th>
+                                <th>파일</th>
+                                <th style="width: 100px;">검토상태</th>
+                                <th>검토의견</th>
+                                <th style="width: 150px;">액션</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for doc in documents %}
+                            <tr>
+                                <td class="fw-bold">{{ doc.doc_name }}</td>
+                                <td class="text-center">
+                                    {% if doc.is_required %}<span class="badge bg-danger">필수</span>{% else %}-{% endif %}
+                                </td>
+                                <td>
+                                    {% if doc.file %}
+                                    <a href="{{ doc.file.url }}" target="_blank" class="text-decoration-none">
+                                        <i class="bi bi-file-earmark me-1"></i>파일 보기
+                                    </a>
+                                    <small class="text-muted ms-2">{{ doc.uploaded_at|date:"m/d" }}</small>
+                                    {% else %}
+                                    <span class="text-muted">미제출</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge
+                                        {% if doc.review_status == 'OK' %}bg-success
+                                        {% elif doc.review_status == 'REJECT' %}bg-danger
+                                        {% else %}bg-secondary{% endif %}">
+                                        {{ doc.get_review_status_display }}
+                                    </span>
+                                </td>
+                                <td class="small">{{ doc.review_comment|default:"-" }}</td>
+                                <td>
+                                    <!-- 업로드 -->
+                                    <form method="post" action="{% url 'qms:document_upload' doc.pk %}" enctype="multipart/form-data" class="d-inline">
+                                        {% csrf_token %}
+                                        <input type="file" name="file" class="d-none" id="file{{ doc.pk }}"
+                                               onchange="this.form.submit()">
+                                        <label for="file{{ doc.pk }}" class="btn btn-sm btn-outline-primary" style="cursor: pointer;">
+                                            <i class="bi bi-upload"></i>
+                                        </label>
+                                    </form>
+                                    {% if doc.file and not is_vendor %}
+                                    <!-- 검토 -->
+                                    <button class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#reviewModal{{ doc.pk }}">
+                                        <i class="bi bi-check"></i>
+                                    </button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="6" class="text-center py-4 text-muted">제출 서류가 없습니다.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- 유효성 평가 탭 -->
+        {% if cr.phase in 'VALIDATION,CLOSED' %}
+        <div class="tab-pane fade" id="tab-validity">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">유효성 평가 기한</label>
+                            <div>{{ cr.validation_due_date|date:"Y-m-d"|default:"-" }}</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">평가 결과</label>
+                            <div>
+                                <span class="badge fs-6
+                                    {% if cr.validity_result == 'PASS' %}bg-success
+                                    {% elif cr.validity_result == 'FAIL' %}bg-danger
+                                    {% else %}bg-secondary{% endif %}">
+                                    {{ cr.get_validity_result_display }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    {% if cr.validity_remark %}
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">평가 비고</label>
+                        <div class="bg-light p-2 rounded">{{ cr.validity_remark }}</div>
+                    </div>
+                    {% endif %}
+                    {% if cr.phase == 'VALIDATION' and not is_vendor %}
+                    <hr>
+                    <form method="post" action="{% url 'qms:validity_evaluation' cr.pk %}">
+                        {% csrf_token %}
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">평가 결과</label>
+                                <select name="validity_result" class="form-select" required>
+                                    <option value="">선택</option>
+                                    <option value="PASS">합격</option>
+                                    <option value="FAIL">불합격</option>
+                                </select>
+                            </div>
+                            <div class="col-md-8">
+                                <label class="form-label fw-bold">비고</label>
+                                <input type="text" name="validity_remark" class="form-control" placeholder="평가 비고">
+                            </div>
+                            <div class="col-12">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-check-lg me-1"></i>평가 결과 저장
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- 변경 이력 탭 -->
+        <div class="tab-pane fade" id="tab-history">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-0">
+                    <table class="table table-sm mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 150px;">일시</th>
+                                <th style="width: 100px;">액션</th>
+                                <th>내용</th>
+                                <th style="width: 100px;">수행자</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for h in history %}
+                            <tr>
+                                <td class="small">{{ h.created_at|date:"Y-m-d H:i" }}</td>
+                                <td><span class="badge bg-secondary">{{ h.get_action_display }}</span></td>
+                                <td class="small">{{ h.description }}</td>
+                                <td class="small">{{ h.actor.username|default:"-" }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center py-4 text-muted">이력이 없습니다.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+<!-- 협력사 회신 요청 모달 -->
+<div class="modal fade" id="vendorRequestModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{% url 'qms:vendor_response_create' cr.pk %}">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">협력사 회신 요청</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">요청 제목</label>
+                        <input type="text" name="request_title" class="form-control" required placeholder="예: 변경 전/후 비교 자료 요청">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">요청 내용</label>
+                        <textarea name="request_content" class="form-control" rows="4" required placeholder="협력사에 요청할 내용을 상세히 작성해주세요."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                    <button type="submit" class="btn btn-primary">요청 보내기</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 서류 검토 모달 -->
+{% for doc in documents %}
+<div class="modal fade" id="reviewModal{{ doc.pk }}" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{% url 'qms:document_review' doc.pk %}">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">서류 검토 - {{ doc.doc_name }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">검토 결과</label>
+                        <select name="review_status" class="form-select" required>
+                            <option value="OK">적합</option>
+                            <option value="REJECT">부적합</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">검토 의견</label>
+                        <textarea name="review_comment" class="form-control" rows="3" placeholder="검토 의견 (선택)">{{ doc.review_comment }}</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                    <button type="submit" class="btn btn-primary">저장</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{% endblock %}

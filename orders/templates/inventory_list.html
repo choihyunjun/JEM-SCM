@@ -1,8 +1,9 @@
 {% extends 'base.html' %}
 {% load humanize %}
+{% load auth_extras %}
 
 {% block content %}
-<div class="container-fluid">
+<div class="container-fluid p-0">
 
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-3 top-control">
         <h2 class="header-title mb-0">
@@ -13,7 +14,7 @@
         </h2>
 
         <div class="top-actions">
-            {% if user.is_superuser or user.profile.role == 'STAFF' %}
+            {% if user.is_superuser or user|has_perm:'can_scm_inventory_view' %}
             <form method="get" class="control-block">
                 <input type="hidden" name="show_all" value="{{ show_all|lower }}">
 
@@ -43,21 +44,14 @@
                     <i class="bi bi-file-earmark-excel me-1"></i>엑셀 저장
                 </a>
 
-                {% if user.is_superuser or user.profile.role == 'STAFF' %}
+                {% if user.is_superuser or user|has_perm:'can_scm_inventory_edit' %}
                 <a href="{% url 'demand_manage' %}" class="btn btn-sm btn-outline-primary shadow-sm bg-white">
                     <i class="bi bi-pencil-square me-1"></i>소요량 수정/삭제
                 </a>
 
-                <button class="btn btn-sm btn-warning shadow-sm" data-bs-toggle="modal" data-bs-target="#demandUploadModal">
-                    <i class="bi bi-cloud-arrow-up me-1"></i>소요량 업로드
+                <button class="btn btn-sm btn-warning shadow-sm" onclick="openBulkShortageModal()">
+                    <i class="bi bi-cart-plus me-1"></i>부족품 일괄 발주
                 </button>
-
-                {# ✅ [삭제 반영] inventory_upload 기능 제거로 버튼 비활성화 #}
-                {% comment %}
-                <a href="{% url 'inventory_upload' %}" class="btn btn-sm btn-danger shadow-sm">
-                    <i class="bi bi-upload me-1"></i>기초재고 업로드
-                </a>
-                {% endcomment %}
                 {% endif %}
             </div>
 
@@ -84,7 +78,7 @@
                         <tr>
                             <th rowspan="2" style="width: 180px; position: sticky; left: 0; top: 0; z-index: 30;" class="bg-light sticky-col">품목 정보</th>
                             <th rowspan="2" style="width: 70px; position: sticky; top: 0; z-index: 20;" class="bg-light">구분</th>
-                            <th rowspan="2" style="width: 90px; position: sticky; top: 0; z-index: 20;" class="bg-light border-end-bold">현재고</th>
+                            <th rowspan="2" style="width: 90px; position: sticky; top: 0; z-index: 20;" class="bg-light border-end-bold">시업재고</th>
                             {% for dt in date_range %}
                             <th class="date-cell"
                                 style="position: sticky; top: 0; z-index: 20; min-width: 85px; {% if dt.weekday >= 5 %}color: #d9534f; background-color: #fff5f5;{% endif %}">
@@ -103,13 +97,9 @@
                                 <div class="small text-secondary fw-normal text-truncate" style="max-width: 150px;">{{ item.part_name }}</div>
                             </td>
                             <td class="bg-light small">소요량</td>
-                            <td rowspan="3" class="fw-bold fs-6 border-end-bold bg-white cursor-pointer lot-detail-cell"
-                                data-part-no="{{ item.part_no }}"
-                                title="더블클릭하여 LOT별 상세 보기"
-                                ondblclick="showLotDetails('{{ item.part_no }}')">
+                            <td rowspan="3" class="fw-bold fs-6 border-end-bold bg-white">
                                 {{ item.base_stock|intcomma }}
                                 <div class="text-muted" style="font-size: 0.6rem;">(기준: 오늘아침)</div>
-                                <div class="text-info small" style="font-size: 0.65rem;">🔍 LOT 상세</div>
                             </td>
                             {% for day in item.daily_status %}
                             <td class="text-primary date-cell {% if user.is_superuser or user.profile.role == 'STAFF' %}cursor-pointer hover-bg-light{% endif %}"
@@ -200,21 +190,77 @@
     </div>
 </div>
 
-<div class="modal fade" id="demandUploadModal" tabindex="-1">
-    <div class="modal-dialog">
+<div class="modal fade" id="bulkShortageModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header bg-warning">
-                <h5 class="modal-title fw-bold">소요량 엑셀 업로드</h5>
+                <h5 class="modal-title fw-bold"><i class="bi bi-cart-plus me-2"></i>부족품 일괄 발주</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
-                <p class="small text-muted">A열:품번 / B열:소요수량 / C열:날짜(YYYY-MM-DD)</p>
-                <form action="{% url 'demand_upload_action' %}" method="post" enctype="multipart/form-data">
-                    {% csrf_token %}
-                    <input type="file" name="demand_file" class="form-control mb-3" required>
-                    <button type="submit" class="btn btn-warning w-100 fw-bold">소요량 데이터 반영</button>
-                </form>
-            </div>
+            <form id="bulkShortageForm" method="post" action="{% url 'bulk_shortage_order' %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <!-- 업체 필터 영역 (선택사항) -->
+                    <div class="mb-3">
+                        <div class="d-flex align-items-center gap-2">
+                            <label class="form-label fw-bold mb-0"><i class="bi bi-funnel me-1"></i>업체 필터</label>
+                            <span class="text-muted small">(선택사항)</span>
+                        </div>
+                        <div class="d-flex gap-2 mt-2">
+                            <div class="position-relative flex-grow-1">
+                                <input type="text" id="vendorSearchInput" class="form-control form-control-sm"
+                                       placeholder="협력사명 검색..." autocomplete="off">
+                                <div id="vendorSearchResults" class="list-group position-absolute w-100 shadow"
+                                     style="z-index: 1050; max-height: 250px; overflow-y: auto; display: none;"></div>
+                            </div>
+                            <div id="selectedVendorDisplay" style="display: none;">
+                                <span class="badge bg-primary px-3 py-2">
+                                    <span id="selectedVendorName"></span>
+                                    <button type="button" class="btn-close btn-close-white ms-2" style="font-size: 0.5rem;" onclick="clearSelectedVendor()"></button>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 부족품 테이블 영역 -->
+                    <div id="shortageTableContainer">
+                        <div class="alert alert-info py-2 mb-3">
+                            <i class="bi bi-info-circle me-1"></i>
+                            <span id="vendorShortageInfo"></span>
+                        </div>
+                        <div class="table-responsive" style="max-height: 400px;">
+                            <table class="table table-bordered table-sm align-middle mb-0" style="font-size: 0.85rem;">
+                                <thead class="table-light text-center sticky-top">
+                                    <tr>
+                                        <th style="width: 40px;"><input type="checkbox" id="checkAll" checked></th>
+                                        <th style="width: 120px;">업체</th>
+                                        <th style="width: 150px;">품번</th>
+                                        <th style="width: 90px;">부족일</th>
+                                        <th style="width: 90px;">부족수량</th>
+                                        <th style="width: 120px;">납기요청일</th>
+                                        <th style="width: 100px;">발주수량</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="shortageTableBody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- 부족품 없음 메시지 -->
+                    <div id="noShortageMessage" class="text-center text-muted py-5" style="display: none;">
+                        <i class="bi bi-check-circle-fill text-success fs-1 d-block mb-2"></i>
+                        부족 품목이 없습니다.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <span class="me-auto text-muted small" id="selectedCount">선택: 0건</span>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                    <button type="submit" class="btn btn-warning fw-bold" id="bulkOrderSubmitBtn" disabled>
+                        <i class="bi bi-check-lg me-1"></i>선택 품목 발주 등록
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -243,6 +289,304 @@ function openOrderModal(partNo, partName, vendor, shortage, dueDate) {
     document.getElementById('modalDueDate').value = dueDate;
     new bootstrap.Modal(document.getElementById('orderModal')).show();
 }
+
+// 부족품 일괄 발주 관련 함수
+const shortageData = [];
+{% for item in inventory_data %}
+    {% for day in item.daily_status %}
+        {% if day.is_danger %}
+        shortageData.push({
+            vendor: '{{ item.vendor_name|escapejs }}',
+            partNo: '{{ item.part_no|escapejs }}',
+            partName: '{{ item.part_name|escapejs }}',
+            shortageDate: '{{ day.date|date:"Y-m-d" }}',
+            shortageQty: {{ day.stock }},
+            dueDate: '{{ day.date|date:"Y-m-d" }}'
+        });
+        {% endif %}
+    {% endfor %}
+{% endfor %}
+
+// 품번+업체 기준으로 중복 제거 (첫 번째 부족일만 사용)
+const uniqueShortages = [];
+const seenKeys = new Set();
+shortageData.forEach(item => {
+    const key = item.partNo + '_' + item.vendor;
+    if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        uniqueShortages.push(item);
+    }
+});
+
+// 부족품이 있는 업체 목록 추출
+const vendorsWithShortage = [...new Set(uniqueShortages.map(item => item.vendor))].sort();
+
+// 이미 등록된 미확인 발주 목록 (품번_납기일 형태) - 정확히 일치하는 경우
+const pendingOrderKeys = new Set([
+    {% for key in pending_order_keys %}'{{ key }}',{% endfor %}
+]);
+// 미확인 발주가 있는 품번 목록 (날짜 무관) - 관련 발주 경고용
+const pendingOrderParts = new Set([
+    {% for part in pending_order_parts %}'{{ part }}',{% endfor %}
+]);
+
+let selectedVendorForBulk = null;
+
+function openBulkShortageModal() {
+    // 초기화
+    selectedVendorForBulk = null;
+    document.getElementById('vendorSearchInput').value = '';
+    document.getElementById('vendorSearchInput').style.display = 'block';
+    document.getElementById('vendorSearchResults').style.display = 'none';
+    document.getElementById('selectedVendorDisplay').style.display = 'none';
+
+    // 전체 부족품 표시
+    showShortages(null);
+
+    new bootstrap.Modal(document.getElementById('bulkShortageModal')).show();
+}
+
+// 업체 검색 기능
+let vendorSearchTimeout = null;
+const vendorSearchInput = document.getElementById('vendorSearchInput');
+const vendorSearchResults = document.getElementById('vendorSearchResults');
+
+// Enter 키로 폼 제출 방지 (검색창에서)
+vendorSearchInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        // 검색 결과가 보이면 첫 번째 항목 선택
+        const firstResult = vendorSearchResults.querySelector('.list-group-item-action');
+        if (firstResult && vendorSearchResults.style.display !== 'none') {
+            firstResult.click();
+        }
+    }
+});
+
+vendorSearchInput.addEventListener('input', function() {
+    clearTimeout(vendorSearchTimeout);
+    const query = this.value.trim().toLowerCase();
+
+    if (query.length < 1) {
+        vendorSearchResults.style.display = 'none';
+        return;
+    }
+
+    vendorSearchTimeout = setTimeout(() => {
+        vendorSearchResults.innerHTML = '';
+        const filtered = vendorsWithShortage.filter(v => v.toLowerCase().includes(query));
+
+        if (filtered.length === 0) {
+            vendorSearchResults.innerHTML = '<div class="list-group-item text-muted">부족품이 있는 협력사가 없습니다</div>';
+        } else {
+            filtered.forEach(vendor => {
+                const count = uniqueShortages.filter(s => s.vendor === vendor).length;
+                const item = document.createElement('button');
+                item.type = 'button';
+                item.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center';
+                item.innerHTML = `<strong>${vendor}</strong><span class="badge bg-danger">${count}건 부족</span>`;
+                item.onclick = () => selectVendorForBulk(vendor);
+                vendorSearchResults.appendChild(item);
+            });
+        }
+        vendorSearchResults.style.display = 'block';
+    }, 200);
+});
+
+function selectVendorForBulk(vendor) {
+    selectedVendorForBulk = vendor;
+    document.getElementById('selectedVendorName').textContent = vendor;
+    document.getElementById('selectedVendorDisplay').style.display = 'inline-block';
+    document.getElementById('vendorSearchInput').style.display = 'none';
+    vendorSearchResults.style.display = 'none';
+
+    // 해당 업체의 부족품만 표시
+    showShortages(vendor);
+}
+
+function clearSelectedVendor() {
+    selectedVendorForBulk = null;
+    document.getElementById('selectedVendorDisplay').style.display = 'none';
+    document.getElementById('vendorSearchInput').style.display = 'block';
+    document.getElementById('vendorSearchInput').value = '';
+
+    // 전체 부족품 다시 표시
+    showShortages(null);
+}
+
+// 날짜 문자열에서 N일 전/후 날짜 계산 (YYYY-MM-DD 형식 유지)
+function calcDate(dateStr, offsetDays) {
+    const parts = dateStr.split('-');
+    const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]) + offsetDays);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
+function showShortages(vendorFilter) {
+    const tbody = document.getElementById('shortageTableBody');
+    const noMsg = document.getElementById('noShortageMessage');
+    const container = document.getElementById('shortageTableContainer');
+    tbody.innerHTML = '';
+
+    // vendorFilter가 null이면 전체, 있으면 해당 업체만
+    const shortages = vendorFilter
+        ? uniqueShortages.filter(item => item.vendor === vendorFilter)
+        : uniqueShortages;
+
+    if (shortages.length === 0) {
+        container.style.display = 'none';
+        noMsg.style.display = 'block';
+        document.getElementById('bulkOrderSubmitBtn').disabled = true;
+        document.getElementById('selectedCount').textContent = '선택: 0건';
+    } else {
+        container.style.display = 'block';
+        noMsg.style.display = 'none';
+
+        // 이미 발주 등록된 품목 수 계산 (정확 매칭 + 관련 발주)
+        let exactMatchCount = 0;
+        let relatedCount = 0;
+        shortages.forEach(item => {
+            const dueDate = calcDate(item.shortageDate, -1);
+            const dk = `${item.partNo}_${dueDate}`;
+            if (pendingOrderKeys.has(dk)) {
+                exactMatchCount++;
+            } else if (pendingOrderParts.has(item.partNo)) {
+                relatedCount++;
+            }
+        });
+
+        let infoHtml = vendorFilter
+            ? `<strong>${vendorFilter}</strong> 부족 품목 <strong>${shortages.length}</strong>건`
+            : `전체 부족 품목 <strong>${shortages.length}</strong>건 (${vendorsWithShortage.length}개 업체)`;
+
+        if (exactMatchCount > 0) {
+            infoHtml += ` <span class="text-info">| 발주중 ${exactMatchCount}건</span>`;
+        }
+        if (relatedCount > 0) {
+            infoHtml += ` <span class="text-warning">| 관련발주 ${relatedCount}건</span>`;
+        }
+        document.getElementById('vendorShortageInfo').innerHTML = infoHtml;
+
+        shortages.forEach((item, idx) => {
+            const absQty = Math.abs(item.shortageQty);
+            // 납기요청일 = 부족일 하루 전
+            const dueDate = calcDate(item.shortageDate, -1);
+
+            // 발주 상태 확인
+            const orderKey = `${item.partNo}_${dueDate}`;
+            const hasExactMatch = pendingOrderKeys.has(orderKey);  // 정확히 같은 납기일 발주 존재
+            const hasRelatedOrder = !hasExactMatch && pendingOrderParts.has(item.partNo);  // 다른 납기일 발주 존재
+
+            const row = document.createElement('tr');
+            if (hasExactMatch) {
+                row.classList.add('table-secondary');
+            } else if (hasRelatedOrder) {
+                row.classList.add('table-warning');
+            }
+
+            // 배지 결정
+            let badge = '';
+            if (hasExactMatch) {
+                badge = '<span class="badge bg-info ms-1" title="동일 납기일 발주 진행중">발주중</span>';
+            } else if (hasRelatedOrder) {
+                badge = '<span class="badge bg-warning text-dark ms-1" title="이 품번에 다른 납기일 발주 있음">관련발주</span>';
+            }
+
+            row.innerHTML = `
+                <td class="text-center">
+                    <input type="checkbox" class="shortage-check" data-idx="${idx}" ${hasExactMatch ? '' : 'checked'}>
+                </td>
+                <td class="small">${item.vendor}</td>
+                <td class="fw-bold">
+                    ${item.partNo}
+                    ${badge}
+                </td>
+                <td class="text-center">${item.shortageDate}</td>
+                <td class="text-center text-danger fw-bold">${item.shortageQty.toLocaleString()}</td>
+                <td class="text-center">
+                    <input type="date" name="due_date_${idx}" value="${dueDate}" class="form-control form-control-sm">
+                </td>
+                <td>
+                    <input type="number" name="qty_${idx}" value="${absQty}" min="1"
+                           class="form-control form-control-sm text-end" style="width: 100px;">
+                </td>
+                <input type="hidden" name="vendor_${idx}" value="${item.vendor}">
+                <input type="hidden" name="part_no_${idx}" value="${item.partNo}">
+            `;
+            tbody.appendChild(row);
+        });
+
+        document.getElementById('checkAll').checked = true;
+        updateSelectedCount();
+    }
+}
+
+function updateSelectedCount() {
+    const checks = document.querySelectorAll('.shortage-check:checked');
+    document.getElementById('selectedCount').textContent = `선택: ${checks.length}건`;
+    document.getElementById('bulkOrderSubmitBtn').disabled = checks.length === 0;
+}
+
+document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('shortage-check') || e.target.id === 'checkAll') {
+        if (e.target.id === 'checkAll') {
+            document.querySelectorAll('.shortage-check').forEach(cb => cb.checked = e.target.checked);
+        }
+        updateSelectedCount();
+    }
+});
+
+document.getElementById('bulkShortageForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData();
+    formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+    const orders = [];
+    document.querySelectorAll('.shortage-check:checked').forEach(cb => {
+        const idx = cb.dataset.idx;
+        orders.push({
+            vendor: document.querySelector(`input[name="vendor_${idx}"]`).value,
+            part_no: document.querySelector(`input[name="part_no_${idx}"]`).value,
+            due_date: document.querySelector(`input[name="due_date_${idx}"]`).value,
+            quantity: document.querySelector(`input[name="qty_${idx}"]`).value
+        });
+    });
+
+    if (orders.length === 0) {
+        alert('발주할 품목을 선택하세요.');
+        return;
+    }
+
+    formData.append('orders', JSON.stringify(orders));
+
+    fetch('{% url "bulk_shortage_order" %}', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(`${data.created}건의 발주가 등록되었습니다.`);
+            location.reload();
+        } else {
+            alert('오류: ' + data.error);
+        }
+    })
+    .catch(err => {
+        alert('발주 처리 중 오류가 발생했습니다.');
+    });
+});
+
+// 외부 클릭 시 업체 검색 결과 닫기
+document.addEventListener('click', function(e) {
+    if (vendorSearchInput && vendorSearchResults) {
+        if (!vendorSearchInput.contains(e.target) && !vendorSearchResults.contains(e.target)) {
+            vendorSearchResults.style.display = 'none';
+        }
+    }
+});
 </script>
 
 <style>
@@ -278,139 +622,6 @@ function openOrderModal(partNo, partName, vendor, shortage, dueDate) {
 .border-bottom-bold { border-bottom: 2px solid #dee2e6 !important; }
 .bg-danger-light { background-color: #fff5f5 !important; transition: 0.2s; }
 .cursor-pointer { cursor: pointer; }
-.lot-detail-cell:hover { background-color: #e7f3ff !important; }
 </style>
-
-<!-- LOT 상세 보기 모달 -->
-<div class="modal fade" id="lotDetailModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title">
-                    <i class="bi bi-box-seam"></i> LOT별 재고 상세
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div id="lotDetailContent">
-                    <div class="text-center py-5">
-                        <div class="spinner-border text-primary" role="status"></div>
-                        <p class="mt-3">데이터 조회 중...</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<script>
-function showLotDetails(partNo) {
-    const modal = new bootstrap.Modal(document.getElementById('lotDetailModal'));
-    modal.show();
-
-    // 로딩 표시
-    document.getElementById('lotDetailContent').innerHTML = `
-        <div class="text-center py-5">
-            <div class="spinner-border text-primary" role="status"></div>
-            <p class="mt-3">데이터 조회 중...</p>
-        </div>
-    `;
-
-    // AJAX 요청
-    fetch('/inventory/lot-details/' + partNo + '/')
-        .then(response => response.json())
-        .then(data => {
-            if (data.error) {
-                throw new Error(data.error);
-            }
-
-            let html = `
-                <div class="mb-3">
-                    <h6 class="fw-bold"><i class="bi bi-info-circle text-primary"></i> 품목 정보</h6>
-                    <div class="row">
-                        <div class="col-md-4"><strong>품번:</strong> ${data.part_no}</div>
-                        <div class="col-md-4"><strong>품명:</strong> ${data.part_name}</div>
-                        <div class="col-md-4"><strong>공급처:</strong> ${data.vendor_name}</div>
-                    </div>
-                    <div class="mt-2">
-                        <span class="badge bg-info">전체 재고: ${data.total_quantity.toLocaleString()} EA</span>
-                    </div>
-                </div>
-            `;
-
-            // FIFO 경고 표시
-            if (data.fifo_warning) {
-                html += `
-                    <div class="alert alert-warning d-flex align-items-center">
-                        <i class="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
-                        <div>
-                            <strong>선입선출(FIFO) 경고!</strong><br>
-                            가장 오래된 LOT: <strong>${data.oldest_lot}</strong> (${data.oldest_days}일 경과)<br>
-                            오래된 LOT를 우선 출고해주세요.
-                        </div>
-                    </div>
-                `;
-            }
-
-            html += `
-                <h6 class="fw-bold mt-3"><i class="bi bi-list-ul text-success"></i> LOT별 상세 재고</h6>
-                <div class="table-responsive">
-                    <table class="table table-bordered table-hover text-center align-middle">
-                        <thead class="table-light">
-                            <tr>
-                                <th>창고</th>
-                                <th>LOT 번호(생산일)</th>
-                                <th>재고수량</th>
-                                <th>보관일수</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-            `;
-
-            if (data.lot_details.length === 0) {
-                html += `
-                    <tr>
-                        <td colspan="4" class="text-muted py-4">재고가 없습니다.</td>
-                    </tr>
-                `;
-            } else {
-                data.lot_details.forEach(lot => {
-                    const daysClass = lot.days_old >= 60 ? 'text-danger fw-bold' : (lot.days_old >= 30 ? 'text-warning' : '');
-                    html += `
-                        <tr>
-                            <td>${lot.warehouse} <small class="text-muted">(${lot.warehouse_code})</small></td>
-                            <td class="fw-bold text-primary">${lot.lot_no}</td>
-                            <td class="fw-bold">${lot.quantity.toLocaleString()} EA</td>
-                            <td class="${daysClass}">${lot.days_old}일</td>
-                        </tr>
-                    `;
-                });
-            }
-
-            html += `
-                        </tbody>
-                    </table>
-                </div>
-                <div class="text-end mt-3">
-                    <small class="text-muted">
-                        <i class="bi bi-info-circle"></i>
-                        보관일수 30일 이상: <span class="text-warning">주의</span>,
-                        60일 이상: <span class="text-danger">경고</span>
-                    </small>
-                </div>
-            `;
-
-            document.getElementById('lotDetailContent').innerHTML = html;
-        })
-        .catch(error => {
-            document.getElementById('lotDetailContent').innerHTML = `
-                <div class="alert alert-danger">
-                    <i class="bi bi-exclamation-circle"></i>
-                    데이터 조회 실패: ${error.message}
-                </div>
-            `;
-        });
-}
-</script>
 
 {% endblock %}

@@ -1,0 +1,114 @@
+{% extends "material/material_base.html" %}
+
+{% block title %}BOM 상세 - {{ product.part_no }} - WMS{% endblock %}
+
+{% block material_content %}
+<div class="container-fluid py-4">
+    <!-- 상단 네비게이션 -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'material:bom_list' %}">BOM 조회</a></li>
+            <li class="breadcrumb-item active">{{ product.part_no }}</li>
+        </ol>
+    </nav>
+
+    <!-- 모품 정보 카드 -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <i class="bi bi-box me-2"></i>모품 정보
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <small class="text-muted">모품번</small>
+                    <h5>{{ product.part_no }}</h5>
+                </div>
+                <div class="col-md-4">
+                    <small class="text-muted">모품명</small>
+                    <h5>{{ product.part_name }}</h5>
+                </div>
+                <div class="col-md-2">
+                    <small class="text-muted">규격</small>
+                    <p class="mb-0">{{ product.spec|default:"-" }}</p>
+                </div>
+                <div class="col-md-1">
+                    <small class="text-muted">단위</small>
+                    <p class="mb-0">{{ product.unit }}</p>
+                </div>
+                <div class="col-md-2">
+                    <small class="text-muted">계정구분</small>
+                    <p class="mb-0">
+                        <span class="badge {% if product.account_type == '제품' %}bg-primary{% else %}bg-info{% endif %} fs-6">
+                            {{ product.account_type }}
+                        </span>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOM 구성품목 -->
+    <div class="card">
+        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-list-nested me-2"></i>BOM 구성품목 (자품)</span>
+            <span class="badge bg-light text-dark">{{ bom_items|length }}개</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:5%">순번</th>
+                            <th style="width:12%">자품번</th>
+                            <th style="width:18%">자품명</th>
+                            <th style="width:10%">규격</th>
+                            <th style="width:6%">단위</th>
+                            <th style="width:10%">정미수량</th>
+                            <th style="width:8%">LOSS(%)</th>
+                            <th style="width:10%">필요수량</th>
+                            <th style="width:8%">사급구분</th>
+                            <th style="width:13%">주거래처</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in bom_items %}
+                        <tr>
+                            <td>{{ item.seq }}</td>
+                            <td><strong>{{ item.child_part_no }}</strong></td>
+                            <td>{{ item.child_part_name }}</td>
+                            <td>{{ item.child_spec|default:"-" }}</td>
+                            <td>{{ item.child_unit }}</td>
+                            <td class="text-end">{{ item.net_qty }}</td>
+                            <td class="text-end">{{ item.loss_rate|default:"-" }}</td>
+                            <td class="text-end"><strong>{{ item.required_qty }}</strong></td>
+                            <td>
+                                <span class="badge {% if item.supply_type == '자재' %}bg-secondary{% else %}bg-warning text-dark{% endif %}">
+                                    {{ item.supply_type }}
+                                </span>
+                            </td>
+                            <td>{{ item.vendor_name|default:"-" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="10" class="text-center py-4 text-muted">
+                                등록된 BOM 구성품목이 없습니다.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 하단 버튼 -->
+    <div class="mt-4 d-flex justify-content-between">
+        <a href="{% url 'material:bom_list' %}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left me-1"></i>목록으로
+        </a>
+        <a href="{% url 'material:bom_calculate' %}?part_no={{ product.part_no }}" class="btn btn-primary">
+            <i class="bi bi-calculator me-1"></i>소요량 계산
+        </a>
+    </div>
+</div>
+{% endblock %}

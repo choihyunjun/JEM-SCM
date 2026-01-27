@@ -2,7 +2,7 @@
 {% load humanize %}
 
 {% block content %}
-<div class="container-fluid">
+<div class="container-fluid p-0" style="max-width: 1920px;">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h3 class="fw-bold"><i class="bi bi-speedometer2 me-2"></i>통합 관리자 대시보드</h3>
         <span class="text-muted">오늘 날짜: {{ today|date:"Y-m-d" }}</span>
@@ -79,25 +79,26 @@
                 </div>
                 <div class="card-body">
                     <div class="list-group list-group-flush">
-                        <a href="/admin/orders/vendor/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                            협력사(Vendor) 관리
+                        <a href="{% url 'vendor_manage' %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-building me-2 text-primary"></i>협력사(Vendor) 관리</span>
                             <i class="bi bi-chevron-right"></i>
                         </a>
-                        <a href="/admin/orders/part/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                            품목(Part) 마스터 관리
+                        <a href="{% url 'part_list' %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-box-seam me-2 text-primary"></i>품목(Part) 마스터 관리</span>
                             <i class="bi bi-chevron-right"></i>
                         </a>
-                        <a href="/admin/orders/inventory/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                            재고(Inventory) 기초값 관리
+                        <a href="{% url 'user_manage' %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-people-fill me-2 text-primary"></i>사용자 등록/관리</span>
                             <i class="bi bi-chevron-right"></i>
                         </a>
-                        <a href="/admin/auth/user/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                            사용자 및 권한 설정
+                        <a href="{% url 'user_permission_manage' %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-shield-lock me-2 text-primary"></i>사용자 권한 설정</span>
                             <i class="bi bi-chevron-right"></i>
                         </a>
-                    </div>
-                    <div class="mt-4 p-3 bg-light rounded small text-muted">
-                        <i class="bi bi-info-circle me-1"></i> 위 링크를 클릭하면 상세 편집이 가능한 Django 관리자 페이지로 연결됩니다. (디자인은 기본 테마로 노출됩니다)
+                        <a href="/admin/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center bg-dark text-white">
+                            <span><i class="bi bi-gear-fill me-2"></i>Django 관리자 페이지</span>
+                            <i class="bi bi-box-arrow-up-right"></i>
+                        </a>
                     </div>
                 </div>
             </div>

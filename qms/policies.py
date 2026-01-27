@@ -36,9 +36,9 @@ class Actor:
         - 내부 사용자는 협력사를 선택해 사전 4M을 기안/진행시킨다.
         - 협력사는 내부가 지정한 대상 문서에 참여(회신/증빙 업로드)만 한다.
 
-        현실적인 운영 이슈:
-        - UserProfile.account_type 값이 초기 세팅/마이그레이션 과정에서 꼬일 수 있어
-          role(ADMIN/STAFF) 또는 is_jinyoung_staff 를 함께 내부 판정에 포함한다.
+        2024-01 권한 시스템 개편:
+        - role=VENDOR 또는 account_type=VENDOR인 계정은 무조건 협력사로 취급
+        - is_jinyoung_staff=True 이고 role이 VENDOR가 아닌 경우만 내부
         """
         # UserProfile이 없어도, Django 기본 플래그가 있으면 내부로 간주
         if getattr(self.user, "is_superuser", False) or getattr(self.user, "is_staff", False):
@@ -48,9 +48,15 @@ class Actor:
             return False
 
         role = getattr(self.profile, "role", None)
+        account_type = getattr(self.profile, "account_type", None)
 
+        # role=VENDOR 또는 account_type=VENDOR면 무조건 협력사 (내부 아님)
+        if role == "VENDOR" or account_type == "VENDOR":
+            return False
+
+        # 내부 판정: account_type=INTERNAL 또는 is_jinyoung_staff=True 또는 role이 ADMIN/STAFF
         return bool(
-            (self.profile.account_type == "INTERNAL" and role != "VENDOR")
+            account_type == "INTERNAL"
             or getattr(self.profile, "is_jinyoung_staff", False)
             or role in ("ADMIN", "STAFF")
         )

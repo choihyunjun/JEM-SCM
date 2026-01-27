@@ -1,0 +1,166 @@
+{% extends 'qms/qms_base.html' %}
+{% load humanize %}
+
+{% block qms_content %}
+<div class="container" style="max-width: 900px;">
+    <h3 class="fw-bold mb-4"><i class="bi bi-search me-2"></i>수입검사 상세 및 판정</h3>
+
+    <div class="card mb-4 shadow-sm border-secondary border-opacity-25">
+        <div class="card-header bg-light fw-bold">
+            <i class="bi bi-box-seam me-2"></i>입고 정보 (WMS/SCM 연동)
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-12 pb-2 border-bottom">
+                    <label class="text-muted small d-block mb-1">참조 번호</label>
+                    <span class="fs-5 fw-bold text-dark">
+                        {% if is_scm_linked %}
+                            <span class="badge bg-success me-2">SCM 납품서</span> {{ display_ref_no }}
+                        {% else %}
+                            <span class="badge bg-secondary me-2">수기 입고</span> {{ display_ref_no }}
+                        {% endif %}
+                    </span>
+                </div>
+
+                <div class="col-md-4"><label class="text-muted small">품번</label><div class="fw-bold">{{ inspection.inbound_transaction.part.part_no }}</div></div>
+                <div class="col-md-4"><label class="text-muted small">품명</label><div>{{ inspection.inbound_transaction.part.part_name }}</div></div>
+                <div class="col-md-4"><label class="text-muted small">공급처</label><div>{{ inspection.inbound_transaction.vendor.name }}</div></div>
+                
+                <div class="col-md-3"><label class="text-muted small">입고일자</label><div>{{ inspection.inbound_transaction.date|date:"Y-m-d" }}</div></div>
+                <div class="col-md-3"><label class="text-muted small">LOT 번호</label><div class="fw-bold text-info">{{ inspection.inbound_transaction.lot_no|date:"Y-m-d"|default:"-" }}</div></div>
+                <div class="col-md-3"><label class="text-muted small">입고수량</label><div class="fw-bold text-primary">{{ inspection.inbound_transaction.quantity|intcomma }} EA</div></div>
+                <div class="col-md-3"><label class="text-muted small">현재위치</label><div>{{ inspection.inbound_transaction.warehouse_to.name }}</div></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-primary border-opacity-50">
+        <div class="card-header bg-primary text-white fw-bold">
+            <i class="bi bi-clipboard-check me-2"></i>검사 결과 및 판정
+        </div>
+        <div class="card-body p-4">
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+
+                <div class="mb-4">
+                    <label class="form-label fw-bold mb-2 text-primary">1. 검사 항목 확인</label>
+                    <div class="d-flex gap-4 p-3 border rounded bg-light">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="check_report" id="chk1" {% if inspection.check_report %}checked{% endif %} {% if inspection.status != 'PENDING' %}disabled{% endif %}>
+                            <label class="form-check-label" for="chk1">성적서 확인</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="check_visual" id="chk2" {% if inspection.check_visual %}checked{% endif %} {% if inspection.status != 'PENDING' %}disabled{% endif %}>
+                            <label class="form-check-label" for="chk2">외관 검사</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="check_dimension" id="chk3" {% if inspection.check_dimension %}checked{% endif %} {% if inspection.status != 'PENDING' %}disabled{% endif %}>
+                            <label class="form-check-label" for="chk3">치수/기능 검사</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label fw-bold mb-2 text-primary">2. 양품수량 입력 (불량 반출)</label>
+                    <div class="p-3 border rounded bg-light">
+                        <div class="row g-3 align-items-center text-center">
+                            <div class="col-md-4">
+                                <label class="small text-muted mb-1">총 입고 수량</label>
+                                <input type="number" class="form-control text-center fw-bold bg-white" 
+                                       value="{{ inspection.inbound_transaction.quantity }}" readonly id="totalQty">
+                            </div>
+                            <div class="col-md-1 text-center text-muted"><i class="bi bi-arrow-right fs-4"></i></div>
+                            
+                            <div class="col-md-3">
+                                <label class="small text-success fw-bold mb-1">양품 (합격)</label>
+                                <input type="number" name="qty_good" id="qtyGood" class="form-control text-center fw-bold text-success border-success"
+                                       value="{% if inspection.status != 'PENDING' %}{{ inspection.qty_good }}{% else %}{{ inspection.inbound_transaction.quantity }}{% endif %}" required min="0"
+                                       {% if inspection.status != 'PENDING' %}disabled{% endif %} oninput="calcBadQty()">
+                            </div>
+
+                            <div class="col-md-3">
+                                <label class="small text-danger fw-bold mb-1">불량 (부적합)</label>
+                                <input type="number" name="qty_bad" id="qtyBad" class="form-control text-center fw-bold text-danger border-danger bg-white"
+                                       value="{% if inspection.status != 'PENDING' %}{{ inspection.qty_bad }}{% else %}0{% endif %}" required min="0" readonly>
+                            </div>
+                        </div>
+                        {% if inspection.status == 'PENDING' %}
+                        <div class="form-text mt-2 text-end">
+                            <i class="bi bi-info-circle"></i> 양품 수량을 입력하면 불량 수량은 자동 계산됩니다.
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-4">
+                    <div class="col-md-12">
+                        <label class="form-label fw-bold text-primary">3. 종합 의견 / 불량 사유</label>
+                        <textarea name="remark" class="form-control" rows="2" placeholder="특이사항이나 불량 사유를 입력하세요." {% if inspection.status != 'PENDING' %}readonly{% endif %}>{{ inspection.remark|default:'' }}</textarea>
+                    </div>
+                    <div class="col-md-12">
+                        <label class="form-label fw-bold">증빙 파일</label>
+                        {% if inspection.attachment %}
+                            <div class="mb-2"><a href="{{ inspection.attachment.url }}" target="_blank" class="btn btn-sm btn-outline-secondary"><i class="bi bi-file-earmark-text"></i> {{ inspection.attachment.name }}</a></div>
+                        {% endif %}
+                        {% if inspection.status == 'PENDING' %}
+                            <input type="file" name="attachment" class="form-control">
+                        {% endif %}
+                    </div>
+                </div>
+
+                <hr>
+
+                {% if inspection.status == 'PENDING' %}
+                <div class="d-flex justify-content-center">
+                    <button type="submit" name="decision" value="COMPLETE" class="btn btn-primary btn-lg px-5 shadow-sm" onclick="return confirm('판정을 완료하시겠습니까?\n(양품은 자재창고로, 불량은 부적합창고로 이동됩니다)')">
+                        <i class="bi bi-check-lg me-2"></i>판정 확정
+                    </button>
+                </div>
+                {% else %}
+                <div class="alert alert-secondary text-center fw-bold mb-0">
+                    {% if inspection.status == 'APPROVED' %}
+                        <i class="bi bi-check-circle-fill text-success me-2"></i> 판정 완료 (합격 포함)
+                    {% else %}
+                        <i class="bi bi-x-circle-fill text-danger me-2"></i> 전량 불량 판정
+                    {% endif %}
+                    <div class="small fw-normal text-muted mt-1">{{ inspection.inspected_at|date:"Y-m-d H:i" }} 처리됨</div>
+                </div>
+                {% endif %}
+
+            </form>
+        </div>
+    </div>
+    
+    <div class="text-center mt-4">
+        <a href="{% url 'qms:import_inspection_list' %}" class="btn btn-secondary">목록으로 돌아가기</a>
+    </div>
+</div>
+
+<script>
+    // [자동 계산 로직] 양품 수량을 입력하면 불량 수량을 자동 계산
+    function calcBadQty() {
+        const total = parseInt(document.getElementById('totalQty').value) || 0;
+        let good = parseInt(document.getElementById('qtyGood').value);
+        
+        // 입력값이 비어있거나 숫자가 아니면 0 처리
+        if (isNaN(good)) good = 0;
+
+        // 유효성 검사: 양품이 총량보다 크면 막음
+        if (good > total) {
+            alert("양품 수량은 총 입고 수량을 초과할 수 없습니다.");
+            document.getElementById('qtyGood').value = total;
+            good = total;
+        }
+        
+        // 음수 방지
+        if (good < 0) {
+            document.getElementById('qtyGood').value = 0;
+            good = 0;
+        }
+
+        // 불량 수량 계산
+        const bad = total - good;
+        document.getElementById('qtyBad').value = bad;
+    }
+</script>
+{% endblock %}

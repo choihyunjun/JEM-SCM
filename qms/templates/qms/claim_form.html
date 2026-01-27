@@ -1,0 +1,354 @@
+{% extends 'qms/qms_base.html' %}
+
+{% block title %}클레임 등록{% endblock %}
+
+{% block qms_content %}
+<div class="container-fluid p-0" style="max-width: 900px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold"><i class="bi bi-file-earmark-x me-2"></i>클레임 등록</h3>
+        <a href="{% url 'qms:claim_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>목록으로
+        </a>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">클레임 유형 <span class="text-danger">*</span></label>
+                        <select name="claim_type" class="form-select" required>
+                            <option value="">선택</option>
+                            {% for value, label in type_choices %}
+                            <option value="{{ value }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">발생일 <span class="text-danger">*</span></label>
+                        <input type="date" name="issue_date" class="form-control" required>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <div class="row g-3">
+                    <div class="col-md-12">
+                        <label class="form-label fw-bold">협력사 <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <input type="text" id="vendorName" class="form-control" placeholder="협력사 검색..." readonly required>
+                            <input type="hidden" name="vendor" id="vendorId" required>
+                            <button type="button" class="btn btn-outline-secondary" onclick="openVendorSearchModal()">
+                                <i class="bi bi-search"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-danger" onclick="clearVendor()" title="초기화">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">품번 <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <input type="text" id="partNo" name="part_no" class="form-control" placeholder="품번 검색..." readonly required>
+                            <button type="button" class="btn btn-outline-secondary" onclick="openPartSearchModal()">
+                                <i class="bi bi-search"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-danger" onclick="clearPart()" title="초기화">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">품명 <span class="text-danger">*</span></label>
+                        <input type="text" id="partName" name="part_name" class="form-control bg-light" readonly required>
+                        <div class="form-text text-muted">품번 선택 시 자동 입력</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">LOT번호</label>
+                        <input type="date" name="lot_no" id="lotNo" class="form-control" placeholder="날짜 선택">
+                        <div class="form-text text-muted">LOT 날짜 선택 (YYYY-MM-DD)</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">클레임 수량 <span class="text-danger">*</span></label>
+                        <input type="number" name="claim_qty" class="form-control" required min="1">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">클레임 금액</label>
+                        <div class="input-group">
+                            <input type="number" name="claim_amount" class="form-control" min="0" placeholder="청구 금액">
+                            <span class="input-group-text">원</span>
+                        </div>
+                        <div class="form-text text-muted">비용 클레임 시 청구 금액 입력</div>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label fw-bold">클레임 내용 <span class="text-danger">*</span></label>
+                        <textarea name="claim_detail" class="form-control" rows="4" required placeholder="클레임 내용을 상세히 기술하세요"></textarea>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">불량 사진</label>
+                        <input type="file" name="photo" class="form-control" accept="image/*">
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-end gap-2 mt-4">
+                    <a href="{% url 'qms:claim_list' %}" class="btn btn-secondary">취소</a>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>등록</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 협력사 검색 모달 -->
+<div class="modal fade" id="vendorSearchModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-search me-2"></i>협력사 검색</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group mb-3">
+                    <input type="text" id="vendorSearchInput" class="form-control" placeholder="협력사명 입력..." autofocus>
+                    <button type="button" class="btn btn-dark" onclick="searchVendor()">
+                        <i class="bi bi-search me-1"></i>검색
+                    </button>
+                </div>
+                <div id="vendorSearchResults" style="max-height: 400px; overflow-y: auto;">
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-building fs-1 d-block mb-2"></i>
+                        협력사명을 입력하고 검색하세요
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 품번 검색 모달 -->
+<div class="modal fade" id="partSearchModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-search me-2"></i>품번 검색</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group mb-3">
+                    <input type="text" id="partSearchInput" class="form-control" placeholder="품번 또는 품명 입력..." autofocus>
+                    <button type="button" class="btn btn-dark" onclick="searchPart()">
+                        <i class="bi bi-search me-1"></i>검색
+                    </button>
+                </div>
+                <div id="partSearchResults" style="max-height: 400px; overflow-y: auto;">
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-box-seam fs-1 d-block mb-2"></i>
+                        품번 또는 품명을 입력하고 검색하세요
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let vendorSearchModal = null;
+let partSearchModal = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    vendorSearchModal = new bootstrap.Modal(document.getElementById('vendorSearchModal'));
+    partSearchModal = new bootstrap.Modal(document.getElementById('partSearchModal'));
+
+    // 협력사 검색 엔터키
+    document.getElementById('vendorSearchInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            searchVendor();
+        }
+    });
+
+    // 품번 검색 엔터키
+    document.getElementById('partSearchInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            searchPart();
+        }
+    });
+});
+
+// ========== 협력사 검색 ==========
+function openVendorSearchModal() {
+    document.getElementById('vendorSearchInput').value = '';
+    document.getElementById('vendorSearchResults').innerHTML = `
+        <div class="text-center text-muted py-5">
+            <i class="bi bi-building fs-1 d-block mb-2"></i>
+            협력사명을 입력하고 검색하세요
+        </div>
+    `;
+    vendorSearchModal.show();
+    setTimeout(() => document.getElementById('vendorSearchInput').focus(), 300);
+}
+
+function searchVendor() {
+    const query = document.getElementById('vendorSearchInput').value.trim();
+    if (query.length < 1) {
+        alert('검색어를 입력해주세요.');
+        return;
+    }
+
+    document.getElementById('vendorSearchResults').innerHTML = `
+        <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status"></div>
+            <div class="mt-2">검색 중...</div>
+        </div>
+    `;
+
+    fetch(`/api/organizations/search/?q=${encodeURIComponent(query)}`)
+        .then(response => response.json())
+        .then(data => {
+            const results = data.results;
+            if (results.length === 0) {
+                document.getElementById('vendorSearchResults').innerHTML = `
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                        검색 결과가 없습니다.
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '<div class="list-group">';
+            results.forEach(v => {
+                html += `
+                    <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                            onclick="selectVendor(${v.id}, '${v.name.replace(/'/g, "\\'")}')">
+                        <div>
+                            <i class="bi bi-building me-2 text-primary"></i>
+                            <span class="fw-bold">${v.name}</span>
+                        </div>
+                        <i class="bi bi-check-circle text-success"></i>
+                    </button>
+                `;
+            });
+            html += '</div>';
+            document.getElementById('vendorSearchResults').innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('vendorSearchResults').innerHTML = `
+                <div class="alert alert-danger">검색 중 오류가 발생했습니다.</div>
+            `;
+        });
+}
+
+function selectVendor(vendorId, vendorName) {
+    document.getElementById('vendorId').value = vendorId;
+    document.getElementById('vendorName').value = vendorName;
+    vendorSearchModal.hide();
+
+    // 협력사 변경 시 품번 초기화
+    clearPart();
+}
+
+function clearVendor() {
+    document.getElementById('vendorId').value = '';
+    document.getElementById('vendorName').value = '';
+    clearPart();
+}
+
+// ========== 품번 검색 ==========
+function openPartSearchModal() {
+    document.getElementById('partSearchInput').value = '';
+    document.getElementById('partSearchResults').innerHTML = `
+        <div class="text-center text-muted py-5">
+            <i class="bi bi-box-seam fs-1 d-block mb-2"></i>
+            품번 또는 품명을 입력하고 검색하세요
+        </div>
+    `;
+    partSearchModal.show();
+    setTimeout(() => document.getElementById('partSearchInput').focus(), 300);
+}
+
+function searchPart() {
+    const query = document.getElementById('partSearchInput').value.trim();
+    if (query.length < 2) {
+        alert('2자 이상 입력해주세요.');
+        return;
+    }
+
+    document.getElementById('partSearchResults').innerHTML = `
+        <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status"></div>
+            <div class="mt-2">검색 중...</div>
+        </div>
+    `;
+
+    fetch(`/api/parts/search/?q=${encodeURIComponent(query)}`)
+        .then(response => response.json())
+        .then(data => {
+            const results = data.results;
+            if (results.length === 0) {
+                document.getElementById('partSearchResults').innerHTML = `
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                        검색 결과가 없습니다.
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '<div class="list-group">';
+            results.forEach(p => {
+                const vendorInfo = p.vendor_name ? `<small class="text-muted ms-2">(${p.vendor_name})</small>` : '';
+                html += `
+                    <button type="button" class="list-group-item list-group-item-action"
+                            onclick="selectPart('${p.part_no.replace(/'/g, "\\'")}', '${p.part_name.replace(/'/g, "\\'")}', ${p.vendor_id || 'null'}, '${(p.vendor_name || '').replace(/'/g, "\\'")}')">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="bi bi-box-seam me-2 text-primary"></i>
+                                <span class="fw-bold">${p.part_no}</span>
+                                ${vendorInfo}
+                            </div>
+                            <i class="bi bi-check-circle text-success"></i>
+                        </div>
+                        <div class="small text-muted mt-1 ms-4">${p.part_name}</div>
+                    </button>
+                `;
+            });
+            html += '</div>';
+            document.getElementById('partSearchResults').innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('partSearchResults').innerHTML = `
+                <div class="alert alert-danger">검색 중 오류가 발생했습니다.</div>
+            `;
+        });
+}
+
+function selectPart(partNo, partName, vendorId, vendorName) {
+    document.getElementById('partNo').value = partNo;
+    document.getElementById('partName').value = partName;
+
+    // 협력사가 아직 선택되지 않았고, 품번에 연결된 협력사가 있으면 자동 설정
+    if (!document.getElementById('vendorId').value && vendorId) {
+        document.getElementById('vendorId').value = vendorId;
+        document.getElementById('vendorName').value = vendorName;
+    }
+
+    partSearchModal.hide();
+}
+
+function clearPart() {
+    document.getElementById('partNo').value = '';
+    document.getElementById('partName').value = '';
+}
+</script>
+{% endblock %}

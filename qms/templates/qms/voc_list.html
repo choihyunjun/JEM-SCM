@@ -1,0 +1,169 @@
+{% extends 'qms/qms_base.html' %}
+{% load humanize %}
+
+{% block title %}VOC (고객의 소리){% endblock %}
+
+{% block qms_content %}
+<div class="container-fluid p-0" style="max-width: 1920px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold"><i class="bi bi-megaphone me-2"></i>VOC (고객의 소리)</h3>
+        <a href="{% url 'qms:voc_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i>VOC 등록
+        </a>
+    </div>
+
+    <!-- 통계 카드 -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3 col-6">
+            <div class="card border-0 shadow-sm text-center p-3">
+                <div class="small text-muted">전체</div>
+                <div class="h4 fw-bold">{{ stats.total }}</div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card border-0 shadow-sm text-center p-3">
+                <div class="small text-muted">처리중</div>
+                <div class="h4 fw-bold text-warning">{{ stats.open }}</div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card border-0 shadow-sm text-center p-3 border-danger">
+                <div class="small text-muted">긴급</div>
+                <div class="h4 fw-bold text-danger">{{ stats.critical }}</div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card border-0 shadow-sm text-center p-3">
+                <div class="small text-muted">이번달</div>
+                <div class="h4 fw-bold text-info">{{ stats.this_month }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 필터 -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small">상태</label>
+                    <select name="status" class="form-select form-select-sm">
+                        <option value="">전체</option>
+                        {% for value, label in status_choices %}
+                        <option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">심각도</label>
+                    <select name="severity" class="form-select form-select-sm">
+                        <option value="">전체</option>
+                        {% for value, label in severity_choices %}
+                        <option value="{{ value }}" {% if request.GET.severity == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">접수경로</label>
+                    <select name="source" class="form-select form-select-sm">
+                        <option value="">전체</option>
+                        {% for value, label in source_choices %}
+                        <option value="{{ value }}" {% if request.GET.source == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">검색</label>
+                    <input type="text" name="q" class="form-control form-control-sm" value="{{ request.GET.q }}" placeholder="VOC번호/고객/품번">
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-dark btn-sm w-100"><i class="bi bi-search me-1"></i>검색</button>
+                </div>
+                <div class="col-md-1">
+                    <a href="{% url 'qms:voc_list' %}" class="btn btn-outline-secondary btn-sm w-100">초기화</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 목록 -->
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <table class="table table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th style="width: 130px;">VOC번호</th>
+                        <th style="width: 80px;" class="text-center">심각도</th>
+                        <th style="width: 100px;">접수경로</th>
+                        <th>고객사</th>
+                        <th>품번</th>
+                        <th style="width: 100px;">불량유형</th>
+                        <th style="width: 90px;" class="text-center">접수일</th>
+                        <th style="width: 90px;" class="text-center">상태</th>
+                        <th style="width: 100px;">담당자</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for voc in vocs %}
+                    <tr onclick="location.href='{% url 'qms:voc_detail' voc.pk %}'" style="cursor: pointer;">
+                        <td class="fw-bold text-primary">{{ voc.voc_no }}</td>
+                        <td class="text-center">
+                            {% if voc.severity == 'CRITICAL' %}
+                            <span class="badge bg-danger">긴급</span>
+                            {% elif voc.severity == 'MAJOR' %}
+                            <span class="badge bg-warning text-dark">중대</span>
+                            {% else %}
+                            <span class="badge bg-secondary">경미</span>
+                            {% endif %}
+                        </td>
+                        <td class="small">{{ voc.get_source_display }}</td>
+                        <td>{{ voc.customer_name }}</td>
+                        <td class="small">{{ voc.part_no }}</td>
+                        <td class="small">{{ voc.defect_type|truncatechars:15 }}</td>
+                        <td class="text-center small">{{ voc.received_date|date:"m/d" }}</td>
+                        <td class="text-center">
+                            {% if voc.status == 'RECEIVED' %}
+                            <span class="badge bg-info">접수</span>
+                            {% elif voc.status == 'ANALYZING' %}
+                            <span class="badge bg-warning text-dark">원인분석</span>
+                            {% elif voc.status == 'ACTION' %}
+                            <span class="badge bg-primary">조치중</span>
+                            {% elif voc.status == 'VERIFY' %}
+                            <span class="badge bg-purple text-white" style="background: #6f42c1;">효과검증</span>
+                            {% else %}
+                            <span class="badge bg-success">완료</span>
+                            {% endif %}
+                        </td>
+                        <td class="small">{{ voc.assigned_to.username|default:"-" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center py-5 text-muted">등록된 VOC가 없습니다.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 페이징 -->
+    {% if vocs.has_other_pages %}
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if vocs.has_previous %}
+            <li class="page-item"><a class="page-link" href="?page={{ vocs.previous_page_number }}{% for k, v in request.GET.items %}{% if k != 'page' %}&{{ k }}={{ v }}{% endif %}{% endfor %}">&laquo;</a></li>
+            {% endif %}
+            {% for num in vocs.paginator.page_range %}
+            {% if vocs.number == num %}
+            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+            {% elif num > vocs.number|add:'-3' and num < vocs.number|add:'3' %}
+            <li class="page-item"><a class="page-link" href="?page={{ num }}{% for k, v in request.GET.items %}{% if k != 'page' %}&{{ k }}={{ v }}{% endif %}{% endfor %}">{{ num }}</a></li>
+            {% endif %}
+            {% endfor %}
+            {% if vocs.has_next %}
+            <li class="page-item"><a class="page-link" href="?page={{ vocs.next_page_number }}{% for k, v in request.GET.items %}{% if k != 'page' %}&{{ k }}={{ v }}{% endif %}{% endfor %}">&raquo;</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

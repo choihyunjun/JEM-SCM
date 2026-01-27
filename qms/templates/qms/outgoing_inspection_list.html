@@ -1,0 +1,150 @@
+{% extends 'qms/qms_base.html' %}
+{% load humanize %}
+
+{% block title %}출하검사 현황{% endblock %}
+
+{% block qms_content %}
+<div class="container-fluid p-0" style="max-width: 1920px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold"><i class="bi bi-truck me-2"></i>출하검사 현황</h3>
+        <a href="{% url 'qms:outgoing_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i>출하검사 등록
+        </a>
+    </div>
+
+    <!-- 통계 카드 -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3 col-6">
+            <div class="card border-0 shadow-sm text-center p-3">
+                <div class="small text-muted">전체 검사</div>
+                <div class="h4 fw-bold">{{ stats.total }}</div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card border-0 shadow-sm text-center p-3">
+                <div class="small text-muted">검사대기</div>
+                <div class="h4 fw-bold text-warning">{{ stats.pending }}</div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card border-0 shadow-sm text-center p-3">
+                <div class="small text-muted">합격</div>
+                <div class="h4 fw-bold text-success">{{ stats.pass }}</div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card border-0 shadow-sm text-center p-3">
+                <div class="small text-muted">불합격</div>
+                <div class="h4 fw-bold text-danger">{{ stats.fail }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 필터 -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small">검사상태</label>
+                    <select name="status" class="form-select form-select-sm">
+                        <option value="">전체</option>
+                        {% for value, label in status_choices %}
+                        <option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small">품번/품명</label>
+                    <input type="text" name="part_no" class="form-control form-control-sm" value="{{ request.GET.part_no }}" placeholder="품번 또는 품명">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">검사일(시작)</label>
+                    <input type="date" name="date_from" class="form-control form-control-sm" value="{{ request.GET.date_from }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">검사일(종료)</label>
+                    <input type="date" name="date_to" class="form-control form-control-sm" value="{{ request.GET.date_to }}">
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-dark btn-sm w-100"><i class="bi bi-search me-1"></i>검색</button>
+                </div>
+                <div class="col-md-1">
+                    <a href="{% url 'qms:outgoing_list' %}" class="btn btn-outline-secondary btn-sm w-100">초기화</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 목록 -->
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <table class="table table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>검사번호</th>
+                        <th>검사일</th>
+                        <th>품번</th>
+                        <th>품명</th>
+                        <th class="text-end">검사수량</th>
+                        <th class="text-end">합격</th>
+                        <th class="text-end">불합격</th>
+                        <th>고객사</th>
+                        <th>상태</th>
+                        <th>검사자</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for oi in inspections %}
+                    <tr>
+                        <td>
+                            <a href="{% url 'qms:outgoing_detail' pk=oi.pk %}" class="fw-bold">{{ oi.inspection_no }}</a>
+                        </td>
+                        <td>{{ oi.inspection_date }}</td>
+                        <td>{{ oi.part_no }}</td>
+                        <td>{{ oi.part_name }}</td>
+                        <td class="text-end">{{ oi.total_qty|intcomma }}</td>
+                        <td class="text-end text-success">{{ oi.pass_qty|intcomma }}</td>
+                        <td class="text-end text-danger">{{ oi.fail_qty|intcomma }}</td>
+                        <td>{{ oi.customer_name|default:'-' }}</td>
+                        <td>
+                            <span class="badge bg-{% if oi.status == 'PASS' %}success{% elif oi.status == 'FAIL' %}danger{% elif oi.status == 'PENDING' %}warning{% elif oi.status == 'CONDITIONAL' %}info{% else %}secondary{% endif %}">
+                                {{ oi.get_status_display }}
+                            </span>
+                        </td>
+                        <td>{{ oi.inspector.username|default:'-' }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="10" class="text-center py-5 text-muted">
+                            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                            출하검사 내역이 없습니다.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 페이징 -->
+    {% if inspections.has_other_pages %}
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if inspections.has_previous %}
+            <li class="page-item"><a class="page-link" href="?page={{ inspections.previous_page_number }}&{{ request.GET.urlencode }}">&laquo;</a></li>
+            {% endif %}
+            {% for num in inspections.paginator.page_range %}
+                {% if num == inspections.number %}
+                <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                {% elif num > inspections.number|add:'-3' and num < inspections.number|add:'3' %}
+                <li class="page-item"><a class="page-link" href="?page={{ num }}&{{ request.GET.urlencode }}">{{ num }}</a></li>
+                {% endif %}
+            {% endfor %}
+            {% if inspections.has_next %}
+            <li class="page-item"><a class="page-link" href="?page={{ inspections.next_page_number }}&{{ request.GET.urlencode }}">&raquo;</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

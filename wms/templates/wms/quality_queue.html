@@ -1,0 +1,40 @@
+{% extends "wms/base.html" %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h4 class="mb-0">품질팀 - 수입검사 의뢰함</h4>
+    <a class="btn btn-outline-secondary" href="{% url 'wms:receipt_list' %}?status=requested">입고 목록</a>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-sm table-striped align-middle">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>요청일시</th>
+          <th>창고</th>
+          <th>품번</th>
+          <th>품명</th>
+          <th class="text-end">수량</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for r in rows %}
+        <tr>
+          <td>{{ r.id }}</td>
+          <td>{{ r.requested_at|date:"Y-m-d H:i" }}</td>
+          <td>{{ r.warehouse_code }}</td>
+          <td>{{ r.part_no }}</td>
+          <td>{{ r.part_name }}</td>
+          <td class="text-end">{{ r.receipt_qty|floatformat:3 }}</td>
+          <td><a class="btn btn-sm btn-outline-primary" href="{% url 'wms:receipt_detail' r.id %}">처리</a></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7" class="text-center text-muted py-4">대기 의뢰가 없습니다.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

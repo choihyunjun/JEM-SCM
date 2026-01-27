@@ -1,0 +1,184 @@
+{% extends 'qms/qms_base.html' %}
+{% load humanize %}
+
+{% block title %}출하검사 상세 - {{ oi.inspection_no }}{% endblock %}
+
+{% block qms_content %}
+<div class="container-fluid p-0" style="max-width: 1200px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold">
+            <i class="bi bi-truck me-2"></i>{{ oi.inspection_no }}
+            <span class="badge bg-{% if oi.status == 'PASS' %}success{% elif oi.status == 'FAIL' %}danger{% elif oi.status == 'PENDING' %}warning{% elif oi.status == 'CONDITIONAL' %}info{% else %}secondary{% endif %} ms-2">
+                {{ oi.get_status_display }}
+            </span>
+        </h3>
+        <a href="{% url 'qms:outgoing_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>목록으로
+        </a>
+    </div>
+
+    <div class="row">
+        <!-- 기본 정보 -->
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-dark text-white">
+                    <i class="bi bi-info-circle me-2"></i>기본 정보
+                </div>
+                <div class="card-body">
+                    <table class="table table-borderless mb-0">
+                        <tr>
+                            <th class="text-muted" style="width: 120px;">검사번호</th>
+                            <td class="fw-bold">{{ oi.inspection_no }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">검사일</th>
+                            <td>{{ oi.inspection_date }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">품번</th>
+                            <td>{{ oi.part_no }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">품명</th>
+                            <td>{{ oi.part_name }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">LOT번호</th>
+                            <td>{{ oi.lot_no|default:'-' }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">고객사</th>
+                            <td>{{ oi.customer_name|default:'-' }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">납품예정일</th>
+                            <td>{{ oi.delivery_date|default:'-' }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">검사자</th>
+                            <td>{{ oi.inspector.username|default:'-' }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 수량 정보 -->
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-primary text-white">
+                    <i class="bi bi-box-seam me-2"></i>수량 정보
+                </div>
+                <div class="card-body">
+                    <div class="row text-center mb-4">
+                        <div class="col-4">
+                            <div class="p-3 bg-light rounded">
+                                <div class="small text-muted">검사수량</div>
+                                <div class="h4 fw-bold">{{ oi.total_qty|intcomma }}</div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="p-3 bg-success bg-opacity-10 rounded">
+                                <div class="small text-muted">합격</div>
+                                <div class="h4 fw-bold text-success">{{ oi.pass_qty|intcomma }}</div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="p-3 bg-danger bg-opacity-10 rounded">
+                                <div class="small text-muted">불합격</div>
+                                <div class="h4 fw-bold text-danger">{{ oi.fail_qty|intcomma }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-center">
+                        <div class="small text-muted">샘플수량: {{ oi.sample_qty|intcomma }}개</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 검사 결과 입력 -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-info text-white">
+            <i class="bi bi-clipboard-check me-2"></i>검사 결과 입력
+        </div>
+        <div class="card-body">
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="update_result">
+
+                <!-- 검사 항목 체크 -->
+                <div class="row g-3 mb-4">
+                    <div class="col-12">
+                        <label class="form-label fw-bold">검사 항목</label>
+                        <div class="d-flex flex-wrap gap-3">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" name="check_visual" id="check_visual" {% if oi.check_visual %}checked{% endif %}>
+                                <label class="form-check-label" for="check_visual">외관검사</label>
+                            </div>
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" name="check_dimension" id="check_dimension" {% if oi.check_dimension %}checked{% endif %}>
+                                <label class="form-check-label" for="check_dimension">치수검사</label>
+                            </div>
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" name="check_function" id="check_function" {% if oi.check_function %}checked{% endif %}>
+                                <label class="form-check-label" for="check_function">기능검사</label>
+                            </div>
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" name="check_packing" id="check_packing" {% if oi.check_packing %}checked{% endif %}>
+                                <label class="form-check-label" for="check_packing">포장검사</label>
+                            </div>
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" name="check_label" id="check_label" {% if oi.check_label %}checked{% endif %}>
+                                <label class="form-check-label" for="check_label">라벨검사</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">합격수량</label>
+                        <input type="number" name="pass_qty" class="form-control" value="{{ oi.pass_qty }}" min="0">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">불합격수량</label>
+                        <input type="number" name="fail_qty" class="form-control" value="{{ oi.fail_qty }}" min="0">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">검사상태</label>
+                        <select name="status" class="form-select">
+                            {% for value, label in status_choices %}
+                            <option value="{{ value }}" {% if oi.status == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-4">
+                    <div class="col-md-8">
+                        <label class="form-label fw-bold">검사 의견</label>
+                        <textarea name="remark" class="form-control" rows="3" placeholder="검사 결과에 대한 의견을 입력하세요">{{ oi.remark }}</textarea>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">검사성적서</label>
+                        {% if oi.attachment %}
+                        <div class="mb-2">
+                            <a href="{{ oi.attachment.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-file-earmark me-1"></i>첨부파일 보기
+                            </a>
+                        </div>
+                        {% endif %}
+                        <input type="file" name="attachment" class="form-control">
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-end gap-2">
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>저장</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

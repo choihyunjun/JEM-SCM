@@ -1,0 +1,200 @@
+{% extends 'material/material_base.html' %}
+{% load humanize %}
+
+{% block title %}재고조사 결과 - {{ check.check_no }}{% endblock %}
+
+{% block material_content %}
+<div class="container-fluid" style="max-width: 1800px;">
+    <!-- 헤더 -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold mb-0">
+            <i class="bi bi-clipboard-data me-2"></i>{{ check.check_no }}
+            <span class="badge bg-{% if check.status == 'COMPLETED' %}success{% else %}secondary{% endif %} ms-2">
+                {{ check.get_status_display }}
+            </span>
+        </h3>
+        <a href="{% url 'material:inventory_check_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>목록
+        </a>
+    </div>
+
+    <!-- 요약 정보 -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="small text-muted">대상 창고</div>
+                    <div class="h5 fw-bold">{{ check.warehouse.name }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="small text-muted">조사일</div>
+                    <div class="h5 fw-bold">{{ check.check_date|date:"Y-m-d" }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="small text-muted">담당자</div>
+                    <div class="h5 fw-bold">{{ check.created_by.username|default:"-" }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="small text-muted">완료일시</div>
+                    <div class="h5 fw-bold">{{ check.completed_at|date:"Y-m-d H:i"|default:"-" }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 집계 (품목 기준) -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card border-0 bg-primary text-white text-center py-4">
+                <div class="small">조사 품목</div>
+                <div class="h2 fw-bold mb-0">{{ part_results|length }}</div>
+                <div class="small">스캔 {{ items|length }}건</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 bg-success text-white text-center py-4">
+                <div class="small">일치 품목</div>
+                <div class="h2 fw-bold mb-0">{{ total_matched }}</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 bg-danger text-white text-center py-4">
+                <div class="small">불일치 품목</div>
+                <div class="h2 fw-bold mb-0">{{ total_discrepancy }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 탭 -->
+    <ul class="nav nav-tabs" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#partResultTab">
+                <i class="bi bi-bar-chart me-1"></i>품목별 결과 ({{ part_results|length }})
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#scanHistoryTab">
+                <i class="bi bi-list me-1"></i>스캔 내역 ({{ items|length }})
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+        <!-- 품목별 결과 -->
+        <div class="tab-pane fade show active" id="partResultTab">
+            <div class="card shadow-sm border-top-0" style="border-top-left-radius:0; border-top-right-radius:0;">
+                <div class="card-body p-0">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th style="width:40px;"></th>
+                                <th>품번</th>
+                                <th>품명</th>
+                                <th class="text-center">스캔 태그</th>
+                                <th class="text-end">실사 합계</th>
+                                <th class="text-end">시스템 재고</th>
+                                <th class="text-end">차이</th>
+                                <th>비고</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in part_results %}
+                            <tr class="{% if not row.is_matched %}table-danger{% endif %}">
+                                <td class="text-center">
+                                    {% if row.is_matched %}
+                                    <i class="bi bi-check-circle-fill text-success"></i>
+                                    {% else %}
+                                    <i class="bi bi-exclamation-triangle-fill text-danger"></i>
+                                    {% endif %}
+                                </td>
+                                <td class="fw-bold">{{ row.part_no }}</td>
+                                <td>{{ row.part_name }}</td>
+                                <td class="text-center">
+                                    <span class="badge bg-secondary">{{ row.tag_count }}장</span>
+                                </td>
+                                <td class="text-end fw-bold text-primary">{{ row.scanned_total|intcomma }}</td>
+                                <td class="text-end">{{ row.system_qty|intcomma }}</td>
+                                <td class="text-end {% if row.discrepancy != 0 %}fw-bold text-danger{% endif %}">
+                                    {% if row.discrepancy > 0 %}+{% endif %}{{ row.discrepancy|intcomma }}
+                                </td>
+                                <td class="small text-muted">
+                                    {% if row.discrepancy > 0 %}
+                                    <span class="text-warning">실물 초과</span>
+                                    {% elif row.discrepancy < 0 %}
+                                    <span class="text-danger">실물 부족</span>
+                                    {% else %}
+                                    <span class="text-success">정상</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="8" class="text-center text-muted py-4">
+                                    <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                    스캔된 항목이 없습니다.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 스캔 내역 -->
+        <div class="tab-pane fade" id="scanHistoryTab">
+            <div class="card shadow-sm border-top-0" style="border-top-left-radius:0; border-top-right-radius:0;">
+                <div class="card-body p-0">
+                    <table class="table table-hover table-sm mb-0">
+                        <thead class="table-secondary">
+                            <tr>
+                                <th>태그ID</th>
+                                <th>품번</th>
+                                <th>품명</th>
+                                <th>LOT</th>
+                                <th class="text-end">수량</th>
+                                <th>스캔일시</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in items %}
+                            <tr>
+                                <td class="small text-primary">{{ item.tag_id }}</td>
+                                <td class="fw-bold">{{ item.part_no }}</td>
+                                <td class="small">{{ item.part_name|truncatechars:25 }}</td>
+                                <td class="small">{{ item.lot_no|date:"Y-m-d"|default:"-" }}</td>
+                                <td class="text-end fw-bold">{{ item.scanned_qty|intcomma }}</td>
+                                <td class="small text-muted">{{ item.scanned_at|date:"H:i:s" }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if check.remark %}
+    <div class="card shadow-sm mt-4">
+        <div class="card-header">
+            <i class="bi bi-sticky me-2"></i>비고
+        </div>
+        <div class="card-body">
+            {{ check.remark }}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

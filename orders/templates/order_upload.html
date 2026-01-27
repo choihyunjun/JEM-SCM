@@ -1,12 +1,120 @@
 {% extends 'base.html' %}
+{% load humanize %}
+
 {% block content %}
-    <h3>📦 발주 등록</h3>
-    <div class="card p-5 border-0 shadow-sm text-center">
-        <form action="{% url 'order_upload_action' %}" method="post" enctype="multipart/form-data">
-            {% csrf_token %}
-            <input type="file" name="excel_file" class="form-control mb-3" required>
-            <button type="submit" class="btn btn-primary w-100">엑셀 업로드</button>
-        </form>
-        <p class="mt-3 text-muted small">헤더: vendor, part_group, part_no, part_name, quantity, due_date</p>
+<div class="container-fluid p-0" style="max-width: 1920px;">
+    
+    <div class="mb-4">
+        <h3 class="fw-bold text-secondary"><i class="bi bi-cloud-upload me-2"></i>발주 일괄 등록</h3>
     </div>
+
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-white py-3">
+            <h5 class="fw-bold m-0 text-primary">STEP 1. 엑셀 파일 업로드</h5>
+        </div>
+        <div class="card-body p-4 text-center bg-light">
+            <form action="{% url 'order_upload_preview' %}" method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="input-group input-group-lg mb-3 mx-auto" style="max-width: 700px;">
+                    <input type="file" name="excel_file" class="form-control" required accept=".xlsx, .xls">
+                    <button type="submit" class="btn btn-primary px-4 fw-bold">
+                        <i class="bi bi-search me-1"></i> 데이터 미리보기
+                    </button>
+                </div>
+            </form>
+            <div class="alert alert-info d-inline-block text-start shadow-sm border-0 mt-2">
+                <small>
+                    <i class="bi bi-info-circle-fill me-1"></i> <strong>엑셀 양식 순서 (헤더 포함, 2행부터 데이터):</strong><br>
+                    <span class="text-dark">A열: 협력사명</span> / 
+                    <span class="text-primary fw-bold">B열: 품번</span> / 
+                    <span class="text-dark">C열: 수량</span> / 
+                    <span class="text-dark">D열: 납기일(YYYY-MM-DD)</span> / 
+                    <strong class="text-secondary">E열: ERP 발주번호</strong> / 
+                    <strong class="text-secondary">F열: ERP 발주순번(선택)</strong><br>
+                    <span class="text-muted ms-3">※ 품명과 품목군은 '품번'을 기준으로 시스템에서 자동 조회합니다.</span>
+                </small>
+            </div>
+        </div>
+    </div>
+
+    {% if preview_data %}
+    <div class="card shadow border-0 border-top border-4 border-success animate__animated animate__fadeInUp">
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+            <h5 class="fw-bold m-0 text-success">STEP 2. 데이터 검증 및 최종 등록</h5>
+            <span class="badge bg-secondary fs-6">
+                총 {{ preview_data|length }}건 / 
+                <span class="text-success-emphasis">등록 {{ valid_count }}</span> / 
+                <span class="text-danger-emphasis">제외 {{ error_count }}</span>
+            </span>
+        </div>
+        
+        <form action="{% url 'order_create_confirm' %}" method="post">
+            {% csrf_token %}
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+                    <table class="table table-hover table-bordered mb-0 text-center align-middle" style="font-size: 0.95rem;">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th style="width: 50px;">No</th>
+                                <th style="width: 150px;">협력사</th>
+                                <th style="width: 100px;">품목군</th>
+                                <th style="width: 150px;">품번</th>
+                                <th style="min-width: 200px;">품명 (자동조회)</th>
+                                <th style="width: 100px;">수량</th>
+                                <th style="width: 120px;">납기일</th>
+                                <th style="width: 150px; background-color: #f8f9fa;">ERP 번호</th>
+                                <th style="width: 80px; background-color: #f8f9fa;">순번</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in preview_data %}
+                            <tr class="{% if not row.part_found %}table-danger{% endif %}">
+                                <td>{{ forloop.counter }}</td>
+                                <td class="fw-bold">{{ row.vendor }}</td>
+                                <td>{{ row.part_group }}</td>
+                                <td class="text-start fw-bold">{{ row.part_no }}</td>
+                                <td class="text-start">
+                                    {% if row.part_found %}
+                                        {{ row.part_name }}
+                                    {% else %}
+                                        <span class="text-danger fw-bold"><i class="bi bi-exclamation-triangle-fill"></i> 품번 없음 (등록 제외)</span>
+                                    {% endif %}
+                                </td>
+                                <td class="fw-bold text-end pe-3">{{ row.quantity|intcomma }}</td>
+                                <td>{{ row.due_date }}</td>
+                                <td class="text-secondary fw-bold">{{ row.erp_order_no|default:"-" }}</td>
+                                <td class="text-muted">{{ row.erp_order_seq|default:"-" }}</td>
+
+                                {% if row.part_found %}
+                                    <input type="hidden" name="vendor_list[]" value="{{ row.vendor }}">
+                                    <input type="hidden" name="part_group_list[]" value="{{ row.part_group }}">
+                                    <input type="hidden" name="part_no_list[]" value="{{ row.part_no }}">
+                                    <input type="hidden" name="part_name_list[]" value="{{ row.part_name }}">
+                                    <input type="hidden" name="quantity_list[]" value="{{ row.quantity }}">
+                                    <input type="hidden" name="due_date_list[]" value="{{ row.due_date }}">
+                                    <input type="hidden" name="erp_order_no_list[]" value="{{ row.erp_order_no }}">
+                                    <input type="hidden" name="erp_order_seq_list[]" value="{{ row.erp_order_seq }}">
+                                {% endif %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card-footer bg-white p-3 text-end">
+                <a href="{% url 'order_upload' %}" class="btn btn-secondary me-2">취소 (다시 올리기)</a>
+                {% if valid_count > 0 %}
+                <button type="submit" class="btn btn-success fw-bold px-5" 
+                        onclick="return confirm('오류 품목 {{ error_count }}건을 제외하고 정상 품목 {{ valid_count }}건만 등록하시겠습니까?')">
+                    <i class="bi bi-check-circle-fill me-2"></i> 최종 등록 확정
+                </button>
+                {% else %}
+                <button type="button" class="btn btn-secondary px-5" disabled>등록 가능한 품목이 없습니다</button>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+    {% endif %}
+
+</div>
 {% endblock %}

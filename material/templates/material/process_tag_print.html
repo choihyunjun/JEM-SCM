@@ -1,0 +1,252 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>현품표 출력</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: "Malgun Gothic", sans-serif;
+            background: #666;
+        }
+
+        /* 상단 버튼 영역 */
+        .no-print {
+            background: #333;
+            color: white;
+            padding: 15px;
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+        .btn {
+            padding: 8px 20px;
+            margin: 0 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .btn-print { background: #f39c12; color: #fff; }
+        .btn-close { background: #95a5a6; color: #fff; }
+
+        /* 화면 미리보기 컨테이너 */
+        #preview-container {
+            padding: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10mm;
+            justify-content: center;
+        }
+
+        /* 라벨 크기 설정 */
+        .label {
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            {% if size_type == 'small' %}
+                width: 60mm; height: 70mm;
+            {% elif size_type == 'medium' %}
+                width: 100mm; height: 60mm;
+            {% elif size_type == 'large' %}
+                width: 210mm; height: 148mm;
+            {% else %}
+                width: 100mm; height: 60mm;
+            {% endif %}
+            border: 2px solid #000;
+        }
+
+        /* 라벨 제목 */
+        .label-title {
+            text-align: center;
+            font-weight: bold;
+            font-size: 12pt;
+            border-bottom: 2px solid #000;
+            padding: 5px;
+            background: #f0f0f0;
+        }
+
+        /* 라벨 내용 테이블 */
+        .label-table {
+            width: 100%;
+            height: calc(100% - 35px);
+            border-collapse: collapse;
+        }
+
+        .label-table td {
+            border: 1px solid #000;
+            padding: 4px;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .label-header {
+            background: #f0f0f0;
+            font-weight: bold;
+            font-size: 9pt;
+            width: 25%;
+        }
+
+        .label-data {
+            font-weight: bold;
+            font-size: 11pt;
+        }
+
+        .qr-cell {
+            width: 30%;
+            padding: 3px !important;
+        }
+
+        .qr-area {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* 인쇄 스타일 */
+        @media print {
+            body {
+                background: white;
+                margin: 0;
+                padding: 0;
+            }
+            .no-print { display: none; }
+
+            {% if print_mode == 'sheet' %}
+                /* A4 모아찍기 */
+                @page {
+                    size: A4;
+                    margin: 5mm;
+                }
+
+                #preview-container {
+                    display: grid !important;
+                    grid-template-columns: repeat({{ sheet_cols }}, {{ label_w_mm }}mm) !important;
+                    grid-column-gap: 3mm;
+                    grid-row-gap: 3mm;
+                    padding: 0;
+                    margin: 0;
+                    width: 100%;
+                }
+
+                .label {
+                    box-shadow: none;
+                    page-break-inside: avoid;
+                    width: {{ label_w_mm }}mm !important;
+                    height: {{ label_h_mm }}mm !important;
+                }
+            {% else %}
+                /* 라벨 프린터 - 1장씩 */
+                @page {
+                    margin: 0;
+                    {% if size_type == 'small' %}
+                        size: 60mm 70mm;
+                    {% elif size_type == 'medium' %}
+                        size: 100mm 60mm;
+                    {% elif size_type == 'large' %}
+                        size: 210mm 148mm;
+                    {% endif %}
+                }
+
+                #preview-container {
+                    display: block;
+                    padding: 0;
+                }
+
+                .label {
+                    width: 100%;
+                    height: 100%;
+                    box-shadow: none;
+                    page-break-after: always;
+                }
+
+                .label:last-child {
+                    page-break-after: auto;
+                }
+            {% endif %}
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 상단 버튼 -->
+    <div class="no-print">
+        <span style="margin-right: 20px; font-size: 14pt;">
+            {% if print_mode == 'sheet' %}
+                📄 <strong>A4 모아찍기</strong> 모드 | 총 {{ tag_list|length }}장
+            {% else %}
+                🏷️ <strong>라벨 프린터</strong> 모드 | 총 {{ tag_list|length }}장
+            {% endif %}
+        </span>
+        <button onclick="window.print()" class="btn btn-print">🖨️ 인쇄하기</button>
+        <button onclick="window.close()" class="btn btn-close">✕ 닫기</button>
+    </div>
+
+    <!-- 라벨 미리보기 -->
+    <div id="preview-container">
+        {% for tag in tag_list %}
+        <div class="label">
+            <div class="label-title">공정 현품표</div>
+            <table class="label-table">
+                <tr>
+                    <td class="qr-cell" rowspan="4">
+                        <div id="qr_{{ tag.index }}" class="qr-area"></div>
+                    </td>
+                    <td class="label-header">품번</td>
+                    <td class="label-data" style="font-family: monospace;">{{ part_no }}</td>
+                </tr>
+                <tr>
+                    <td class="label-header">품명</td>
+                    <td class="label-data">{{ part_name }}</td>
+                </tr>
+                <tr>
+                    <td class="label-header">수량</td>
+                    <td class="label-data" style="font-size: 13pt; color: #2c3e50;">{{ quantity }} EA</td>
+                </tr>
+                <tr>
+                    <td class="label-header">LOT</td>
+                    <td class="label-data" style="font-family: monospace;">{{ lot_no }}</td>
+                </tr>
+            </table>
+        </div>
+        {% endfor %}
+    </div>
+
+    <script>
+        // QR 코드 생성 - 각 태그별 고유 tag_id 포함
+        const sizeType = "{{ size_type }}";
+
+        let qrSize = 90; // 기본 QR 크기 (픽셀)
+
+        if (sizeType === 'small') qrSize = 80;
+        else if (sizeType === 'medium') qrSize = 90;
+        else if (sizeType === 'large') qrSize = 140;
+
+        // 각 태그별 고유 QR 데이터 생성
+        const tagList = [
+            {% for tag in tag_list %}
+            { index: {{ tag.index }}, tag_id: "{{ tag.tag_id }}" }{% if not forloop.last %},{% endif %}
+            {% endfor %}
+        ];
+
+        tagList.forEach(tag => {
+            // QR 데이터: TAG_ID|품번|수량|LOT
+            const qrData = `${tag.tag_id}|{{ part_no }}|{{ quantity }}|{{ lot_no }}`;
+            new QRCode(document.getElementById(`qr_${tag.index}`), {
+                text: qrData,
+                width: qrSize,
+                height: qrSize,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.M
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,363 @@
+{% extends 'qms/qms_base.html' %}
+{% load humanize %}
+
+{% block title %}VOC 상세 - {{ voc.voc_no }}{% endblock %}
+
+{% block qms_content %}
+<div class="container-fluid p-0" style="max-width: 1400px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold mb-1">
+                <i class="bi bi-megaphone me-2"></i>{{ voc.voc_no }}
+                {% if voc.severity == 'CRITICAL' %}
+                <span class="badge bg-danger ms-2">긴급</span>
+                {% elif voc.severity == 'MAJOR' %}
+                <span class="badge bg-warning text-dark ms-2">중대</span>
+                {% endif %}
+            </h3>
+            <small class="text-muted">{{ voc.customer_name }} | {{ voc.get_source_display }}</small>
+        </div>
+        <div>
+            <span class="badge fs-6
+                {% if voc.status == 'RECEIVED' %}bg-info
+                {% elif voc.status == 'ANALYZING' %}bg-warning text-dark
+                {% elif voc.status == 'ACTION' %}bg-primary
+                {% elif voc.status == 'VERIFY' %}bg-purple
+                {% else %}bg-success{% endif %}" style="{% if voc.status == 'VERIFY' %}background: #6f42c1;{% endif %}">
+                {{ voc.get_status_display }}
+            </span>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- 좌측: 기본 정보 -->
+        <div class="col-lg-8">
+            <!-- 기본 정보 -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-dark text-white">
+                    <i class="bi bi-info-circle me-1"></i>기본 정보
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted">접수일</label>
+                            <div class="fw-bold">{{ voc.received_date }}</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted">접수경로</label>
+                            <div class="fw-bold">{{ voc.get_source_display }}</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted">처리기한</label>
+                            <div class="fw-bold {% if voc.is_overdue %}text-danger{% endif %}">
+                                {{ voc.due_date|default:"-" }}
+                                {% if voc.is_overdue %}<span class="badge bg-danger ms-1">기한초과</span>{% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted">담당자</label>
+                            <div class="fw-bold">{{ voc.assigned_to.username|default:"-" }}</div>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted">고객사</label>
+                            <div class="fw-bold">{{ voc.customer_name }}</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted">고객담당자</label>
+                            <div>{{ voc.customer_contact|default:"-" }}</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted">연락처</label>
+                            <div>{{ voc.customer_phone|default:"-" }}</div>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted">품번</label>
+                            <div class="fw-bold text-primary">{{ voc.part_no }}</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted">품명</label>
+                            <div>{{ voc.part_name }}</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted">LOT번호</label>
+                            <div>{{ voc.lot_no|default:"-" }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 불량 내용 -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-danger text-white">
+                    <i class="bi bi-exclamation-triangle me-1"></i>불량 내용
+                </div>
+                <div class="card-body">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted">불량수량</label>
+                            <div class="h4 text-danger">{{ voc.defect_qty|intcomma }}</div>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label small text-muted">불량유형</label>
+                            <div class="fw-bold">{{ voc.defect_type }}</div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">불량상세</label>
+                        <div class="p-3 bg-light rounded">{{ voc.defect_detail|linebreaks }}</div>
+                    </div>
+                    {% if voc.photo %}
+                    <div>
+                        <label class="form-label small text-muted">불량사진</label>
+                        <div><a href="{{ voc.photo.url }}" target="_blank" class="btn btn-sm btn-outline-primary"><i class="bi bi-image me-1"></i>사진 보기</a></div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- 원인 분석 -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-warning text-dark">
+                    <i class="bi bi-search me-1"></i>원인 분석
+                </div>
+                <div class="card-body">
+                    {% if voc.status != 'CLOSED' %}
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="update_analysis">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">원인분석</label>
+                                <textarea name="cause_analysis" class="form-control" rows="3">{{ voc.cause_analysis }}</textarea>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">근본원인</label>
+                                <textarea name="root_cause" class="form-control" rows="3">{{ voc.root_cause }}</textarea>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">귀책구분</label>
+                                <select name="responsible_type" class="form-select">
+                                    <option value="">선택</option>
+                                    <option value="INTERNAL" {% if voc.responsible_type == 'INTERNAL' %}selected{% endif %}>사내</option>
+                                    <option value="VENDOR" {% if voc.responsible_type == 'VENDOR' %}selected{% endif %}>협력사</option>
+                                    <option value="CUSTOMER" {% if voc.responsible_type == 'CUSTOMER' %}selected{% endif %}>고객</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">귀책 협력사</label>
+                                <select name="linked_vendor" class="form-select">
+                                    <option value="">선택</option>
+                                    {% for v in vendors %}
+                                    <option value="{{ v.id }}" {% if voc.linked_vendor_id == v.id %}selected{% endif %}>{{ v.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="text-end mt-3">
+                            <button type="submit" class="btn btn-warning"><i class="bi bi-save me-1"></i>원인분석 저장</button>
+                        </div>
+                    </form>
+                    {% else %}
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">원인분석</label>
+                            <div class="p-2 bg-light rounded">{{ voc.cause_analysis|default:"-"|linebreaks }}</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">근본원인</label>
+                            <div class="p-2 bg-light rounded">{{ voc.root_cause|default:"-"|linebreaks }}</div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- 대책/조치 -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-primary text-white">
+                    <i class="bi bi-tools me-1"></i>대책/조치
+                </div>
+                <div class="card-body">
+                    {% if voc.status != 'CLOSED' %}
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="update_action">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label">즉시대책</label>
+                                <textarea name="immediate_action" class="form-control" rows="2">{{ voc.immediate_action }}</textarea>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">시정조치</label>
+                                <textarea name="corrective_action" class="form-control" rows="2">{{ voc.corrective_action }}</textarea>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">예방조치</label>
+                                <textarea name="preventive_action" class="form-control" rows="2">{{ voc.preventive_action }}</textarea>
+                            </div>
+                        </div>
+                        <div class="text-end mt-3">
+                            <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>대책 저장</button>
+                        </div>
+                    </form>
+                    {% else %}
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label small text-muted">즉시대책</label>
+                            <div class="p-2 bg-light rounded">{{ voc.immediate_action|default:"-"|linebreaks }}</div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small text-muted">시정조치</label>
+                            <div class="p-2 bg-light rounded">{{ voc.corrective_action|default:"-"|linebreaks }}</div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small text-muted">예방조치</label>
+                            <div class="p-2 bg-light rounded">{{ voc.preventive_action|default:"-"|linebreaks }}</div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 우측: 상태/액션 -->
+        <div class="col-lg-4">
+            <!-- 상태 진행 -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-dark text-white">
+                    <i class="bi bi-diagram-3 me-1"></i>진행 상태
+                </div>
+                <div class="card-body">
+                    <div class="d-flex flex-column gap-2">
+                        {% for value, label in status_choices %}
+                        <div class="d-flex align-items-center">
+                            <div class="rounded-circle d-flex align-items-center justify-content-center me-2"
+                                 style="width: 30px; height: 30px;
+                                 {% if voc.status == value %}background: #0d6efd; color: white;
+                                 {% elif forloop.counter <= status_choices|length %}background: #e9ecef;{% endif %}">
+                                {% if voc.status == value %}
+                                <i class="bi bi-check-lg"></i>
+                                {% else %}
+                                {{ forloop.counter }}
+                                {% endif %}
+                            </div>
+                            <span class="{% if voc.status == value %}fw-bold text-primary{% endif %}">{{ label }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- 협력사 클레임 연계 -->
+            {% if voc.responsible_type == 'VENDOR' and voc.linked_vendor %}
+            <div class="card shadow-sm mb-4 border-danger">
+                <div class="card-header bg-danger text-white">
+                    <i class="bi bi-link-45deg me-1"></i>협력사 클레임
+                </div>
+                <div class="card-body">
+                    {% if voc.linked_claim %}
+                    <div class="alert alert-success mb-0">
+                        <i class="bi bi-check-circle me-1"></i>
+                        클레임 연계됨: <a href="{% url 'qms:claim_detail' voc.linked_claim.pk %}" class="fw-bold">{{ voc.linked_claim.claim_no }}</a>
+                    </div>
+                    {% else %}
+                    <p class="text-muted small mb-2">협력사 귀책 VOC입니다. 클레임을 생성하시겠습니까?</p>
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="create_claim">
+                        <button type="submit" class="btn btn-danger w-100" onclick="return confirm('협력사 클레임을 생성하시겠습니까?');">
+                            <i class="bi bi-plus-lg me-1"></i>클레임 생성
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- 효과검증 -->
+            {% if voc.status in 'ACTION,VERIFY' %}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header text-white" style="background: #6f42c1;">
+                    <i class="bi bi-clipboard-check me-1"></i>효과 검증
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="verify">
+                        <div class="mb-3">
+                            <label class="form-label">검증 결과</label>
+                            <textarea name="verification_result" class="form-control" rows="3">{{ voc.verification_result }}</textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">효과 있음?</label>
+                            <div class="btn-group w-100">
+                                <input type="radio" class="btn-check" name="is_effective" id="eff_yes" value="true" {% if voc.is_effective %}checked{% endif %}>
+                                <label class="btn btn-outline-success" for="eff_yes">효과 있음</label>
+                                <input type="radio" class="btn-check" name="is_effective" id="eff_no" value="false" {% if voc.is_effective == False %}checked{% endif %}>
+                                <label class="btn btn-outline-danger" for="eff_no">효과 없음</label>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn w-100" style="background: #6f42c1; color: white;">
+                            <i class="bi bi-save me-1"></i>검증 저장
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- 완료 처리 -->
+            {% if voc.status != 'CLOSED' %}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-success text-white">
+                    <i class="bi bi-check-circle me-1"></i>완료 처리
+                </div>
+                <div class="card-body">
+                    <form method="post" onsubmit="return confirm('VOC를 완료 처리하시겠습니까?');">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="close">
+                        <button type="submit" class="btn btn-success w-100">
+                            <i class="bi bi-check-lg me-1"></i>VOC 완료
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- 메타 정보 -->
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <i class="bi bi-clock-history me-1"></i>등록 정보
+                </div>
+                <div class="card-body small">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="text-muted">접수자</span>
+                        <span>{{ voc.received_by.username }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="text-muted">등록일시</span>
+                        <span>{{ voc.created_at|date:"Y-m-d H:i" }}</span>
+                    </div>
+                    {% if voc.closed_date %}
+                    <div class="d-flex justify-content-between">
+                        <span class="text-muted">완료일</span>
+                        <span>{{ voc.closed_date }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-4">
+        <a href="{% url 'qms:voc_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>목록으로
+        </a>
+    </div>
+</div>
+{% endblock %}

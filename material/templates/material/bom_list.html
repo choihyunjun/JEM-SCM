@@ -1,0 +1,143 @@
+{% extends "material/material_base.html" %}
+{% load auth_extras %}
+
+{% block title %}BOM 조회 - WMS{% endblock %}
+
+{% block material_content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="mb-0"><i class="bi bi-diagram-3 me-2"></i>BOM 조회</h4>
+        <div>
+            {% if user|has_perm:'can_wms_bom_edit' %}
+            <a href="{% url 'material:bom_upload' %}" class="btn btn-success btn-sm">
+                <i class="bi bi-upload me-1"></i>BOM 업로드
+            </a>
+            {% endif %}
+            <a href="{% url 'material:bom_calculate' %}" class="btn btn-primary btn-sm">
+                <i class="bi bi-calculator me-1"></i>소요량 계산
+            </a>
+        </div>
+    </div>
+
+    <!-- 검색 필터 -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label">품번/품명 검색</label>
+                    <input type="text" name="q" class="form-control" placeholder="모품번 또는 모품명" value="{{ q }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">계정구분</label>
+                    <select name="account_type" class="form-select">
+                        <option value="">전체</option>
+                        <option value="제품" {% if account_type == '제품' %}selected{% endif %}>제품</option>
+                        <option value="반제품" {% if account_type == '반제품' %}selected{% endif %}>반제품</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-search me-1"></i>검색</button>
+                    <a href="{% url 'material:bom_list' %}" class="btn btn-secondary">초기화</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 목록 테이블 -->
+    <div class="card">
+        <div class="card-header bg-dark text-white">
+            <i class="bi bi-list-ul me-2"></i>모품(제품) 목록
+            <span class="badge bg-light text-dark ms-2">{{ page_obj.paginator.count }}건</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:5%">No</th>
+                            <th style="width:15%">모품번</th>
+                            <th style="width:25%">모품명</th>
+                            <th style="width:10%">규격</th>
+                            <th style="width:8%">단위</th>
+                            <th style="width:10%">계정구분</th>
+                            <th style="width:10%">BOM 항목수</th>
+                            <th style="width:12%">등록일</th>
+                            <th style="width:5%">상세</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in page_obj %}
+                        <tr>
+                            <td>{{ forloop.counter0|add:page_obj.start_index }}</td>
+                            <td><strong>{{ product.part_no }}</strong></td>
+                            <td>{{ product.part_name }}</td>
+                            <td>{{ product.spec|default:"-" }}</td>
+                            <td>{{ product.unit }}</td>
+                            <td>
+                                <span class="badge {% if product.account_type == '제품' %}bg-primary{% else %}bg-info{% endif %}">
+                                    {{ product.account_type }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if product.bom_count > 0 %}
+                                <span class="badge bg-success">{{ product.bom_count }}개</span>
+                                {% else %}
+                                <span class="badge bg-secondary">없음</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ product.created_at|date:"Y-m-d" }}</td>
+                            <td>
+                                <a href="{% url 'material:bom_detail' product.part_no %}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center py-4 text-muted">
+                                등록된 BOM이 없습니다. BOM 업로드를 먼저 진행해주세요.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 페이징 -->
+    {% if page_obj.has_other_pages %}
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page=1&q={{ q }}&account_type={{ account_type }}">처음</a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ q }}&account_type={{ account_type }}">이전</a>
+            </li>
+            {% endif %}
+
+            {% for num in page_obj.paginator.page_range %}
+                {% if page_obj.number == num %}
+                <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ num }}&q={{ q }}&account_type={{ account_type }}">{{ num }}</a>
+                </li>
+                {% endif %}
+            {% endfor %}
+
+            {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ q }}&account_type={{ account_type }}">다음</a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}&q={{ q }}&account_type={{ account_type }}">마지막</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

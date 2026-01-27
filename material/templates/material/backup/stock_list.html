@@ -1,0 +1,285 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid" style="max-width: 1600px;">
+    
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="fw-bold text-secondary"><i class="bi bi-boxes me-2"></i>자재 재고 현황</h4>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-3 bg-light">
+        <div class="card-body py-3">
+            <form method="get" class="row g-2 align-items-center">
+                <input type="hidden" name="search_triggered" value="yes">
+                
+                <div class="col-auto">
+                    <select name="part_group" class="form-select form-select-sm shadow-sm" style="width: 150px;">
+                        <option value="">:: 품목군 전체 ::</option>
+                        {% for g in part_groups %}
+                            {% if g %}
+                            <option value="{{ g }}" {% if selected_group == g %}selected{% endif %}>{{ g }}</option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-auto">
+                    <select name="warehouse_id" class="form-select form-select-sm shadow-sm" style="width: 180px;">
+                        <option value="">:: 창고 전체 ::</option>
+                        {% for wh in warehouses %}
+                            <option value="{{ wh.id }}" {% if selected_wh == wh.id|stringformat:"s" %}selected{% endif %}>
+                                [{{ wh.code }}] {{ wh.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-auto flex-grow-1" style="max-width: 350px;">
+                    <div class="input-group input-group-sm shadow-sm">
+                        <input type="text" name="q" class="form-control" placeholder="품번 또는 품명 입력" value="{{ q }}">
+                    </div>
+                </div>
+
+                <div class="col-auto border rounded bg-white px-3 py-1 shadow-sm d-flex align-items-center">
+                    <div class="form-check form-check-inline mb-0 small">
+                        <input class="form-check-input" type="radio" name="view_mode" id="mode_detail" value="detail" 
+                               {% if view_mode == 'detail' %}checked{% endif %}>
+                        <label class="form-check-label fw-bold" for="mode_detail">🏭 창고별 상세</label>
+                    </div>
+                    <div class="form-check form-check-inline mb-0 ms-2 small">
+                        <input class="form-check-input" type="radio" name="view_mode" id="mode_summary" value="summary" 
+                               {% if view_mode == 'summary' %}checked{% endif %}>
+                        <label class="form-check-label fw-bold text-primary" for="mode_summary">∑ 전체 합계</label>
+                    </div>
+                </div>
+
+                <div class="col-auto">
+                    <button class="btn btn-primary btn-sm px-4 fw-bold shadow-sm" type="submit">
+                        <i class="bi bi-search me-1"></i> 조회
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if search_triggered == 'yes' %}
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0 text-center align-middle table-bordered" style="font-size: 0.85rem;">
+                        <thead class="table-light">
+                            <tr class="align-middle">
+                                {% if view_mode == 'detail' %}
+                                    <th style="width: 18%;">창고위치</th>
+                                {% else %}
+                                    <th style="width: 18%;" class="bg-primary-subtle text-primary">구분</th>
+                                {% endif %}
+                                
+                                <th style="width: 10%;">품목군</th>
+                                <th style="width: 15%;">품번</th>
+                                <th>품명</th>
+                                <th style="width: 15%;">협력사</th>
+                                <th style="width: 10%;" class="table-primary">현재고</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in stocks %}
+                            <tr>
+                                {% if view_mode == 'detail' %}
+                                    <td class="text-start ps-3 text-truncate" style="max-width: 200px;">
+                                        <span class="badge bg-secondary me-1" style="font-size: 0.75rem;">{{ item.warehouse__code }}</span>
+                                        {{ item.warehouse__name }}
+                                    </td>
+                                    <td>{{ item.part__part_group }}</td>
+                                    <td class="fw-bold text-primary">{{ item.part__part_no }}</td>
+                                    <td class="text-start text-truncate" style="max-width: 300px;">{{ item.part__part_name }}</td>
+                                    <td class="text-truncate" style="max-width: 150px;">{{ item.part__vendor__name }}</td>
+                                    <td class="fw-bold text-end pe-3 fs-6 cursor-pointer lot-detail-cell"
+                                        data-part-no="{{ item.part__part_no }}"
+                                        data-warehouse-code="{{ item.warehouse__code }}"
+                                        title="더블클릭하여 LOT별 상세 보기"
+                                        ondblclick="showLotDetails('{{ item.part__part_no }}', '{{ item.warehouse__code }}')">
+                                        {{ item.total_qty|intcomma }}
+                                        <div class="text-info small" style="font-size: 0.65rem;">🔍 LOT 상세</div>
+                                    </td>
+                                {% else %}
+                                    <td class="text-primary fw-bold">전체 합계</td>
+                                    <td>{{ item.part__part_group }}</td>
+                                    <td class="fw-bold text-primary">{{ item.part__part_no }}</td>
+                                    <td class="text-start text-truncate" style="max-width: 300px;">{{ item.part__part_name }}</td>
+                                    <td class="text-truncate" style="max-width: 150px;">{{ item.part__vendor__name }}</td>
+                                    <td class="fw-bold text-end pe-3 fs-6 text-primary cursor-pointer lot-detail-cell"
+                                        data-part-no="{{ item.part__part_no }}"
+                                        title="더블클릭하여 LOT별 상세 보기 (전체 창고)"
+                                        ondblclick="showLotDetails('{{ item.part__part_no }}', null)">
+                                        {{ item.total_qty|intcomma }}
+                                        <div class="text-info small" style="font-size: 0.65rem;">🔍 LOT 상세</div>
+                                    </td>
+                                {% endif %}
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="6" class="py-5 text-muted">
+                                    <i class="bi bi-emoji-dizzy fs-3 d-block mb-2"></i>
+                                    조건에 맞는 재고 데이터가 없습니다.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <div class="text-center py-5 mt-5">
+            <div class="text-muted opacity-50 mb-3">
+                <i class="bi bi-search" style="font-size: 4rem;"></i>
+            </div>
+            <h5 class="fw-bold text-secondary">검색 조건을 입력하고 [조회] 버튼을 눌러주세요.</h5>
+            <p class="text-muted small">조건 없이 조회하면 전체 재고가 표시됩니다.</p>
+        </div>
+    {% endif %}
+</div>
+
+<!-- LOT 상세 정보 모달 -->
+<div class="modal fade" id="lotDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="bi bi-box-seam me-2"></i>LOT별 재고 상세</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="lotDetailContent">
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.cursor-pointer {
+    cursor: pointer;
+}
+.lot-detail-cell:hover {
+    background-color: #e3f2fd !important;
+    transition: background-color 0.2s;
+}
+</style>
+
+<script>
+function showLotDetails(partNo, warehouseCode) {
+    const modal = new bootstrap.Modal(document.getElementById('lotDetailModal'));
+    const contentDiv = document.getElementById('lotDetailContent');
+
+    contentDiv.innerHTML = `
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-3 text-muted">LOT 정보를 불러오는 중...</p>
+        </div>
+    `;
+
+    modal.show();
+
+    let url = '/wms/stock/lot-details/' + partNo + '/';
+    if (warehouseCode) {
+        url += '?warehouse=' + warehouseCode;
+    }
+
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                contentDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle me-2"></i>${data.error}
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+
+            html += '<div class="card border-0 bg-light mb-3">';
+            html += '  <div class="card-body">';
+            html += '    <div class="row">';
+            html += '      <div class="col-md-4"><strong>품번:</strong> <span class="text-primary">' + data.part_no + '</span></div>';
+            html += '      <div class="col-md-8"><strong>품명:</strong> ' + data.part_name + '</div>';
+            html += '    </div>';
+            html += '    <div class="row mt-2">';
+            html += '      <div class="col-md-6"><strong>협력사:</strong> ' + data.vendor_name + '</div>';
+            html += '      <div class="col-md-6"><strong>전체 재고:</strong> <span class="text-primary fw-bold fs-5">' + data.total_quantity.toLocaleString() + ' EA</span></div>';
+            html += '    </div>';
+            html += '  </div>';
+            html += '</div>';
+
+            if (data.fifo_warning) {
+                html += '<div class="alert alert-warning border-warning">';
+                html += '  <i class="bi bi-exclamation-triangle-fill me-2"></i>';
+                html += '  <strong>FIFO 경고!</strong> 가장 오래된 LOT가 <strong>' + data.oldest_days + '일</strong> 경과했습니다. ';
+                html += '  (LOT: ' + data.oldest_lot + ')';
+                html += '</div>';
+            }
+
+            if (data.lot_details.length === 0) {
+                html += '<div class="alert alert-info">LOT 정보가 없습니다.</div>';
+            } else {
+                html += '<div class="table-responsive">';
+                html += '  <table class="table table-bordered table-hover mb-0">';
+                html += '    <thead class="table-light">';
+                html += '      <tr class="text-center">';
+                html += '        <th style="width: 25%;">창고</th>';
+                html += '        <th style="width: 25%;">LOT 번호</th>';
+                html += '        <th style="width: 20%;">재고량</th>';
+                html += '        <th style="width: 30%;">재고 일수</th>';
+                html += '      </tr>';
+                html += '    </thead>';
+                html += '    <tbody>';
+
+                data.lot_details.forEach(function(lot) {
+                    let daysClass = '';
+                    let daysText = lot.days_old + '일';
+
+                    if (lot.days_old >= 60) {
+                        daysClass = 'text-danger fw-bold';
+                        daysText = lot.days_old + '일 (위험)';
+                    } else if (lot.days_old >= 30) {
+                        daysClass = 'text-warning fw-bold';
+                        daysText = lot.days_old + '일 (주의)';
+                    }
+
+                    html += '<tr>';
+                    html += '  <td><span class="badge bg-secondary me-1">' + lot.warehouse_code + '</span>' + lot.warehouse + '</td>';
+                    html += '  <td class="text-center fw-bold text-primary">' + lot.lot_no + '</td>';
+                    html += '  <td class="text-end fw-bold">' + lot.quantity.toLocaleString() + ' EA</td>';
+                    html += '  <td class="text-center ' + daysClass + '">' + daysText + '</td>';
+                    html += '</tr>';
+                });
+
+                html += '    </tbody>';
+                html += '  </table>';
+                html += '</div>';
+            }
+
+            contentDiv.innerHTML = html;
+        })
+        .catch(error => {
+            contentDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle me-2"></i>데이터를 불러오는 중 오류가 발생했습니다.
+                </div>
+            `;
+            console.error('Error:', error);
+        });
+}
+</script>
+
+{% endblock %}

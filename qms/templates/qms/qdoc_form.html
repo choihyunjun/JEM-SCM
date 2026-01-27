@@ -1,0 +1,143 @@
+{% extends 'qms/qms_base.html' %}
+
+{% block title %}품질문서 등록{% endblock %}
+
+{% block qms_content %}
+<div class="container-fluid p-0" style="max-width: 900px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold mb-0">
+            <i class="bi bi-file-earmark-plus me-2"></i>품질문서 등록
+        </h3>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-dark text-white">
+            <i class="bi bi-pencil-square me-1"></i>문서 정보 입력
+        </div>
+        <div class="card-body">
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+
+                <!-- 기본 정보 -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">문서번호 <span class="text-danger">*</span></label>
+                        <input type="text" name="doc_no" class="form-control" required
+                               placeholder="예: QM-001" value="{{ form.doc_no.value|default:'' }}">
+                        <div class="form-text">고유한 문서관리 번호를 입력하세요.</div>
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label fw-bold">문서명 <span class="text-danger">*</span></label>
+                        <input type="text" name="doc_name" class="form-control" required
+                               placeholder="예: 품질경영매뉴얼" value="{{ form.doc_name.value|default:'' }}">
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">분류 <span class="text-danger">*</span></label>
+                        <select name="category" class="form-select" required>
+                            {% for value, label in category_choices %}
+                            <option value="{{ value }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">개정번호</label>
+                        <input type="number" name="revision" class="form-control" value="0" min="0">
+                        <div class="form-text">최초 등록 시 0, 개정 시 증가</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">상태</label>
+                        <select name="status" class="form-select">
+                            {% for value, label in status_choices %}
+                            <option value="{{ value }}" {% if value == 'DRAFT' %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <!-- 관리 정보 -->
+                <h6 class="fw-bold mb-3"><i class="bi bi-building me-1"></i>관리 정보</h6>
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <label class="form-label">관리부서</label>
+                        <input type="text" name="department" class="form-control" placeholder="예: 품질관리팀">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">작성자</label>
+                        <input type="text" name="author" class="form-control" placeholder="예: 홍길동">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">승인자</label>
+                        <input type="text" name="approver" class="form-control" placeholder="예: 김철수">
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <label class="form-label">시행일</label>
+                        <input type="date" name="effective_date" class="form-control">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">검토예정일</label>
+                        <input type="date" name="review_date" class="form-control">
+                        <div class="form-text">정기검토 예정일</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">폐기일</label>
+                        <input type="date" name="obsolete_date" class="form-control">
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <!-- 문서 내용 -->
+                <h6 class="fw-bold mb-3"><i class="bi bi-file-text me-1"></i>문서 내용</h6>
+                <div class="mb-4">
+                    <label class="form-label">문서 설명</label>
+                    <textarea name="description" class="form-control" rows="3" placeholder="문서의 목적과 적용범위를 간략히 기술하세요."></textarea>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label fw-bold">문서 파일</label>
+                    <input type="file" name="file" class="form-control" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.hwp">
+                    <div class="form-text">PDF, Word, Excel, PowerPoint, 한글 파일 업로드 가능</div>
+                </div>
+
+                <hr class="my-4">
+
+                <!-- 관련 문서 -->
+                <h6 class="fw-bold mb-3"><i class="bi bi-link-45deg me-1"></i>관련 정보</h6>
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label">상위 문서번호</label>
+                        <input type="text" name="parent_doc_no" class="form-control" placeholder="상위 문서가 있는 경우 입력">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">관련 문서번호</label>
+                        <input type="text" name="related_doc_nos" class="form-control" placeholder="관련문서 (쉼표로 구분)">
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label">비고</label>
+                    <textarea name="remark" class="form-control" rows="2" placeholder="기타 참고사항"></textarea>
+                </div>
+
+                <!-- 버튼 -->
+                <div class="d-flex justify-content-between mt-4 pt-3 border-top">
+                    <a href="{% url 'qms:qdoc_list' %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left me-1"></i>취소
+                    </a>
+                    <button type="submit" class="btn btn-primary btn-lg px-5">
+                        <i class="bi bi-check-lg me-1"></i>등록
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

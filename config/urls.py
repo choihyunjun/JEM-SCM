@@ -26,9 +26,9 @@ urlpatterns = [
     # ------------------------------------------------------------------
     # 2. 발주(SCM) 관련 기능
     # ------------------------------------------------------------------
-    # 조회 및 메인
-    path('', views.order_list, name='order_list'),
-    path('list/', views.order_list, name='order_list_alias'),
+    # 조회 및 메인 (기본 페이지: 알림 대시보드)
+    path('', views.scm_alert_dashboard, name='home'),
+    path('list/', views.order_list, name='order_list'),
 
     # [관리 기능]
     path('upload/', views.order_upload, name='order_upload'),
@@ -56,6 +56,7 @@ urlpatterns = [
     path('inventory/demand-delete/', views.delete_all_demands, name='delete_all_demands'),
     path('inventory/demand-update-ajax/', views.demand_update_ajax, name='demand_update_ajax'),
     path('inventory/quick-order/', views.quick_order_action, name='quick_order_action'),
+    path('inventory/bulk-shortage-order/', views.bulk_shortage_order, name='bulk_shortage_order'),
 
     # ------------------------------------------------------------------
     # 4. 납품서(라벨) 및 입고 관리
@@ -74,6 +75,50 @@ urlpatterns = [
     path('incoming/list/', views.incoming_list, name='incoming_list'),
     path('incoming/export/', views.incoming_export, name='incoming_export'),
     path('incoming/cancel/', views.incoming_cancel, name='incoming_cancel'),
+
+    # [품목 마스터 관리]
+    path('part/list/', views.part_list, name='part_list'),
+    path('part/vendor-template/', views.part_vendor_template, name='part_vendor_template'),
+
+    # [협력사 관리]
+    path('vendor/', views.vendor_manage, name='vendor_manage'),
+    path('vendor/detail/<int:vendor_id>/', views.vendor_detail, name='vendor_detail'),
+    path('vendor/create/', views.vendor_create, name='vendor_create'),
+    path('vendor/update/', views.vendor_update, name='vendor_update'),
+    path('vendor/delete/', views.vendor_delete, name='vendor_delete'),
+    path('vendor/link-user/', views.vendor_link_user, name='vendor_link_user'),
+    path('vendor/unlink-user/', views.vendor_unlink_user, name='vendor_unlink_user'),
+    path('vendor/search-users/', views.vendor_search_users, name='vendor_search_users'),
+    path('vendor/upload/', views.vendor_upload, name='vendor_upload'),
+    path('vendor/upload/preview/', views.vendor_upload_preview, name='vendor_upload_preview'),
+    path('vendor/upload/confirm/', views.vendor_upload_confirm, name='vendor_upload_confirm'),
+
+    # [사용자 권한 관리]
+    path('system/user-permission/', views.user_permission_manage, name='user_permission_manage'),
+
+    # [사용자 관리]
+    path('system/user/', views.user_manage, name='user_manage'),
+    path('system/user/create/', views.user_create, name='user_create'),
+    path('system/user/update/', views.user_update, name='user_update'),
+    path('system/user/delete/', views.user_delete, name='user_delete'),
+
+    # [리포트]
+    path('report/vendor-delivery/', views.vendor_delivery_report, name='vendor_delivery_report'),
+    path('report/vendor-delivery/close/', views.vendor_delivery_close_month, name='vendor_delivery_close_month'),
+    path('report/alert-dashboard/', views.scm_alert_dashboard, name='scm_alert_dashboard'),
+
+    # [공지사항 / QnA]
+    path('notice/create/', views.notice_create, name='notice_create'),
+    path('qna/create/', views.qna_create, name='qna_create'),
+    path('qna/answer/<int:qna_id>/', views.qna_answer, name='qna_answer'),
+
+    # ------------------------------------------------------------------
+    # API 엔드포인트 (품번/협력사/직원 검색)
+    # ------------------------------------------------------------------
+    path('api/parts/search/', views.api_part_search, name='api_part_search'),
+    path('api/vendors/search/', views.api_vendor_search, name='api_vendor_search'),
+    path('api/organizations/search/', views.api_organization_search, name='api_organization_search'),
+    path('api/employees/search/', views.api_employee_search, name='api_employee_search'),
 
     # ------------------------------------------------------------------
     # 5. 자재관리 (WMS) - [⭐⭐ 핵심 수정 사항 ⭐⭐]

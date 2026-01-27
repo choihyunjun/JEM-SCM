@@ -1,0 +1,572 @@
+{% extends "material/material_base.html" %}
+
+{% block title %}소요량 계산 - WMS{% endblock %}
+
+{% block material_content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="mb-0"><i class="bi bi-calculator me-2"></i>소요량 계산</h4>
+        <a href="{% url 'material:bom_list' %}" class="btn btn-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i>BOM 목록
+        </a>
+    </div>
+
+    <!-- 메시지 표시 -->
+    {% if messages %}
+    {% for message in messages %}
+    <div class="alert alert-{% if message.tags == 'error' %}danger{% elif message.tags == 'warning' %}warning{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <!-- 탭 네비게이션 -->
+    <ul class="nav nav-tabs mb-4" id="calcTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="single-tab" data-bs-toggle="tab" data-bs-target="#single" type="button" role="tab">
+                <i class="bi bi-1-circle me-1"></i>단일 제품 계산
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="batch-tab" data-bs-toggle="tab" data-bs-target="#batch" type="button" role="tab">
+                <i class="bi bi-file-earmark-excel me-1"></i>엑셀 일괄 계산
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="calcTabsContent">
+        <!-- 단일 제품 계산 탭 -->
+        <div class="tab-pane fade show active" id="single" role="tabpanel">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <i class="bi bi-input-cursor me-2"></i>제품 및 생산수량 입력
+                </div>
+                <div class="card-body">
+                    <form method="post" id="singleForm">
+                        {% csrf_token %}
+                        <input type="hidden" name="calc_type" value="single">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-5">
+                                <label class="form-label fw-bold">제품 품번 (모품번)</label>
+                                <div class="position-relative">
+                                    <input type="text" name="part_no" class="form-control form-control-lg"
+                                           id="partNoInput" placeholder="품번 입력 (검색)" autocomplete="off"
+                                           value="{{ product.part_no|default:'' }}" required>
+                                    <div id="autocompleteList" class="autocomplete-list"></div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-bold">생산 수량</label>
+                                <input type="number" name="production_qty" class="form-control form-control-lg"
+                                       placeholder="생산할 수량" min="1" value="{{ production_qty|default:'' }}" required>
+                            </div>
+                            <div class="col-md-4">
+                                <button type="submit" class="btn btn-primary btn-lg me-2">
+                                    <i class="bi bi-calculator me-1"></i>소요량 계산
+                                </button>
+                                <a href="{% url 'material:bom_calculate' %}" class="btn btn-secondary btn-lg">초기화</a>
+                            </div>
+                        </div>
+                        <div class="form-text mt-2">품번 또는 품명의 일부를 입력하세요</div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- 엑셀 일괄 계산 탭 -->
+        <div class="tab-pane fade" id="batch" role="tabpanel">
+            <div class="row">
+                <div class="col-md-7">
+                    <div class="card mb-4">
+                        <div class="card-header bg-success text-white">
+                            <i class="bi bi-upload me-2"></i>엑셀 파일 업로드
+                        </div>
+                        <div class="card-body">
+                            <form method="post" enctype="multipart/form-data" id="batchForm">
+                                {% csrf_token %}
+                                <input type="hidden" name="calc_type" value="batch">
+
+                                <div class="mb-4">
+                                    <label class="form-label fw-bold">파일 선택 (CSV 또는 XLSX)</label>
+                                    <input type="file" name="calc_file" class="form-control form-control-lg"
+                                           accept=".csv,.xlsx" required id="calcFile">
+                                    <div class="form-text">
+                                        <i class="bi bi-info-circle me-1"></i>
+                                        CSV 파일은 UTF-8 인코딩으로 저장해주세요.
+                                    </div>
+                                </div>
+
+                                <div class="mb-3" id="batchFileInfo" style="display:none;">
+                                    <div class="alert alert-info mb-0">
+                                        <i class="bi bi-file-earmark me-2"></i>
+                                        <span id="batchFileName"></span>
+                                        <span class="badge bg-primary ms-2" id="batchFileSize"></span>
+                                    </div>
+                                </div>
+
+                                <div class="d-grid gap-2">
+                                    <button type="submit" class="btn btn-success btn-lg" id="batchSubmitBtn">
+                                        <i class="bi bi-calculator me-2"></i>일괄 소요량 계산
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-5">
+                    <div class="card">
+                        <div class="card-header bg-info text-white">
+                            <i class="bi bi-question-circle me-2"></i>업로드 파일 형식
+                        </div>
+                        <div class="card-body">
+                            <h6 class="fw-bold mb-3">필수 컬럼</h6>
+                            <table class="table table-sm table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>컬럼명</th>
+                                        <th>설명</th>
+                                        <th>필수</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><code>품번</code></td>
+                                        <td>제품(모품) 품번</td>
+                                        <td><span class="badge bg-danger">필수</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>수량</code></td>
+                                        <td>생산 수량</td>
+                                        <td><span class="badge bg-danger">필수</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>필요일자</code></td>
+                                        <td>자재 필요 날짜</td>
+                                        <td><span class="badge bg-secondary">선택</span></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <hr>
+
+                            <h6 class="fw-bold mb-3">파일 예시</h6>
+                            <div class="alert alert-secondary small mb-3">
+                                <code>
+                                품번,수량,필요일자<br>
+                                064133-0010,100,2025-01-25<br>
+                                064133-0020,50,2025-01-26<br>
+                                064133-0030,200,
+                                </code>
+                            </div>
+
+                            <div class="d-grid">
+                                <a href="{% url 'material:bom_calc_template' %}" class="btn btn-outline-primary">
+                                    <i class="bi bi-download me-2"></i>양식 다운로드
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 계산 결과 (단일) -->
+    {% if result and calc_type == 'single' %}
+    <div class="card">
+        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+            <span>
+                <i class="bi bi-list-check me-2"></i>
+                소요량 계산 결과 - <strong>{{ product.part_no }}</strong> ({{ product.part_name }})
+                <span class="badge bg-light text-dark ms-2">생산수량: {{ production_qty }}개</span>
+            </span>
+            <div>
+                <a href="{% url 'material:bom_calc_export' %}?part_no={{ product.part_no }}&qty={{ production_qty }}"
+                   class="btn btn-sm btn-outline-light me-2">
+                    <i class="bi bi-file-excel me-1"></i>엑셀
+                </a>
+                <button class="btn btn-sm btn-outline-light" onclick="window.print()">
+                    <i class="bi bi-printer me-1"></i>인쇄
+                </button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:5%">순번</th>
+                            <th style="width:12%">자품번</th>
+                            <th style="width:18%">자품명</th>
+                            <th style="width:6%">단위</th>
+                            <th style="width:10%">단위소요량</th>
+                            <th style="width:12%">필요수량</th>
+                            <th style="width:12%">현재고</th>
+                            <th style="width:12%">부족수량</th>
+                            <th style="width:13%">주거래처</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in result %}
+                        <tr class="{% if item.shortage > 0 %}table-danger{% endif %}">
+                            <td>{{ item.seq }}</td>
+                            <td><strong>{{ item.child_part_no }}</strong></td>
+                            <td>{{ item.child_part_name }}</td>
+                            <td>{{ item.child_unit }}</td>
+                            <td class="text-end">{{ item.unit_qty }}</td>
+                            <td class="text-end fw-bold">{{ item.required_qty|floatformat:2 }}</td>
+                            <td class="text-end">
+                                {% if item.stock_qty > 0 %}
+                                <span class="text-success">{{ item.stock_qty }}</span>
+                                {% else %}
+                                <span class="text-muted">0</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if item.shortage > 0 %}
+                                <span class="badge bg-danger fs-6">{{ item.shortage|floatformat:0 }}</span>
+                                {% else %}
+                                <span class="badge bg-success">충족</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ item.vendor_name|default:"-" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer">
+            <div class="row text-center">
+                <div class="col-md-4">
+                    <span class="text-muted">총 자재 종류:</span>
+                    <strong class="ms-2">{{ result|length }}종</strong>
+                </div>
+                <div class="col-md-4">
+                    <span class="text-muted">부족 자재:</span>
+                    <strong class="ms-2 text-danger">{{ shortage_count }}종</strong>
+                </div>
+                <div class="col-md-4">
+                    <span class="text-muted">충족 자재:</span>
+                    <strong class="ms-2 text-success">{{ sufficient_count }}종</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 일괄 계산 결과 -->
+    {% if batch_results %}
+    <div class="card">
+        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+            <span>
+                <i class="bi bi-list-check me-2"></i>
+                일괄 소요량 계산 결과
+                <span class="badge bg-light text-dark ms-2">{{ batch_results|length }}개 제품</span>
+            </span>
+            <div>
+                <a href="{% url 'material:bom_calc_batch_export' %}?session_key={{ session_key }}"
+                   class="btn btn-sm btn-outline-light me-2">
+                    <i class="bi bi-file-excel me-1"></i>결과 엑셀 다운로드
+                </a>
+                <button type="button" class="btn btn-sm btn-warning me-2" onclick="confirmRegisterDemand()">
+                    <i class="bi bi-upload me-1"></i>SCM 소요량 등록
+                </button>
+                <button class="btn btn-sm btn-outline-light" onclick="window.print()">
+                    <i class="bi bi-printer me-1"></i>인쇄
+                </button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:12%">모품번</th>
+                            <th style="width:15%">모품명</th>
+                            <th style="width:8%">생산수량</th>
+                            <th style="width:10%">필요일자</th>
+                            <th style="width:12%">자품번</th>
+                            <th style="width:15%">자품명</th>
+                            <th style="width:8%">필요수량</th>
+                            <th style="width:8%">현재고</th>
+                            <th style="width:8%">부족수량</th>
+                            <th style="width:10%">거래처</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for batch in batch_results %}
+                            {% for item in batch.items %}
+                            <tr class="{% if item.shortage > 0 %}table-danger{% endif %}">
+                                {% if forloop.first %}
+                                <td rowspan="{{ batch.items|length }}" class="align-middle fw-bold">{{ batch.part_no }}</td>
+                                <td rowspan="{{ batch.items|length }}" class="align-middle">{{ batch.part_name }}</td>
+                                <td rowspan="{{ batch.items|length }}" class="align-middle text-center">{{ batch.qty }}</td>
+                                <td rowspan="{{ batch.items|length }}" class="align-middle">{{ batch.need_date|default:"-" }}</td>
+                                {% endif %}
+                                <td>{{ item.child_part_no }}</td>
+                                <td>{{ item.child_part_name }}</td>
+                                <td class="text-end">{{ item.required_qty|floatformat:2 }}</td>
+                                <td class="text-end">{{ item.stock_qty }}</td>
+                                <td class="text-end">
+                                    {% if item.shortage > 0 %}
+                                    <span class="badge bg-danger">{{ item.shortage|floatformat:0 }}</span>
+                                    {% else %}
+                                    <span class="badge bg-success">OK</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ item.vendor_name|default:"-" }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr class="table-warning">
+                                <td class="fw-bold">{{ batch.part_no }}</td>
+                                <td>-</td>
+                                <td class="text-center">{{ batch.qty }}</td>
+                                <td>{{ batch.need_date|default:"-" }}</td>
+                                <td colspan="6" class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>BOM 데이터 없음</td>
+                            </tr>
+                            {% endfor %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer">
+            <div class="row text-center">
+                <div class="col-md-3">
+                    <span class="text-muted">총 제품:</span>
+                    <strong class="ms-2">{{ batch_results|length }}종</strong>
+                </div>
+                <div class="col-md-3">
+                    <span class="text-muted">총 자재:</span>
+                    <strong class="ms-2">{{ total_material_count }}종</strong>
+                </div>
+                <div class="col-md-3">
+                    <span class="text-muted">부족 자재:</span>
+                    <strong class="ms-2 text-danger">{{ total_shortage_count }}종</strong>
+                </div>
+                <div class="col-md-3">
+                    <span class="text-muted">충족 자재:</span>
+                    <strong class="ms-2 text-success">{{ total_sufficient_count }}종</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCM 소요량 등록 폼 (숨김) -->
+    <form id="demandRegisterForm" method="post" action="{% url 'material:bom_register_demand' %}" style="display:none;">
+        {% csrf_token %}
+        <input type="hidden" name="session_key" value="{{ session_key }}">
+    </form>
+    {% endif %}
+
+    {% if not result and not batch_results and request.method != 'POST' %}
+    <!-- 사용 안내 -->
+    <div class="card border-info">
+        <div class="card-body text-center py-5">
+            <i class="bi bi-info-circle text-info" style="font-size: 4rem;"></i>
+            <h5 class="mt-3">소요량 계산 기능</h5>
+            <p class="text-muted mb-0">
+                제품 품번과 생산 수량을 입력하면<br>
+                BOM을 기반으로 필요한 자재량을 자동 계산합니다.<br>
+                <strong>현재고와 비교하여 부족 수량도 확인</strong>할 수 있습니다.<br><br>
+                <span class="badge bg-primary">단일 제품</span> 개별 품번 입력하여 계산<br>
+                <span class="badge bg-success">엑셀 일괄</span> 여러 제품을 엑셀로 한번에 계산
+            </p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.autocomplete-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #ddd;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 1000;
+    display: none;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+.autocomplete-list.show {
+    display: block;
+}
+.autocomplete-item {
+    padding: 10px 15px;
+    cursor: pointer;
+    border-bottom: 1px solid #eee;
+}
+.autocomplete-item:hover, .autocomplete-item.active {
+    background-color: #f0f7ff;
+}
+.autocomplete-item .part-no {
+    font-weight: bold;
+    color: #333;
+}
+.autocomplete-item .part-name {
+    color: #666;
+    font-size: 0.9em;
+}
+.autocomplete-item .account-type {
+    font-size: 0.8em;
+    color: #999;
+}
+
+@media print {
+    .sidebar, .navbar, form, .btn, nav, .nav-tabs, .tab-pane:not(.show) {
+        display: none !important;
+    }
+    .tab-pane.show {
+        display: block !important;
+    }
+    .card-header {
+        background-color: #333 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    .table-danger {
+        background-color: #f8d7da !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+}
+</style>
+
+<script>
+// 제품 데이터 (서버에서 전달)
+const products = [
+    {% for p in products %}
+    {
+        part_no: "{{ p.part_no|escapejs }}",
+        part_name: "{{ p.part_name|escapejs }}",
+        account_type: "{{ p.account_type|escapejs }}"
+    }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+];
+
+const input = document.getElementById('partNoInput');
+const list = document.getElementById('autocompleteList');
+let currentFocus = -1;
+
+input.addEventListener('input', function() {
+    const val = this.value.toLowerCase();
+    closeList();
+
+    if (!val) return;
+
+    const filtered = products.filter(p =>
+        p.part_no.toLowerCase().includes(val) ||
+        p.part_name.toLowerCase().includes(val)
+    ).slice(0, 20); // 최대 20개
+
+    if (filtered.length === 0) return;
+
+    list.classList.add('show');
+
+    filtered.forEach((p, idx) => {
+        const item = document.createElement('div');
+        item.className = 'autocomplete-item';
+        item.innerHTML = `
+            <div class="part-no">${p.part_no}</div>
+            <div class="part-name">${p.part_name}</div>
+            <div class="account-type">${p.account_type}</div>
+        `;
+        item.addEventListener('click', function() {
+            input.value = p.part_no;
+            closeList();
+        });
+        list.appendChild(item);
+    });
+});
+
+input.addEventListener('keydown', function(e) {
+    const items = list.querySelectorAll('.autocomplete-item');
+    if (e.key === 'ArrowDown') {
+        currentFocus++;
+        addActive(items);
+        e.preventDefault();
+    } else if (e.key === 'ArrowUp') {
+        currentFocus--;
+        addActive(items);
+        e.preventDefault();
+    } else if (e.key === 'Enter') {
+        if (currentFocus > -1 && items[currentFocus]) {
+            items[currentFocus].click();
+            e.preventDefault();
+        }
+    } else if (e.key === 'Escape') {
+        closeList();
+    }
+});
+
+function addActive(items) {
+    if (!items) return;
+    removeActive(items);
+    if (currentFocus >= items.length) currentFocus = 0;
+    if (currentFocus < 0) currentFocus = items.length - 1;
+    items[currentFocus].classList.add('active');
+    items[currentFocus].scrollIntoView({block: 'nearest'});
+}
+
+function removeActive(items) {
+    items.forEach(item => item.classList.remove('active'));
+}
+
+function closeList() {
+    list.innerHTML = '';
+    list.classList.remove('show');
+    currentFocus = -1;
+}
+
+document.addEventListener('click', function(e) {
+    if (e.target !== input) closeList();
+});
+
+// 파일 선택 시 정보 표시
+document.getElementById('calcFile').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        document.getElementById('batchFileInfo').style.display = 'block';
+        document.getElementById('batchFileName').textContent = file.name;
+
+        const size = file.size;
+        let sizeText = '';
+        if (size < 1024) {
+            sizeText = size + ' B';
+        } else if (size < 1024 * 1024) {
+            sizeText = (size / 1024).toFixed(1) + ' KB';
+        } else {
+            sizeText = (size / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+        document.getElementById('batchFileSize').textContent = sizeText;
+    }
+});
+
+// 폼 제출 시 로딩 표시
+document.getElementById('batchForm').addEventListener('submit', function() {
+    const btn = document.getElementById('batchSubmitBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>계산 중...';
+});
+
+// SCM 소요량 등록 확인
+function confirmRegisterDemand() {
+    const msg = 'BOM 계산 결과를 SCM 소요량으로 등록하시겠습니까?\n\n' +
+                '- 필요일자가 있는 항목만 등록됩니다.\n' +
+                '- 동일 품번+일자는 합산되어 기존 데이터를 업데이트합니다.\n' +
+                '- SCM 품목 마스터에 없는 자재는 제외됩니다.';
+
+    if (confirm(msg)) {
+        document.getElementById('demandRegisterForm').submit();
+    }
+}
+</script>
+{% endblock %}

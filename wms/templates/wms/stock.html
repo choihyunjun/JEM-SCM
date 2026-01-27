@@ -1,0 +1,51 @@
+{% extends "wms/base.html" %}
+{% block content %}
+<div class="container-fluid py-3">
+  <h4 class="mb-3">WMS 재고 조회</h4>
+  <div class="mb-2 text-muted">
+    최신 스냅샷: {{ latest|date:"Y-m-d H:i" }}{% if not latest %} (업로드 필요){% endif %}
+  </div>
+
+  <form class="row g-2 mb-3" method="get">
+    <div class="col-auto">
+      <select name="warehouse" class="form-select">
+        <option value="">(전체 창고)</option>
+        {% for wh in warehouses %}
+          <option value="{{ wh }}" {% if wh == selected_warehouse %}selected{% endif %}>{{ wh }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-auto">
+      <input name="q" value="{{ q }}" class="form-control" placeholder="품번 검색">
+    </div>
+    <div class="col-auto">
+      <button class="btn btn-primary">조회</button>
+      <a class="btn btn-outline-secondary" href="{% url 'wms:upload_stock' %}">스냅샷 업로드</a>
+    </div>
+  </form>
+
+  <div class="table-responsive">
+    <table class="table table-sm table-striped align-middle">
+      <thead>
+        <tr>
+          <th>창고</th>
+          <th>품번</th>
+          <th class="text-end">ERP 현재고</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for r in rows %}
+        <tr>
+          <td>{{ r.warehouse_code }}</td>
+          <td>{{ r.part_no }}</td>
+          <td class="text-end">{{ r.qty_onhand|floatformat:3 }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="3" class="text-center text-muted py-4">데이터가 없습니다.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="text-muted small">표시 제한: 최대 2000행</div>
+</div>
+{% endblock %}

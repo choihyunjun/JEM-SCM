@@ -1,0 +1,262 @@
+{% extends 'material/material_base.html' %}
+{% load humanize %}
+
+{% block title %}재고조사 스캔 - {{ check.check_no }}{% endblock %}
+
+{% block material_content %}
+<div class="container-fluid" style="max-width: 1800px;">
+    <!-- 헤더 -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="fw-bold mb-0">
+            <i class="bi bi-qr-code-scan me-2"></i>{{ check.check_no }}
+            <small class="text-muted ms-2">{{ check.warehouse.name }}</small>
+        </h4>
+        <div>
+            <form method="post" action="{% url 'material:inventory_check_complete' check.pk %}" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-success" onclick="return confirm('조사를 완료하시겠습니까?')">
+                    <i class="bi bi-check-lg me-1"></i>조사 완료
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 요약 카드 -->
+    <div class="row g-3 mb-4">
+        <div class="col-12">
+            <div class="card border-0 bg-primary text-white text-center py-3">
+                <div class="small">스캔한 태그</div>
+                <div class="h2 fw-bold mb-0" id="totalScanned">{{ check.total_scanned }}</div>
+                <div class="small mt-1">품목별 비교는 조사 완료 후 결과에서 확인</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 스캔 입력 -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <div class="input-group input-group-lg">
+                <span class="input-group-text bg-dark text-white">
+                    <i class="bi bi-qr-code"></i>
+                </span>
+                <input type="text" id="tagInput" class="form-control"
+                       placeholder="TAG-YYYYMMDD-XXXX" autofocus
+                       style="ime-mode: disabled; text-transform: uppercase;"
+                       pattern="[A-Za-z0-9\-]+"
+                       autocomplete="off">
+                <button type="button" id="scanBtn" class="btn btn-primary">
+                    <i class="bi bi-search"></i>
+                </button>
+            </div>
+            <div id="scanMessage" class="mt-2" style="display:none;"></div>
+        </div>
+    </div>
+
+    <!-- 스캔 내역 -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-list-check me-2"></i>스캔 내역</span>
+            <span class="badge bg-light text-dark" id="itemCount">{{ items|length }}건</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive" style="max-height: 50vh; overflow-y: auto;">
+                <table class="table table-hover table-sm mb-0">
+                    <thead class="table-light sticky-top">
+                        <tr>
+                            <th style="width:40px;"></th>
+                            <th>태그ID</th>
+                            <th>품번</th>
+                            <th>품명</th>
+                            <th>LOT</th>
+                            <th class="text-end">수량</th>
+                        </tr>
+                    </thead>
+                    <tbody id="itemsTable">
+                        {% for item in items %}
+                        <tr>
+                            <td class="text-center">
+                                <i class="bi bi-check-circle-fill text-success"></i>
+                            </td>
+                            <td class="small text-primary">{{ item.tag_id }}</td>
+                            <td class="fw-bold">{{ item.part_no }}</td>
+                            <td class="small">{{ item.part_name|truncatechars:20 }}</td>
+                            <td class="small">{{ item.lot_no|date:"Y-m-d"|default:"-" }}</td>
+                            <td class="text-end fw-bold">{{ item.scanned_qty|intcomma }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr id="emptyRow">
+                            <td colspan="6" class="text-center text-muted py-4">
+                                <i class="bi bi-qr-code fs-1 d-block mb-2"></i>
+                                현품표 QR을 스캔하세요
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 알림음 -->
+<audio id="successSound" preload="auto">
+    <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2LkY2KhYB8d3Fta2loaWxwdXuAhYqOkJKTlJWWlpeYmJiYmJiXl5aWlZSTkY+MiYaDgH15dnRycXBwcHFzdXh7foGEh4qMjY+QkZGSkpKSkpKSkpKSkZGQj46Ni4mHhYOBf316eHZ1dHNzc3R1dnh6fX+ChIaIiouMjY2Ojo6Ojo6Ojo6NjYyMi4qJiIaFg4GAf316eXh3d3d4eXp7fX+Bg4WGh4iJiYqKioqKioqKioqJiYmIh4aFhIOCgYB/fnx7enl5eXl5ent8fX5/gIGCg4SEhYWFhYWFhYWFhYWEhISEg4ODgoKBgYCAf39+fn5+fn5+f3+AgIGBgoKDg4OEhISEhISEhIODg4KCgYGAgH9/fn5+fn5+fn5/f4CAgYGCgoKDg4OEhISEhISEg4ODgoKBgYCAf39+fn5+fn5+fn5/f4CAgYGCgoKDg4OEhA==" type="audio/wav">
+</audio>
+<audio id="errorSound" preload="auto">
+    <source src="data:audio/wav;base64,UklGRl9vAAAXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YTtvAACAgICAgICAgICAgICAgICAgICAgICAgIB4eHh4eHh4eHh4eHh4eHh4eHh4eHhwcHBwcHBwcHBwcHBwcHBwcHBwcGhoaGhoaGhoaGhoaGhoaGhoaGhoYGBgYGBgYGBgYGBgYGBgYGBgYGBYWFhYWFhYWFhYWFhYWFhYWFhYUFBQUFBQUFBQUFBQUFBQUFBQUFA==" type="audio/wav">
+</audio>
+
+<script>
+const scanUrl = "{% url 'material:inventory_check_scan_api' check.pk %}";
+const csrfToken = "{{ csrf_token }}";
+
+const tagInput = document.getElementById('tagInput');
+const scanBtn = document.getElementById('scanBtn');
+const scanMessage = document.getElementById('scanMessage');
+const itemsTable = document.getElementById('itemsTable');
+const emptyRow = document.getElementById('emptyRow');
+
+const totalScanned = document.getElementById('totalScanned');
+const itemCount = document.getElementById('itemCount');
+
+const successSound = document.getElementById('successSound');
+const errorSound = document.getElementById('errorSound');
+
+// 스캔 처리 (서버에서 QR 데이터 파싱)
+async function doScan() {
+    const tagId = tagInput.value.trim();
+    if (!tagId) return;
+
+    scanBtn.disabled = true;
+    tagInput.disabled = true;
+
+    try {
+        const response = await fetch(scanUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+            },
+            body: JSON.stringify({ tag_id: tagId })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            // 성공
+            playSound('success');
+            showMessage('success', `✅ 스캔 완료: ${data.item.part_no} - ${data.item.part_name}`);
+
+            // 테이블에 추가
+            addItemRow(data.item);
+
+            // 요약 업데이트
+            updateSummary(data.summary);
+
+            // 빈 행 제거
+            if (emptyRow) emptyRow.remove();
+        } else {
+            // 실패
+            playSound('error');
+            showMessage('danger', `❌ ${data.error}`);
+
+            // 진동 (모바일)
+            if (navigator.vibrate) {
+                navigator.vibrate([200, 100, 200]);
+            }
+        }
+    } catch (err) {
+        playSound('error');
+        showMessage('danger', `❌ 네트워크 오류: ${err.message}`);
+    }
+
+    tagInput.value = '';
+    tagInput.disabled = false;
+    scanBtn.disabled = false;
+    tagInput.focus();
+}
+
+function addItemRow(item) {
+    const tr = document.createElement('tr');
+
+    tr.innerHTML = `
+        <td class="text-center"><i class="bi bi-check-circle-fill text-success"></i></td>
+        <td class="small text-primary">${item.tag_id}</td>
+        <td class="fw-bold">${item.part_no}</td>
+        <td class="small">${item.part_name.substring(0, 20)}</td>
+        <td class="small">${item.lot_no}</td>
+        <td class="text-end fw-bold">${item.scanned_qty.toLocaleString()}</td>
+    `;
+
+    // 맨 위에 추가
+    itemsTable.insertBefore(tr, itemsTable.firstChild);
+
+    // 하이라이트 효과
+    tr.style.backgroundColor = '#d1e7dd';
+    setTimeout(() => {
+        tr.style.transition = 'background-color 0.5s';
+        tr.style.backgroundColor = '';
+    }, 100);
+}
+
+function updateSummary(summary) {
+    totalScanned.textContent = summary.total_scanned;
+    itemCount.textContent = summary.total_scanned + '건';
+}
+
+function showMessage(type, text) {
+    scanMessage.className = `alert alert-${type} py-2 mb-0`;
+    scanMessage.textContent = text;
+    scanMessage.style.display = 'block';
+
+    setTimeout(() => {
+        scanMessage.style.display = 'none';
+    }, 3000);
+}
+
+function playSound(type) {
+    try {
+        if (type === 'success') {
+            successSound.currentTime = 0;
+            successSound.play();
+        } else {
+            errorSound.currentTime = 0;
+            errorSound.play();
+        }
+    } catch (e) {
+        // 무음
+    }
+}
+
+// 한글 입력만 차단 (QR 데이터는 서버에서 파싱)
+tagInput.addEventListener('input', (e) => {
+    // 한글만 제거
+    const cleaned = e.target.value.replace(/[ㄱ-ㅎㅏ-ㅣ가-힣]/g, '');
+    if (e.target.value !== cleaned) {
+        e.target.value = cleaned;
+    }
+});
+
+// IME 조합 중 한글 입력 차단
+tagInput.addEventListener('compositionend', (e) => {
+    e.target.value = e.target.value.replace(/[ㄱ-ㅎㅏ-ㅣ가-힣]/g, '');
+});
+
+// 이벤트 바인딩
+scanBtn.addEventListener('click', doScan);
+tagInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        doScan();
+    }
+});
+
+// 포커스 유지
+document.addEventListener('click', () => {
+    tagInput.focus();
+});
+
+// 초기 포커스
+tagInput.focus();
+</script>
+{% endblock %}

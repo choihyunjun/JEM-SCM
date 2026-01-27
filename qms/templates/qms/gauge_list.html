@@ -1,0 +1,168 @@
+{% extends 'qms/qms_base.html' %}
+{% load humanize %}
+
+{% block title %}계측기 관리{% endblock %}
+
+{% block qms_content %}
+<div class="container-fluid p-0" style="max-width: 1920px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold"><i class="bi bi-speedometer2 me-2"></i>계측기 관리</h3>
+        <a href="{% url 'qms:gauge_create' %}" class="btn btn-secondary">
+            <i class="bi bi-plus-lg me-1"></i>계측기 등록
+        </a>
+    </div>
+
+    <!-- 통계 카드 -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4 col-6">
+            <div class="card border-0 shadow-sm text-center p-3">
+                <div class="small text-muted">사용중</div>
+                <div class="h4 fw-bold text-primary">{{ stats.total }}</div>
+            </div>
+        </div>
+        <div class="col-md-4 col-6">
+            <div class="card border-0 shadow-sm text-center p-3 border-danger">
+                <div class="small text-muted">교정기한 초과</div>
+                <div class="h4 fw-bold text-danger">{{ stats.overdue }}</div>
+            </div>
+        </div>
+        <div class="col-md-4 col-6">
+            <div class="card border-0 shadow-sm text-center p-3 border-warning">
+                <div class="small text-muted">교정임박 (30일)</div>
+                <div class="h4 fw-bold text-warning">{{ stats.due_soon }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 필터 -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small">상태</label>
+                    <select name="status" class="form-select form-select-sm">
+                        <option value="">전체</option>
+                        {% for value, label in status_choices %}
+                        <option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">유형</label>
+                    <select name="gauge_type" class="form-select form-select-sm">
+                        <option value="">전체</option>
+                        {% for value, label in type_choices %}
+                        <option value="{{ value }}" {% if request.GET.gauge_type == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">교정상태</label>
+                    <select name="calibration_due" class="form-select form-select-sm">
+                        <option value="">전체</option>
+                        <option value="overdue" {% if request.GET.calibration_due == 'overdue' %}selected{% endif %}>기한초과</option>
+                        <option value="soon" {% if request.GET.calibration_due == 'soon' %}selected{% endif %}>임박(30일)</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">검색</label>
+                    <input type="text" name="q" class="form-control form-control-sm" value="{{ request.GET.q }}" placeholder="관리번호/이름/시리얼">
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-dark btn-sm w-100"><i class="bi bi-search me-1"></i>검색</button>
+                </div>
+                <div class="col-md-1">
+                    <a href="{% url 'qms:gauge_list' %}" class="btn btn-outline-secondary btn-sm w-100">초기화</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 목록 -->
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <table class="table table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th style="width: 120px;">관리번호</th>
+                        <th>계측기명</th>
+                        <th style="width: 120px;">유형</th>
+                        <th>설치장소</th>
+                        <th style="width: 100px;" class="text-center">최근교정</th>
+                        <th style="width: 100px;" class="text-center">차기교정</th>
+                        <th style="width: 120px;" class="text-center">교정상태</th>
+                        <th style="width: 80px;" class="text-center">상태</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for gauge in gauges %}
+                    <tr onclick="location.href='{% url 'qms:gauge_detail' gauge.pk %}'" style="cursor: pointer;">
+                        <td class="fw-bold text-primary">{{ gauge.gauge_no }}</td>
+                        <td>{{ gauge.gauge_name }}</td>
+                        <td class="small">{{ gauge.get_gauge_type_display }}</td>
+                        <td class="small">{{ gauge.location|default:"-" }}</td>
+                        <td class="text-center small">{{ gauge.last_calibration_date|date:"Y-m-d"|default:"-" }}</td>
+                        <td class="text-center small">{{ gauge.next_calibration_date|date:"Y-m-d"|default:"-" }}</td>
+                        <td class="text-center">
+                            {% if gauge.next_calibration_date %}
+                                {% with status=gauge.calibration_status_text %}
+                                {% if '기한초과' in status %}
+                                <span class="badge bg-danger">{{ status }}</span>
+                                {% elif '긴급' in status %}
+                                <span class="badge bg-danger">{{ status }}</span>
+                                {% elif '임박' in status %}
+                                <span class="badge bg-warning text-dark">{{ status }}</span>
+                                {% else %}
+                                <span class="badge bg-success">{{ status }}</span>
+                                {% endif %}
+                                {% endwith %}
+                            {% else %}
+                            <span class="badge bg-secondary">미설정</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if gauge.status == 'ACTIVE' %}
+                            <span class="badge bg-success">사용중</span>
+                            {% elif gauge.status == 'CALIBRATING' %}
+                            <span class="badge bg-info">교정중</span>
+                            {% elif gauge.status == 'REPAIR' %}
+                            <span class="badge bg-warning text-dark">수리중</span>
+                            {% elif gauge.status == 'SCRAPPED' %}
+                            <span class="badge bg-dark">폐기</span>
+                            {% else %}
+                            <span class="badge bg-secondary">미사용</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center py-5 text-muted">등록된 계측기가 없습니다.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 페이징 -->
+    {% if gauges.has_other_pages %}
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if gauges.has_previous %}
+            <li class="page-item"><a class="page-link" href="?page={{ gauges.previous_page_number }}{% for k, v in request.GET.items %}{% if k != 'page' %}&{{ k }}={{ v }}{% endif %}{% endfor %}">&laquo;</a></li>
+            {% endif %}
+            {% for num in gauges.paginator.page_range %}
+            {% if gauges.number == num %}
+            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+            {% elif num > gauges.number|add:'-3' and num < gauges.number|add:'3' %}
+            <li class="page-item"><a class="page-link" href="?page={{ num }}{% for k, v in request.GET.items %}{% if k != 'page' %}&{{ k }}={{ v }}{% endif %}{% endfor %}">{{ num }}</a></li>
+            {% endif %}
+            {% endfor %}
+            {% if gauges.has_next %}
+            <li class="page-item"><a class="page-link" href="?page={{ gauges.next_page_number }}{% for k, v in request.GET.items %}{% if k != 'page' %}&{{ k }}={{ v }}{% endif %}{% endfor %}">&raquo;</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

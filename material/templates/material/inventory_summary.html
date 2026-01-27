@@ -1,0 +1,165 @@
+{% extends 'material/material_base.html' %}
+{% load humanize material_extras %}
+
+{% block title %}재고조사 종합 집계표{% endblock %}
+
+{% block material_content %}
+<div class="container-fluid" style="max-width: 1800px;">
+    <!-- 헤더 -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h4 class="fw-bold mb-0 text-success">
+                <i class="bi bi-table me-2"></i>재고조사 통합 집계본
+            </h4>
+            <small class="text-muted">Ver. 2 [{% now "y.m.d" %}]</small>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'material:inventory_summary_excel' %}?part_no={{ part_no_q }}&part_name={{ part_name_q }}&category={{ category_q }}"
+               class="btn btn-success">
+                <i class="bi bi-file-earmark-excel me-1"></i>엑셀 다운로드
+            </a>
+            <a href="{% url 'material:inventory_check_list' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i>재고조사 목록
+            </a>
+        </div>
+    </div>
+
+    <!-- 총 합계 요약 -->
+    <div class="row g-2 mb-3">
+        <div class="col-auto">
+            <div class="bg-light rounded px-3 py-2 text-end">
+                <span class="small text-muted me-2">총 품목수</span>
+                <span class="fw-bold text-primary">{{ summary_list|length|intcomma }}</span>
+            </div>
+        </div>
+        <div class="col-auto">
+            <div class="bg-light rounded px-3 py-2 text-end">
+                <span class="small text-muted me-2">총 스캔수량</span>
+                <span class="fw-bold text-success">{{ grand_total|intcomma }}</span>
+            </div>
+        </div>
+        {% for wh in warehouses %}
+        {% with total=warehouse_totals|get_item:wh.code %}
+        {% if total > 0 %}
+        <div class="col-auto">
+            <div class="bg-light rounded px-3 py-2 text-end">
+                <span class="small text-muted me-2">{{ wh.name }}</span>
+                <span class="fw-bold">{{ total|intcomma }}</span>
+            </div>
+        </div>
+        {% endif %}
+        {% endwith %}
+        {% endfor %}
+    </div>
+
+    <!-- 필터 -->
+    <div class="card shadow-sm mb-3">
+        <div class="card-body py-2">
+            <form method="get" class="row g-2 align-items-end">
+                <div class="col-auto">
+                    <input type="text" name="part_no" class="form-control form-control-sm"
+                           placeholder="품번" value="{{ part_no_q }}" style="width: 140px;">
+                </div>
+                <div class="col-auto">
+                    <input type="text" name="part_name" class="form-control form-control-sm"
+                           placeholder="품명" value="{{ part_name_q }}" style="width: 180px;">
+                </div>
+                <div class="col-auto">
+                    <select name="category" class="form-select form-select-sm" style="width: 130px;">
+                        <option value="">품목군 전체</option>
+                        {% for cat in categories %}
+                        <option value="{{ cat }}" {% if category_q == cat %}selected{% endif %}>{{ cat }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-sm btn-dark">
+                        <i class="bi bi-search"></i> 조회
+                    </button>
+                    <a href="{% url 'material:inventory_summary' %}" class="btn btn-sm btn-outline-secondary">초기화</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 데이터 테이블 -->
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive" style="max-height: 70vh;">
+                <table class="table table-sm table-hover table-bordered mb-0" style="font-size: 0.85rem;">
+                    <thead class="table-success sticky-top">
+                        <tr>
+                            <th class="text-center" style="min-width: 120px;">품번</th>
+                            <th style="min-width: 180px;">품명</th>
+                            <th style="min-width: 120px;">규격</th>
+                            <th class="text-center" style="width: 70px;">계정</th>
+                            <th class="text-center" style="width: 50px;">단위</th>
+                            <th class="text-center" style="width: 90px;">품목군명</th>
+                            <th class="text-end bg-warning-subtle" style="width: 90px;">TOTAL</th>
+                            {% for wh in warehouses %}
+                            <th class="text-end" style="min-width: 100px;">
+                                {{ wh.name }}<br>
+                                <small class="text-muted">({{ wh.code }})</small>
+                            </th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in summary_list %}
+                        <tr>
+                            <td class="fw-bold text-primary">{{ row.part_no }}</td>
+                            <td class="text-truncate" style="max-width: 200px;" title="{{ row.part_name }}">
+                                {{ row.part_name }}
+                            </td>
+                            <td class="small text-truncate" style="max-width: 150px;">
+                                {% if row.part %}{{ row.part.spec|default:"-" }}{% else %}-{% endif %}
+                            </td>
+                            <td class="text-center small">
+                                {% if row.part %}{{ row.part.account_type|default:"원재료" }}{% else %}원재료{% endif %}
+                            </td>
+                            <td class="text-center small">
+                                {% if row.part %}{{ row.part.unit|default:"EA" }}{% else %}EA{% endif %}
+                            </td>
+                            <td class="text-center small">
+                                {% if row.part %}{{ row.part.part_group|default:"-" }}{% else %}-{% endif %}
+                            </td>
+                            <td class="text-end fw-bold bg-warning-subtle">{{ row.total|intcomma }}</td>
+                            {% for wh in warehouses %}
+                            <td class="text-end {% if row.warehouse_qty|get_item:wh.code > 0 %}text-dark{% else %}text-muted{% endif %}">
+                                {% with qty=row.warehouse_qty|get_item:wh.code %}
+                                {% if qty > 0 %}{{ qty|intcomma }}{% else %}-{% endif %}
+                                {% endwith %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="{{ warehouses|length|add:7 }}" class="text-center text-muted py-5">
+                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                스캔된 재고조사 데이터가 없습니다.<br>
+                                <small>재고조사를 시작하고 현품표를 스캔하세요.</small>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    {% if summary_list %}
+                    <tfoot class="table-light fw-bold">
+                        <tr>
+                            <td colspan="6" class="text-end">합계</td>
+                            <td class="text-end bg-warning">{{ grand_total|intcomma }}</td>
+                            {% for wh in warehouses %}
+                            <td class="text-end">
+                                {% with total=warehouse_totals|get_item:wh.code %}
+                                {% if total > 0 %}{{ total|intcomma }}{% else %}-{% endif %}
+                                {% endwith %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                    </tfoot>
+                    {% endif %}
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

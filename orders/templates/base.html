@@ -4,130 +4,731 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <title>JEM 시스템</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <title>JEM SCM System</title>
+    
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
+    <script src="https://use.fontawesome.com/releases/v6.3.0/js/all.js" crossorigin="anonymous"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+
+    <link href="https://cdn.jsdelivr.net/npm/simple-datatables@7.1.2/dist/style.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/startbootstrap-sb-admin@7.0.7/dist/css/styles.css" rel="stylesheet" />
+
     <style>
-        body { font-size: 0.9rem; background-color: #f4f6f9; display: flex; min-height: 100vh; margin: 0; }
-        .sidebar { width: 240px; background-color: #2c3e50; color: white; flex-shrink: 0; }
-        .sidebar-header { background: #1a252f; padding: 15px; text-align: center; } 
-        .nav-link { color: #bdc3c7; padding: 15px 20px; border-bottom: 1px solid #34495e; transition: 0.3s; }
-        .nav-link:hover { background: #34495e; color: white; }
-        .nav-link.active { background: #860505; color: white; font-weight: bold; }
-        .content-area { flex-grow: 1; display: flex; flex-direction: column; overflow-x: hidden; }
-        
-        /* [추가] 상단바 기본색 (빨강) */
-        .top-nav { 
-            background: #860505 !important; 
-            color: white !important; 
-            padding: 10px 20px; 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
+        /* [Global] 폰트 설정 */
+        body {
+            font-family: "Pretendard Variable", Pretendard, sans-serif;
+            background-color: #f5f6fa;
         }
 
-        /* [추가] QMS 앱일 때 상단바 색상 변경 (남색) */
-        body.is-qms .top-nav { background: #2c3e50 !important; }
+        /* [Navbar] 상단바 */
+        .sb-topnav {
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
 
-        /* [추가] 시스템 전환 탭 스타일 */
-        .system-tab { color: rgba(255,255,255,0.7) !important; margin-right: 15px; text-decoration: none; font-weight: bold; padding: 5px 10px; border-radius: 4px; transition: 0.3s; }
-        .system-tab:hover { color: white !important; background: rgba(255,255,255,0.1); }
-        .system-tab.active-system { color: white !important; background: rgba(255,255,255,0.2); border: 1px solid white; }
+        /* 로고 가시성 확보 */
+        .navbar-brand img {
+            filter: brightness(0) invert(1); 
+            opacity: 0.95;
+        }
 
-        .main-wrapper { padding: 20px; }
-        .top-nav .header-title { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.5px; color: white !important; }
-        .top-nav span, .top-nav i { color: white !important; }
+        .navbar-brand {
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+        }
+
+        /* [Theme Colors] 배경색 */
+        body.is-scm .sb-topnav { background: linear-gradient(135deg, #a00000 0%, #6e0000 100%) !important; }
+        body.is-qms .sb-topnav { background: linear-gradient(135deg, #2c3e50 0%, #1a252f 100%) !important; }
+        body.is-wms .sb-topnav { background: linear-gradient(135deg, #134E5E 0%, #71B280 100%) !important; }
+
+        /* [Nav Links] 상단 메뉴 탭 */
+        .navbar-nav .nav-link {
+            color: rgba(255, 255, 255, 0.8) !important;
+            font-weight: 500;
+            padding: 0.5rem 1rem !important;
+            border-radius: 50px;
+            margin: 0 4px;
+        }
+        .navbar-nav .nav-link:hover {
+            color: #fff !important;
+            background-color: rgba(255, 255, 255, 0.15);
+        }
+        .nav-link.active-system {
+            color: #fff !important;
+            font-weight: 700;
+            background-color: rgba(255, 255, 255, 0.25);
+        }
+
+        /* [Sidebar] 사이드바 디자인 */
+        .sb-sidenav-dark {
+            background-color: #212529; 
+            background: #2b3035; 
+        }
+
+        .sb-sidenav-dark .sb-sidenav-menu-heading {
+            color: #ced4da !important; 
+            opacity: 1 !important;
+            font-size: 0.75rem;
+            font-weight: 800;
+            letter-spacing: 1px;
+            margin-top: 1.5rem;
+        }
+
+        /* 기본 링크 스타일 */
+        .sb-sidenav-dark .nav-link {
+            color: #f8f9fa !important;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: all 0.2s;
+            border-left: 4px solid transparent; 
+        }
+
+        .sb-sidenav-dark .nav-link .sb-nav-link-icon {
+            color: #adb5bd !important;
+            transition: color 0.2s;
+        }
+
+        .sb-sidenav-dark .nav-link:hover {
+            color: #fff !important;
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+        .sb-sidenav-dark .nav-link:hover .sb-nav-link-icon {
+            color: #fff !important;
+        }
+
+        /* ★★★ [Active Menu] 대메뉴(Parent) 활성화 효과 ★★★ */
+        body.is-scm .sb-sidenav-dark .nav-link.active {
+            background: linear-gradient(90deg, rgba(220, 53, 69, 0.2) 0%, transparent 100%);
+            border-left-color: #ff6b6b;
+            color: #ffcccc !important;
+            font-weight: 700;
+        }
+        body.is-scm .sb-sidenav-dark .nav-link.active .sb-nav-link-icon { color: #ff6b6b !important; }
+
+        body.is-qms .sb-sidenav-dark .nav-link.active {
+            background: linear-gradient(90deg, rgba(52, 152, 219, 0.2) 0%, transparent 100%);
+            border-left-color: #3498db;
+            color: #d1ecf1 !important;
+            font-weight: 700;
+        }
+        body.is-qms .sb-sidenav-dark .nav-link.active .sb-nav-link-icon { color: #3498db !important; }
+
+        body.is-wms .sb-sidenav-dark .nav-link.active {
+            background: linear-gradient(90deg, rgba(46, 204, 113, 0.2) 0%, transparent 100%);
+            border-left-color: #2ecc71;
+            color: #d4edda !important;
+            font-weight: 700;
+        }
+        body.is-wms .sb-sidenav-dark .nav-link.active .sb-nav-link-icon { color: #2ecc71 !important; }
+
+        /* ★★★ [Nested Menu] 소메뉴 스타일 - 심플 버전 ★★★ */
+        .sb-sidenav-menu-nested {
+            padding-left: 1rem;
+        }
+        .sb-sidenav-menu-nested .nav-link {
+            font-size: 0.88rem !important;
+            padding: 0.4rem 1rem !important;
+            color: #9ca3af !important;
+            border-left: none !important;
+        }
+        .sb-sidenav-menu-nested .nav-link:hover {
+            color: #fff !important;
+            background: transparent;
+        }
+
+        /* ★★★ [Nested Active] 소메뉴(Child) 활성화 효과 ★★★ */
+        body.is-scm .sb-sidenav-menu-nested .nav-link.active { color: #ff8a8a !important; }
+        body.is-qms .sb-sidenav-menu-nested .nav-link.active { color: #7ec8e3 !important; }
+        body.is-wms .sb-sidenav-menu-nested .nav-link.active { color: #7ee8a5 !important; }
+
+        .sb-sidenav-menu-nested .nav-link.active {
+            font-weight: 600;
+            background: transparent !important;
+        }
+
+        footer.bg-light { background-color: #fff !important; border-top: 1px solid #e3e6f0; }
+
+        /* ========================================
+           SCM 공통 스타일 (폰트/간격 미세 조정만)
+           ======================================== */
+
+        /* SCM 테이블 폰트 크기 통일 */
+        .scm-table { font-size: 0.85rem; }
+        .scm-table th { white-space: nowrap; }
+        .scm-table td { vertical-align: middle; }
+
+        /* 필터 영역 간격 조정 */
+        .scm-filter .form-select-sm,
+        .scm-filter .form-control-sm { font-size: 0.85rem; }
+        .scm-filter .btn-sm { font-size: 0.85rem; }
     </style>
 </head>
-<body class="{% if request.resolver_match.app_name == 'qms' %}is-qms{% endif %}">
-    <div class="sidebar">
-        <div class="sidebar-header">
-            <a href="{% url 'order_list' %}">
-                <img src="{% static 'images/LOGO.png' %}" alt="JEM SCM" style="max-height: 45px; width: auto; object-fit: contain;">
-            </a>
-        </div>
+
+<body class="sb-nav-fixed {% if request.resolver_match.app_name == 'qms' %}is-qms{% elif request.resolver_match.app_name == 'material' %}is-wms{% else %}is-scm{% endif %}">
+    
+    <nav class="sb-topnav navbar navbar-expand navbar-dark">
+        <a class="navbar-brand ps-3" href="{% url 'home' %}">
+            <img src="{% static 'images/LOGO.png' %}" alt="JEM" style="height: 30px;">
+            <span class="fs-5 ms-2">진영전기(주)</span>
+        </a>
+        <button class="btn btn-link btn-sm order-1 order-lg-0 me-4 me-lg-0 text-white" id="sidebarToggle" href="#!"><i class="fas fa-bars"></i></button>
         
-        <div class="nav flex-column">
-            {% if request.resolver_match.app_name != 'qms' %}
-                {% if user.is_superuser or user.profile.can_view_orders %}
-                <a href="{% url 'order_list' %}" class="nav-link {% if active_menu == 'list' %}active{% endif %}">
-                    <i class="bi bi-list-check me-2"></i> 발주 조회 / 승인
-                </a>
+        <div class="d-none d-md-inline-block form-inline ms-auto me-0 me-md-3 my-2 my-md-0">
+            <ul class="navbar-nav">
+                {# SCM 탭 - SCM 관련 권한 중 하나라도 있으면 표시 #}
+                {% if user|has_perm:'can_scm_order_view' or user|has_perm:'can_scm_order_edit' or user|has_perm:'can_scm_label_view' or user|has_perm:'can_scm_incoming_view' or user|has_perm:'can_scm_admin' %}
+                <li class="nav-item">
+                    <a class="nav-link {% if request.resolver_match.app_name != 'qms' and request.resolver_match.app_name != 'material' %}active-system{% endif %}" href="{% url 'scm_alert_dashboard' %}">
+                       <i class="bi bi-cart-check me-1"></i>발주관리(SCM)
+                    </a>
+                </li>
                 {% endif %}
-
-                {% if user.is_superuser or user.profile.can_register_orders %}
-                <a href="{% url 'label_list' %}" class="nav-link {% if active_menu == 'label' %}active{% endif %}">
-                    <i class="bi bi-printer me-2"></i> 납품서 등록 / 조회
-                </a>
+                {# QMS 탭 - QMS 관련 권한 중 하나라도 있으면 표시 #}
+                {% if user|has_perm:'can_qms_4m_view' or user|has_perm:'can_qms_4m' or user|has_perm:'can_qms_inspection_view' or user|has_perm:'can_qms_inspection' %}
+                <li class="nav-item">
+                    <a class="nav-link {% if request.resolver_match.app_name == 'qms' %}active-system{% endif %}" href="{% url 'qms:dashboard' %}">
+                       <i class="bi bi-shield-check me-1"></i>품질관리(QMS)
+                    </a>
+                </li>
                 {% endif %}
-
-                {% if user.is_superuser or user.profile.can_view_inventory %}
-                <a href="{% url 'inventory_list' %}" class="nav-link {% if active_menu == 'inventory' %}active{% endif %}">
-                    <i class="bi bi-box-seam me-2"></i> 과부족 조회
-                </a>
+                {# WMS 탭 - WMS 관련 권한 중 하나라도 있으면 표시 #}
+                {% if user|has_perm:'can_wms_stock_view' or user|has_perm:'can_wms_inout_view' or user|has_perm:'can_wms_bom_view' or user|has_perm:'can_wms_inout' %}
+                <li class="nav-item">
+                    <a class="nav-link {% if request.resolver_match.app_name == 'material' %}active-system{% endif %}" href="{% url 'material:dashboard' %}">
+                       <i class="bi bi-box-seam me-1"></i>자재관리(WMS)
+                    </a>
+                </li>
                 {% endif %}
-
-                {% if user.is_superuser or user.profile.can_manage_incoming %}
-                <a href="{% url 'incoming_list' %}" class="nav-link {% if active_menu == 'incoming' %}active{% endif %}">
-                    <i class="bi bi-box-arrow-in-down me-2"></i> 입고 관리
-                </a>
-                {% endif %}
-
-                {% if user.is_superuser %}
-                <a href="{% url 'order_upload' %}" class="nav-link {% if active_menu == 'upload' %}active{% endif %}">
-                    <i class="bi bi-cloud-upload me-2"></i> 발주 등록
-                </a>
-                {% endif %}
-
-                {% if user.is_superuser or user.profile.can_access_scm_admin %}
-                <a href="{% url 'scm_admin_main' %}" class="nav-link {% if active_menu == 'admin_main' %}active{% endif %}">
-                    <i class="bi bi-gear-fill me-2"></i> 관리자 페이지
-                </a>
-                {% endif %}
-            {% else %}
-                {% block sidebar_qms %}{% endblock %}
-            {% endif %}
+            </ul>
         </div>
-    </div>
 
-    <div class="content-area">
-        <div class="top-nav shadow-sm">
-            <div class="d-flex align-items-center">
-                <span class="header-title me-4">JEM 시스템</span>
-                <div class="system-tabs d-flex">
-                    <a href="{% url 'order_list' %}" class="system-tab {% if request.resolver_match.app_name != 'qms' %}active-system{% endif %}">발주관리(SCM)</a>
-                    <a href="{% url 'qms:m4_list' %}" class="system-tab {% if request.resolver_match.app_name == 'qms' %}active-system{% endif %}">품질관리(QMS)</a>
+        <ul class="navbar-nav ms-auto ms-md-0 me-3 me-lg-4">
+            <li class="nav-item dropdown">
+                <a class="nav-link dropdown-toggle text-white" id="navbarDropdown" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="fas fa-user-circle fa-fw me-1"></i> 
+                    {% if user.is_superuser %}관리자{% else %}{{ user.username }}{% endif %}
+                </a>
+                <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="navbarDropdown">
+                    <li><div class="px-3 py-2 text-muted small">접속 계정: <strong>{{ user.username }}</strong></div></li>
+                    <li><hr class="dropdown-divider" /></li>
+                    <li>
+                        <form action="{% url 'logout' %}" method="post" class="px-2 py-1">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-danger btn-sm w-100"><i class="bi bi-box-arrow-right me-1"></i> 로그아웃</button>
+                        </form>
+                    </li>
+                </ul>
+            </li>
+        </ul>
+    </nav>
+
+    <div id="layoutSidenav">
+        <div id="layoutSidenav_nav">
+            <nav class="sb-sidenav accordion sb-sidenav-dark" id="sidenavAccordion">
+                <div class="sb-sidenav-menu">
+                    <div class="nav">
+                        
+                        {# ====================================================== #}
+                        {# 1. QMS 메뉴 (품질관리) #}
+                        {# ====================================================== #}
+                        {% if request.resolver_match.app_name == 'qms' %}
+                            {# 메뉴 고정핀 #}
+                            <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom border-secondary mb-2">
+                                <small class="text-muted">QMS 메뉴</small>
+                                <button class="btn btn-sm p-1" id="qmsMenuPin" title="메뉴 전체 펼침/접힘" style="background:transparent;border:none;color:#6c757d;">
+                                    <i class="bi bi-pin-angle-fill"></i>
+                                </button>
+                            </div>
+
+                            {# QMS 대시보드 #}
+                            <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}"
+                               href="{% url 'qms:dashboard' %}">
+                                <div class="sb-nav-link-icon"><i class="bi bi-speedometer2"></i></div>
+                                QMS 대시보드
+                            </a>
+
+                            {# 4M 변경점 관리 - can_qms_4m_view 또는 can_qms_4m 권한 필요 #}
+                            {% if user|has_perm:'can_qms_4m_view' or user|has_perm:'can_qms_4m' %}
+                            <a class="nav-link collapsed {% if 'm4' in request.resolver_match.url_name or 'formal' in request.resolver_match.url_name or 'change_request' in request.resolver_match.url_name %}active{% endif %}"
+                               href="#"
+                               data-bs-toggle="collapse"
+                               data-bs-target="#collapse4M"
+                               aria-expanded="{% if 'm4' in request.resolver_match.url_name or 'formal' in request.resolver_match.url_name or 'change_request' in request.resolver_match.url_name %}true{% else %}false{% endif %}"
+                               aria-controls="collapse4M">
+                                <div class="sb-nav-link-icon"><i class="bi bi-gear-wide-connected"></i></div>
+                                4M 변경관리
+                                <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
+                            </a>
+                            <div class="collapse {% if 'm4' in request.resolver_match.url_name or 'formal' in request.resolver_match.url_name or 'change_request' in request.resolver_match.url_name %}show{% endif %}"
+                                 id="collapse4M"
+                                 aria-labelledby="heading4M"
+                                 data-bs-parent="#sidenavAccordion">
+                                <nav class="sb-sidenav-menu-nested nav">
+                                    <a class="nav-link {% if 'm4_list' in request.resolver_match.url_name %}active{% endif %}"
+                                       href="{% url 'qms:m4_list' %}">
+                                       사전 4M
+                                    </a>
+                                    <a class="nav-link {% if 'formal4m_list' in request.resolver_match.url_name %}active{% endif %}"
+                                       href="{% url 'qms:formal4m_list' %}">
+                                       정식 4M
+                                    </a>
+                                    <a class="nav-link {% if 'change_request' in request.resolver_match.url_name %}active{% endif %}"
+                                       href="{% url 'qms:change_request_list' %}">
+                                       4M 변경관리(v2)
+                                    </a>
+                                </nav>
+                            </div>
+                            {% endif %}
+
+                            {# 검사 관리 - can_qms_inspection_view 또는 can_qms_inspection 권한 필요 #}
+                            {% if user|has_perm:'can_qms_inspection_view' or user|has_perm:'can_qms_inspection' %}
+                            <a class="nav-link collapsed {% if 'inspection' in request.resolver_match.url_name or 'outgoing' in request.resolver_match.url_name %}active{% endif %}"
+                               href="#"
+                               data-bs-toggle="collapse"
+                               data-bs-target="#collapseInspection"
+                               aria-expanded="{% if 'inspection' in request.resolver_match.url_name or 'outgoing' in request.resolver_match.url_name %}true{% else %}false{% endif %}"
+                               aria-controls="collapseInspection">
+                                <div class="sb-nav-link-icon"><i class="bi bi-clipboard-check"></i></div>
+                                검사 관리
+                                <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
+                            </a>
+                            <div class="collapse {% if 'inspection' in request.resolver_match.url_name or 'outgoing' in request.resolver_match.url_name %}show{% endif %}"
+                                 id="collapseInspection"
+                                 aria-labelledby="headingInspection"
+                                 data-bs-parent="#sidenavAccordion">
+                                <nav class="sb-sidenav-menu-nested nav">
+                                    <a class="nav-link {% if 'import_inspection' in request.resolver_match.url_name %}active{% endif %}"
+                                       href="{% url 'qms:import_inspection_list' %}">수입검사 현황</a>
+                                    <a class="nav-link {% if 'outgoing' in request.resolver_match.url_name %}active{% endif %}"
+                                       href="{% url 'qms:outgoing_list' %}">출하검사 관리</a>
+                                </nav>
+                            </div>
+                            {% endif %}
+
+                            {# 부적합/시정조치 - can_qms_nc_view 권한 필요 #}
+                            {% if user|has_perm:'can_qms_nc_view' or user|has_perm:'can_qms_inspection_view' or user|has_perm:'can_qms_inspection' %}
+                            <a class="nav-link collapsed {% if 'nc' in request.resolver_match.url_name or 'capa' in request.resolver_match.url_name %}active{% endif %}"
+                               href="#"
+                               data-bs-toggle="collapse"
+                               data-bs-target="#collapseNC"
+                               aria-expanded="{% if 'nc' in request.resolver_match.url_name or 'capa' in request.resolver_match.url_name %}true{% else %}false{% endif %}"
+                               aria-controls="collapseNC">
+                                <div class="sb-nav-link-icon"><i class="bi bi-exclamation-triangle"></i></div>
+                                부적합/시정조치
+                                <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
+                            </a>
+                            <div class="collapse {% if 'nc' in request.resolver_match.url_name or 'capa' in request.resolver_match.url_name %}show{% endif %}"
+                                 id="collapseNC"
+                                 aria-labelledby="headingNC"
+                                 data-bs-parent="#sidenavAccordion">
+                                <nav class="sb-sidenav-menu-nested nav">
+                                    <a class="nav-link {% if 'nc_' in request.resolver_match.url_name %}active{% endif %}"
+                                       href="{% url 'qms:nc_list' %}">부적합품 관리</a>
+                                    <a class="nav-link {% if 'capa' in request.resolver_match.url_name %}active{% endif %}"
+                                       href="{% url 'qms:capa_list' %}">시정조치(CAPA)</a>
+                                </nav>
+                            </div>
+                            {% endif %}
+
+                            {# 협력사 품질관리 - can_qms_claim_view 또는 can_qms_rating_view 권한 필요 #}
+                            {% if user|has_perm:'can_qms_claim_view' or user|has_perm:'can_qms_rating_view' or user|has_perm:'can_qms_inspection_view' or user|has_perm:'can_qms_inspection' %}
+                            <a class="nav-link collapsed {% if 'claim' in request.resolver_match.url_name or 'rating' in request.resolver_match.url_name %}active{% endif %}"
+                               href="#"
+                               data-bs-toggle="collapse"
+                               data-bs-target="#collapseVendorQms"
+                               aria-expanded="{% if 'claim' in request.resolver_match.url_name or 'rating' in request.resolver_match.url_name %}true{% else %}false{% endif %}"
+                               aria-controls="collapseVendorQms">
+                                <div class="sb-nav-link-icon"><i class="bi bi-building"></i></div>
+                                협력사 품질관리
+                                <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
+                            </a>
+                            <div class="collapse {% if 'claim' in request.resolver_match.url_name or 'rating' in request.resolver_match.url_name %}show{% endif %}"
+                                 id="collapseVendorQms"
+                                 aria-labelledby="headingVendorQms"
+                                 data-bs-parent="#sidenavAccordion">
+                                <nav class="sb-sidenav-menu-nested nav">
+                                    <a class="nav-link {% if 'claim' in request.resolver_match.url_name %}active{% endif %}"
+                                       href="{% url 'qms:claim_list' %}">클레임 관리</a>
+                                    <a class="nav-link {% if 'rating' in request.resolver_match.url_name %}active{% endif %}"
+                                       href="{% url 'qms:rating_list' %}">협력사 평가</a>
+                                </nav>
+                            </div>
+                            {% endif %}
+
+                            {# 초도품검사(ISIR) - can_qms_isir_view 권한 필요 #}
+                            {% if user|has_perm:'can_qms_isir_view' or user|has_perm:'can_qms_inspection_view' or user|has_perm:'can_qms_inspection' %}
+                            <a class="nav-link collapsed {% if 'isir' in request.resolver_match.url_name %}active{% endif %}"
+                               href="#"
+                               data-bs-toggle="collapse"
+                               data-bs-target="#collapseISIR"
+                               aria-expanded="{% if 'isir' in request.resolver_match.url_name %}true{% else %}false{% endif %}"
+                               aria-controls="collapseISIR">
+                                <div class="sb-nav-link-icon"><i class="bi bi-patch-check-fill"></i></div>
+                                초도품검사(ISIR)
+                                <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
+                            </a>
+                            <div class="collapse {% if 'isir' in request.resolver_match.url_name %}show{% endif %}"
+                                 id="collapseISIR"
+                                 aria-labelledby="headingISIR"
+                                 data-bs-parent="#sidenavAccordion">
+                                <nav class="sb-sidenav-menu-nested nav">
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'isir_list' %}active{% endif %}" href="{% url 'qms:isir_list' %}">ISIR 현황</a>
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'isir_create' %}active{% endif %}" href="{% url 'qms:isir_create' %}">ISIR 등록</a>
+                                </nav>
+                            </div>
+                            {% endif %}
+
+                            {# VOC 관리 (고객의 소리) #}
+                            {% if user|has_perm:'can_qms_inspection_view' or user|has_perm:'can_qms_inspection' %}
+                            <a class="nav-link {% if 'voc' in request.resolver_match.url_name %}active{% endif %}"
+                               href="{% url 'qms:voc_list' %}">
+                                <div class="sb-nav-link-icon"><i class="bi bi-megaphone"></i></div>
+                                VOC 관리
+                            </a>
+                            {% endif %}
+
+                            {# 계측기 관리 #}
+                            {% if user|has_perm:'can_qms_inspection_view' or user|has_perm:'can_qms_inspection' %}
+                            <a class="nav-link {% if 'gauge' in request.resolver_match.url_name %}active{% endif %}"
+                               href="{% url 'qms:gauge_list' %}">
+                                <div class="sb-nav-link-icon"><i class="bi bi-speedometer"></i></div>
+                                계측기 관리
+                            </a>
+                            {% endif %}
+
+                            {# 품질문서 관리 #}
+                            {% if user|has_perm:'can_qms_inspection_view' or user|has_perm:'can_qms_inspection' %}
+                            <a class="nav-link {% if 'qdoc' in request.resolver_match.url_name %}active{% endif %}"
+                               href="{% url 'qms:qdoc_list' %}">
+                                <div class="sb-nav-link-icon"><i class="bi bi-file-earmark-text"></i></div>
+                                품질문서 관리
+                            </a>
+                            {% endif %}
+
+
+                        {# ====================================================== #}
+                        {# 2. WMS 메뉴 (자재관리) #}
+                        {# ====================================================== #}
+                        {% elif request.resolver_match.app_name == 'material' %}
+                            {# 메뉴 고정핀 #}
+                            <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom border-secondary mb-2">
+                                <small class="text-muted">WMS 메뉴</small>
+                                <button class="btn btn-sm p-1" id="wmsMenuPin" title="메뉴 전체 펼침/접힘" style="background:transparent;border:none;color:#6c757d;">
+                                    <i class="bi bi-pin-angle-fill"></i>
+                                </button>
+                            </div>
+
+                            {# 대시보드 #}
+                            <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'material:dashboard' %}">
+                                <div class="sb-nav-link-icon"><i class="bi bi-speedometer2"></i></div>
+                                WMS 현황판
+                            </a>
+
+                            {# 재고 관리 - can_wms_stock_view 권한 필요 #}
+                            {% if user|has_perm:'can_wms_stock_view' %}
+                            <a class="nav-link collapsed {% if request.resolver_match.url_name in 'stock_list,stock_transfer,transfer_history,transaction_history,stock_adjustment' %}active{% endif %}"
+                               href="#" data-bs-toggle="collapse" data-bs-target="#collapseStock" aria-expanded="{% if request.resolver_match.url_name in 'stock_list,stock_transfer,transfer_history,transaction_history,stock_adjustment' %}true{% else %}false{% endif %}" aria-controls="collapseStock">
+                                <div class="sb-nav-link-icon"><i class="bi bi-boxes"></i></div>
+                                재고/수불 관리
+                                <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
+                            </a>
+                            <div class="collapse {% if request.resolver_match.url_name in 'stock_list,stock_transfer,transfer_history,transaction_history,stock_adjustment' %}show{% endif %}"
+                                 id="collapseStock" data-bs-parent="#sidenavAccordion">
+                                <nav class="sb-sidenav-menu-nested nav">
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'stock_list' %}active{% endif %}" href="{% url 'material:stock_list' %}">자재 재고 현황</a>
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'stock_transfer' %}active{% endif %}" href="{% url 'material:stock_transfer' %}">재고 이동 처리</a>
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'transfer_history' %}active{% endif %}" href="{% url 'material:transfer_history' %}">재고 이동 현황</a>
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'transaction_history' %}active{% endif %}" href="{% url 'material:transaction_history' %}">기간별 수불 대장</a>
+                                    {% if user|has_perm:'can_wms_stock_edit' or user|has_perm:'can_wms_adjustment' %}
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'stock_adjustment' %}active{% endif %}" href="{% url 'material:stock_adjustment' %}">재고 조정(관리)</a>
+                                    {% endif %}
+                                </nav>
+                            </div>
+                            {% endif %}
+
+                            {# 입고 관리 - can_wms_inout_view 또는 can_wms_inout 권한 필요 #}
+                            {% if user|has_perm:'can_wms_inout_view' or user|has_perm:'can_wms_inout' %}
+                            <a class="nav-link collapsed {% if 'manual_incoming' in request.resolver_match.url_name or 'incoming_history' in request.resolver_match.url_name %}active{% endif %}"
+                               href="#"
+                               data-bs-toggle="collapse"
+                               data-bs-target="#collapseInboundWMS"
+                               aria-expanded="{% if 'manual_incoming' in request.resolver_match.url_name or 'incoming_history' in request.resolver_match.url_name %}true{% else %}false{% endif %}"
+                               aria-controls="collapseInboundWMS">
+                                <div class="sb-nav-link-icon"><i class="bi bi-box-arrow-in-down"></i></div>
+                                입고 관리
+                                <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
+                            </a>
+                            <div class="collapse {% if 'manual_incoming' in request.resolver_match.url_name or 'incoming_history' in request.resolver_match.url_name %}show{% endif %}"
+                                 id="collapseInboundWMS"
+                                 data-bs-parent="#sidenavAccordion">
+                                <nav class="sb-sidenav-menu-nested nav">
+                                    <a class="nav-link {% if 'manual_incoming' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'material:manual_incoming' %}">입고처리</a>
+                                    <a class="nav-link {% if 'incoming_history' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'material:incoming_history' %}">입고 내역 조회</a>
+                                </nav>
+                            </div>
+
+                            {# 출고 관리 #}
+                            <a class="nav-link collapsed {% if 'stock_return' in request.resolver_match.url_name or 'outbound_create' in request.resolver_match.url_name %}active{% endif %}"
+                               href="#"
+                               data-bs-toggle="collapse"
+                               data-bs-target="#collapseOutboundWMS"
+                               aria-expanded="{% if 'stock_return' in request.resolver_match.url_name or 'outbound_create' in request.resolver_match.url_name %}true{% else %}false{% endif %}"
+                               aria-controls="collapseOutboundWMS">
+                                <div class="sb-nav-link-icon"><i class="bi bi-box-arrow-up-right"></i></div>
+                                출고 관리
+                                <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
+                            </a>
+                            <div class="collapse {% if 'stock_return' in request.resolver_match.url_name or 'outbound_create' in request.resolver_match.url_name %}show{% endif %}"
+                                 id="collapseOutboundWMS"
+                                 data-bs-parent="#sidenavAccordion">
+                                <nav class="sb-sidenav-menu-nested nav">
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'outbound_create' %}active{% endif %}" href="{% url 'material:outbound_create' %}">생산 자재 불출</a>
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'stock_return' %}active{% endif %}" href="{% url 'material:stock_return' %}">불량 반품 처리</a>
+                                </nav>
+                            </div>
+                            {% endif %}
+
+                            {# BOM 관리 - can_wms_bom_view 또는 can_wms_bom 권한 필요 #}
+                            {% if user|has_perm:'can_wms_bom_view' or user|has_perm:'can_wms_bom' %}
+                            <a class="nav-link collapsed {% if request.resolver_match.url_name in 'bom_list,bom_upload,bom_calculate,bom_detail' %}active{% endif %}"
+                               href="#" data-bs-toggle="collapse" data-bs-target="#collapseBOM"
+                               aria-expanded="{% if request.resolver_match.url_name in 'bom_list,bom_upload,bom_calculate,bom_detail' %}true{% else %}false{% endif %}"
+                               aria-controls="collapseBOM">
+                                <div class="sb-nav-link-icon"><i class="bi bi-diagram-3"></i></div>
+                                BOM 관리
+                                <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
+                            </a>
+                            <div class="collapse {% if request.resolver_match.url_name in 'bom_list,bom_upload,bom_calculate,bom_detail' %}show{% endif %}"
+                                 id="collapseBOM" data-bs-parent="#sidenavAccordion">
+                                <nav class="sb-sidenav-menu-nested nav">
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'bom_list' or request.resolver_match.url_name == 'bom_detail' %}active{% endif %}" href="{% url 'material:bom_list' %}">BOM 조회</a>
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'bom_upload' %}active{% endif %}" href="{% url 'material:bom_upload' %}">BOM 업로드</a>
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'bom_calculate' %}active{% endif %}" href="{% url 'material:bom_calculate' %}">소요량 계산</a>
+                                </nav>
+                            </div>
+                            {% endif %}
+
+                            {# 현장 지원 - can_wms_stock_view 권한 필요 #}
+                            {% if user|has_perm:'can_wms_stock_view' %}
+                            <a class="nav-link collapsed {% if request.resolver_match.url_name in 'process_tag_form,stock_check,stock_check_result' %}active{% endif %}"
+                               href="#" data-bs-toggle="collapse" data-bs-target="#collapseSupport"
+                               aria-expanded="{% if request.resolver_match.url_name in 'process_tag_form,stock_check,stock_check_result' %}true{% else %}false{% endif %}"
+                               aria-controls="collapseSupport">
+                                <div class="sb-nav-link-icon"><i class="bi bi-tools"></i></div>
+                                현장 지원
+                                <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
+                            </a>
+                            <div class="collapse {% if request.resolver_match.url_name in 'process_tag_form,stock_check,stock_check_result' %}show{% endif %}"
+                                 id="collapseSupport" data-bs-parent="#sidenavAccordion">
+                                <nav class="sb-sidenav-menu-nested nav">
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'process_tag_form' %}active{% endif %}" href="{% url 'material:process_tag_form' %}">공정 현품표 발행</a>
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'stock_check' %}active{% endif %}" href="{% url 'material:stock_check' %}">재고 조사 (QR)</a>
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'stock_check_result' %}active{% endif %}" href="{% url 'material:stock_check_result' %}">재고 조사 결과</a>
+                                </nav>
+                            </div>
+                            {% endif %}
+
+                        {# ====================================================== #}
+                        {# 3. SCM 메뉴 (기본) #}
+                        {# ====================================================== #}
+                        {% else %}
+                            {# 메뉴 고정핀 #}
+                            <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom border-secondary mb-2">
+                                <small class="text-muted">SCM 메뉴</small>
+                                <button class="btn btn-sm p-1" id="scmMenuPin" title="메뉴 전체 펼침/접힘" style="background:transparent;border:none;color:#6c757d;">
+                                    <i class="bi bi-pin-angle-fill"></i>
+                                </button>
+                            </div>
+
+                            {# 대시보드 #}
+                            <a class="nav-link {% if request.resolver_match.url_name == 'scm_alert_dashboard' or request.resolver_match.url_name == 'home' %}active{% endif %}" href="{% url 'scm_alert_dashboard' %}">
+                                <div class="sb-nav-link-icon"><i class="bi bi-speedometer2"></i></div>
+                                알림 대시보드
+                            </a>
+
+                            {# 발주 관리 #}
+                            {% if user|has_perm:'can_scm_order_view' or user|has_perm:'can_scm_order_edit' %}
+                            <a class="nav-link collapsed {% if request.resolver_match.url_name in 'order_list,order_upload' %}active{% endif %}"
+                               href="#" data-bs-toggle="collapse" data-bs-target="#collapseOrder"
+                               aria-expanded="{% if request.resolver_match.url_name in 'order_list,order_upload' %}true{% else %}false{% endif %}">
+                                <div class="sb-nav-link-icon"><i class="bi bi-cart4"></i></div>
+                                발주 관리
+                                <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
+                            </a>
+                            <div class="collapse {% if request.resolver_match.url_name in 'order_list,order_upload' %}show{% endif %}"
+                                 id="collapseOrder" data-bs-parent="#sidenavAccordion">
+                                <nav class="sb-sidenav-menu-nested nav">
+                                    {% if user|has_perm:'can_scm_order_view' %}
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'order_list' %}active{% endif %}" href="{% url 'order_list' %}">발주 조회/승인</a>
+                                    {% endif %}
+                                    {% if user|has_perm:'can_scm_order_edit' %}
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'order_upload' %}active{% endif %}" href="{% url 'order_upload' %}">발주 등록</a>
+                                    {% endif %}
+                                </nav>
+                            </div>
+                            {% endif %}
+
+                            {# 납품/입고 관리 #}
+                            {% if user|has_perm:'can_scm_label_view' or user|has_perm:'can_scm_incoming_view' %}
+                            <a class="nav-link collapsed {% if request.resolver_match.url_name in 'label_list,incoming_list' %}active{% endif %}"
+                               href="#" data-bs-toggle="collapse" data-bs-target="#collapseDelivery"
+                               aria-expanded="{% if request.resolver_match.url_name in 'label_list,incoming_list' %}true{% else %}false{% endif %}">
+                                <div class="sb-nav-link-icon"><i class="bi bi-box-arrow-in-down"></i></div>
+                                납품/입고 관리
+                                <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
+                            </a>
+                            <div class="collapse {% if request.resolver_match.url_name in 'label_list,incoming_list' %}show{% endif %}"
+                                 id="collapseDelivery" data-bs-parent="#sidenavAccordion">
+                                <nav class="sb-sidenav-menu-nested nav">
+                                    {% if user|has_perm:'can_scm_label_view' %}
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'label_list' %}active{% endif %}" href="{% url 'label_list' %}">납품서 등록/조회</a>
+                                    {% endif %}
+                                    {% if user|has_perm:'can_scm_incoming_view' %}
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'incoming_list' %}active{% endif %}" href="{% url 'incoming_list' %}">입고 현황</a>
+                                    {% endif %}
+                                </nav>
+                            </div>
+                            {% endif %}
+
+                            {# 재고/소요 관리 #}
+                            {% if user|has_perm:'can_scm_inventory_view' %}
+                            <a class="nav-link {% if request.resolver_match.url_name == 'inventory_list' %}active{% endif %}" href="{% url 'inventory_list' %}">
+                                <div class="sb-nav-link-icon"><i class="bi bi-clipboard-data"></i></div>
+                                재고/소요 조회
+                            </a>
+                            {% endif %}
+
+                            {# 기준정보 관리 - 관리자 전용 #}
+                            {% if user|has_perm:'can_scm_admin' %}
+                            <a class="nav-link collapsed {% if request.resolver_match.url_name in 'part_list,vendor_manage' %}active{% endif %}"
+                               href="#" data-bs-toggle="collapse" data-bs-target="#collapseMaster"
+                               aria-expanded="{% if request.resolver_match.url_name in 'part_list,vendor_manage' %}true{% else %}false{% endif %}">
+                                <div class="sb-nav-link-icon"><i class="bi bi-database"></i></div>
+                                기준정보 관리
+                                <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
+                            </a>
+                            <div class="collapse {% if request.resolver_match.url_name in 'part_list,vendor_manage' %}show{% endif %}"
+                                 id="collapseMaster" data-bs-parent="#sidenavAccordion">
+                                <nav class="sb-sidenav-menu-nested nav">
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'part_list' %}active{% endif %}" href="{% url 'part_list' %}">품목 관리</a>
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'vendor_manage' %}active{% endif %}" href="{% url 'vendor_manage' %}">협력사 관리</a>
+                                </nav>
+                            </div>
+                            {% endif %}
+
+                            {# 리포트 #}
+                            {% if user|has_perm:'can_scm_report' %}
+                            <a class="nav-link {% if request.resolver_match.url_name == 'vendor_delivery_report' %}active{% endif %}" href="{% url 'vendor_delivery_report' %}">
+                                <div class="sb-nav-link-icon"><i class="bi bi-graph-up-arrow"></i></div>
+                                협력사 납기준수율
+                            </a>
+                            {% endif %}
+
+                            {# 시스템 관리 #}
+                            {% if user|has_perm:'can_scm_admin' %}
+                            <a class="nav-link {% if request.resolver_match.url_name == 'scm_admin_main' %}active{% endif %}" href="{% url 'scm_admin_main' %}">
+                                <div class="sb-nav-link-icon"><i class="bi bi-gear-fill"></i></div>
+                                관리자 페이지
+                            </a>
+                            {% endif %}
+                        {% endif %}
+                    </div>
                 </div>
-            </div>
-            
-            <div class="d-flex align-items-center">
-                <span class="me-3 small">
-                    <i class="bi bi-person-circle"></i> 
-                    {% if user.is_superuser %}슈퍼관리자{% elif user.profile.role == 'STAFF' %}진영전기 직원{% else %}{{ vendor_name }}{% endif %} ({{ user_name }})
-                </span>
-                <form action="{% url 'logout' %}" method="post" class="m-0">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-sm btn-outline-light py-0">로그아웃</button>
-                </form>
-            </div>
+                <div class="sb-sidenav-footer">
+                    <div class="small text-muted">Logged in as:</div>
+                    <div class="fw-bold text-white">{{ user.username }}</div>
+                </div>
+            </nav>
         </div>
 
-        {% if messages %}
-        <div class="container-fluid mt-3">
-            {% for message in messages %}
-            <div class="alert alert-{{ message.tags }} alert-dismissible fade show shadow-sm border-0" role="alert">
-                {{ message }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-            {% endfor %}
-        </div>
-        {% endif %}
+        <div id="layoutSidenav_content">
+            <main>
+                <div class="container-fluid px-4 py-4">
+                    {% if messages %}
+                        {% for message in messages %}
+                        <div class="alert alert-{{ message.tags }} alert-dismissible fade show shadow-sm" role="alert">
+                            {% if message.tags == 'success' %}<i class="bi bi-check-circle-fill me-2"></i>{% endif %}
+                            {% if message.tags == 'error' or message.tags == 'danger' %}<i class="bi bi-exclamation-triangle-fill me-2"></i>{% endif %}
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                        {% endfor %}
+                    {% endif %}
 
-        <div class="main-wrapper">
-            {% block content %}{% endblock %}
+                    {% block content %}{% endblock %}
+                </div>
+            </main>
+            <footer class="py-4 mt-auto">
+                <div class="container-fluid px-4">
+                    <div class="d-flex align-items-center justify-content-between small">
+                        <div class="text-muted">Copyright &copy; <strong>JEM SCM System</strong> 2026. All rights reserved.</div>
+                    </div>
+                </div>
+            </footer>
         </div>
     </div>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/startbootstrap-sb-admin@7.0.7/dist/js/scripts.js"></script>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 메뉴 핀 기능 초기화 함수
+        function initMenuPin(pinBtnId, storageKey, pinColor) {
+            const pinBtn = document.getElementById(pinBtnId);
+            if (!pinBtn) return;
+
+            let isPinned = localStorage.getItem(storageKey) === 'true';
+
+            function updateMenuState() {
+                const collapses = document.querySelectorAll('#sidenavAccordion .collapse');
+                const icon = pinBtn.querySelector('i');
+
+                if (isPinned) {
+                    // 핀 고정: 모든 메뉴 펼침
+                    pinBtn.style.color = pinColor;
+                    icon.style.transform = 'rotate(45deg)';
+                    pinBtn.title = '메뉴 접기';
+                    collapses.forEach(el => {
+                        el.classList.add('show');
+                    });
+                } else {
+                    // 핀 해제: 활성 메뉴만 열고 나머지 접기
+                    pinBtn.style.color = '#6c757d';
+                    icon.style.transform = 'rotate(0deg)';
+                    pinBtn.title = '메뉴 전체 펼치기';
+                    collapses.forEach(el => {
+                        const hasActive = el.querySelector('.nav-link.active');
+                        if (hasActive) {
+                            el.classList.add('show');
+                        } else {
+                            el.classList.remove('show');
+                        }
+                    });
+                }
+            }
+
+            updateMenuState();
+
+            pinBtn.addEventListener('click', function() {
+                isPinned = !isPinned;
+                localStorage.setItem(storageKey, isPinned);
+                updateMenuState();
+            });
+        }
+
+        // 각 시스템별 핀 초기화
+        initMenuPin('qmsMenuPin', 'qmsMenuPinned', '#3498db');  // QMS: 파란색
+        initMenuPin('wmsMenuPin', 'wmsMenuPinned', '#2ecc71');  // WMS: 초록색
+        initMenuPin('scmMenuPin', 'scmMenuPinned', '#e74c3c');  // SCM: 빨간색
+    });
+    </script>
+
+    {% block extra_js %}{% endblock %}
 </body>
 </html>

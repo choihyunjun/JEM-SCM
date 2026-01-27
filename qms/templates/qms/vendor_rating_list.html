@@ -1,0 +1,187 @@
+{% extends 'qms/qms_base.html' %}
+{% load humanize %}
+
+{% block title %}협력사 평가 관리{% endblock %}
+
+{% block qms_content %}
+<div class="container-fluid p-0" style="max-width: 1920px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold"><i class="bi bi-star me-2"></i>협력사 평가 관리</h3>
+        <a href="{% url 'qms:rating_create' %}" class="btn btn-success">
+            <i class="bi bi-plus-lg me-1"></i>평가 생성/갱신
+        </a>
+    </div>
+
+    <!-- 필터 -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small">연도</label>
+                    <select name="year" class="form-select form-select-sm">
+                        <option value="">전체</option>
+                        {% for y in years %}
+                        <option value="{{ y }}" {% if request.GET.year == y|stringformat:"i" %}selected{% endif %}>{{ y }}년</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">월</label>
+                    <select name="month" class="form-select form-select-sm">
+                        <option value="">전체</option>
+                        {% for m in months %}
+                        <option value="{{ m }}" {% if request.GET.month == m|stringformat:"i" %}selected{% endif %}>{{ m }}월</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">협력사</label>
+                    <select name="vendor" class="form-select form-select-sm">
+                        <option value="">전체</option>
+                        {% for v in vendors %}
+                        <option value="{{ v.id }}" {% if request.GET.vendor == v.id|stringformat:"i" %}selected{% endif %}>{{ v.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">등급</label>
+                    <select name="grade" class="form-select form-select-sm">
+                        <option value="">전체</option>
+                        {% for value, label in grade_choices %}
+                        <option value="{{ value }}" {% if request.GET.grade == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-dark btn-sm w-100"><i class="bi bi-search me-1"></i>검색</button>
+                </div>
+                <div class="col-md-1">
+                    <a href="{% url 'qms:rating_list' %}" class="btn btn-outline-secondary btn-sm w-100">초기화</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 목록 -->
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <table class="table table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>평가기간</th>
+                        <th>협력사</th>
+                        <th class="text-center">수입검사 합격률</th>
+                        <th class="text-center">납기준수율</th>
+                        <th class="text-center">PPM</th>
+                        <th class="text-center">클레임</th>
+                        <th class="text-center">품질점수</th>
+                        <th class="text-center">납기점수</th>
+                        <th class="text-center">종합점수</th>
+                        <th class="text-center">등급</th>
+                        <th>평가자</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in ratings %}
+                    <tr>
+                        <td>
+                            <a href="{% url 'qms:rating_detail' pk=r.pk %}" class="fw-bold">{{ r.year }}년 {{ r.month }}월</a>
+                        </td>
+                        <td>{{ r.vendor.name }}</td>
+                        <td class="text-center">
+                            <span class="{% if r.incoming_rate >= 98 %}text-success{% elif r.incoming_rate >= 95 %}text-warning{% else %}text-danger{% endif %} fw-bold">
+                                {{ r.incoming_rate }}%
+                            </span>
+                            <small class="text-muted d-block">{{ r.incoming_pass }}/{{ r.incoming_total }}</small>
+                        </td>
+                        <td class="text-center">
+                            <span class="{% if r.delivery_rate >= 98 %}text-success{% elif r.delivery_rate >= 95 %}text-warning{% else %}text-danger{% endif %} fw-bold">
+                                {{ r.delivery_rate }}%
+                            </span>
+                            <small class="text-muted d-block">{{ r.delivery_ontime }}/{{ r.delivery_total }}</small>
+                        </td>
+                        <td class="text-center">
+                            <span class="{% if r.ppm <= 100 %}text-success{% elif r.ppm <= 500 %}text-warning{% else %}text-danger{% endif %}">
+                                {{ r.ppm|floatformat:0 }}
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            {{ r.claim_count }}건
+                            {% if r.claim_amount > 0 %}
+                            <small class="text-muted d-block">{{ r.claim_amount|intcomma }}원</small>
+                            {% endif %}
+                        </td>
+                        <td class="text-center fw-bold">{{ r.quality_score|floatformat:1 }}</td>
+                        <td class="text-center fw-bold">{{ r.delivery_score|floatformat:1 }}</td>
+                        <td class="text-center fw-bold">{{ r.total_score|floatformat:1 }}</td>
+                        <td class="text-center">
+                            <span class="badge fs-6 bg-{% if r.grade == 'A' %}success{% elif r.grade == 'B' %}primary{% elif r.grade == 'C' %}warning{% else %}danger{% endif %}">
+                                {{ r.grade }}
+                            </span>
+                        </td>
+                        <td>{{ r.evaluated_by.username|default:'-' }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="11" class="text-center py-5 text-muted">
+                            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                            평가 내역이 없습니다.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 페이징 -->
+    {% if ratings.has_other_pages %}
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if ratings.has_previous %}
+            <li class="page-item"><a class="page-link" href="?page={{ ratings.previous_page_number }}&{{ request.GET.urlencode }}">&laquo;</a></li>
+            {% endif %}
+            {% for num in ratings.paginator.page_range %}
+                {% if num == ratings.number %}
+                <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                {% elif num > ratings.number|add:'-3' and num < ratings.number|add:'3' %}
+                <li class="page-item"><a class="page-link" href="?page={{ num }}&{{ request.GET.urlencode }}">{{ num }}</a></li>
+                {% endif %}
+            {% endfor %}
+            {% if ratings.has_next %}
+            <li class="page-item"><a class="page-link" href="?page={{ ratings.next_page_number }}&{{ request.GET.urlencode }}">&raquo;</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+
+    <!-- 등급 기준 설명 -->
+    <div class="card shadow-sm mt-4">
+        <div class="card-header bg-light">
+            <i class="bi bi-info-circle me-2"></i>평가 등급 기준
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>종합점수 = (품질점수 x 60%) + (납기점수 x 40%)</h6>
+                    <ul class="list-unstyled">
+                        <li><span class="badge bg-success me-2">A등급</span> 95점 이상 (우수)</li>
+                        <li><span class="badge bg-primary me-2">B등급</span> 85점 이상 (양호)</li>
+                        <li><span class="badge bg-warning me-2">C등급</span> 70점 이상 (보통)</li>
+                        <li><span class="badge bg-danger me-2">D등급</span> 70점 미만 (불량)</li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <h6>PPM 기준</h6>
+                    <ul class="list-unstyled">
+                        <li>PPM = (불량수량 / 총입고수량) x 1,000,000</li>
+                        <li><span class="text-success">100 이하</span> - 우수</li>
+                        <li><span class="text-warning">500 이하</span> - 양호</li>
+                        <li><span class="text-danger">500 초과</span> - 개선필요</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

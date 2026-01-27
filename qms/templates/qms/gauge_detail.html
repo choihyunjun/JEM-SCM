@@ -1,0 +1,338 @@
+{% extends 'qms/qms_base.html' %}
+{% load humanize %}
+
+{% block title %}계측기 상세 - {{ gauge.gauge_no }}{% endblock %}
+
+{% block qms_content %}
+<div class="container-fluid p-0" style="max-width: 1400px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold mb-1">
+                <i class="bi bi-speedometer2 me-2"></i>{{ gauge.gauge_no }}
+            </h3>
+            <small class="text-muted">{{ gauge.gauge_name }} | {{ gauge.get_gauge_type_display }}</small>
+        </div>
+        <div>
+            {% if gauge.status == 'ACTIVE' %}
+            <span class="badge bg-success fs-6">사용중</span>
+            {% elif gauge.status == 'CALIBRATING' %}
+            <span class="badge bg-info fs-6">교정중</span>
+            {% elif gauge.status == 'REPAIR' %}
+            <span class="badge bg-warning text-dark fs-6">수리중</span>
+            {% else %}
+            <span class="badge bg-secondary fs-6">{{ gauge.get_status_display }}</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- 좌측: 기본 정보 -->
+        <div class="col-lg-8">
+            <!-- 기본 정보 -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-dark text-white d-flex justify-content-between">
+                    <span><i class="bi bi-info-circle me-1"></i>기본 정보</span>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted">관리번호</label>
+                            <div class="fw-bold text-primary">{{ gauge.gauge_no }}</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted">계측기명</label>
+                            <div class="fw-bold">{{ gauge.gauge_name }}</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted">유형</label>
+                            <div>{{ gauge.get_gauge_type_display }}</div>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted">제조사</label>
+                            <div>{{ gauge.manufacturer|default:"-" }}</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted">모델번호</label>
+                            <div>{{ gauge.model_no|default:"-" }}</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted">시리얼번호</label>
+                            <div>{{ gauge.serial_no|default:"-" }}</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted">측정범위</label>
+                            <div>{{ gauge.measurement_range|default:"-" }}</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted">분해능</label>
+                            <div>{{ gauge.resolution|default:"-" }}</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted">정밀도</label>
+                            <div>{{ gauge.accuracy|default:"-" }}</div>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted">설치장소</label>
+                            <div>{{ gauge.location|default:"-" }}</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted">관리부서</label>
+                            <div>{{ gauge.department|default:"-" }}</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted">관리담당자</label>
+                            <div>{{ gauge.manager.username|default:"-" }}</div>
+                        </div>
+                    </div>
+                    {% if gauge.usage %}
+                    <hr>
+                    <div>
+                        <label class="form-label small text-muted">용도</label>
+                        <div>{{ gauge.usage }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- 교정 이력 -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-calendar-check me-1"></i>교정 이력</span>
+                    <button class="btn btn-sm btn-dark" data-bs-toggle="modal" data-bs-target="#addCalibrationModal">
+                        <i class="bi bi-plus-lg me-1"></i>교정 등록
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>교정일</th>
+                                <th>교정유형</th>
+                                <th>교정기관</th>
+                                <th class="text-center">결과</th>
+                                <th>성적서번호</th>
+                                <th>차기교정일</th>
+                                <th>성적서</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for cal in calibrations %}
+                            <tr>
+                                <td>{{ cal.calibration_date }}</td>
+                                <td>{{ cal.get_calibration_type_display }}</td>
+                                <td class="small">{{ cal.calibration_agency|default:"-" }}</td>
+                                <td class="text-center">
+                                    {% if cal.result == 'PASS' %}
+                                    <span class="badge bg-success">합격</span>
+                                    {% elif cal.result == 'ADJUSTED' %}
+                                    <span class="badge bg-info">조정후합격</span>
+                                    {% else %}
+                                    <span class="badge bg-danger">불합격</span>
+                                    {% endif %}
+                                </td>
+                                <td class="small">{{ cal.certificate_no|default:"-" }}</td>
+                                <td>{{ cal.next_date|default:"-" }}</td>
+                                <td>
+                                    {% if cal.certificate_file %}
+                                    <a href="{{ cal.certificate_file.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-file-earmark-text"></i>
+                                    </a>
+                                    {% else %}-{% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="text-center py-4 text-muted">교정 이력이 없습니다.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 우측: 상태/교정 정보 -->
+        <div class="col-lg-4">
+            <!-- 교정 상태 -->
+            <div class="card shadow-sm mb-4 {% if gauge.is_calibration_due %}border-danger{% endif %}">
+                <div class="card-header {% if gauge.is_calibration_due %}bg-danger text-white{% else %}bg-success text-white{% endif %}">
+                    <i class="bi bi-calendar-event me-1"></i>교정 상태
+                </div>
+                <div class="card-body text-center">
+                    {% if gauge.next_calibration_date %}
+                    <div class="h2 mb-2 {% if gauge.is_calibration_due %}text-danger{% else %}text-success{% endif %}">
+                        {{ gauge.calibration_status_text }}
+                    </div>
+                    <div class="small text-muted">차기 교정일: {{ gauge.next_calibration_date }}</div>
+                    {% else %}
+                    <div class="h4 text-muted">교정일 미설정</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- 교정 정보 -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header">
+                    <i class="bi bi-sliders me-1"></i>교정 설정
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="update">
+                        <div class="mb-3">
+                            <label class="form-label small">교정주기 (월)</label>
+                            <input type="number" name="calibration_cycle" class="form-control" value="{{ gauge.calibration_cycle }}" min="1">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small">교정기관</label>
+                            <input type="text" name="calibration_agency" class="form-control" value="{{ gauge.calibration_agency }}">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small">상태</label>
+                            <select name="status" class="form-select">
+                                {% for value, label in status_choices %}
+                                <option value="{{ value }}" {% if gauge.status == value %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-save me-1"></i>저장
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- 첨부파일 -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header">
+                    <i class="bi bi-paperclip me-1"></i>첨부파일
+                </div>
+                <div class="card-body">
+                    {% if gauge.photo %}
+                    <a href="{{ gauge.photo.url }}" target="_blank" class="btn btn-outline-primary btn-sm mb-2 w-100">
+                        <i class="bi bi-image me-1"></i>사진 보기
+                    </a>
+                    {% endif %}
+                    {% if gauge.manual %}
+                    <a href="{{ gauge.manual.url }}" target="_blank" class="btn btn-outline-secondary btn-sm w-100">
+                        <i class="bi bi-file-earmark-pdf me-1"></i>매뉴얼 다운로드
+                    </a>
+                    {% endif %}
+                    {% if not gauge.photo and not gauge.manual %}
+                    <div class="text-muted text-center">첨부파일 없음</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- 메타 정보 -->
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <i class="bi bi-clock-history me-1"></i>등록 정보
+                </div>
+                <div class="card-body small">
+                    {% if gauge.purchase_date %}
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="text-muted">구입일</span>
+                        <span>{{ gauge.purchase_date }}</span>
+                    </div>
+                    {% endif %}
+                    {% if gauge.purchase_cost %}
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="text-muted">구입가격</span>
+                        <span>{{ gauge.purchase_cost|intcomma }}원</span>
+                    </div>
+                    {% endif %}
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="text-muted">등록일시</span>
+                        <span>{{ gauge.created_at|date:"Y-m-d H:i" }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-4">
+        <a href="{% url 'qms:gauge_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>목록으로
+        </a>
+    </div>
+</div>
+
+<!-- 교정 등록 모달 -->
+<div class="modal fade" id="addCalibrationModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="add_calibration">
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title"><i class="bi bi-plus-lg me-1"></i>교정 이력 등록</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">교정일 <span class="text-danger">*</span></label>
+                        <input type="date" name="calibration_date" class="form-control" required>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">교정유형</label>
+                            <select name="calibration_type" class="form-select">
+                                {% for value, label in calibration_type_choices %}
+                                <option value="{{ value }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">결과 <span class="text-danger">*</span></label>
+                            <select name="result" class="form-select" required>
+                                {% for value, label in result_choices %}
+                                <option value="{{ value }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3 mt-3">
+                        <label class="form-label">교정기관</label>
+                        <input type="text" name="cal_agency" class="form-control" value="{{ gauge.calibration_agency }}">
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">성적서번호</label>
+                            <input type="text" name="certificate_no" class="form-control">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">교정비용</label>
+                            <input type="number" name="cost" class="form-control" min="0">
+                        </div>
+                    </div>
+                    <div class="mb-3 mt-3">
+                        <label class="form-label">측정불확도</label>
+                        <input type="text" name="uncertainty" class="form-control" placeholder="예: ±0.01mm (k=2)">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">교정성적서</label>
+                        <input type="file" name="certificate_file" class="form-control">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">비고</label>
+                        <textarea name="cal_remark" class="form-control" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                    <button type="submit" class="btn btn-warning">
+                        <i class="bi bi-check-lg me-1"></i>등록
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

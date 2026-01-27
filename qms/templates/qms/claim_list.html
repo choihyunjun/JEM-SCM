@@ -1,0 +1,182 @@
+{% extends 'qms/qms_base.html' %}
+{% load humanize %}
+
+{% block title %}협력사 클레임 관리{% endblock %}
+
+{% block qms_content %}
+<div class="container-fluid p-0" style="max-width: 1920px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold"><i class="bi bi-file-earmark-x me-2"></i>협력사 클레임 관리</h3>
+        <a href="{% url 'qms:claim_create' %}" class="btn btn-secondary">
+            <i class="bi bi-plus-lg me-1"></i>클레임 등록
+        </a>
+    </div>
+
+    <!-- 통계 카드 -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3 col-6">
+            <div class="card border-0 shadow-sm text-center p-3">
+                <div class="small text-muted">전체</div>
+                <div class="h4 fw-bold">{{ stats.total }}</div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card border-0 shadow-sm text-center p-3">
+                <div class="small text-muted">작성중</div>
+                <div class="h4 fw-bold text-secondary">{{ stats.draft }}</div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card border-0 shadow-sm text-center p-3">
+                <div class="small text-muted">처리중</div>
+                <div class="h4 fw-bold text-warning">{{ stats.processing }}</div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card border-0 shadow-sm text-center p-3">
+                <div class="small text-muted">종결</div>
+                <div class="h4 fw-bold text-success">{{ stats.closed }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 필터 -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small">상태</label>
+                    <select name="status" class="form-select form-select-sm">
+                        <option value="">전체</option>
+                        {% for value, label in status_choices %}
+                        <option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">클레임유형</label>
+                    <select name="claim_type" class="form-select form-select-sm">
+                        <option value="">전체</option>
+                        {% for value, label in type_choices %}
+                        <option value="{{ value }}" {% if request.GET.claim_type == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">협력사</label>
+                    <select name="vendor" class="form-select form-select-sm">
+                        <option value="">전체</option>
+                        {% for v in vendors %}
+                        <option value="{{ v.id }}" {% if request.GET.vendor == v.id|stringformat:"i" %}selected{% endif %}>{{ v.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">발생일(시작)</label>
+                    <input type="date" name="date_from" class="form-control form-control-sm" value="{{ request.GET.date_from }}">
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-dark btn-sm w-100"><i class="bi bi-search me-1"></i>검색</button>
+                </div>
+                <div class="col-md-1">
+                    <a href="{% url 'qms:claim_list' %}" class="btn btn-outline-secondary btn-sm w-100">초기화</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 목록 -->
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <table class="table table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>클레임번호</th>
+                        <th>발생일</th>
+                        <th>유형</th>
+                        <th>협력사</th>
+                        <th>품번</th>
+                        <th class="text-end">수량</th>
+                        <th>상태</th>
+                        <th class="text-end">클레임금액</th>
+                        <th class="text-end">보상금액</th>
+                        <th>정산</th>
+                        <th>발행자</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for claim in claims %}
+                    <tr>
+                        <td>
+                            <a href="{% url 'qms:claim_detail' pk=claim.pk %}" class="fw-bold">{{ claim.claim_no }}</a>
+                        </td>
+                        <td>{{ claim.issue_date }}</td>
+                        <td>
+                            <span class="badge bg-{% if claim.claim_type == 'QUALITY' %}danger{% elif claim.claim_type == 'DELIVERY' %}warning{% else %}secondary{% endif %}">
+                                {{ claim.get_claim_type_display }}
+                            </span>
+                        </td>
+                        <td>{{ claim.vendor.name }}</td>
+                        <td>{{ claim.part_no }}</td>
+                        <td class="text-end">{{ claim.claim_qty|intcomma }}</td>
+                        <td>
+                            <span class="badge bg-{% if claim.status == 'CLOSED' %}success{% elif claim.status == 'DRAFT' %}secondary{% else %}warning{% endif %}">
+                                {{ claim.get_status_display }}
+                            </span>
+                        </td>
+                        <td class="text-end">
+                            {% if claim.claim_amount %}
+                            {{ claim.claim_amount|intcomma }}원
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            {% if claim.compensation_amount %}
+                            {{ claim.compensation_amount|intcomma }}원
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-{% if claim.settlement_status == 'SETTLED' %}success{% elif claim.settlement_status == 'IN_PROGRESS' %}warning{% else %}secondary{% endif %}">
+                                {{ claim.get_settlement_status_display }}
+                            </span>
+                        </td>
+                        <td>{{ claim.issued_by.username }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="11" class="text-center py-5 text-muted">
+                            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                            클레임 내역이 없습니다.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 페이징 -->
+    {% if claims.has_other_pages %}
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if claims.has_previous %}
+            <li class="page-item"><a class="page-link" href="?page={{ claims.previous_page_number }}&{{ request.GET.urlencode }}">&laquo;</a></li>
+            {% endif %}
+            {% for num in claims.paginator.page_range %}
+                {% if num == claims.number %}
+                <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                {% elif num > claims.number|add:'-3' and num < claims.number|add:'3' %}
+                <li class="page-item"><a class="page-link" href="?page={{ num }}&{{ request.GET.urlencode }}">{{ num }}</a></li>
+                {% endif %}
+            {% endfor %}
+            {% if claims.has_next %}
+            <li class="page-item"><a class="page-link" href="?page={{ claims.next_page_number }}&{{ request.GET.urlencode }}">&raquo;</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

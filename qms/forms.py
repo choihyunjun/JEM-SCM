@@ -142,17 +142,18 @@ class M4RequestForm(forms.ModelForm):    # [결재선] 내부 사용자만 노�
         # [수정] 필드 중복 제거 및 논리적 순서 배치
         fields = [
             'factory', 'product', 'model_name', 'quality_rank',
-            'part_no', 'part_name', 'request_no', 'm4_type',
+            'is_internal', 'is_external',  # 사내/사외 체크박스
+            'part_no', 'part_name', 'request_no', 'change_class', 'm4_type',
             'vendor_org',
             'reviewer_user', 'reviewer_user2', 'approver_user',  # 결재선 지정 필드
-            'reason', 'content_before', 'content_after', 
+            'reason', 'content_before', 'content_after',
             'photo_before', 'photo_after',
             'affected_features', 'due_date',
             'plan_step1', 'plan_step2', 'plan_step3', 'plan_step4',
             'plan_step5', 'plan_step6', 'plan_step7', 'plan_step8',
             'reject_reason',
         ]
-        
+
         # 기본 위젯 설정
         widgets = {
             # 날짜 필드 캘린더 적용
@@ -163,6 +164,8 @@ class M4RequestForm(forms.ModelForm):    # [결재선] 내부 사용자만 노�
             'content_after': forms.Textarea(attrs={'rows': 4}),
             'photo_before': forms.ClearableFileInput(),
             'photo_after': forms.ClearableFileInput(),
+            'is_internal': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'is_external': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
     def __init__(self, *args, **kwargs):

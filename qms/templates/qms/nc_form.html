@@ -1,0 +1,209 @@
+{% extends 'qms/qms_base.html' %}
+
+{% block title %}부적합 등록{% endblock %}
+
+{% block qms_content %}
+<div class="container-fluid p-0" style="max-width: 900px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold"><i class="bi bi-exclamation-triangle me-2"></i>부적합 등록</h3>
+        <a href="{% url 'qms:nc_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>목록으로
+        </a>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">발생구분 <span class="text-danger">*</span></label>
+                        <select name="source" class="form-select" required>
+                            <option value="">선택</option>
+                            {% for value, label in source_choices %}
+                            <option value="{{ value }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">발생일 <span class="text-danger">*</span></label>
+                        <input type="date" name="occurred_date" class="form-control" required>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">품번 <span class="text-danger">*</span></label>
+                        <input type="text" name="part_no" class="form-control" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">품명 <span class="text-danger">*</span></label>
+                        <input type="text" name="part_name" class="form-control" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">LOT번호</label>
+                        <input type="text" name="lot_no" class="form-control">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">협력사</label>
+                        <div class="input-group">
+                            <input type="text" id="vendorName" class="form-control" placeholder="협력사 검색 (수입검사 불량 시)" readonly>
+                            <input type="hidden" name="vendor" id="vendorId">
+                            <button type="button" class="btn btn-outline-secondary" onclick="openVendorSearchModal()">
+                                <i class="bi bi-search"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-danger" onclick="clearVendor()" title="초기화">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">불량수량 <span class="text-danger">*</span></label>
+                        <input type="number" name="defect_qty" class="form-control" required min="1">
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label fw-bold">불량유형 <span class="text-danger">*</span></label>
+                        <input type="text" name="defect_type" class="form-control" required placeholder="예: 치수불량, 외관불량, 기능불량">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-bold">불량 상세 <span class="text-danger">*</span></label>
+                        <textarea name="defect_detail" class="form-control" rows="4" required placeholder="불량 내용을 상세히 기술하세요"></textarea>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">불량 사진</label>
+                        <input type="file" name="photo" class="form-control" accept="image/*">
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-end gap-2 mt-4">
+                    <a href="{% url 'qms:nc_list' %}" class="btn btn-secondary">취소</a>
+                    <button type="submit" class="btn btn-danger"><i class="bi bi-check-lg me-1"></i>등록</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 협력사 검색 모달 -->
+<div class="modal fade" id="vendorSearchModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-search me-2"></i>협력사 검색</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group mb-3">
+                    <input type="text" id="vendorSearchInput" class="form-control" placeholder="협력사명 입력..." autofocus>
+                    <button type="button" class="btn btn-dark" onclick="searchVendor()">
+                        <i class="bi bi-search me-1"></i>검색
+                    </button>
+                </div>
+                <div id="vendorSearchResults" style="max-height: 400px; overflow-y: auto;">
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-building fs-1 d-block mb-2"></i>
+                        협력사명을 입력하고 검색하세요
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let vendorSearchModal = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    vendorSearchModal = new bootstrap.Modal(document.getElementById('vendorSearchModal'));
+    document.getElementById('vendorSearchInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            searchVendor();
+        }
+    });
+});
+
+function openVendorSearchModal() {
+    document.getElementById('vendorSearchInput').value = '';
+    document.getElementById('vendorSearchResults').innerHTML = `
+        <div class="text-center text-muted py-5">
+            <i class="bi bi-building fs-1 d-block mb-2"></i>
+            협력사명을 입력하고 검색하세요
+        </div>
+    `;
+    vendorSearchModal.show();
+    setTimeout(() => document.getElementById('vendorSearchInput').focus(), 300);
+}
+
+function searchVendor() {
+    const query = document.getElementById('vendorSearchInput').value.trim();
+    if (query.length < 1) {
+        alert('검색어를 입력해주세요.');
+        return;
+    }
+
+    document.getElementById('vendorSearchResults').innerHTML = `
+        <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status"></div>
+            <div class="mt-2">검색 중...</div>
+        </div>
+    `;
+
+    fetch(`/api/organizations/search/?q=${encodeURIComponent(query)}`)
+        .then(response => response.json())
+        .then(data => {
+            const results = data.results;
+            if (results.length === 0) {
+                document.getElementById('vendorSearchResults').innerHTML = `
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                        검색 결과가 없습니다.
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '<div class="list-group">';
+            results.forEach(v => {
+                html += `
+                    <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                            onclick="selectVendor(${v.id}, '${v.name.replace(/'/g, "\\'")}')">
+                        <div>
+                            <i class="bi bi-building me-2 text-primary"></i>
+                            <span class="fw-bold">${v.name}</span>
+                        </div>
+                        <i class="bi bi-check-circle text-success"></i>
+                    </button>
+                `;
+            });
+            html += '</div>';
+            document.getElementById('vendorSearchResults').innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('vendorSearchResults').innerHTML = `
+                <div class="alert alert-danger">검색 중 오류가 발생했습니다.</div>
+            `;
+        });
+}
+
+function selectVendor(vendorId, vendorName) {
+    document.getElementById('vendorId').value = vendorId;
+    document.getElementById('vendorName').value = vendorName;
+    vendorSearchModal.hide();
+}
+
+function clearVendor() {
+    document.getElementById('vendorId').value = '';
+    document.getElementById('vendorName').value = '';
+}
+</script>
+{% endblock %}

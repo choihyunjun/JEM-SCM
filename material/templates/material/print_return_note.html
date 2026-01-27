@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>반출증 (Gate Pass)</title>
+    <style>
+        body { font-family: "Malgun Gothic", serif; margin: 0; padding: 20px; background-color: #eee; }
+        
+        /* 인쇄 버튼 영역 */
+        .no-print { 
+            text-align: center; margin-bottom: 20px; padding: 10px; 
+            background: #333; color: white; border-radius: 5px; 
+        }
+        .btn { 
+            background: white; color: #333; padding: 8px 15px; 
+            text-decoration: none; border-radius: 4px; cursor: pointer; 
+            border: none; font-weight: bold; margin: 0 5px; font-size: 14px;
+        }
+        .btn:hover { background: #ddd; }
+
+        /* A4 용지 스타일 (반출증 양식) */
+        .sheet { 
+            width: 210mm; margin: 0 auto; background: white; padding: 20mm; 
+            box-sizing: border-box; border: 1px solid #ddd; box-shadow: 0 0 10px rgba(0,0,0,0.1); 
+            min-height: 297mm; position: relative;
+        }
+        
+        h1 { text-align: center; text-decoration: underline; margin-bottom: 50px; letter-spacing: 5px; font-size: 28px; }
+        
+        /* 테이블 스타일 */
+        table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+        th, td { border: 1px solid #000; padding: 10px; font-size: 14px; }
+        th { background-color: #f0f0f0; text-align: center; font-weight: bold; }
+        td { text-align: center; }
+        
+        .text-left { text-align: left !important; padding-left: 10px !important; }
+        .no-border { border: none !important; }
+        
+        /* 서명란 */
+        .footer { margin-top: 80px; display: flex; justify-content: space-between; padding: 0 20px; }
+        .sign-box { 
+            width: 200px; border-bottom: 1px solid #000; 
+            text-align: center; display: inline-block; margin-left: 10px; 
+        }
+
+        /* 인쇄 시 스타일 */
+        @media print {
+            .no-print { display: none !important; }
+            body { background: none; padding: 0; }
+            .sheet { border: none; box-shadow: none; width: 100%; margin: 0; padding: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="no-print">
+        <span style="margin-right: 20px;">🖨️ 반출증 미리보기</span>
+        <button onclick="window.print()" class="btn">인쇄하기</button>
+        <button onclick="window.close()" class="btn" style="background:#888; color:white;">창 닫기</button>
+    </div>
+
+    <div class="sheet">
+        <table style="border: none; margin-bottom: 10px;">
+            <tr>
+                <td class="no-border text-left" style="width: 50%;"><strong>No.</strong> {{ trx.transaction_no }}</td>
+                <td class="no-border" style="text-align: right;"><strong>발행일:</strong> {{ today|date:"Y년 m월 d일" }}</td>
+            </tr>
+        </table>
+
+        <h1>자재 반출증 (Gate Pass)</h1>
+        
+        <table>
+            <colgroup>
+                <col style="width: 20%;">
+                <col style="width: 30%;">
+                <col style="width: 20%;">
+                <col style="width: 30%;">
+            </colgroup>
+            <tr>
+                <th>수신처 (업체명)</th>
+                <td class="text-left fw-bold">{{ trx.vendor.name }}</td>
+                <th>반출 부서</th>
+                <td>자재팀</td>
+            </tr>
+            <tr>
+                <th>반출 사유</th>
+                <td colspan="3" class="text-left">{{ trx.remark }}</td>
+            </tr>
+        </table>
+
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 20%;">품번</th>
+                    <th>품명</th>
+                    <th style="width: 10%;">단위</th>
+                    <th style="width: 15%;">수량</th>
+                    <th style="width: 20%;">비고</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td style="font-weight: bold;">{{ trx.part.part_no }}</td>
+                    <td class="text-left">{{ trx.part.part_name }}</td>
+                    <td>EA</td>
+                    <td style="font-weight: bold; font-size: 16px;">{{ trx.quantity }}</td>
+                    <td>불량반품</td>
+                </tr>
+                <tr><td>&nbsp;</td><td></td><td></td><td></td><td></td></tr>
+                <tr><td>&nbsp;</td><td></td><td></td><td></td><td></td></tr>
+                <tr><td>&nbsp;</td><td></td><td></td><td></td><td></td></tr>
+            </tbody>
+            <tfoot>
+                <tr>
+                    <th colspan="3">합 계</th>
+                    <th style="font-size: 16px;">{{ trx.quantity }}</th>
+                    <th></th>
+                </tr>
+            </tfoot>
+        </table>
+
+        <div style="border: 2px solid #000; padding: 15px; min-height: 100px; margin-bottom: 20px;">
+            <strong>[특이사항 / 인수자 메모]</strong><br><br>
+            위 물품을 정히 반출(인수) 하였습니다.
+        </div>
+
+        <div class="footer">
+            <div>
+                <strong>반출 담당자 :</strong> 
+                <span class="sign-box">{{ trx.actor.last_name }}{{ trx.actor.first_name }}</span> (인)
+            </div>
+            <div>
+                <strong>인수자 확인 :</strong> 
+                <span class="sign-box"></span> (인)
+            </div>
+        </div>
+    </div>
+
+    
+    
+    <script>
+        // 페이지 로드 후 0.5초 뒤 자동 인쇄 팝업
+        window.onload = function() { setTimeout(window.print, 500); }
+    </script>
+</body>
+</html>

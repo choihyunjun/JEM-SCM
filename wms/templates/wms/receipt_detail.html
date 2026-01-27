@@ -1,0 +1,73 @@
+{% extends "wms/base.html" %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h4 class="mb-0">입고 상세 #{{ rec.id }}</h4>
+    <a class="btn btn-outline-secondary" href="{% url 'wms:receipt_list' %}">목록</a>
+  </div>
+
+  <div class="card p-3 mb-3">
+    <div class="row g-2">
+      <div class="col-md-3"><b>상태</b> : {{ rec.get_status_display }}</div>
+      <div class="col-md-3"><b>창고</b> : {{ rec.warehouse_code }}</div>
+      <div class="col-md-3"><b>품번</b> : {{ rec.part_no }}</div>
+      <div class="col-md-3"><b>품명</b> : {{ rec.part_name }}</div>
+      <div class="col-md-3"><b>수량</b> : {{ rec.receipt_qty|floatformat:3 }}</div>
+      <div class="col-md-3"><b>입고일</b> : {{ rec.receipt_date }}</div>
+      <div class="col-md-3"><b>제조일</b> : {{ rec.mfg_date }}</div>
+      <div class="col-md-3"><b>LOT</b> : {{ rec.lot_no }}</div>
+    </div>
+
+    <div class="mt-3">
+      {% if rec.status == "draft" or rec.status == "rejected" %}
+      <form method="post" style="display:inline;">
+        {% csrf_token %}
+        <button name="request_qc" value="1" class="btn btn-warning">수입검사 의뢰</button>
+      </form>
+      {% endif %}
+      {% if rec.status == "requested" %}
+        <span class="badge bg-info">품질 승인 대기</span>
+        <a class="btn btn-sm btn-outline-primary" href="{% url 'wms:quality_queue' %}">품질 의뢰함</a>
+      {% endif %}
+      {% if rec.status == "approved" %}
+        <span class="badge bg-success">입고완료</span>
+      {% endif %}
+      {% if rec.status == "rejected" %}
+        <span class="badge bg-danger">반려</span>
+        <div class="mt-2 text-danger"><b>사유:</b> {{ rec.reject_reason }}</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card p-3">
+    <h6>첨부(성적서)</h6>
+    <ul class="mb-3">
+      {% for a in rec.attachments.all %}
+        <li><a href="{{ a.file.url }}">{{ a.original_name|default:a.file.name }}</a> ({{ a.uploaded_at|date:"Y-m-d H:i" }})</li>
+      {% empty %}
+        <li class="text-muted">첨부 없음</li>
+      {% endfor %}
+    </ul>
+
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <div class="row g-2 align-items-end">
+        <div class="col-md-6">
+          <input type="file" name="file" class="form-control">
+        </div>
+        <div class="col-auto">
+          <button name="upload_file" value="1" class="btn btn-outline-secondary">성적서 첨부</button>
+        </div>
+      </div>
+      <div class="form-text">품질팀(또는 관리자) 권한에서 첨부/승인이 가능합니다.</div>
+    </form>
+
+    {% if rec.status == "requested" %}
+      <div class="mt-3">
+        <a class="btn btn-success" href="{% url 'wms:quality_approve' rec.id %}">승인</a>
+        <a class="btn btn-danger" href="{% url 'wms:quality_reject' rec.id %}">반려</a>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

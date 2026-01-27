@@ -1,0 +1,219 @@
+{% extends 'material/material_base.html' %}
+{% load humanize %}
+
+{% block material_content %}
+<!-- Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+<style>
+    .select2-container--bootstrap-5 .select2-selection--single {
+        height: 31px !important;
+        padding: 0.2rem 0.5rem;
+        font-size: 0.875rem;
+    }
+    .select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered {
+        line-height: 1.5;
+    }
+</style>
+<div class="container-fluid" style="max-width: 1800px;">
+
+    <div class="d-flex justify-content-between align-items-center mb-3 pt-3">
+        <h4 class="fw-bold text-secondary">
+            <i class="bi bi-arrow-left-right me-2"></i>재고 이동 현황
+        </h4>
+        <span class="text-muted small">창고 간 재고 이동 이력을 조회합니다.</span>
+    </div>
+
+    <!-- 검색 필터 -->
+    <div class="card shadow-sm border-0 mb-3 bg-light">
+        <div class="card-body py-3">
+            <form method="get" class="row g-2 align-items-end">
+
+                <div class="col-auto">
+                    <label class="small text-muted mb-1">시작일</label>
+                    <input type="date" name="start_date" class="form-control form-control-sm" value="{{ start_date }}">
+                </div>
+
+                <div class="col-auto">
+                    <label class="small text-muted mb-1">종료일</label>
+                    <input type="date" name="end_date" class="form-control form-control-sm" value="{{ end_date }}">
+                </div>
+
+                <div class="col-auto">
+                    <label class="small text-muted mb-1">보낸 창고</label>
+                    <select name="from_wh" class="form-select form-select-sm" style="width: 180px;">
+                        <option value="">:: 전체 ::</option>
+                        {% for wh in warehouses %}
+                            <option value="{{ wh.code }}" {% if from_wh == wh.code %}selected{% endif %}>
+                                ({{ wh.code }}) {{ wh.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-auto">
+                    <label class="small text-muted mb-1">받은 창고</label>
+                    <select name="to_wh" class="form-select form-select-sm" style="width: 180px;">
+                        <option value="">:: 전체 ::</option>
+                        {% for wh in warehouses %}
+                            <option value="{{ wh.code }}" {% if to_wh == wh.code %}selected{% endif %}>
+                                ({{ wh.code }}) {{ wh.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-auto">
+                    <label class="small text-muted mb-1">품목군</label>
+                    <select name="part_group" id="partGroupSelect" class="form-select form-select-sm" style="width: 160px;">
+                        <option value="">:: 전체 ::</option>
+                        {% for pg in part_groups %}
+                            {% if pg %}
+                            <option value="{{ pg }}" {% if part_group == pg %}selected{% endif %}>{{ pg }}</option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-auto flex-grow-1" style="max-width: 200px;">
+                    <label class="small text-muted mb-1">품번/품명 검색</label>
+                    <input type="text" name="q" class="form-control form-control-sm"
+                           placeholder="품번 또는 품명" value="{{ q }}">
+                </div>
+
+                <div class="col-auto">
+                    <button class="btn btn-primary btn-sm px-4 fw-bold" type="submit">
+                        <i class="bi bi-search me-1"></i> 조회
+                    </button>
+                    <a href="{% url 'material:transfer_history' %}" class="btn btn-outline-secondary btn-sm">
+                        초기화
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 결과 테이블 -->
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+            <span class="fw-bold text-dark">
+                <i class="bi bi-list-ul me-1"></i> 이동 이력
+            </span>
+            <span class="badge bg-secondary">총 {{ page_obj.paginator.count|intcomma }}건</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0 text-center align-middle table-bordered" style="font-size: 0.85rem;">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 5%;">No</th>
+                            <th style="width: 12%;">이동일시</th>
+                            <th style="width: 12%;">품번</th>
+                            <th style="width: 18%;">품명</th>
+                            <th style="width: 8%;">LOT</th>
+                            <th style="width: 14%;">보낸 창고</th>
+                            <th style="width: 3%;"><i class="bi bi-arrow-right"></i></th>
+                            <th style="width: 14%;">받은 창고</th>
+                            <th style="width: 7%;">수량</th>
+                            <th style="width: 7%;">처리자</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for trx in page_obj %}
+                        <tr>
+                            <td class="text-muted small">{{ forloop.counter|add:page_obj.start_index|add:"-1" }}</td>
+                            <td class="small">{{ trx.date|date:"Y-m-d H:i" }}</td>
+                            <td class="fw-bold text-primary">{{ trx.part.part_no }}</td>
+                            <td class="text-start small">{{ trx.part.part_name|truncatechars:25 }}</td>
+                            <td class="small">
+                                {% if trx.lot_no %}
+                                    <span class="badge bg-info text-dark">{{ trx.lot_no|date:"Y-m-d" }}</span>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="small">
+                                {% if trx.warehouse_from %}
+                                    <span class="text-danger">({{ trx.warehouse_from.code }})</span> {{ trx.warehouse_from.name }}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td><i class="bi bi-arrow-right text-success"></i></td>
+                            <td class="small">
+                                {% if trx.warehouse_to %}
+                                    <span class="text-success">({{ trx.warehouse_to.code }})</span> {{ trx.warehouse_to.name }}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="fw-bold">{{ trx.quantity|intcomma }}</td>
+                            <td class="small text-muted">
+                                {% if trx.actor %}{{ trx.actor.username }}{% else %}-{% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="10" class="text-muted py-5">
+                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                조회된 이동 이력이 없습니다.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 페이징 -->
+        {% if page_obj.has_other_pages %}
+        <div class="card-footer bg-white">
+            <nav aria-label="Page navigation">
+                <ul class="pagination pagination-sm justify-content-center mb-0">
+                    {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page=1&start_date={{ start_date }}&end_date={{ end_date }}&from_wh={{ from_wh }}&to_wh={{ to_wh }}&part_group={{ part_group }}&q={{ q }}">&laquo;</a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}&start_date={{ start_date }}&end_date={{ end_date }}&from_wh={{ from_wh }}&to_wh={{ to_wh }}&part_group={{ part_group }}&q={{ q }}">&lsaquo;</a>
+                        </li>
+                    {% endif %}
+
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ num }}&start_date={{ start_date }}&end_date={{ end_date }}&from_wh={{ from_wh }}&to_wh={{ to_wh }}&part_group={{ part_group }}&q={{ q }}">{{ num }}</a>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}&start_date={{ start_date }}&end_date={{ end_date }}&from_wh={{ from_wh }}&to_wh={{ to_wh }}&part_group={{ part_group }}&q={{ q }}">&rsaquo;</a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}&start_date={{ start_date }}&end_date={{ end_date }}&from_wh={{ from_wh }}&to_wh={{ to_wh }}&part_group={{ part_group }}&q={{ q }}">&raquo;</a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Select2 JS -->
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+    $(document).ready(function() {
+        $('#partGroupSelect').select2({
+            theme: 'bootstrap-5',
+            placeholder: '품목군 검색...',
+            allowClear: true,
+            width: '160px'
+        });
+    });
+</script>
+{% endblock %}

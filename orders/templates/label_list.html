@@ -1,17 +1,19 @@
 {% extends 'base.html' %}
 {% load humanize %}
+{% load auth_extras %}
 
 {% block content %}
+<div class="container-fluid p-0" style="max-width: 1920px;">
 <div class="mb-4 d-flex align-items-center flex-wrap gap-3">
     <div>
         <span class="badge bg-success me-2">협력사 전용</span>
         <span class="fw-bold text-secondary">납품서 등록 및 라벨 발행</span>
     </div>
 
-    {% if user.is_superuser or user.profile.role == 'STAFF' %}
-    <div class="d-flex align-items-center gap-2 ms-2">
+    {% if user.is_superuser or user|has_perm:'can_scm_label_view' %}
+    <div class="d-flex align-items-center gap-2 ms-2 scm-filter">
         <form method="get" class="d-flex align-items-center gap-2">
-            <select name="vendor_id" class="form-select form-select-sm shadow-sm" onchange="this.form.submit()" style="width: 180px; border-color: #198754; background-color: #f8fff9;">
+            <select name="vendor_id" class="form-select form-select-sm shadow-sm" onchange="this.form.submit()" style="width: 160px; border-color: #198754; background-color: #f8fff9;">
                 <option value="">== 업체 전체 선택 ==</option>
                 {% for v in vendor_list %}
                     <option value="{{ v.id }}" {% if selected_vendor_id == v.id|stringformat:"s" %}selected{% endif %}>
@@ -20,20 +22,20 @@
                 {% endfor %}
             </select>
 
-            <div class="input-group input-group-sm" style="width: 220px;">
+            <div class="input-group input-group-sm" style="width: 200px;">
                 <input type="text" name="q" value="{{ q|default:'' }}" class="form-control border-primary shadow-sm" placeholder="품번 또는 품명 검색">
                 <button class="btn btn-primary" type="submit">
                     <i class="bi bi-search"></i>
                 </button>
             </div>
-            
+
             <input type="hidden" name="status" value="{{ status_filter|default:'' }}">
         </form>
 
         <form method="get" class="d-flex align-items-center">
             <input type="hidden" name="vendor_id" value="{{ selected_vendor_id|default:'' }}">
             <input type="hidden" name="q" value="{{ q|default:'' }}">
-            <select name="status" class="form-select form-select-sm shadow-sm" onchange="this.form.submit()" style="width: 130px; border-color: #0d6efd;">
+            <select name="status" class="form-select form-select-sm shadow-sm" onchange="this.form.submit()" style="width: 120px; border-color: #0d6efd;">
                 <option value="">== 전체 상태 ==</option>
                 <option value="registered" {% if status_filter == 'registered' %}selected{% endif %}>등록완료</option>
                 <option value="received" {% if status_filter == 'received' %}selected{% endif %}>입고완료</option>
@@ -70,7 +72,7 @@
 
             <div class="tab-pane fade show active" id="active-pane" role="tabpanel">
                 <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
-                    <table class="table table-hover mb-0 text-center align-middle">
+                    <table class="table table-hover mb-0 text-center align-middle scm-table">
                         <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
                             <tr>
                                 <th style="width: 25%;">납품서 번호</th>
@@ -133,60 +135,46 @@
                     </div>
                 </div>
 
-                <div class="card shadow-sm border-0 border-start border-danger border-4">
-                    <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle mb-0">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>납품서 번호</th>
-                                        <th>판정 일자</th>
-                                        <th>품목</th>
-                                        <th>불량(반출) 수량</th>
-                                        <th class="text-danger">불량 사유</th>
-                                        <th>조치</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for log in return_logs %}
-                                    <tr class="{% if log.is_confirmed %}table-light text-muted{% endif %}">
-                                        <td class="small fw-bold">{{ log.delivery_order.order_no }}</td>
-                                        <td>{{ log.created_at|date:"Y-m-d" }}</td>
-                                        <td>
-                                            <span class="fw-bold">{{ log.part.part_no }}</span><br>
-                                            <span class="small">{{ log.part.part_name }}</span>
-                                        </td>
-                                        <td class="fw-bold fs-5">{{ log.quantity|intcomma }} ea</td>
-                                        <td>
-                                            <span class="badge bg-danger mb-1">수입검사 불합격</span><br>
-                                            <small>{{ log.reason|default:"-" }}</small>
-                                        </td>
-                                        <td>
-                                            {% if log.is_confirmed %}
-                                                <span class="badge bg-secondary p-2">
-                                                    <i class="bi bi-check-all me-1"></i> 확인 완료
-                                                </span>
-                                                <div class="small text-muted mt-1" style="font-size: 0.75rem;">
-                                                    {{ log.confirmed_at|date:"m/d H:i" }}
-                                                </div>
-                                            {% else %}
-                                                <form action="{% url 'confirm_return' log.id %}" method="post" style="display:inline;">
-                                                    {% csrf_token %}
-                                                    <button type="submit" class="btn btn-sm btn-danger fw-bold"
-                                                            onclick="return confirm('부적합 내용을 확인하였으며, 반출 처리에 동의하시겠습니까?\n\n(확인 시 해당 수량만큼 납품 가능 수량이 즉시 복구됩니다)')">
-                                                        <i class="bi bi-check2-circle me-1"></i> 반출 확인
-                                                    </button>
-                                                </form>
-                                            {% endif %}
-                                        </td>
-                                    </tr>
-                                    {% empty %}
-                                    <tr><td colspan="6" class="text-center py-5 text-muted">부적합/반출 내역이 없습니다.</td></tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+                <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                    <table class="table table-hover mb-0 text-center align-middle scm-table">
+                        <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
+                            <tr>
+                                <th style="width: 20%;">납품서 번호</th>
+                                <th style="width: 15%;">판정 일자</th>
+                                <th style="width: 20%;">품번</th>
+                                <th style="width: 15%;">불량 수량</th>
+                                <th style="width: 15%;">불량 사유</th>
+                                <th style="width: 15%;">조치</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in return_logs %}
+                            <tr class="{% if log.is_confirmed %}table-light text-muted{% endif %}">
+                                <td class="fw-bold text-danger">{{ log.delivery_order.order_no }}</td>
+                                <td>{{ log.created_at|date:"Y-m-d" }}</td>
+                                <td class="fw-bold">{{ log.part.part_no }}</td>
+                                <td class="fw-bold text-danger">{{ log.quantity|intcomma }}</td>
+                                <td>{{ log.reason|default:"-" }}</td>
+                                <td>
+                                    {% if log.is_confirmed %}
+                                        <span class="badge bg-secondary">확인 완료</span>
+                                        <div class="small text-muted">{{ log.confirmed_at|date:"m/d H:i" }}</div>
+                                    {% else %}
+                                        <form action="{% url 'confirm_return' log.id %}" method="post" style="display:inline;">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-danger"
+                                                    onclick="return confirm('부적합 내용을 확인하였으며, 반출 처리에 동의하시겠습니까?\n\n(확인 시 해당 수량만큼 납품 가능 수량이 즉시 복구됩니다)')">
+                                                <i class="bi bi-check2-circle"></i> 반출 확인
+                                            </button>
+                                        </form>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="6" class="text-center py-5 text-muted">부적합/반출 내역이 없습니다.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
@@ -200,12 +188,12 @@
         <span><i class="bi bi-cart-plus-fill"></i> 신규 납품서 등록 대기</span>
         <span class="badge bg-white text-primary" id="preview-count">0건</span>
     </div>
-    
+
     <form id="createOrderForm" method="post" action="{% url 'create_delivery_order' %}">
         {% csrf_token %}
         <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-striped mb-0 text-center align-middle">
+                <table class="table table-striped mb-0 text-center align-middle scm-table">
                     <thead class="table-light">
                         <tr>
                             <th style="width: 12%;">ERP 정보</th>
@@ -228,7 +216,7 @@
                     </tfoot>
                 </table>
             </div>
-            
+
             <div class="p-3 text-end bg-light border-top">
                 <span class="text-muted small me-3">※ 위 품목들로 납품서 번호가 하나 생성됩니다.</span>
                 <button type="button" class="btn btn-secondary me-1" onclick="clearPreview()">초기화</button>
@@ -253,41 +241,41 @@
 <div class="card shadow-sm border-0">
     <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-bordered table-hover mb-0 align-middle">
+            <table class="table table-bordered table-hover mb-0 align-middle scm-table">
                 <thead class="table-light text-center text-nowrap">
                     <tr>
-                        <th style="width: 50px;">NO</th>
-                        <th style="width: 120px; background-color: #f8f9fa;">ERP 번호</th>
-                        <th style="width: 60px; background-color: #f8f9fa;">순번</th>
-                        <th style="width: 15%;">품번</th>
+                        <th style="width: 40px;">NO</th>
+                        <th style="width: 100px; background-color: #f8f9fa;">ERP 번호</th>
+                        <th style="width: 50px; background-color: #f8f9fa;">순번</th>
+                        <th style="width: 13%;">품번</th>
                         <th>품명</th>
-                        <th style="width: 100px;">납기일</th>
-                        <th style="width: 100px;">총 발주</th>
-                        <th style="width: 120px;" class="table-primary">납품가능</th>
-                        <th style="width: 100px;">SNP</th>
-                        <th style="width: 80px;">박스</th>
-                        <th style="width: 130px;" class="table-warning">LOT 번호(생산일)</th>
-                        <th style="width: 100px;">총 발행</th>
-                        <th style="width: 80px;">기능</th>
+                        <th style="width: 80px;">납기일</th>
+                        <th style="width: 80px;">총 발주</th>
+                        <th style="width: 100px;" class="table-primary">납품가능</th>
+                        <th style="width: 80px;">SNP</th>
+                        <th style="width: 65px;">박스</th>
+                        <th style="width: 115px;" class="table-warning">LOT(생산일)</th>
+                        <th style="width: 80px;">총 발행</th>
+                        <th style="width: 65px;">기능</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for item in label_data %}
                     <tr id="row-{{ forloop.counter }}">
                         <td class="text-center">{{ forloop.counter }}</td>
-                        
+
                         <td class="text-center text-secondary small">{{ item.erp_no|default:"-" }}</td>
                         <td class="text-center text-secondary small">{{ item.erp_seq|default:"-" }}</td>
-                        
+
                         <td class="fw-bold text-primary" id="pno-{{ forloop.counter }}">{{ item.part_no }}</td>
                         <td id="pname-{{ forloop.counter }}">{{ item.part_name }}</td>
                         <td class="text-center small">{{ item.due_date|date:"m/d" }}</td>
                         <td class="text-end text-muted">{{ item.total_order|intcomma }}</td>
-                        
-                        <td class="text-end fw-bold fs-5 text-danger remain-cell" id="remain-{{ forloop.counter }}" data-val="{{ item.remain }}">
+
+                        <td class="text-end fw-bold text-danger remain-cell" id="remain-{{ forloop.counter }}" data-val="{{ item.remain }}">
                             {{ item.remain|intcomma }}
                         </td>
-                        
+
                         <td>
                             <input type="number" class="form-control form-control-sm text-end bg-light"
                                    id="snp-{{ forloop.counter }}" value="0" min="1"
@@ -306,8 +294,8 @@
                         <td class="text-center">
                             <input type="hidden" id="oid-{{ forloop.counter }}" value="{{ item.order_id|default:'' }}">
                             <input type="hidden" id="erp-str-{{ forloop.counter }}" value="{% if item.erp_no != '-' %}{{ item.erp_no }}-{{ item.erp_seq }}{% else %}-{% endif %}">
-                            
-                            <button type="button" class="btn btn-outline-success btn-sm fw-bold text-nowrap" 
+
+                            <button type="button" class="btn btn-outline-success btn-sm fw-bold text-nowrap"
                                     onclick="addToPreview({{ forloop.counter }})">
                                 <i class="bi bi-plus-square"></i> 추가
                             </button>
@@ -331,10 +319,10 @@
         var box = parseInt(document.getElementById('box-' + rowId).value) || 0;
         var total = snp * box;
         document.getElementById('total-' + rowId).innerText = total.toLocaleString();
-        
+
         var remain = parseInt(document.getElementById('remain-' + rowId).getAttribute('data-val'));
         var totalElem = document.getElementById('total-' + rowId);
-        
+
         // 잔량 초과 시 붉은색 표시
         if (total > remain) {
             totalElem.classList.add('text-danger');
@@ -345,7 +333,7 @@
         }
     }
 
-    var addedItems = []; 
+    var addedItems = [];
 
     // 대기 목록에 추가
     function addToPreview(rowId) {
@@ -379,12 +367,12 @@
         // UI 표시
         document.getElementById('preview-section').style.display = 'block';
         document.getElementById('info-alert').style.display = 'none';
-        
+
         var tbody = document.getElementById('preview-tbody');
         var newRow = document.createElement('tr');
         newRow.className = "preview-item-row";
         newRow.id = 'preview-row-' + itemKey.replace(/[^a-zA-Z0-9]/g, '_');
-        
+
         var html = '';
         // [신규] ERP 정보 표시
         html += '<td class="small text-muted">' + erpStr + '</td>';
@@ -422,7 +410,7 @@
         if (element) element.remove();
         addedItems = addedItems.filter(function(item) { return item !== itemKey; });
         updateGrandTotal();
-        
+
         if (addedItems.length === 0) {
             document.getElementById('preview-section').style.display = 'none';
             document.getElementById('info-alert').style.display = 'block';
@@ -457,7 +445,7 @@
     }
 
     function openPrintPopup(orderId) {
-        var url = "/label/print/" + orderId + "/"; 
+        var url = "/label/print/" + orderId + "/";
         window.open(url, 'print_popup', 'width=1000,height=900,scrollbars=yes');
     }
     function openNotePopup(orderId) {
@@ -465,4 +453,5 @@
         window.open(url, 'note_popup', 'width=900,height=1000,scrollbars=yes');
     }
 </script>
+</div>
 {% endblock %}

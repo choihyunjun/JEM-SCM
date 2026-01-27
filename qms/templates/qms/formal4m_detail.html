@@ -87,6 +87,22 @@
                     </div>
                 </div>
 
+
+                <div class="row g-3 mt-2">
+                    <div class="col-md-3">
+                        <div class="text-muted small mb-1">변경구분(A/B/C/D)</div>
+                        <div class="fw-semibold">{{ formal.change_class|default:"-" }}</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-muted small mb-1">고객변경신고 필요</div>
+                        <div class="fw-semibold">{% if formal.customer_notice_required %}필요{% else %}불필요/미결정{% endif %}</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-muted small mb-1">유효성평가 결과</div>
+                        <div class="fw-semibold">{{ formal.get_validity_result_display|default:"-" }}</div>
+                    </div>
+                </div>
+
                 {% if actor.is_internal %}
                 <form method="post" action="{% url 'qms:formal4m_set_validity_start' formal.id %}" class="mt-3">
                     {% csrf_token %}

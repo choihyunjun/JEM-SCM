@@ -1,0 +1,304 @@
+{% extends 'material/material_base.html' %}
+
+{% block material_content %}
+<div class="container" style="max-width: 700px;">
+    <div class="py-3 text-center">
+        <h3 class="fw-bold"><i class="bi bi-qr-code text-primary me-2"></i>공정 현품표 발행</h3>
+        <p class="text-muted mb-0">현품표를 출력할 품목 정보를 입력하세요</p>
+    </div>
+
+    <form action="{% url 'material:process_tag_print' %}" method="post" target="_blank" class="needs-validation" novalidate>
+        {% csrf_token %}
+
+        <!-- 품번 검색 -->
+        <div class="card shadow-sm mb-3">
+            <div class="card-header bg-primary text-white fw-bold">
+                <i class="bi bi-search me-2"></i>품목 정보
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">품번 검색 <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <input type="text" id="selectedPartNo" name="part_no" class="form-control form-control-lg" placeholder="품번을 검색하세요..." readonly required>
+                        <button type="button" class="btn btn-primary btn-lg" onclick="openPartSearchModal()">
+                            <i class="bi bi-search"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-danger btn-lg" onclick="clearPart()" title="초기화">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="mb-0">
+                    <label class="form-label fw-bold">선택된 품명</label>
+                    <input type="text" id="selectedPartName" name="part_name" class="form-control bg-light" readonly>
+                </div>
+            </div>
+        </div>
+
+        <!-- 수량 및 LOT -->
+        <div class="card shadow-sm mb-3">
+            <div class="card-header bg-success text-white fw-bold">
+                <i class="bi bi-123 me-2"></i>수량 및 LOT 정보
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <label class="form-label fw-bold">수량 <span class="text-danger">*</span></label>
+                        <input type="number" name="quantity" class="form-control form-control-lg" placeholder="수량 입력" min="1" required>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-bold">LOT 번호 <span class="text-danger">*</span></label>
+                        <input type="text" id="lotInput" name="lot_no" class="form-control form-control-lg" placeholder="YYYYMMDD" required>
+                    </div>
+                </div>
+                <div class="form-text text-muted">
+                    <i class="bi bi-info-circle"></i> LOT는 8자리 숫자로 입력하세요 (예: 20260120)
+                </div>
+            </div>
+        </div>
+
+        <!-- 인쇄 옵션 -->
+        <div class="card shadow-sm mb-3">
+            <div class="card-header bg-warning fw-bold">
+                <i class="bi bi-printer me-2"></i>인쇄 설정
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">프린터 종류</label>
+                    <div class="btn-group w-100" role="group">
+                        <input type="radio" class="btn-check" name="print_mode" id="modeRoll" value="roll" checked>
+                        <label class="btn btn-outline-primary" for="modeRoll">
+                            <i class="bi bi-printer"></i> 라벨 프린터
+                        </label>
+
+                        <input type="radio" class="btn-check" name="print_mode" id="modeSheet" value="sheet">
+                        <label class="btn btn-outline-primary" for="modeSheet">
+                            <i class="bi bi-file-earmark"></i> A4 프린터
+                        </label>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">라벨 크기</label>
+                    <select name="size_type" class="form-select">
+                        <option value="small">소형 (60x70mm)</option>
+                        <option value="medium" selected>표준 (100x60mm)</option>
+                        <option value="large">대형 (A4 전체)</option>
+                    </select>
+                </div>
+
+                <div class="mb-0">
+                    <label class="form-label fw-bold">발행 매수</label>
+                    <div class="input-group">
+                        <button class="btn btn-outline-secondary" type="button" onclick="adjustCount(-1)">-</button>
+                        <input type="number" id="printCount" name="print_count" class="form-control text-center fw-bold" value="1" min="1" max="50">
+                        <button class="btn btn-outline-secondary" type="button" onclick="adjustCount(1)">+</button>
+                        <span class="input-group-text">장</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 제출 버튼 -->
+        <div class="d-grid gap-2">
+            <button type="submit" class="btn btn-primary btn-lg py-3 fw-bold">
+                <i class="bi bi-printer-fill me-2"></i>현품표 인쇄하기
+            </button>
+            <button type="reset" class="btn btn-outline-secondary" onclick="resetForm()">
+                <i class="bi bi-arrow-counterclockwise me-2"></i>초기화
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- 품번 검색 모달 -->
+<div class="modal fade" id="partSearchModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-search me-2"></i>품번 검색</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group mb-3">
+                    <input type="text" id="partSearchInput" class="form-control form-control-lg" placeholder="품번 또는 품명 입력..." autofocus>
+                    <button type="button" class="btn btn-dark btn-lg" onclick="searchPart()">
+                        <i class="bi bi-search me-1"></i>검색
+                    </button>
+                </div>
+                <div id="partSearchResults" style="max-height: 400px; overflow-y: auto;">
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-box-seam fs-1 d-block mb-2"></i>
+                        품번 또는 품명을 입력하고 검색하세요
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// 전체 품목 데이터
+const allParts = [
+    {% for p in parts %}
+    {
+        partNo: "{{ p.part_no|escapejs }}",
+        partName: "{{ p.part_name|escapejs }}"
+    }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+];
+
+let partSearchModal = null;
+const selectedPartNo = document.getElementById('selectedPartNo');
+const selectedPartName = document.getElementById('selectedPartName');
+const lotInput = document.getElementById('lotInput');
+
+document.addEventListener('DOMContentLoaded', function() {
+    partSearchModal = new bootstrap.Modal(document.getElementById('partSearchModal'));
+
+    // 검색 입력창에서 Enter 키 처리
+    document.getElementById('partSearchInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            searchPart();
+        }
+    });
+
+    // 페이지 로드 시 오늘 날짜를 LOT에 기본값으로
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    lotInput.value = yyyy + '-' + mm + '-' + dd;
+});
+
+// 모달 열기
+function openPartSearchModal() {
+    document.getElementById('partSearchInput').value = '';
+    document.getElementById('partSearchResults').innerHTML = `
+        <div class="text-center text-muted py-5">
+            <i class="bi bi-box-seam fs-1 d-block mb-2"></i>
+            품번 또는 품명을 입력하고 검색하세요
+        </div>
+    `;
+    partSearchModal.show();
+    setTimeout(() => document.getElementById('partSearchInput').focus(), 300);
+}
+
+// 품번 검색
+function searchPart() {
+    const query = document.getElementById('partSearchInput').value.trim().toUpperCase();
+
+    if (query.length < 1) {
+        alert('검색어를 입력해주세요.');
+        return;
+    }
+
+    document.getElementById('partSearchResults').innerHTML = `
+        <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status"></div>
+            <div class="mt-2">검색 중...</div>
+        </div>
+    `;
+
+    // 검색 수행
+    const results = allParts.filter(p =>
+        p.partNo.toUpperCase().includes(query) ||
+        p.partName.toUpperCase().includes(query)
+    ).slice(0, 50);
+
+    if (results.length === 0) {
+        document.getElementById('partSearchResults').innerHTML = `
+            <div class="text-center text-muted py-5">
+                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                검색 결과가 없습니다.
+            </div>
+        `;
+        return;
+    }
+
+    let html = '<div class="list-group">';
+    results.forEach(part => {
+        html += `
+            <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-3"
+                    onclick="selectPart('${part.partNo.replace(/'/g, "\\'")}', '${part.partName.replace(/'/g, "\\'")}')">
+                <div>
+                    <div class="fw-bold text-primary">${part.partNo}</div>
+                    <div class="small text-muted">${part.partName}</div>
+                </div>
+                <i class="bi bi-check-circle text-success fs-5"></i>
+            </button>
+        `;
+    });
+    html += '</div>';
+
+    if (results.length >= 50) {
+        html += '<div class="text-center text-muted py-2 small">검색 결과가 많습니다. 더 구체적인 검색어를 입력하세요.</div>';
+    }
+
+    document.getElementById('partSearchResults').innerHTML = html;
+}
+
+// 품목 선택
+function selectPart(partNo, partName) {
+    selectedPartNo.value = partNo;
+    selectedPartName.value = partName;
+    partSearchModal.hide();
+
+    // 다음 입력으로 포커스 이동
+    document.querySelector('input[name="quantity"]').focus();
+}
+
+// 품번 초기화
+function clearPart() {
+    selectedPartNo.value = '';
+    selectedPartName.value = '';
+}
+
+// LOT 입력 포맷팅
+lotInput.addEventListener('input', function() {
+    let val = this.value.replace(/\D/g, ''); // 숫자만 추출
+
+    if (val.length === 8) {
+        // YYYYMMDD → YYYY-MM-DD 자동 변환
+        this.value = val.substring(0, 4) + '-' + val.substring(4, 6) + '-' + val.substring(6, 8);
+    } else if (val.length > 8) {
+        this.value = val.substring(0, 8);
+    }
+});
+
+// 발행 매수 조절
+function adjustCount(delta) {
+    const input = document.getElementById('printCount');
+    let val = parseInt(input.value) || 1;
+    val += delta;
+    if (val < 1) val = 1;
+    if (val > 50) val = 50;
+    input.value = val;
+}
+
+// 폼 초기화
+function resetForm() {
+    selectedPartNo.value = '';
+    selectedPartName.value = '';
+
+    // LOT를 오늘 날짜로 다시 설정
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    lotInput.value = yyyy + '-' + mm + '-' + dd;
+}
+
+// 폼 제출 검증
+document.querySelector('form').addEventListener('submit', function(e) {
+    if (!selectedPartNo.value) {
+        e.preventDefault();
+        alert('품번을 선택해주세요!');
+        openPartSearchModal();
+        return false;
+    }
+});
+</script>
+{% endblock %}

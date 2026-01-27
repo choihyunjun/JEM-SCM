@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid p-0" style="max-width: 1920px;">
+
+<h2 class="mb-4">
+    <i class="bi bi-box-seam me-2"></i>품목 마스터 관리
+    <span class="badge bg-secondary fs-6 ms-2">총 {{ parts|length }}건 (최대 200건)</span>
+</h2>
+
+<!-- 검색 및 필터 -->
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">품번/품명 검색</label>
+                <input type="text" name="q" class="form-control"
+                       placeholder="품번 또는 품명 입력" value="{{ search_q }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">업체</label>
+                <select name="vendor" class="form-select">
+                    <option value="">전체 업체</option>
+                    {% for v in vendors %}
+                    <option value="{{ v.id }}" {% if vendor_filter == v.id|stringformat:"s" %}selected{% endif %}>
+                        {{ v.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">품목군</label>
+                <select name="group" class="form-select">
+                    <option value="">전체 품목군</option>
+                    {% for g in part_groups %}
+                    <option value="{{ g }}" {% if group_filter == g %}selected{% endif %}>{{ g }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <div class="form-check mt-4">
+                    <input type="checkbox" name="wms_only" value="1" class="form-check-input"
+                           id="wmsOnly" {% if wms_only == '1' %}checked{% endif %}>
+                    <label class="form-check-label" for="wmsOnly">
+                        <i class="bi bi-exclamation-circle text-warning"></i> 업체 미연결만
+                    </label>
+                </div>
+            </div>
+            <div class="col-md-3 text-end">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-search me-1"></i>검색
+                </button>
+                <a href="{% url 'part_list' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>초기화
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 안내 문구 -->
+<div class="alert alert-info mb-3">
+    <i class="bi bi-info-circle me-2"></i>
+    <strong>WMS 전용 품목:</strong> WMS에서 재고 업로드 시 품목 마스터에 없는 품번은 자동으로 등록됩니다.
+    발주를 위해서는 해당 품목에 업체를 연결해야 합니다.
+</div>
+
+<!-- 엑셀 일괄 업데이트 -->
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-success text-white">
+        <i class="bi bi-file-earmark-excel me-2"></i>엑셀로 품목군/업체 일괄 수정
+    </div>
+    <div class="card-body">
+        <div class="row align-items-end">
+            <div class="col-md-6">
+                <p class="mb-2 text-muted small">
+                    <i class="bi bi-info-circle me-1"></i>
+                    양식: <strong>품번 | 품목군 | 업체코드</strong> → 업로드하면 일괄 적용됩니다.
+                </p>
+                <div class="btn-group" role="group">
+                    <a href="{% url 'part_vendor_template' %}" class="btn btn-outline-success">
+                        <i class="bi bi-download me-1"></i>빈 양식
+                    </a>
+                    <a href="{% url 'part_vendor_template' %}?include_data=1" class="btn btn-success">
+                        <i class="bi bi-download me-1"></i>현재 데이터 포함
+                    </a>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <form method="post" enctype="multipart/form-data" class="row g-2 align-items-end">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="upload_vendor_excel">
+                    <div class="col-8">
+                        <label class="form-label small">엑셀 파일 업로드</label>
+                        <input type="file" name="excel_file" class="form-control" accept=".xlsx,.xls" required>
+                    </div>
+                    <div class="col-4">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-upload me-1"></i>적용
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 품목 목록 테이블 -->
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-striped mb-0 align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th class="text-center" style="width: 70px;">ID</th>
+                        <th style="width: 160px;">품번</th>
+                        <th>품명</th>
+                        <th class="text-center" style="width: 100px;">품목군</th>
+                        <th style="width: 180px;">연결 업체</th>
+                        <th class="text-center" style="width: 80px;">상태</th>
+                        <th class="text-center" style="width: 100px;">관리</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for part in parts %}
+                    <tr>
+                        <td class="text-center text-muted">{{ part.id }}</td>
+                        <td><strong class="text-primary">{{ part.part_no }}</strong></td>
+                        <td>{{ part.part_name }}</td>
+                        <td class="text-center">
+                            <span class="badge {% if part.part_group == 'WMS' %}bg-info{% else %}bg-secondary{% endif %}">
+                                {{ part.part_group }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if part.vendor %}
+                            <span class="text-success">
+                                <i class="bi bi-building me-1"></i>{{ part.vendor.name }}
+                            </span>
+                            {% else %}
+                            <span class="text-warning">
+                                <i class="bi bi-exclamation-triangle me-1"></i>미연결
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if part.is_active %}
+                            <span class="badge bg-success">활성</span>
+                            {% else %}
+                            <span class="badge bg-secondary">비활성</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <button type="button" class="btn btn-sm btn-outline-primary"
+                                    data-bs-toggle="modal" data-bs-target="#editModal"
+                                    onclick="openEditModal({{ part.id }}, '{{ part.part_no|escapejs }}', '{{ part.part_name|escapejs }}', '{{ part.part_group|escapejs }}', '{{ part.vendor.id|default:"" }}')">
+                                <i class="bi bi-pencil"></i> 수정
+                            </button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                            {% if search_q or vendor_filter or group_filter or wms_only %}
+                            검색 결과가 없습니다.
+                            {% else %}
+                            등록된 품목이 없습니다.
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+</div><!-- end container-fluid -->
+
+<!-- 품목 수정 모달 -->
+<div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>품목 정보 수정</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="update_part">
+                <input type="hidden" name="part_id" id="editPartId">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">품번</label>
+                        <input type="text" class="form-control" id="editPartNo" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">품명</label>
+                        <input type="text" name="part_name" id="editPartName" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">품목군</label>
+                        <input type="text" name="part_group" id="editPartGroup" class="form-control"
+                               placeholder="예: 일반, WMS, 원자재 등">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-primary">
+                            <i class="bi bi-building me-1"></i>연결 업체
+                        </label>
+                        <select name="vendor_id" id="editVendorId" class="form-select">
+                            <option value="">-- 업체 미연결 (WMS 전용) --</option>
+                            {% for v in vendors %}
+                            <option value="{{ v.id }}">{{ v.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">
+                            <i class="bi bi-info-circle me-1"></i>
+                            발주를 위해서는 업체 연결이 필요합니다.
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check me-1"></i>저장
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function openEditModal(partId, partNo, partName, partGroup, vendorId) {
+    document.getElementById('editPartId').value = partId;
+    document.getElementById('editPartNo').value = partNo;
+    document.getElementById('editPartName').value = partName;
+    document.getElementById('editPartGroup').value = partGroup;
+    document.getElementById('editVendorId').value = vendorId || '';
+}
+</script>
+{% endblock %}

@@ -1,0 +1,186 @@
+{% extends 'qms/qms_base.html' %}
+
+{% block title %}계측기 등록{% endblock %}
+
+{% block qms_content %}
+<div class="container-fluid p-0" style="max-width: 1200px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold"><i class="bi bi-speedometer2 me-2"></i>계측기 등록</h3>
+        <a href="{% url 'qms:gauge_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>목록
+        </a>
+    </div>
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-primary text-white">
+                <i class="bi bi-info-circle me-1"></i>기본 정보
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">관리번호 <span class="text-danger">*</span></label>
+                        <input type="text" name="gauge_no" class="form-control" required placeholder="예: G-001">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">계측기명 <span class="text-danger">*</span></label>
+                        <input type="text" name="gauge_name" class="form-control" required placeholder="예: 버니어캘리퍼스 150mm">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">유형 <span class="text-danger">*</span></label>
+                        <select name="gauge_type" class="form-select" required>
+                            <option value="">선택</option>
+                            {% for value, label in type_choices %}
+                            <option value="{{ value }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-secondary text-white">
+                <i class="bi bi-gear me-1"></i>제원 정보
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">제조사</label>
+                        <input type="text" name="manufacturer" class="form-control" placeholder="예: Mitutoyo">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">모델번호</label>
+                        <input type="text" name="model_no" class="form-control">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">시리얼번호</label>
+                        <input type="text" name="serial_no" class="form-control">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">측정범위</label>
+                        <input type="text" name="measurement_range" class="form-control" placeholder="예: 0-150mm">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">분해능</label>
+                        <input type="text" name="resolution" class="form-control" placeholder="예: 0.01mm">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">정밀도</label>
+                        <input type="text" name="accuracy" class="form-control" placeholder="예: ±0.02mm">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-info text-white">
+                <i class="bi bi-geo-alt me-1"></i>위치/용도
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">설치장소</label>
+                        <input type="text" name="location" class="form-control" placeholder="예: 품질검사실">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">관리부서</label>
+                        <input type="text" name="department" class="form-control" placeholder="예: 품질팀">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">관리담당자</label>
+                        <select name="manager" class="form-select">
+                            <option value="">선택</option>
+                            {% for u in users %}
+                            <option value="{{ u.id }}">{{ u.username }} {% if u.first_name %}({{ u.first_name }}){% endif %}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">용도</label>
+                        <input type="text" name="usage" class="form-control" placeholder="계측기 사용 용도">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-warning text-dark">
+                <i class="bi bi-calendar-check me-1"></i>교정 정보
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">교정유형</label>
+                        <select name="calibration_type" class="form-select">
+                            {% for value, label in calibration_type_choices %}
+                            <option value="{{ value }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">교정주기 (월)</label>
+                        <input type="number" name="calibration_cycle" class="form-control" value="12" min="1">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">교정기관</label>
+                        <input type="text" name="calibration_agency" class="form-control" placeholder="예: 한국계량측정협회">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-dark text-white">
+                <i class="bi bi-cart me-1"></i>구입 정보
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">구입일</label>
+                        <input type="date" name="purchase_date" class="form-control">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">구입가격 (원)</label>
+                        <input type="number" name="purchase_cost" class="form-control" min="0">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header">
+                <i class="bi bi-paperclip me-1"></i>첨부파일
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">사진</label>
+                        <input type="file" name="photo" class="form-control" accept="image/*">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">매뉴얼</label>
+                        <input type="file" name="manual" class="form-control">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <label class="form-label">비고</label>
+                <textarea name="remark" class="form-control" rows="2"></textarea>
+            </div>
+        </div>
+
+        <div class="text-end">
+            <a href="{% url 'qms:gauge_list' %}" class="btn btn-secondary me-2">취소</a>
+            <button type="submit" class="btn btn-primary btn-lg px-5">
+                <i class="bi bi-check-lg me-1"></i>등록
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

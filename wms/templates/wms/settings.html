@@ -1,0 +1,22 @@
+{% extends "wms/base.html" %}
+{% block content %}
+<div class="container-fluid py-3">
+  <h4 class="mb-3">WMS 설정</h4>
+
+  <div class="card p-3 mb-3">
+    <h6 class="mb-2">품목 동기화</h6>
+    <div class="text-muted small mb-2">
+      SCM 품목마스터(orders.Part)에서 품번/품명을 수집해 WMS 조회용 품목표를 갱신합니다.
+    </div>
+    <a class="btn btn-primary" href="{% url 'wms:sync_items' %}">품목 동기화 실행</a>
+  </div>
+
+  <div class="card p-3">
+    <h6 class="mb-2">ERP 재고 스냅샷 업로드</h6>
+    <div class="text-muted small mb-2">
+      ERP에서 내려받은 창고별 재고(엑셀/CSV)를 업로드합니다.
+    </div>
+    <a class="btn btn-outline-primary" href="{% url 'wms:upload_stock' %}">스냅샷 업로드</a>
+  </div>
+</div>
+{% endblock %}

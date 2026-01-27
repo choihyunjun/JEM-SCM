@@ -1,0 +1,239 @@
+{% extends 'qms/qms_base.html' %}
+{% load humanize %}
+
+{% block title %}협력사 평가 상세{% endblock %}
+
+{% block qms_content %}
+<div class="container-fluid p-0" style="max-width: 1200px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold">
+            <i class="bi bi-star me-2"></i>{{ rating.vendor.name }} - {{ rating.year }}년 {{ rating.month }}월 평가
+            <span class="badge fs-5 bg-{% if rating.grade == 'A' %}success{% elif rating.grade == 'B' %}primary{% elif rating.grade == 'C' %}warning{% else %}danger{% endif %} ms-2">
+                {{ rating.grade }}등급
+            </span>
+        </h3>
+        <div>
+            <form method="post" class="d-inline">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="recalculate">
+                <button type="submit" class="btn btn-success me-2">
+                    <i class="bi bi-arrow-clockwise me-1"></i>재계산
+                </button>
+            </form>
+            <a href="{% url 'qms:rating_list' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i>목록으로
+            </a>
+        </div>
+    </div>
+
+    <!-- 종합 점수 카드 -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm text-center p-4">
+                <div class="small text-muted">품질점수</div>
+                <div class="h2 fw-bold text-primary">{{ rating.quality_score|floatformat:1 }}</div>
+                <div class="small text-muted">가중치 60%</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm text-center p-4">
+                <div class="small text-muted">납기점수</div>
+                <div class="h2 fw-bold text-info">{{ rating.delivery_score|floatformat:1 }}</div>
+                <div class="small text-muted">가중치 40%</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm text-center p-4 bg-{% if rating.grade == 'A' %}success{% elif rating.grade == 'B' %}primary{% elif rating.grade == 'C' %}warning{% else %}danger{% endif %} text-white">
+                <div class="small">종합점수</div>
+                <div class="h2 fw-bold">{{ rating.total_score|floatformat:1 }}</div>
+                <div class="small">{{ rating.get_grade_display }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- 품질 지표 -->
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-primary text-white">
+                    <i class="bi bi-clipboard-check me-2"></i>품질 지표
+                </div>
+                <div class="card-body">
+                    <table class="table table-borderless">
+                        <tr>
+                            <th class="text-muted">수입검사 건수</th>
+                            <td class="text-end fw-bold">{{ rating.incoming_total }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">합격</th>
+                            <td class="text-end text-success fw-bold">{{ rating.incoming_pass }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">불합격</th>
+                            <td class="text-end text-danger fw-bold">{{ rating.incoming_fail }}</td>
+                        </tr>
+                        <tr class="table-light">
+                            <th>수입검사 합격률</th>
+                            <td class="text-end h5 fw-bold {% if rating.incoming_rate >= 98 %}text-success{% elif rating.incoming_rate >= 95 %}text-warning{% else %}text-danger{% endif %}">
+                                {{ rating.incoming_rate }}%
+                            </td>
+                        </tr>
+                    </table>
+
+                    <hr>
+
+                    <table class="table table-borderless">
+                        <tr>
+                            <th class="text-muted">총 입고수량</th>
+                            <td class="text-end">{{ rating.total_incoming_qty|intcomma }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">불량수량</th>
+                            <td class="text-end text-danger">{{ rating.defect_qty|intcomma }}</td>
+                        </tr>
+                        <tr class="table-light">
+                            <th>PPM</th>
+                            <td class="text-end h5 fw-bold {% if rating.ppm <= 100 %}text-success{% elif rating.ppm <= 500 %}text-warning{% else %}text-danger{% endif %}">
+                                {{ rating.ppm|floatformat:0 }}
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 납기/클레임 지표 -->
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-info text-white">
+                    <i class="bi bi-truck me-2"></i>납기/클레임 지표
+                </div>
+                <div class="card-body">
+                    <table class="table table-borderless">
+                        <tr>
+                            <th class="text-muted">납품 건수</th>
+                            <td class="text-end fw-bold">{{ rating.delivery_total }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">정시납품</th>
+                            <td class="text-end text-success fw-bold">{{ rating.delivery_ontime }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">지연납품</th>
+                            <td class="text-end text-danger fw-bold">{{ rating.delivery_late }}</td>
+                        </tr>
+                        <tr class="table-light">
+                            <th>납기준수율</th>
+                            <td class="text-end h5 fw-bold {% if rating.delivery_rate >= 98 %}text-success{% elif rating.delivery_rate >= 95 %}text-warning{% else %}text-danger{% endif %}">
+                                {{ rating.delivery_rate }}%
+                            </td>
+                        </tr>
+                    </table>
+
+                    <hr>
+
+                    <table class="table table-borderless">
+                        <tr>
+                            <th class="text-muted">클레임 건수</th>
+                            <td class="text-end text-danger fw-bold">{{ rating.claim_count }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">클레임 금액</th>
+                            <td class="text-end text-danger fw-bold">{{ rating.claim_amount|intcomma }}원</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 클레임 상세 목록 -->
+    {% if claims %}
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-danger text-white">
+            <i class="bi bi-exclamation-triangle me-2"></i>{{ rating.year }}년 {{ rating.month }}월 클레임 목록 ({{ claims|length }}건)
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>클레임번호</th>
+                        <th>발생일</th>
+                        <th>유형</th>
+                        <th>품번</th>
+                        <th>품명</th>
+                        <th class="text-end">수량</th>
+                        <th class="text-end">클레임금액</th>
+                        <th>상태</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for claim in claims %}
+                    <tr>
+                        <td>
+                            <a href="{% url 'qms:claim_detail' claim.pk %}">{{ claim.claim_no }}</a>
+                        </td>
+                        <td>{{ claim.issue_date|date:"Y-m-d" }}</td>
+                        <td>{{ claim.get_claim_type_display }}</td>
+                        <td>{{ claim.part_no }}</td>
+                        <td>{{ claim.part_name }}</td>
+                        <td class="text-end">{{ claim.claim_qty|intcomma }}</td>
+                        <td class="text-end text-danger">{{ claim.claim_amount|intcomma|default:"-" }}</td>
+                        <td>
+                            <span class="badge bg-{% if claim.status == 'CLOSED' %}success{% elif claim.status == 'RESOLVED' %}primary{% elif claim.status == 'PROCESSING' %}warning{% else %}secondary{% endif %}">
+                                {{ claim.get_status_display }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 점수 수동 조정 -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-warning">
+            <i class="bi bi-pencil me-2"></i>점수 수동 조정
+        </div>
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="update">
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">품질점수 (0~100)</label>
+                        <input type="number" name="quality_score" class="form-control" value="{{ rating.quality_score|floatformat:2 }}" min="0" max="100" step="0.01">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">납기점수 (0~100)</label>
+                        <input type="number" name="delivery_score" class="form-control" value="{{ rating.delivery_score|floatformat:2 }}" min="0" max="100" step="0.01">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">종합점수 (자동계산)</label>
+                        <div class="form-control bg-light">품질 x 0.6 + 납기 x 0.4</div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-12">
+                        <label class="form-label fw-bold">비고</label>
+                        <textarea name="remark" class="form-control" rows="2">{{ rating.remark }}</textarea>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="small text-muted">
+                        {% if rating.evaluated_by %}
+                        평가자: {{ rating.evaluated_by.username }} | 평가일시: {{ rating.evaluated_at }}
+                        {% endif %}
+                    </div>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>저장</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,149 @@
+{% extends 'qms/qms_base.html' %}
+
+{% block title %}VOC 등록{% endblock %}
+
+{% block qms_content %}
+<div class="container-fluid p-0" style="max-width: 1200px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold"><i class="bi bi-megaphone me-2"></i>VOC 등록</h3>
+        <a href="{% url 'qms:voc_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>목록
+        </a>
+    </div>
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-primary text-white">
+                <i class="bi bi-info-circle me-1"></i>기본 정보
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">접수경로 <span class="text-danger">*</span></label>
+                        <select name="source" class="form-select" required>
+                            <option value="">선택</option>
+                            {% for value, label in source_choices %}
+                            <option value="{{ value }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">심각도 <span class="text-danger">*</span></label>
+                        <select name="severity" class="form-select" required>
+                            {% for value, label in severity_choices %}
+                            <option value="{{ value }}" {% if value == 'MINOR' %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">접수일 <span class="text-danger">*</span></label>
+                        <input type="date" name="received_date" class="form-control" value="{{ today }}" required>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-secondary text-white">
+                <i class="bi bi-building me-1"></i>고객 정보
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">고객사 <span class="text-danger">*</span></label>
+                        <input type="text" name="customer_name" class="form-control" required placeholder="고객사명">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">고객담당자</label>
+                        <input type="text" name="customer_contact" class="form-control" placeholder="담당자 성함">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">연락처</label>
+                        <input type="text" name="customer_phone" class="form-control" placeholder="연락처">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-info text-white">
+                <i class="bi bi-box me-1"></i>품목 정보
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">품번 <span class="text-danger">*</span></label>
+                        <input type="text" name="part_no" class="form-control" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">품명 <span class="text-danger">*</span></label>
+                        <input type="text" name="part_name" class="form-control" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">LOT번호</label>
+                        <input type="text" name="lot_no" class="form-control">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-danger text-white">
+                <i class="bi bi-exclamation-triangle me-1"></i>불량 내용
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">불량수량</label>
+                        <input type="number" name="defect_qty" class="form-control" value="0" min="0">
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label">불량유형 <span class="text-danger">*</span></label>
+                        <input type="text" name="defect_type" class="form-control" required placeholder="예: 외관불량, 치수불량, 기능불량">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">불량상세 <span class="text-danger">*</span></label>
+                        <textarea name="defect_detail" class="form-control" rows="4" required placeholder="불량 내용을 상세히 기술해주세요."></textarea>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">불량사진</label>
+                        <input type="file" name="photo" class="form-control" accept="image/*">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-dark text-white">
+                <i class="bi bi-person-gear me-1"></i>담당 정보
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">담당자</label>
+                        <select name="assigned_to" class="form-select">
+                            <option value="">선택</option>
+                            {% for u in users %}
+                            <option value="{{ u.id }}">{{ u.username }} {% if u.first_name %}({{ u.first_name }}){% endif %}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">처리기한</label>
+                        <input type="date" name="due_date" class="form-control">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-end">
+            <a href="{% url 'qms:voc_list' %}" class="btn btn-secondary me-2">취소</a>
+            <button type="submit" class="btn btn-primary btn-lg px-5">
+                <i class="bi bi-check-lg me-1"></i>등록
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

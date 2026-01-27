@@ -1,0 +1,305 @@
+{% extends 'qms/qms_base.html' %}
+
+{% block title %}ISIR 등록{% endblock %}
+
+{% block qms_content %}
+<div class="container-fluid p-0" style="max-width: 900px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold"><i class="bi bi-file-earmark-check me-2"></i>ISIR 등록</h3>
+        <a href="{% url 'qms:isir_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>목록으로
+        </a>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+
+                <h6 class="fw-bold text-primary mb-3"><i class="bi bi-info-circle me-2"></i>기본 정보</h6>
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">ISIR 유형 <span class="text-danger">*</span></label>
+                        <select name="isir_type" class="form-select" required>
+                            <option value="">선택</option>
+                            {% for value, label in type_choices %}
+                            <option value="{{ value }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">협력사 <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <input type="text" id="vendorName" class="form-control" placeholder="협력사 검색..." readonly required>
+                            <input type="hidden" name="vendor" id="vendorId" required>
+                            <button type="button" class="btn btn-outline-secondary" onclick="openVendorSearchModal()">
+                                <i class="bi bi-search"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-danger" onclick="clearVendor()" title="초기화">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <h6 class="fw-bold text-primary mb-3"><i class="bi bi-box-seam me-2"></i>품목 정보</h6>
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">품번 <span class="text-danger">*</span></label>
+                        <input type="text" name="part_no" class="form-control" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">품명 <span class="text-danger">*</span></label>
+                        <input type="text" name="part_name" class="form-control" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">도면REV</label>
+                        <input type="text" name="part_rev" class="form-control" placeholder="도면 개정번호">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">도면번호</label>
+                        <input type="text" name="drawing_no" class="form-control" placeholder="도면번호">
+                    </div>
+                </div>
+
+                <h6 class="fw-bold text-primary mb-3"><i class="bi bi-collection me-2"></i>샘플 정보</h6>
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">샘플 수량 <span class="text-danger">*</span></label>
+                        <input type="number" name="sample_qty" class="form-control" value="5" min="1" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">샘플 LOT</label>
+                        <input type="text" name="sample_lot" class="form-control" placeholder="샘플 LOT번호">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">샘플 입고일</label>
+                        <input type="date" name="sample_received_date" class="form-control">
+                    </div>
+                </div>
+
+                <h6 class="fw-bold text-primary mb-3"><i class="bi bi-paperclip me-2"></i>첨부파일</h6>
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">검사성적서</label>
+                        <input type="file" name="report_file" class="form-control" accept=".pdf,.xlsx,.xls,.doc,.docx">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">사진1</label>
+                        <input type="file" name="photo1" class="form-control" accept="image/*">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">사진2</label>
+                        <input type="file" name="photo2" class="form-control" accept="image/*">
+                    </div>
+                </div>
+
+                <!-- SPC 데이터 (선택사항) -->
+                <div class="border rounded mb-4">
+                    <button class="btn btn-link w-100 text-start p-3 text-decoration-none" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#spcCollapse">
+                        <h6 class="fw-bold text-info mb-0">
+                            <i class="bi bi-graph-up me-2"></i>공정능력 데이터 (SPC) - 선택사항
+                            <i class="bi bi-chevron-down float-end"></i>
+                        </h6>
+                    </button>
+                    <div class="collapse" id="spcCollapse">
+                        <div class="p-3 border-top bg-light">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">측정 특성</label>
+                                    <input type="text" name="cpk_characteristic" class="form-control" placeholder="예: 외경, 길이, 표면조도">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Cpk</label>
+                                    <input type="number" step="0.01" name="cpk_value" class="form-control" placeholder="예: 1.33">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Ppk</label>
+                                    <input type="number" step="0.01" name="ppk_value" class="form-control" placeholder="예: 1.25">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">USL (상한규격)</label>
+                                    <input type="number" step="0.0001" name="usl" class="form-control">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">LSL (하한규격)</label>
+                                    <input type="number" step="0.0001" name="lsl" class="form-control">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">공정평균</label>
+                                    <input type="number" step="0.0001" name="process_mean" class="form-control">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">표준편차</label>
+                                    <input type="number" step="0.000001" name="process_std" class="form-control">
+                                </div>
+                            </div>
+                            <div class="form-text mt-2">
+                                <i class="bi bi-info-circle me-1"></i>Cpk/Ppk ≥ 1.33: 합격, 1.0~1.33: 조건부 합격, &lt; 1.0: 개선 필요
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MSA 데이터 (선택사항) -->
+                <div class="border rounded mb-4">
+                    <button class="btn btn-link w-100 text-start p-3 text-decoration-none" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#msaCollapse">
+                        <h6 class="fw-bold text-warning mb-0">
+                            <i class="bi bi-rulers me-2"></i>측정시스템분석 (MSA) - 선택사항
+                            <i class="bi bi-chevron-down float-end"></i>
+                        </h6>
+                    </button>
+                    <div class="collapse" id="msaCollapse">
+                        <div class="p-3 border-top bg-light">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">Gage R&R (%)</label>
+                                    <input type="number" step="0.01" name="msa_grr_percent" class="form-control" placeholder="예: 8.5">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">NDC (구별범주수)</label>
+                                    <input type="number" name="msa_ndc" class="form-control" placeholder="≥5 권장">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">MSA 판정</label>
+                                    <select name="msa_result" class="form-select">
+                                        <option value="">선택</option>
+                                        <option value="ACCEPT">적합 (≤10%)</option>
+                                        <option value="CONDITIONAL">조건부 적합 (10~30%)</option>
+                                        <option value="REJECT">부적합 (>30%)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-text mt-2">
+                                <i class="bi bi-info-circle me-1"></i>Gage R&R ≤ 10%: 적합, 10~30%: 조건부 적합, > 30%: 부적합
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-end gap-2 mt-4">
+                    <a href="{% url 'qms:isir_list' %}" class="btn btn-secondary">취소</a>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>등록</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 협력사 검색 모달 -->
+<div class="modal fade" id="vendorSearchModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-search me-2"></i>협력사 검색</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group mb-3">
+                    <input type="text" id="vendorSearchInput" class="form-control" placeholder="협력사명 입력..." autofocus>
+                    <button type="button" class="btn btn-dark" onclick="searchVendor()">
+                        <i class="bi bi-search me-1"></i>검색
+                    </button>
+                </div>
+                <div id="vendorSearchResults" style="max-height: 400px; overflow-y: auto;">
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-building fs-1 d-block mb-2"></i>
+                        협력사명을 입력하고 검색하세요
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let vendorSearchModal = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    vendorSearchModal = new bootstrap.Modal(document.getElementById('vendorSearchModal'));
+    document.getElementById('vendorSearchInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            searchVendor();
+        }
+    });
+});
+
+function openVendorSearchModal() {
+    document.getElementById('vendorSearchInput').value = '';
+    document.getElementById('vendorSearchResults').innerHTML = `
+        <div class="text-center text-muted py-5">
+            <i class="bi bi-building fs-1 d-block mb-2"></i>
+            협력사명을 입력하고 검색하세요
+        </div>
+    `;
+    vendorSearchModal.show();
+    setTimeout(() => document.getElementById('vendorSearchInput').focus(), 300);
+}
+
+function searchVendor() {
+    const query = document.getElementById('vendorSearchInput').value.trim();
+    if (query.length < 1) {
+        alert('검색어를 입력해주세요.');
+        return;
+    }
+
+    document.getElementById('vendorSearchResults').innerHTML = `
+        <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status"></div>
+            <div class="mt-2">검색 중...</div>
+        </div>
+    `;
+
+    fetch(`/api/organizations/search/?q=${encodeURIComponent(query)}`)
+        .then(response => response.json())
+        .then(data => {
+            const results = data.results;
+            if (results.length === 0) {
+                document.getElementById('vendorSearchResults').innerHTML = `
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                        검색 결과가 없습니다.
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '<div class="list-group">';
+            results.forEach(v => {
+                html += `
+                    <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                            onclick="selectVendor(${v.id}, '${v.name.replace(/'/g, "\\'")}')">
+                        <div>
+                            <i class="bi bi-building me-2 text-primary"></i>
+                            <span class="fw-bold">${v.name}</span>
+                        </div>
+                        <i class="bi bi-check-circle text-success"></i>
+                    </button>
+                `;
+            });
+            html += '</div>';
+            document.getElementById('vendorSearchResults').innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('vendorSearchResults').innerHTML = `
+                <div class="alert alert-danger">검색 중 오류가 발생했습니다.</div>
+            `;
+        });
+}
+
+function selectVendor(vendorId, vendorName) {
+    document.getElementById('vendorId').value = vendorId;
+    document.getElementById('vendorName').value = vendorName;
+    vendorSearchModal.hide();
+}
+
+function clearVendor() {
+    document.getElementById('vendorId').value = '';
+    document.getElementById('vendorName').value = '';
+}
+</script>
+{% endblock %}

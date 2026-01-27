@@ -1,0 +1,58 @@
+{% extends 'material/material_base.html' %}
+
+{% block material_content %}
+<div class="container-fluid" style="max-width: 1800px;">
+    <h3 class="fw-bold mb-4 text-danger">
+        <i class="bi bi-box-arrow-left me-2"></i>불량 자재 반품 처리
+    </h3>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-white py-3">
+            <i class="bi bi-exclamation-triangle text-danger me-2"></i>부적합 창고 보유 현황
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>품번</th>
+                            <th>품명</th>
+                            <th>공급처</th>
+                            <th>현재고 (불량)</th>
+                            <th width="30%">반품 처리</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for stock in ng_stocks %}
+                        <tr>
+                            <td class="fw-bold">{{ stock.part.part_no }}</td>
+                            <td>{{ stock.part.part_name }}</td>
+                            <td>{{ stock.part.vendor.name }}</td>
+                            <td class="text-danger fw-bold">{{ stock.quantity }} EA</td>
+                            <td>
+                                <form method="post" class="d-flex gap-2">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="stock_id" value="{{ stock.id }}">
+                                    <input type="number" name="quantity" class="form-control form-control-sm" placeholder="수량" max="{{ stock.quantity }}" min="1" required style="width: 100px;">
+                                    <input type="text" name="remark" class="form-control form-control-sm" placeholder="사유 (예: 치수불량)" required>
+                                    <button type="submit" class="btn btn-sm btn-outline-danger text-nowrap" onclick="return confirm('이 자재를 반품 처리하시겠습니까?\n재고에서 차감됩니다.')">
+                                        반품확정
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center py-5 text-muted">
+                                <i class="bi bi-check-circle fs-1 d-block mb-3 text-success"></i>
+                                현재 반품 대상(부적합 재고)이 없습니다.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

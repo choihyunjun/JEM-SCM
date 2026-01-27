@@ -1,0 +1,119 @@
+{% extends 'qms/qms_base.html' %}
+{% load humanize %}
+
+{% block title %}4M 변경관리{% endblock %}
+
+{% block qms_content %}
+<div class="container-fluid px-3" style="max-width: 1400px;">
+
+    <!-- 헤더 -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h5 class="fw-bold mb-0">
+                <i class="bi bi-arrow-repeat me-2 text-primary"></i>4M 변경관리
+            </h5>
+            <small class="text-muted">Man, Machine, Material, Method 변경점 관리</small>
+        </div>
+        <div class="d-flex gap-2">
+            {% if my_pending_count > 0 %}
+            <span class="badge bg-warning text-dark fs-6 d-flex align-items-center">
+                <i class="bi bi-bell-fill me-1"></i> 내 결재대기 {{ my_pending_count }}건
+            </span>
+            {% endif %}
+            <a href="{% url 'qms:change_request_create' %}" class="btn btn-primary">
+                <i class="bi bi-plus-lg me-1"></i>신규 신청
+            </a>
+        </div>
+    </div>
+
+    <!-- 필터 -->
+    <div class="card border-0 shadow-sm mb-3">
+        <div class="card-body py-2">
+            <form method="get" class="row g-2 align-items-center">
+                <div class="col-auto">
+                    <select name="phase" class="form-select form-select-sm">
+                        <option value="">전체 단계</option>
+                        {% for code, label in phase_choices %}
+                        <option value="{{ code }}" {% if selected_phase == code %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <select name="type" class="form-select form-select-sm">
+                        <option value="">전체 유형</option>
+                        {% for code, label in type_choices %}
+                        <option value="{{ code }}" {% if selected_type == code %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <input type="text" name="q" class="form-control form-control-sm"
+                           placeholder="관리번호/품번/품명 검색" value="{{ q }}" style="width: 200px;">
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-search"></i> 검색
+                    </button>
+                    <a href="{% url 'qms:change_request_list' %}" class="btn btn-sm btn-outline-secondary">초기화</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 목록 테이블 -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-sm mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr class="text-center">
+                            <th style="width: 160px;">관리번호</th>
+                            <th style="width: 90px;">단계</th>
+                            <th style="width: 100px;">4M유형</th>
+                            <th style="width: 120px;">품번</th>
+                            <th>품명</th>
+                            <th style="width: 120px;">협력사</th>
+                            <th style="width: 90px;">신청자</th>
+                            <th style="width: 100px;">신청일</th>
+                            <th style="width: 100px;">목표완료일</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cr in requests %}
+                        <tr style="cursor: pointer;" onclick="location.href='{% url 'qms:change_request_detail' cr.pk %}'">
+                            <td class="text-center">
+                                <a href="{% url 'qms:change_request_detail' cr.pk %}" class="text-decoration-none fw-bold">
+                                    {{ cr.request_no }}
+                                </a>
+                            </td>
+                            <td class="text-center">
+                                <span class="badge bg-{{ cr.phase_display_class }}">{{ cr.get_phase_display }}</span>
+                            </td>
+                            <td class="text-center">
+                                <span class="badge bg-outline-secondary border text-dark">{{ cr.get_change_type_display }}</span>
+                            </td>
+                            <td class="text-center fw-bold text-primary small">{{ cr.part_no }}</td>
+                            <td class="small">{{ cr.part_name|truncatechars:25 }}</td>
+                            <td class="text-center small">{{ cr.vendor.name|truncatechars:10 }}</td>
+                            <td class="text-center small">{{ cr.created_by.username }}</td>
+                            <td class="text-center small">{{ cr.created_at|date:"Y-m-d" }}</td>
+                            <td class="text-center small">
+                                {% if cr.target_date %}{{ cr.target_date|date:"Y-m-d" }}{% else %}-{% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center py-5 text-muted">
+                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                등록된 4M 변경 신청이 없습니다.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

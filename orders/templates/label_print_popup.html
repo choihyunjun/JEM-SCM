@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>라벨 인쇄</title>
-    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.0/dist/JsBarcode.all.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         /* ========================================= */
         /* [공통] 기본 스타일 */
@@ -97,10 +97,20 @@
             text-align: center;
         }
         .part-name { font-size: 14px; font-weight: bold; margin-bottom: 5px; }
-        .part-no { font-size: 24px; font-weight: 900; margin: 5px 0; }
+        .part-no { font-size: 24px; font-weight: 900; margin: 5px 0; font-family: monospace; }
         .snp-info { font-size: 16px; font-weight: bold; margin-top: 5px; }
-        
-        .barcode-area { text-align: center; margin-top: 5px; }
+        .lot-info { font-size: 14px; font-weight: bold; margin-top: 5px; color: #2c3e50; font-family: monospace; }
+
+        .qr-area {
+            text-align: center;
+            margin-top: 5px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .qr-container {
+            display: inline-block;
+        }
         .page-number {
             position: absolute;
             bottom: 5px;
@@ -143,8 +153,8 @@
         <p style="font-size: 12px; color: #666;">※ 인쇄 설정: '배율' 맞춤(100%), '여백' 없음(또는 최소) 권장</p>
     </div>
 
-    {% for i in box_count %}
-        
+    {% for item in box_count %}
+
         {% if forloop.counter0|divisibleby:8 %}
         <div class="sheet">
         {% endif %}
@@ -152,25 +162,19 @@
             <div class="label-outer">
                 <div class="label-inner">
                     <div class="header">
-                        <span class="vendor-name">{{ vendor_name }}</span>
-                        <span class="print-date">{{ print_date|date:"Y-m-d" }}</span>
+                        <span class="vendor-name">{{ item.vendor_name }}</span>
+                        <span class="print-date">{{ item.print_date|date:"Y-m-d" }}</span>
                     </div>
 
                     <div class="content">
-                        <div class="part-name">{{ part_name }}</div>
-                        <div class="part-no">{{ part_no }}</div>
-                        <div class="snp-info">QTY: {{ snp }} EA</div>
+                        <div class="part-name">{{ item.part_name }}</div>
+                        <div class="part-no">{{ item.part_no }}</div>
+                        <div class="snp-info">QTY: {{ item.snp }} EA</div>
+                        <div class="lot-info">LOT: {{ item.lot_no|date:"Y-m-d"|default:"미지정" }}</div>
                     </div>
 
-                    <div class="barcode-area">
-                        <svg class="barcode"
-                             jsbarcode-format="CODE128"
-                             jsbarcode-value="{{ part_no }}"
-                             jsbarcode-textmargin="0"
-                             jsbarcode-fontoptions="bold"
-                             jsbarcode-height="40"
-                             jsbarcode-width="2"
-                             jsbarcode-displayValue="false"> </svg>
+                    <div class="qr-area">
+                        <div id="qr_{{ forloop.counter }}" class="qr-container"></div>
                     </div>
 
                     <div class="page-number">
@@ -186,10 +190,20 @@
 
     <script>
         window.onload = function() {
-            // 1. 바코드 생성
-            JsBarcode(".barcode").init();
-            
-            // 2. 0.5초 뒤 자동 인쇄 (원치 않으면 주석 처리)
+            // QR 코드 생성
+            {% for item in box_count %}
+            const qrData_{{ forloop.counter }} = "{{ item.part_no }}|{{ item.snp }}|{{ item.lot_no|date:'Y-m-d'|default:'' }}";
+            new QRCode(document.getElementById("qr_{{ forloop.counter }}"), {
+                text: qrData_{{ forloop.counter }},
+                width: 80,
+                height: 80,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.M
+            });
+            {% endfor %}
+
+            // 0.5초 뒤 자동 인쇄 (원치 않으면 주석 처리)
             setTimeout(function() {
                 window.print();
             }, 500);

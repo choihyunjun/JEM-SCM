@@ -23,6 +23,16 @@ class Vendor(models.Model):
     def __str__(self):
         return f"[{self.code}] {self.name}"
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # 연결된 Organization이 없으면 자동 생성
+        if not hasattr(self, 'organization') or self.organization is None:
+            Organization.objects.create(
+                name=self.name,
+                org_type="VENDOR",
+                linked_vendor=self
+            )
+
 # 1-1. 조직(회사/협력사)
 class Organization(models.Model):
     ORG_TYPE_CHOICES = [
@@ -31,28 +41,33 @@ class Organization(models.Model):
     ]
     name = models.CharField(max_length=100, unique=True, verbose_name="조직명(회사/협력사)")
     org_type = models.CharField(max_length=20, choices=ORG_TYPE_CHOICES, verbose_name="조직 구분")
+    linked_vendor = models.OneToOneField(
+        Vendor, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="organization", verbose_name="연결된 협력사"
+    )
 
     class Meta:
-        verbose_name = "조직(회사/협력사)"
-        verbose_name_plural = "조직(회사/협력사)"
+        verbose_name = "내부 조직"
+        verbose_name_plural = "내부 조직 관리"
 
     def __str__(self):
         return f"{self.name} [{self.get_org_type_display()}]"
 
 # 2. 품목 마스터(Part)
 class Part(models.Model):
-    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, verbose_name='전담 업체')
+    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, verbose_name='전담 업체',
+                               null=True, blank=True)  # nullable: WMS 전용 품목은 업체 없음
     part_group = models.CharField(max_length=50, verbose_name='품목군', default='일반')
-    part_no = models.CharField(max_length=50, verbose_name='품번')
+    part_no = models.CharField(max_length=50, verbose_name='품번', unique=True)  # 품번은 전체에서 유니크
     part_name = models.CharField(max_length=100, verbose_name='품명')
 
     class Meta:
         verbose_name = "품목 마스터"
         verbose_name_plural = "품목 마스터 관리"
-        unique_together = ('vendor', 'part_no')
 
     def __str__(self):
-        return f"[{self.part_group}] {self.part_no} ({self.vendor.name})"
+        vendor_name = self.vendor.name if self.vendor else "WMS전용"
+        return f"[{self.part_group}] {self.part_no} ({vendor_name})"
 
     def save(self, *args, **kwargs):
         is_new = self.pk is None
@@ -224,11 +239,80 @@ class UserProfile(models.Model):
     position = models.CharField(max_length=30, blank=True, null=True, verbose_name="직급")
     job_title = models.CharField(max_length=30, blank=True, null=True, verbose_name="직책")
 
-    can_view_orders = models.BooleanField(default=False, verbose_name="[메뉴] 발주 조회/승인")
-    can_register_orders = models.BooleanField(default=False, verbose_name="[메뉴] 발주서 등록")
-    can_view_inventory = models.BooleanField(default=False, verbose_name="[메뉴] 과부족 조회")
-    can_manage_incoming = models.BooleanField(default=False, verbose_name="[메뉴] 입고 관리")
-    can_access_scm_admin = models.BooleanField(default=False, verbose_name="[메뉴] 통합 관리자 접근")
+    # ========== SCM 권한 (View/Edit 분리) ==========
+    # 발주 관리
+    can_scm_order_view = models.BooleanField(default=False, verbose_name="발주 조회")
+    can_scm_order_edit = models.BooleanField(default=False, verbose_name="발주 등록/수정/삭제")
+
+    # 과부족/소요량 관리
+    can_scm_inventory_view = models.BooleanField(default=False, verbose_name="과부족 조회")
+    can_scm_inventory_edit = models.BooleanField(default=False, verbose_name="소요량 등록/수정")
+
+    # 입고 관리
+    can_scm_incoming_view = models.BooleanField(default=False, verbose_name="입고 조회")
+    can_scm_incoming_edit = models.BooleanField(default=False, verbose_name="입고 처리/취소")
+
+    # 납품서 관리
+    can_scm_label_view = models.BooleanField(default=False, verbose_name="납품서 조회")
+    can_scm_label_edit = models.BooleanField(default=False, verbose_name="납품서 등록/삭제")
+
+    # 리포트/관리
+    can_scm_report = models.BooleanField(default=False, verbose_name="리포트 조회")
+    can_scm_admin = models.BooleanField(default=False, verbose_name="통합 관리자")
+
+    # ========== WMS 권한 (View/Edit 분리) ==========
+    # 재고 관리
+    can_wms_stock_view = models.BooleanField(default=False, verbose_name="재고 조회")
+    can_wms_stock_edit = models.BooleanField(default=False, verbose_name="재고 이동/조정")
+
+    # 입출고 관리
+    can_wms_inout_view = models.BooleanField(default=False, verbose_name="입출고 조회")
+    can_wms_inout_edit = models.BooleanField(default=False, verbose_name="입출고 처리")
+
+    # BOM 관리
+    can_wms_bom_view = models.BooleanField(default=False, verbose_name="BOM 조회")
+    can_wms_bom_edit = models.BooleanField(default=False, verbose_name="BOM 등록/수정")
+
+    # ========== QMS 권한 (View/Edit 분리) ==========
+    # 4M 변경점 관리
+    can_qms_4m_view = models.BooleanField(default=False, verbose_name="4M 조회")
+    can_qms_4m_edit = models.BooleanField(default=False, verbose_name="4M 등록/수정")
+
+    # 수입검사 관리
+    can_qms_inspection_view = models.BooleanField(default=False, verbose_name="검사 조회")
+    can_qms_inspection_edit = models.BooleanField(default=False, verbose_name="검사 등록/판정")
+
+    # 부적합품/시정조치
+    can_qms_nc_view = models.BooleanField(default=False, verbose_name="부적합/CAPA 조회")
+    can_qms_nc_edit = models.BooleanField(default=False, verbose_name="부적합/CAPA 등록/처리")
+
+    # 클레임 관리
+    can_qms_claim_view = models.BooleanField(default=False, verbose_name="클레임 조회")
+    can_qms_claim_edit = models.BooleanField(default=False, verbose_name="클레임 등록/처리")
+
+    # ISIR (초도품검사)
+    can_qms_isir_view = models.BooleanField(default=False, verbose_name="ISIR 조회")
+    can_qms_isir_edit = models.BooleanField(default=False, verbose_name="ISIR 등록/승인")
+
+    # 협력사 평가
+    can_qms_rating_view = models.BooleanField(default=False, verbose_name="협력사평가 조회")
+    can_qms_rating_edit = models.BooleanField(default=False, verbose_name="협력사평가 등록")
+
+    # ========== 레거시 필드 (호환성 유지) ==========
+    can_view_orders = models.BooleanField(default=False, verbose_name="[구]발주 조회")
+    can_register_orders = models.BooleanField(default=False, verbose_name="[구]발주 등록")
+    can_view_inventory = models.BooleanField(default=False, verbose_name="[구]과부족 조회")
+    can_manage_incoming = models.BooleanField(default=False, verbose_name="[구]입고 관리")
+    can_manage_parts = models.BooleanField(default=False, verbose_name="[구]품목 관리")
+    can_view_reports = models.BooleanField(default=False, verbose_name="[구]리포트 조회")
+    can_access_scm_admin = models.BooleanField(default=False, verbose_name="[구]통합 관리자")
+    can_access_wms = models.BooleanField(default=False, verbose_name="[구]WMS 접근")
+    can_wms_inout = models.BooleanField(default=False, verbose_name="[구]입출고 처리")
+    can_wms_adjustment = models.BooleanField(default=False, verbose_name="[구]재고 조정")
+    can_wms_bom = models.BooleanField(default=False, verbose_name="[구]BOM 관리")
+    can_access_qms = models.BooleanField(default=False, verbose_name="[구]QMS 접근")
+    can_qms_inspection = models.BooleanField(default=False, verbose_name="[구]검사 관리")
+    can_qms_4m = models.BooleanField(default=False, verbose_name="[구]4M 관리")
 
     is_jinyoung_staff = models.BooleanField(default=False, verbose_name="진영전기 직원 여부(기본)")
 
@@ -239,6 +323,18 @@ class UserProfile(models.Model):
     @property
     def is_internal(self) -> bool:
         return self.account_type == "INTERNAL"
+
+    def save(self, *args, **kwargs):
+        # 새로 생성되는 협력사 계정에 기본 권한 자동 부여
+        is_new = self.pk is None
+        if is_new and (self.role == self.ROLE_VENDOR or self.account_type == "VENDOR"):
+            # 협력사 기본 권한: 발주 조회, 과부족 조회, 납품서 조회/등록, 4M 조회
+            self.can_scm_order_view = True
+            self.can_scm_inventory_view = True
+            self.can_scm_label_view = True
+            self.can_scm_label_edit = True
+            self.can_qms_4m_view = True
+        super().save(*args, **kwargs)
 
     def __str__(self):
         name = self.display_name or self.user.get_full_name() or self.user.username
@@ -268,3 +364,117 @@ class ReturnLog(models.Model):
     def __str__(self):
         status = "확인완료" if self.is_confirmed else "미확인"
         return f"[{status}] {self.part.part_name} - {self.quantity}ea"
+
+
+class VendorMonthlyPerformance(models.Model):
+    """
+    협력사 월별 납기준수율 기록
+    - 매월 마감 시 해당 월의 실적을 저장
+    - 마감된 데이터는 수정 불가 (is_closed=True)
+    """
+    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, verbose_name="협력사")
+    year_month = models.CharField(max_length=7, verbose_name="년월")  # "2026-01"
+
+    # 발주 데이터
+    order_qty = models.IntegerField(default=0, verbose_name="발주수량")
+
+    # 입고 데이터
+    incoming_qty = models.IntegerField(default=0, verbose_name="입고수량")
+    on_time_qty = models.IntegerField(default=0, verbose_name="납기준수 수량")
+    delayed_qty = models.IntegerField(default=0, verbose_name="납기지연 수량")
+
+    # 계산된 지표
+    compliance_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0, verbose_name="납기준수율(%)")
+    incoming_rate = models.DecimalField(max_digits=6, decimal_places=2, default=0, verbose_name="입고율(%)")
+    avg_lead_time = models.DecimalField(max_digits=5, decimal_places=1, default=0, verbose_name="평균 리드타임(일)")
+
+    # 등급 (마감 시점 기준)
+    GRADE_CHOICES = [
+        ('A', 'A등급 (95%+)'),
+        ('B', 'B등급 (85-95%)'),
+        ('C', 'C등급 (85%미만)'),
+    ]
+    grade = models.CharField(max_length=1, choices=GRADE_CHOICES, default='C', verbose_name="등급")
+
+    # 마감 상태
+    is_closed = models.BooleanField(default=False, verbose_name="마감 여부")
+    closed_at = models.DateTimeField(null=True, blank=True, verbose_name="마감 일시")
+    closed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="마감 처리자")
+
+    # 메타 정보
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="생성일시")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="수정일시")
+
+    class Meta:
+        verbose_name = "협력사 월별 실적"
+        verbose_name_plural = "협력사 월별 실적"
+        unique_together = ['vendor', 'year_month']
+        ordering = ['-year_month', 'vendor__name']
+
+    def __str__(self):
+        status = "마감" if self.is_closed else "미마감"
+        return f"{self.vendor.name} {self.year_month} [{status}] 준수율:{self.compliance_rate}%"
+
+    def calculate_grade(self):
+        """준수율에 따른 등급 계산"""
+        if self.compliance_rate >= 95:
+            return 'A'
+        elif self.compliance_rate >= 85:
+            return 'B'
+        else:
+            return 'C'
+
+
+# ============================================
+# 공지사항 / QnA
+# ============================================
+
+class Notice(models.Model):
+    """공지사항"""
+    title = models.CharField("제목", max_length=200)
+    content = models.TextField("내용")
+    is_important = models.BooleanField("중요 공지", default=False)
+    is_active = models.BooleanField("노출 여부", default=True)
+
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name="작성자")
+    created_at = models.DateTimeField("작성일", auto_now_add=True)
+    updated_at = models.DateTimeField("수정일", auto_now=True)
+
+    class Meta:
+        verbose_name = "공지사항"
+        verbose_name_plural = "공지사항"
+        ordering = ['-is_important', '-created_at']
+
+    def __str__(self):
+        return f"{'[중요] ' if self.is_important else ''}{self.title}"
+
+
+class QnA(models.Model):
+    """Q&A (질문/답변)"""
+    title = models.CharField("제목", max_length=200)
+    content = models.TextField("질문 내용")
+
+    # 질문자 (협력사 또는 직원)
+    author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='qna_questions', verbose_name="질문자")
+    vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="협력사")
+
+    # 답변
+    answer = models.TextField("답변", blank=True, null=True)
+    answered_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='qna_answers', verbose_name="답변자")
+    answered_at = models.DateTimeField("답변일시", null=True, blank=True)
+
+    created_at = models.DateTimeField("질문일시", auto_now_add=True)
+    updated_at = models.DateTimeField("수정일", auto_now=True)
+
+    class Meta:
+        verbose_name = "Q&A"
+        verbose_name_plural = "Q&A"
+        ordering = ['-created_at']
+
+    @property
+    def is_answered(self):
+        return bool(self.answer)
+
+    def __str__(self):
+        status = "답변완료" if self.is_answered else "대기중"
+        return f"[{status}] {self.title}"

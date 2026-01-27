@@ -1,0 +1,208 @@
+{% extends 'qms/qms_base.html' %}
+{% load humanize %}
+
+{% block title %}부적합 상세 - {{ nc.nc_no }}{% endblock %}
+
+{% block qms_content %}
+<div class="container-fluid p-0" style="max-width: 1200px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold">
+            <i class="bi bi-exclamation-triangle me-2"></i>{{ nc.nc_no }}
+            <span class="badge bg-{% if nc.status == 'OPEN' %}danger{% elif nc.status == 'CLOSED' %}success{% else %}warning{% endif %} ms-2">
+                {{ nc.get_status_display }}
+            </span>
+        </h3>
+        <a href="{% url 'qms:nc_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>목록으로
+        </a>
+    </div>
+
+    <div class="row">
+        <!-- 기본 정보 -->
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-dark text-white">
+                    <i class="bi bi-info-circle me-2"></i>기본 정보
+                </div>
+                <div class="card-body">
+                    <table class="table table-borderless mb-0">
+                        <tr>
+                            <th class="text-muted" style="width: 100px;">부적합번호</th>
+                            <td class="fw-bold">{{ nc.nc_no }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">발생구분</th>
+                            <td>
+                                <span class="badge bg-{% if nc.source == 'INCOMING' %}primary{% elif nc.source == 'CUSTOMER' %}danger{% else %}secondary{% endif %}">
+                                    {{ nc.get_source_display }}
+                                </span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">발생일</th>
+                            <td>{{ nc.occurred_date }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">품번</th>
+                            <td>{{ nc.part_no }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">품명</th>
+                            <td>{{ nc.part_name }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">LOT번호</th>
+                            <td>{{ nc.lot_no|default:'-' }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">협력사</th>
+                            <td>{{ nc.vendor.name|default:'-' }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">보고자</th>
+                            <td>{{ nc.reported_by.username }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 불량 내용 -->
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-danger text-white">
+                    <i class="bi bi-exclamation-circle me-2"></i>불량 내용
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <div class="small text-muted">불량수량</div>
+                            <div class="h4 fw-bold text-danger">{{ nc.defect_qty|intcomma }}</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="small text-muted">불량유형</div>
+                            <div class="fw-bold">{{ nc.defect_type }}</div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="small text-muted">불량상세</div>
+                        <div class="p-3 bg-light rounded">{{ nc.defect_detail }}</div>
+                    </div>
+                    {% if nc.photo %}
+                    <div>
+                        <div class="small text-muted mb-2">불량사진</div>
+                        <img src="{{ nc.photo.url }}" class="img-fluid rounded" style="max-height: 200px;">
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 처리 정보 -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-warning">
+            <i class="bi bi-gear me-2"></i>처리 정보
+        </div>
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="update">
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">처리상태</label>
+                        <select name="status" class="form-select">
+                            {% for value, label in status_choices %}
+                            <option value="{{ value }}" {% if nc.status == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">처리방법</label>
+                        <select name="disposition" class="form-select">
+                            <option value="">선택</option>
+                            {% for value, label in disposition_choices %}
+                            <option value="{{ value }}" {% if nc.disposition == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">담당자</label>
+                        <select name="assigned_to" class="form-select">
+                            <option value="">선택</option>
+                            {% for u in users %}
+                            <option value="{{ u.id }}" {% if nc.assigned_to_id == u.id %}selected{% endif %}>{{ u.username }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">원인분석</label>
+                        <textarea name="cause_analysis" class="form-control" rows="3">{{ nc.cause_analysis }}</textarea>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">근본원인</label>
+                        <textarea name="root_cause" class="form-control" rows="3">{{ nc.root_cause }}</textarea>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-12">
+                        <label class="form-label fw-bold">처리내역</label>
+                        <textarea name="disposition_detail" class="form-control" rows="3">{{ nc.disposition_detail }}</textarea>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between">
+                    {% if nc.vendor and nc.status != 'CLOSED' %}
+                    <button type="submit" name="action" value="create_capa" class="btn btn-outline-warning">
+                        <i class="bi bi-tools me-1"></i>시정조치 요청
+                    </button>
+                    {% else %}
+                    <div></div>
+                    {% endif %}
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>저장</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 관련 시정조치 -->
+    {% if nc.capa_requests.exists %}
+    <div class="card shadow-sm">
+        <div class="card-header bg-info text-white">
+            <i class="bi bi-tools me-2"></i>관련 시정조치
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>CAPA번호</th>
+                        <th>요청일</th>
+                        <th>기한</th>
+                        <th>상태</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for capa in nc.capa_requests.all %}
+                    <tr>
+                        <td><a href="{% url 'qms:capa_detail' pk=capa.pk %}">{{ capa.capa_no }}</a></td>
+                        <td>{{ capa.request_date }}</td>
+                        <td>{{ capa.due_date }}</td>
+                        <td>
+                            <span class="badge bg-{% if capa.status == 'CLOSED' %}success{% elif capa.is_overdue %}danger{% else %}warning{% endif %}">
+                                {{ capa.get_status_display }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

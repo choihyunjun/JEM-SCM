@@ -1,47 +1,119 @@
 {% extends "base.html" %}
+{% load auth_extras %}
 
 {% block sidebar_qms %}
 <style>
-    /* QMS 전용 트리형 소메뉴 스타일 */
-    .submenu-item { 
-        background: #1a252f !important; 
-        font-size: 0.85rem; 
-        padding-left: 40px !important; 
-        border-bottom: none !important; 
-        color: #bdc3c7 !important;
-        display: block;
-        padding: 10px 20px;
-        text-decoration: none;
-        transition: 0.3s;
+    /* QMS 전용 사이드바 스타일 */
+    .submenu-item {
+        background: #1a252f; color: #bdc3c7; padding: 10px 20px; display: block; text-decoration: none; font-size: 0.9rem;
     }
-    .submenu-item:hover { background: #243342 !important; color: white !important; }
-    .submenu-item.active { color: white !important; font-weight: bold; }
-    .nav-link.dropdown-toggle::after { float: right; margin-top: 7px; }
+    .submenu-item:hover { background: #243342; color: white; }
+    .submenu-item.active { color: white; font-weight: bold; background: #2c3e50; }
 </style>
 
 <div class="nav flex-column">
-    <a class="nav-link dropdown-toggle" data-bs-toggle="collapse" href="#m4Submenu" role="button" aria-expanded="true">
-        <i class="bi bi-gear-wide-connected me-2"></i> 4M 변경점 관리
+
+    {# QMS 대시보드 #}
+    <a href="{% url 'qms:dashboard' %}" class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+        <i class="bi bi-speedometer2 me-2"></i> QMS 대시보드
     </a>
-    <div class="collapse show" id="m4Submenu">
+
+    {# 4M 변경관리 #}
+    {% if user|has_perm:'can_qms_4m_view' or user|has_perm:'can_qms_4m' %}
+    <a class="nav-link dropdown-toggle" data-bs-toggle="collapse" href="#m4Submenu" role="button" aria-expanded="false">
+        <i class="bi bi-arrow-repeat me-2"></i> 4M 변경관리
+    </a>
+    <div class="collapse {% if 'm4' in request.resolver_match.url_name or 'formal4m' in request.resolver_match.url_name or 'change' in request.resolver_match.url_name %}show{% endif %}" id="m4Submenu">
         <a href="{% url 'qms:m4_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'm4_list' %}active{% endif %}">
             - 사전 4M
         </a>
-        <a href="{% url 'qms:formal4m_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'formal4m_list' or request.resolver_match.url_name == 'formal4m_detail' or request.resolver_match.url_name == 'formal4m_detail_by_id' %}active{% endif %}">- 정식 4M</a>
+        <a href="{% url 'qms:formal4m_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'formal4m_list' %}active{% endif %}">
+            - 정식 4M
+        </a>
+        <a href="{% url 'qms:change_request_list' %}" class="submenu-item {% if 'change_request' in request.resolver_match.url_name %}active{% endif %}">
+            - 4M 변경관리(v2)
+        </a>
     </div>
+    {% endif %}
 
-    <a class="nav-link dropdown-toggle collapsed" data-bs-toggle="collapse" href="#isirSubmenu" role="button" aria-expanded="false">
-        <i class="bi bi-file-earmark-check me-2"></i> 품질 승인(ISIR)
+    {# 수입검사 관리 #}
+    {% if user|has_perm:'can_qms_inspection_view' or user|has_perm:'can_qms_inspection' %}
+    <a class="nav-link dropdown-toggle collapsed" data-bs-toggle="collapse" href="#inspectionSubmenu" role="button" aria-expanded="false">
+        <i class="bi bi-clipboard-check me-2"></i> 검사 관리
     </a>
-    <div class="collapse" id="isirSubmenu">
-        <a href="#" class="submenu-item">- ISIR 제출 목록</a>
-        <a href="#" class="submenu-item">- 정기 재승인 현황</a>
+    <div class="collapse {% if 'inspection' in request.resolver_match.url_name or 'outgoing' in request.resolver_match.url_name %}show{% endif %}" id="inspectionSubmenu">
+        <a href="{% url 'qms:import_inspection_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'import_inspection_list' %}active{% endif %}">
+            - 수입검사 현황
+        </a>
+        <a href="{% url 'qms:outgoing_list' %}" class="submenu-item {% if 'outgoing' in request.resolver_match.url_name %}active{% endif %}">
+            - 출하검사 관리
+        </a>
     </div>
+    {% endif %}
+
+    {# 부적합/시정조치 - can_qms_nc_view 권한 필요 #}
+    {% if user|has_perm:'can_qms_nc_view' or user|has_perm:'can_qms_inspection_view' or user|has_perm:'can_qms_inspection' %}
+    <a class="nav-link dropdown-toggle collapsed" data-bs-toggle="collapse" href="#ncSubmenu" role="button" aria-expanded="false">
+        <i class="bi bi-exclamation-triangle me-2"></i> 부적합/시정조치
+    </a>
+    <div class="collapse {% if 'nc' in request.resolver_match.url_name or 'capa' in request.resolver_match.url_name %}show{% endif %}" id="ncSubmenu">
+        <a href="{% url 'qms:nc_list' %}" class="submenu-item {% if 'nc_' in request.resolver_match.url_name %}active{% endif %}">
+            - 부적합품 관리
+        </a>
+        <a href="{% url 'qms:capa_list' %}" class="submenu-item {% if 'capa' in request.resolver_match.url_name %}active{% endif %}">
+            - 시정조치(CAPA)
+        </a>
+    </div>
+    {% endif %}
+
+    {# 협력사 품질관리 - can_qms_claim_view 또는 can_qms_rating_view 권한 필요 #}
+    {% if user|has_perm:'can_qms_claim_view' or user|has_perm:'can_qms_rating_view' or user|has_perm:'can_qms_inspection_view' or user|has_perm:'can_qms_inspection' %}
+    <a class="nav-link dropdown-toggle collapsed" data-bs-toggle="collapse" href="#vendorQmsSubmenu" role="button" aria-expanded="false">
+        <i class="bi bi-building me-2"></i> 협력사 품질관리
+    </a>
+    <div class="collapse {% if 'claim' in request.resolver_match.url_name or 'rating' in request.resolver_match.url_name %}show{% endif %}" id="vendorQmsSubmenu">
+        <a href="{% url 'qms:claim_list' %}" class="submenu-item {% if 'claim' in request.resolver_match.url_name %}active{% endif %}">
+            - 클레임 관리
+        </a>
+        <a href="{% url 'qms:rating_list' %}" class="submenu-item {% if 'rating' in request.resolver_match.url_name %}active{% endif %}">
+            - 협력사 평가
+        </a>
+    </div>
+    {% endif %}
+
+    {# 초도품검사(ISIR) - can_qms_isir_view 권한 필요 #}
+    {% if user|has_perm:'can_qms_isir_view' or user|has_perm:'can_qms_inspection_view' or user|has_perm:'can_qms_inspection' %}
+    <a href="{% url 'qms:isir_list' %}" class="nav-link {% if 'isir' in request.resolver_match.url_name %}active{% endif %}">
+        <i class="bi bi-file-earmark-check me-2"></i> 초도품검사(ISIR)
+    </a>
+    {% endif %}
+
+    {# VOC 관리 (고객의 소리) #}
+    {% if user|has_perm:'can_qms_inspection_view' or user|has_perm:'can_qms_inspection' %}
+    <a href="{% url 'qms:voc_list' %}" class="nav-link {% if 'voc' in request.resolver_match.url_name %}active{% endif %}">
+        <i class="bi bi-megaphone me-2"></i> VOC 관리
+    </a>
+    {% endif %}
+
+    {# 계측기 관리 #}
+    {% if user|has_perm:'can_qms_inspection_view' or user|has_perm:'can_qms_inspection' %}
+    <a href="{% url 'qms:gauge_list' %}" class="nav-link {% if 'gauge' in request.resolver_match.url_name %}active{% endif %}">
+        <i class="bi bi-speedometer me-2"></i> 계측기 관리
+    </a>
+    {% endif %}
+
+    {# 품질문서 관리 #}
+    {% if user|has_perm:'can_qms_inspection_view' or user|has_perm:'can_qms_inspection' %}
+    <a href="{% url 'qms:qdoc_list' %}" class="nav-link {% if 'qdoc' in request.resolver_match.url_name %}active{% endif %}">
+        <i class="bi bi-file-earmark-text me-2"></i> 품질문서 관리
+    </a>
+    {% endif %}
+
 </div>
 {% endblock %}
 
 {% block content %}
-    <div class="qms-main-area">
+    <div class="main-wrapper">
         {% block qms_content %}{% endblock %}
     </div>
 {% endblock %}

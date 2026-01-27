@@ -1,0 +1,214 @@
+{% extends 'qms/qms_base.html' %}
+
+{% block title %}품질문서 관리{% endblock %}
+
+{% block qms_content %}
+<div class="container-fluid p-0" style="max-width: 1600px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold mb-0">
+            <i class="bi bi-file-earmark-text me-2"></i>품질문서 관리
+        </h3>
+        <a href="{% url 'qms:qdoc_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i>문서 등록
+        </a>
+    </div>
+
+    <!-- 통계 카드 -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="card border-0 bg-primary bg-opacity-10">
+                <div class="card-body text-center py-3">
+                    <div class="h3 mb-0 text-primary">{{ stats.total }}</div>
+                    <small class="text-muted">전체 문서</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card border-0 bg-success bg-opacity-10">
+                <div class="card-body text-center py-3">
+                    <div class="h3 mb-0 text-success">{{ stats.approved }}</div>
+                    <small class="text-muted">승인 문서</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card border-0 bg-warning bg-opacity-10">
+                <div class="card-body text-center py-3">
+                    <div class="h3 mb-0 text-warning">{{ stats.review }}</div>
+                    <small class="text-muted">검토중</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card border-0 bg-secondary bg-opacity-10">
+                <div class="card-body text-center py-3">
+                    <div class="h3 mb-0 text-secondary">{{ stats.draft }}</div>
+                    <small class="text-muted">작성중</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 필터 -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body py-3">
+            <form method="get" class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small">문서 검색</label>
+                    <input type="text" name="q" class="form-control" placeholder="문서번호, 문서명..." value="{{ request.GET.q }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">분류</label>
+                    <select name="category" class="form-select">
+                        <option value="">전체</option>
+                        {% for value, label in category_choices %}
+                        <option value="{{ value }}" {% if request.GET.category == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">상태</label>
+                    <select name="status" class="form-select">
+                        <option value="">전체</option>
+                        {% for value, label in status_choices %}
+                        <option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">부서</label>
+                    <select name="department" class="form-select">
+                        <option value="">전체</option>
+                        {% for dept in departments %}
+                        <option value="{{ dept }}" {% if request.GET.department == dept %}selected{% endif %}>{{ dept }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-dark me-1">
+                        <i class="bi bi-search me-1"></i>검색
+                    </button>
+                    <a href="{% url 'qms:qdoc_list' %}" class="btn btn-outline-secondary">초기화</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 문서 목록 -->
+    <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th style="width: 140px;">문서번호</th>
+                        <th>문서명</th>
+                        <th class="text-center" style="width: 100px;">분류</th>
+                        <th class="text-center" style="width: 80px;">개정</th>
+                        <th class="text-center" style="width: 90px;">상태</th>
+                        <th style="width: 100px;">관리부서</th>
+                        <th class="text-center" style="width: 100px;">시행일</th>
+                        <th class="text-center" style="width: 80px;">파일</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for doc in documents %}
+                    <tr style="cursor: pointer;" onclick="location.href='{% url 'qms:qdoc_detail' doc.pk %}'">
+                        <td>
+                            <a href="{% url 'qms:qdoc_detail' doc.pk %}" class="text-decoration-none fw-bold">
+                                {{ doc.doc_no }}
+                            </a>
+                        </td>
+                        <td>
+                            <div class="fw-semibold">{{ doc.doc_name }}</div>
+                            {% if doc.description %}
+                            <small class="text-muted">{{ doc.description|truncatewords:10 }}</small>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if doc.category == 'MANUAL' %}
+                            <span class="badge bg-primary">매뉴얼</span>
+                            {% elif doc.category == 'PROCEDURE' %}
+                            <span class="badge bg-success">절차서</span>
+                            {% elif doc.category == 'INSTRUCTION' %}
+                            <span class="badge bg-info">지시서</span>
+                            {% elif doc.category == 'STANDARD' %}
+                            <span class="badge bg-warning text-dark">기준서</span>
+                            {% elif doc.category == 'FORM' %}
+                            <span class="badge bg-secondary">양식</span>
+                            {% else %}
+                            <span class="badge bg-dark">{{ doc.get_category_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <span class="badge bg-outline-dark border">Rev.{{ doc.revision }}</span>
+                        </td>
+                        <td class="text-center">
+                            {% if doc.status == 'APPROVED' %}
+                            <span class="badge bg-success">승인</span>
+                            {% elif doc.status == 'REVIEW' %}
+                            <span class="badge bg-warning text-dark">검토중</span>
+                            {% elif doc.status == 'DRAFT' %}
+                            <span class="badge bg-secondary">작성중</span>
+                            {% else %}
+                            <span class="badge bg-danger">폐기</span>
+                            {% endif %}
+                        </td>
+                        <td class="small">{{ doc.department|default:"-" }}</td>
+                        <td class="text-center small">{{ doc.effective_date|default:"-" }}</td>
+                        <td class="text-center">
+                            {% if doc.file %}
+                            <a href="{{ doc.file.url }}" target="_blank" class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation();">
+                                <i class="bi bi-download"></i>
+                            </a>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center py-5 text-muted">
+                            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                            등록된 품질문서가 없습니다.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 페이지네이션 -->
+    {% if documents.has_other_pages %}
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center mb-0">
+            {% if documents.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ documents.previous_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">
+                    <i class="bi bi-chevron-left"></i>
+                </a>
+            </li>
+            {% endif %}
+
+            {% for num in documents.paginator.page_range %}
+                {% if documents.number == num %}
+                <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                {% elif num > documents.number|add:'-3' and num < documents.number|add:'3' %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ num }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">{{ num }}</a>
+                </li>
+                {% endif %}
+            {% endfor %}
+
+            {% if documents.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ documents.next_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">
+                    <i class="bi bi-chevron-right"></i>
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

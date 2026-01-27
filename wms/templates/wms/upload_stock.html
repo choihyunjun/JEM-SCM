@@ -1,0 +1,30 @@
+{% extends "wms/base.html" %}
+{% block content %}
+<div class="container-fluid py-3">
+  <h4 class="mb-3">ERP 재고 스냅샷 업로드</h4>
+
+  <div class="alert alert-warning">
+    파일 헤더에 “창고/품번/수량” 컬럼이 포함되어야 합니다. (예: 창고, 품번, 현재고)
+  </div>
+
+  <form method="post" enctype="multipart/form-data" class="card p-3">
+    {% csrf_token %}
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label">{{ form.file.label }}</label>
+        {{ form.file }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">{{ form.snapshot_at.label }}</label>
+        {{ form.snapshot_at }}
+        <div class="form-text">{{ form.snapshot_at.help_text }}</div>
+      </div>
+    </div>
+
+    <div class="mt-3">
+      <button class="btn btn-primary">업로드</button>
+      <a class="btn btn-outline-secondary" href="{% url 'wms:stock' %}">재고로 돌아가기</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

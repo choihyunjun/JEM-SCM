@@ -1,0 +1,335 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid p-0" style="max-width: 1920px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold"><i class="bi bi-building me-2"></i>협력사(거래처) 관리</h3>
+        <div>
+            <a href="{% url 'vendor_upload' %}" class="btn btn-outline-success me-2">
+                <i class="bi bi-cloud-upload me-1"></i>엑셀 임포트
+            </a>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#vendorModal" onclick="openCreateModal()">
+                <i class="bi bi-plus-lg me-1"></i>신규 등록
+            </button>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-white py-3">
+            <form method="get" class="row g-2 align-items-center">
+                <div class="col-auto">
+                    <input type="text" name="q" class="form-control" placeholder="업체명/코드 검색" value="{{ query|default:'' }}">
+                </div>
+                <div class="col-auto">
+                    <select name="has_user" class="form-select">
+                        <option value="">전체</option>
+                        <option value="yes" {% if has_user_filter == 'yes' %}selected{% endif %}>사용자 연결됨</option>
+                        <option value="no" {% if has_user_filter == 'no' %}selected{% endif %}>사용자 미연결</option>
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-secondary"><i class="bi bi-search"></i> 검색</button>
+                    <a href="{% url 'vendor_manage' %}" class="btn btn-outline-secondary">초기화</a>
+                </div>
+                <div class="col-auto ms-auto">
+                    <span class="text-muted">총 <strong>{{ vendors.count }}</strong>개 협력사</span>
+                </div>
+            </form>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive" style="max-height: 600px;">
+                <table class="table table-hover mb-0 align-middle" style="font-size: 0.9rem;">
+                    <thead class="table-light sticky-top">
+                        <tr>
+                            <th style="width: 80px;">코드</th>
+                            <th style="width: 180px;">업체명</th>
+                            <th style="width: 130px;">사업자번호</th>
+                            <th style="width: 80px;">대표자</th>
+                            <th>주소</th>
+                            <th style="width: 150px;">연결 사용자</th>
+                            <th style="width: 120px;" class="text-center">관리</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for vendor in vendors %}
+                        <tr>
+                            <td class="fw-bold text-primary">{{ vendor.code }}</td>
+                            <td class="fw-bold">{{ vendor.name }}</td>
+                            <td>{{ vendor.biz_registration_number|default:"-" }}</td>
+                            <td>{{ vendor.representative|default:"-" }}</td>
+                            <td class="small text-muted">{{ vendor.address|default:"-"|truncatechars:35 }}</td>
+                            <td>
+                                {% if vendor.user %}
+                                    <span class="badge bg-success me-1">{{ vendor.user.username }}</span>
+                                    <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="unlinkUser({{ vendor.id }}, '{{ vendor.name }}')" title="연결 해제">
+                                        <i class="bi bi-x"></i>
+                                    </button>
+                                {% else %}
+                                    <button class="btn btn-sm btn-outline-primary" onclick="openLinkUserModal({{ vendor.id }}, '{{ vendor.name }}')">
+                                        <i class="bi bi-person-plus"></i> 연결
+                                    </button>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <button class="btn btn-sm btn-outline-secondary" onclick="openEditModal({{ vendor.id }})">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteVendor({{ vendor.id }}, '{{ vendor.name }}')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-5 text-muted">
+                                <i class="bi bi-building fs-1 d-block mb-2"></i>
+                                등록된 협력사가 없습니다.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    {% if vendors.has_other_pages %}
+    <nav>
+        <ul class="pagination justify-content-center">
+            {% if vendors.has_previous %}
+            <li class="page-item"><a class="page-link" href="?page={{ vendors.previous_page_number }}&q={{ query }}&has_user={{ has_user_filter }}">이전</a></li>
+            {% endif %}
+            <li class="page-item disabled"><span class="page-link">{{ vendors.number }} / {{ vendors.paginator.num_pages }}</span></li>
+            {% if vendors.has_next %}
+            <li class="page-item"><a class="page-link" href="?page={{ vendors.next_page_number }}&q={{ query }}&has_user={{ has_user_filter }}">다음</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+
+<!-- 협력사 등록/수정 모달 -->
+<div class="modal fade" id="vendorModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="vendorModalTitle">협력사 등록</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="vendorForm" method="post">
+                {% csrf_token %}
+                <input type="hidden" id="vendorId" name="vendor_id" value="">
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">업체코드 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="vendorCode" name="code" required>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label fw-bold">업체명 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="vendorName" name="name" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">사업자등록번호</label>
+                            <input type="text" class="form-control" id="vendorBizReg" name="biz_registration_number" placeholder="000-00-00000">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">대표자</label>
+                            <input type="text" class="form-control" id="vendorRep" name="representative">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">주소</label>
+                            <input type="text" class="form-control" id="vendorAddress" name="address">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">업태</label>
+                            <input type="text" class="form-control" id="vendorBizType" name="biz_type">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">종목</label>
+                            <input type="text" class="form-control" id="vendorBizItem" name="biz_item">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                    <button type="submit" class="btn btn-primary" id="vendorSubmitBtn">등록</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 사용자 연결 모달 -->
+<div class="modal fade" id="linkUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">사용자 연결</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="linkUserForm" method="post" action="{% url 'vendor_link_user' %}">
+                {% csrf_token %}
+                <input type="hidden" id="linkVendorId" name="vendor_id" value="">
+                <input type="hidden" id="linkUserId" name="user_id" value="">
+                <div class="modal-body">
+                    <p><strong id="linkVendorName"></strong>에 연결할 사용자를 선택하세요.</p>
+                    <div class="position-relative">
+                        <input type="text" id="userSearchInput" class="form-control"
+                               placeholder="사용자명 검색..." autocomplete="off">
+                        <div id="userSearchResults" class="list-group position-absolute w-100 shadow"
+                             style="z-index: 1000; max-height: 200px; overflow-y: auto; display: none;"></div>
+                    </div>
+                    <div id="selectedUserDisplay" class="mt-2" style="display: none;">
+                        <span class="badge bg-primary fs-6 px-3 py-2">
+                            <span id="selectedUserName"></span>
+                            <button type="button" class="btn-close btn-close-white ms-2" style="font-size: 0.6rem;" onclick="clearSelectedUser()"></button>
+                        </span>
+                    </div>
+                    <div class="form-text mt-2">다른 협력사에 연결되지 않은 사용자만 검색됩니다.</div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                    <button type="submit" class="btn btn-primary" id="linkUserSubmitBtn" disabled>연결</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function openCreateModal() {
+    document.getElementById('vendorModalTitle').textContent = '협력사 신규 등록';
+    document.getElementById('vendorSubmitBtn').textContent = '등록';
+    document.getElementById('vendorForm').action = '{% url "vendor_create" %}';
+    document.getElementById('vendorId').value = '';
+    document.getElementById('vendorCode').value = '';
+    document.getElementById('vendorName').value = '';
+    document.getElementById('vendorBizReg').value = '';
+    document.getElementById('vendorRep').value = '';
+    document.getElementById('vendorAddress').value = '';
+    document.getElementById('vendorBizType').value = '';
+    document.getElementById('vendorBizItem').value = '';
+    document.getElementById('vendorCode').readOnly = false;
+}
+
+function openEditModal(vendorId) {
+    fetch(`{% url 'vendor_detail' 0 %}`.replace('0', vendorId))
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('vendorModalTitle').textContent = '협력사 수정';
+            document.getElementById('vendorSubmitBtn').textContent = '수정';
+            document.getElementById('vendorForm').action = '{% url "vendor_update" %}';
+            document.getElementById('vendorId').value = data.id;
+            document.getElementById('vendorCode').value = data.code;
+            document.getElementById('vendorName').value = data.name;
+            document.getElementById('vendorBizReg').value = data.biz_registration_number || '';
+            document.getElementById('vendorRep').value = data.representative || '';
+            document.getElementById('vendorAddress').value = data.address || '';
+            document.getElementById('vendorBizType').value = data.biz_type || '';
+            document.getElementById('vendorBizItem').value = data.biz_item || '';
+            document.getElementById('vendorCode').readOnly = true;
+            new bootstrap.Modal(document.getElementById('vendorModal')).show();
+        });
+}
+
+function deleteVendor(vendorId, vendorName) {
+    if (confirm(`"${vendorName}" 협력사를 삭제하시겠습니까?\n\n※ 연결된 발주/입고 데이터가 있으면 삭제할 수 없습니다.`)) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '{% url "vendor_delete" %}';
+        form.innerHTML = `
+            <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+            <input type="hidden" name="vendor_id" value="${vendorId}">
+        `;
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+function openLinkUserModal(vendorId, vendorName) {
+    document.getElementById('linkVendorId').value = vendorId;
+    document.getElementById('linkVendorName').textContent = vendorName;
+    // 초기화
+    clearSelectedUser();
+    document.getElementById('userSearchInput').value = '';
+    document.getElementById('userSearchResults').style.display = 'none';
+    new bootstrap.Modal(document.getElementById('linkUserModal')).show();
+}
+
+function unlinkUser(vendorId, vendorName) {
+    if (confirm(`"${vendorName}" 협력사의 사용자 연결을 해제하시겠습니까?`)) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '{% url "vendor_unlink_user" %}';
+        form.innerHTML = `
+            <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+            <input type="hidden" name="vendor_id" value="${vendorId}">
+        `;
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+// 사용자 검색 기능
+let searchTimeout = null;
+const userSearchInput = document.getElementById('userSearchInput');
+const userSearchResults = document.getElementById('userSearchResults');
+
+userSearchInput.addEventListener('input', function() {
+    clearTimeout(searchTimeout);
+    const query = this.value.trim();
+
+    if (query.length < 1) {
+        userSearchResults.style.display = 'none';
+        return;
+    }
+
+    searchTimeout = setTimeout(() => {
+        fetch(`/vendor/search-users/?q=${encodeURIComponent(query)}`)
+            .then(response => response.json())
+            .then(data => {
+                userSearchResults.innerHTML = '';
+                if (data.users.length === 0) {
+                    userSearchResults.innerHTML = '<div class="list-group-item text-muted">검색 결과가 없습니다</div>';
+                } else {
+                    data.users.forEach(user => {
+                        const item = document.createElement('button');
+                        item.type = 'button';
+                        item.className = 'list-group-item list-group-item-action';
+                        item.innerHTML = `<strong>${user.username}</strong>${user.name ? ' (' + user.name + ')' : ''}`;
+                        item.onclick = () => selectUser(user.id, user.username, user.name);
+                        userSearchResults.appendChild(item);
+                    });
+                }
+                userSearchResults.style.display = 'block';
+            });
+    }, 300);
+});
+
+function selectUser(userId, username, name) {
+    document.getElementById('linkUserId').value = userId;
+    document.getElementById('selectedUserName').textContent = username + (name ? ' (' + name + ')' : '');
+    document.getElementById('selectedUserDisplay').style.display = 'block';
+    document.getElementById('userSearchInput').style.display = 'none';
+    document.getElementById('userSearchResults').style.display = 'none';
+    document.getElementById('linkUserSubmitBtn').disabled = false;
+}
+
+function clearSelectedUser() {
+    document.getElementById('linkUserId').value = '';
+    document.getElementById('selectedUserDisplay').style.display = 'none';
+    document.getElementById('userSearchInput').style.display = 'block';
+    document.getElementById('userSearchInput').value = '';
+    document.getElementById('linkUserSubmitBtn').disabled = true;
+}
+
+// 외부 클릭 시 검색 결과 닫기
+document.addEventListener('click', function(e) {
+    if (!userSearchInput.contains(e.target) && !userSearchResults.contains(e.target)) {
+        userSearchResults.style.display = 'none';
+    }
+});
+</script>
+{% endblock %}

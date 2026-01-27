@@ -1,0 +1,469 @@
+{% extends 'material/material_base.html' %}
+
+{% block material_content %}
+<div class="container-fluid" style="max-width: 1800px;">
+    <div class="d-flex justify-content-between align-items-center mb-4 pt-3">
+        <h3 class="fw-bold text-dark">
+            <i class="bi bi-arrow-left-right text-success me-2"></i>재고 이동 처리
+        </h3>
+        <span class="text-muted small">창고 간 재고를 이동하고 수불 이력을 생성합니다.</span>
+    </div>
+
+    <form method="post" id="transferForm">
+        {% csrf_token %}
+        
+        <div class="card shadow-sm border-success mb-4">
+            <div class="card-header bg-success text-white fw-bold">
+                <i class="bi bi-plus-circle me-1"></i> 이동 대상 추가
+            </div>
+            <div class="card-body bg-light">
+                <!-- QR 스캔 입력란 -->
+                <div class="row g-2 mb-3">
+                    <div class="col-12">
+                        <label class="small fw-bold mb-1 text-primary">
+                            <i class="bi bi-qr-code-scan me-1"></i>QR 코드 스캔 (빠른 입력)
+                        </label>
+                        <input type="text" id="qrScanInput" class="form-control form-control-lg border-primary"
+                               placeholder="현품표 QR 코드를 스캔하세요"
+                               autocomplete="off"
+                               style="background: #f0f8ff; font-weight: bold;">
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle"></i> QR 코드를 스캔하면 품번, 수량, LOT가 자동으로 입력됩니다.
+                        </small>
+                    </div>
+                </div>
+
+                <hr class="my-3">
+
+                <!-- 수동 입력란 -->
+                <div class="row g-2 align-items-end">
+
+                    <div class="col-md-3">
+                        <label class="small fw-bold mb-1">품번 (Part No)</label>
+                        <input type="text" id="inputPart" class="form-control" placeholder="품번 검색/스캔">
+                        </div>
+
+                    <div class="col-md-2">
+                        <label class="small fw-bold mb-1">보내는 창고 (From)</label>
+                        <select id="selFromLoc" class="form-select">
+                            <option value="">:: 선택 ::</option>
+                            {% for loc in warehouses %}
+                            <option value="{{ loc.code }}">({{ loc.code }}) {{ loc.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="small fw-bold mb-1">LOT 선택 <span class="text-danger">*</span></label>
+                        <select id="selLot" class="form-select" disabled>
+                            <option value="">:: 품번/창고 선택 후 표시 ::</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-1 d-flex align-items-end">
+                        <small id="lotInfo" class="text-muted"></small>
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="small fw-bold mb-1">받는 창고 (To)</label>
+                        <select id="selToLoc" class="form-select">
+                            <option value="">:: 선택 ::</option>
+                            {% for loc in warehouses %}
+                            <option value="{{ loc.code }}">({{ loc.code }}) {{ loc.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-1">
+                        <label class="small fw-bold mb-1">수량</label>
+                        <input type="number" id="inputQty" class="form-control text-end fw-bold" placeholder="0" min="1">
+                    </div>
+
+                    <div class="col-md-1">
+                        <button type="button" class="btn btn-success w-100 fw-bold" onclick="addRow()">
+                            추가
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-list-check me-1"></i> 이동 목록</span>
+                <span class="badge bg-secondary rounded-pill" id="itemCount">0건</span>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-bordered table-hover mb-0 text-center align-middle" id="transferTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th width="15%">품번</th>
+                            <th width="15%">LOT 번호</th>
+                            <th width="20%">보내는 곳 (From)</th>
+                            <th width="5%">➡</th>
+                            <th width="20%">받는 곳 (To)</th>
+                            <th width="10%">수량</th>
+                            <th width="10%">삭제</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <tr id="emptyRow">
+                            <td colspan="7" class="text-muted py-4">이동할 항목을 상단에서 추가해주세요.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-footer bg-white text-end py-3">
+                <button type="button" class="btn btn-light me-2" onclick="location.reload()">초기화</button>
+                <button type="submit" class="btn btn-primary btn-lg px-5 fw-bold" onclick="return confirm('작성된 내용으로 재고 이동을 확정하시겠습니까?')">
+                    <i class="bi bi-check-circle me-2"></i> 이동 확정
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+    let currentLotData = null; // 현재 선택된 LOT의 재고 정보 저장
+    let qrScannedQty = null; // QR 코드에서 스캔된 수량 저장
+
+    // ============================================
+    // QR 코드 스캔 처리
+    // ============================================
+    async function handleQRScan(qrData) {
+        const qrInput = document.getElementById('qrScanInput');
+
+        // QR 데이터 파싱: "품번|수량|LOT"
+        const parts = qrData.split('|');
+
+        if (parts.length !== 3) {
+            alert('올바른 QR 코드 형식이 아닙니다.\n형식: 품번|수량|LOT');
+            qrInput.value = '';
+            qrInput.focus();
+            return;
+        }
+
+        const [partNo, qty, lotNo] = parts.map(p => p.trim());
+
+        if (!partNo) {
+            alert('품번 정보가 없습니다.');
+            qrInput.value = '';
+            qrInput.focus();
+            return;
+        }
+
+        // 1. 보내는 창고와 받는 창고 확인
+        const fromLoc = document.getElementById('selFromLoc').value;
+        const toLoc = document.getElementById('selToLoc').value;
+
+        if (!fromLoc) {
+            alert('먼저 "보내는 창고"를 선택해주세요.');
+            document.getElementById('selFromLoc').focus();
+            qrInput.value = '';
+            return;
+        }
+
+        if (!toLoc) {
+            alert('먼저 "받는 창고"를 선택해주세요.');
+            document.getElementById('selToLoc').focus();
+            qrInput.value = '';
+            return;
+        }
+
+        // 2. 품번 입력
+        document.getElementById('inputPart').value = partNo;
+
+        // 3. QR에서 스캔된 수량 저장
+        qrScannedQty = parseInt(qty) || null;
+
+        // 4. LOT 목록 로드
+        await loadAvailableLots();
+
+        // 5. LOT가 로드되면 QR의 LOT와 일치하는 것 자동 선택
+        if (lotNo) {
+            const lotMatched = await autoSelectLotByDate(lotNo);
+
+            if (lotMatched) {
+                // LOT 매칭 성공 → 자동으로 행 추가
+                qrInput.value = '';
+                await addRow();
+            } else {
+                // LOT 매칭 실패 → 수동 선택 필요
+                qrInput.value = '';
+                document.getElementById('selLot').focus();
+            }
+        } else {
+            qrInput.value = '';
+            document.getElementById('selLot').focus();
+        }
+    }
+
+    // LOT 날짜로 자동 선택 (성공 시 true, 실패 시 false 반환)
+    function autoSelectLotByDate(lotDateStr) {
+        const lotSelect = document.getElementById('selLot');
+        const options = lotSelect.options;
+
+        for (let i = 1; i < options.length; i++) { // index 0은 placeholder
+            const optionLotNo = options[i].dataset.lotNo;
+            if (optionLotNo === lotDateStr) {
+                lotSelect.selectedIndex = i;
+                onLotSelect(); // LOT 선택 이벤트 트리거
+
+                // QR에서 스캔된 수량으로 덮어쓰기 (있는 경우)
+                if (qrScannedQty) {
+                    document.getElementById('inputQty').value = qrScannedQty;
+                }
+                return true; // 매칭 성공
+            }
+        }
+
+        // 일치하는 LOT를 못 찾은 경우
+        alert(`QR 코드의 LOT(${lotDateStr})가 현재 창고에 없습니다.\n수동으로 LOT를 선택해주세요.`);
+        return false; // 매칭 실패
+    }
+
+    // [신규] 품번 + 창고 변경 시 LOT 목록 자동 로드
+    async function loadAvailableLots() {
+        const partNo = document.getElementById('inputPart').value.trim();
+        const fromLoc = document.getElementById('selFromLoc').value;
+        const lotSelect = document.getElementById('selLot');
+        const lotInfo = document.getElementById('lotInfo');
+
+        // 초기화
+        lotSelect.innerHTML = '<option value="">:: 품번/창고 선택 후 표시 ::</option>';
+        lotSelect.disabled = true;
+        lotInfo.textContent = '';
+        currentLotData = null;
+
+        if (!partNo || !fromLoc) {
+            return; // 품번이나 창고가 없으면 LOT 로드 안 함
+        }
+
+        try {
+            const url = "{% url 'material:api_get_available_lots' %}?part_no=" + encodeURIComponent(partNo) + "&warehouse_code=" + encodeURIComponent(fromLoc);
+            const res = await fetch(url, { method: 'GET' });
+            const data = await res.json();
+
+            if (!data.success) {
+                lotInfo.textContent = data.error || 'LOT 정보를 가져올 수 없습니다.';
+                lotInfo.className = 'text-danger small';
+                return;
+            }
+
+            if (data.lots.length === 0) {
+                lotSelect.innerHTML = '<option value="">:: 해당 창고에 재고 없음 ::</option>';
+                lotInfo.textContent = '이동 가능한 재고가 없습니다.';
+                lotInfo.className = 'text-danger small';
+                return;
+            }
+
+            // LOT 목록 구성 (FIFO 순서: 오래된 순)
+            lotSelect.innerHTML = '<option value="">:: LOT 선택 ::</option>';
+            data.lots.forEach((lot, index) => {
+                const option = document.createElement('option');
+                option.value = lot.stock_id;
+                option.dataset.quantity = lot.quantity;
+                option.dataset.lotNo = lot.lot_no || 'NO LOT';
+                option.dataset.daysOld = lot.days_old;
+
+                let displayText = lot.lot_no ? lot.lot_no : 'LOT 없음';
+                displayText += ` (재고: ${lot.quantity.toLocaleString()} EA, ${lot.days_old}일 경과)`;
+
+                // FIFO 추천 표시 (가장 오래된 것)
+                if (index === 0 && lot.lot_no) {
+                    displayText += ' ⚠️ FIFO 추천';
+                }
+
+                option.textContent = displayText;
+                lotSelect.appendChild(option);
+            });
+
+            lotSelect.disabled = false;
+            lotInfo.textContent = `총 ${data.lots.length}개 LOT 사용 가능`;
+            lotInfo.className = 'text-success small';
+
+        } catch (e) {
+            lotInfo.textContent = 'LOT 정보 조회 실패';
+            lotInfo.className = 'text-danger small';
+            console.error(e);
+        }
+    }
+
+    // LOT 선택 시 정보 저장 및 수량 자동 입력
+    function onLotSelect() {
+        const lotSelect = document.getElementById('selLot');
+        const selectedOption = lotSelect.options[lotSelect.selectedIndex];
+        const qtyInput = document.getElementById('inputQty');
+
+        if (selectedOption.value) {
+            currentLotData = {
+                stock_id: selectedOption.value,
+                lot_no: selectedOption.dataset.lotNo,
+                max_qty: parseInt(selectedOption.dataset.quantity),
+                days_old: parseInt(selectedOption.dataset.daysOld)
+            };
+
+            // 재고 수량을 자동으로 입력 (사용자가 변경 가능)
+            qtyInput.value = currentLotData.max_qty;
+            qtyInput.max = currentLotData.max_qty;
+        } else {
+            currentLotData = null;
+            qtyInput.value = '';
+            qtyInput.removeAttribute('max');
+        }
+    }
+
+    // 행 추가 로직 (LOT 정보 포함)
+    async function addRow() {
+        const partNo = document.getElementById('inputPart').value.trim();
+        const fromSel = document.getElementById('selFromLoc');
+        const lotSel = document.getElementById('selLot');
+        const toSel = document.getElementById('selToLoc');
+        const qty = document.getElementById('inputQty').value;
+
+        const fromVal = fromSel.value;
+        const fromText = fromSel.options[fromSel.selectedIndex].text;
+        const toVal = toSel.value;
+        const toText = toSel.options[toSel.selectedIndex].text;
+
+        // 유효성 검사
+        if(!partNo) { alert('품번을 입력해주세요.'); return; }
+        if(!fromVal) { alert('보내는 창고를 선택해주세요.'); return; }
+        if(!lotSel.value) { alert('LOT를 선택해주세요.'); return; }
+        if(!toVal) { alert('받는 창고를 선택해주세요.'); return; }
+        if(fromVal === toVal) { alert('보내는 곳과 받는 곳이 같습니다.'); return; }
+        if(!qty || parseInt(qty) <= 0) { alert('수량은 1 이상이어야 합니다.'); return; }
+
+        // LOT 재고 수량 확인
+        if (currentLotData && parseInt(qty) > currentLotData.max_qty) {
+            alert(`선택한 LOT의 재고(${currentLotData.max_qty} EA)를 초과할 수 없습니다.`);
+            return;
+        }
+
+        // FIFO 경고 (첫 번째 LOT가 아닌 경우)
+        const firstOption = lotSel.options[1]; // index 0은 ":: LOT 선택 ::"
+        if (firstOption && lotSel.selectedIndex > 1) {
+            const firstLotDays = parseInt(firstOption.dataset.daysOld);
+            if (currentLotData.days_old < firstLotDays) {
+                if (!confirm(`⚠️ FIFO 위반 경고!\n\n더 오래된 LOT가 있습니다.\n그래도 선택한 LOT로 이동하시겠습니까?`)) {
+                    return;
+                }
+            }
+        }
+
+        // 품번 존재 여부 서버 검증
+        try {
+            const url = "{% url 'material:api_part_exists' %}?part_no=" + encodeURIComponent(partNo);
+            const res = await fetch(url, { method: 'GET' });
+            const data = await res.json();
+
+            if (!data.exists) {
+                alert('등록되지 않은 품번입니다: ' + partNo);
+                document.getElementById('inputPart').focus();
+                return;
+            }
+        } catch (e) {
+            alert('품번 검증 중 오류가 발생했습니다.');
+            return;
+        }
+
+        // 빈 행 제거
+        const emptyRow = document.getElementById('emptyRow');
+        if(emptyRow) emptyRow.remove();
+
+        const tbody = document.getElementById('tableBody');
+        const tr = document.createElement('tr');
+
+        const lotDisplay = currentLotData.lot_no === 'NO LOT' ? '-' : currentLotData.lot_no;
+
+        tr.innerHTML = `
+            <td class="fw-bold text-primary">
+                ${partNo}
+                <input type="hidden" name="part_no[]" value="${partNo}">
+            </td>
+            <td class="text-center">
+                ${lotDisplay}
+                <input type="hidden" name="stock_id[]" value="${currentLotData.stock_id}">
+            </td>
+            <td>
+                ${fromText}
+                <input type="hidden" name="from_loc[]" value="${fromVal}">
+            </td>
+            <td class="text-muted"><i class="bi bi-arrow-right"></i></td>
+            <td>
+                ${toText}
+                <input type="hidden" name="to_loc[]" value="${toVal}">
+            </td>
+            <td class="fw-bold">
+                ${parseInt(qty).toLocaleString()}
+                <input type="hidden" name="move_qty[]" value="${qty}">
+            </td>
+            <td>
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this)">삭제</button>
+            </td>
+        `;
+
+        tbody.appendChild(tr);
+        updateCount();
+
+        // 입력창 초기화
+        document.getElementById('inputPart').value = '';
+        document.getElementById('selLot').innerHTML = '<option value="">:: 품번/창고 선택 후 표시 ::</option>';
+        document.getElementById('selLot').disabled = true;
+        document.getElementById('lotInfo').textContent = '';
+        document.getElementById('inputQty').value = '';
+        document.getElementById('inputQty').removeAttribute('max');
+        currentLotData = null;
+        qrScannedQty = null; // QR 스캔 수량 초기화
+
+        // QR 입력창으로 포커스 이동 (다음 스캔 준비)
+        document.getElementById('qrScanInput').focus();
+    }
+
+    function removeRow(btn) {
+        btn.closest('tr').remove();
+        const tbody = document.getElementById('tableBody');
+        if(tbody.children.length === 0) {
+            tbody.innerHTML = `<tr id="emptyRow"><td colspan="7" class="text-muted py-4">이동할 항목을 상단에서 추가해주세요.</td></tr>`;
+        }
+        updateCount();
+    }
+
+    function updateCount() {
+        const count = document.querySelectorAll('input[name="part_no[]"]').length;
+        document.getElementById('itemCount').innerText = count + "건";
+    }
+
+    // 이벤트 리스너 등록
+    document.addEventListener('DOMContentLoaded', function() {
+        // QR 스캔 입력 이벤트 (엔터키로 스캔 완료)
+        document.getElementById('qrScanInput').addEventListener('keypress', function(e) {
+            if(e.key === 'Enter') {
+                e.preventDefault();
+                const qrData = this.value.trim();
+                if (qrData) {
+                    handleQRScan(qrData);
+                }
+            }
+        });
+
+        // 페이지 로드 시 QR 입력창에 포커스
+        document.getElementById('qrScanInput').focus();
+
+        // 품번 또는 보내는 창고 변경 시 LOT 목록 로드
+        document.getElementById('inputPart').addEventListener('change', loadAvailableLots);
+        document.getElementById('selFromLoc').addEventListener('change', loadAvailableLots);
+
+        // LOT 선택 시 정보 저장
+        document.getElementById('selLot').addEventListener('change', onLotSelect);
+
+        // 엔터키 입력 시 추가 동작
+        document.getElementById('inputQty').addEventListener('keypress', function(e) {
+            if(e.key === 'Enter') {
+                e.preventDefault();
+                addRow();
+            }
+        });
+    });
+</script>
+{% endblock %}

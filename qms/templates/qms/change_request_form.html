@@ -1,0 +1,379 @@
+{% extends 'qms/qms_base.html' %}
+{% load humanize %}
+
+{% block title %}4M 변경관리 - {% if mode == 'create' %}신규 신청{% else %}수정{% endif %}{% endblock %}
+
+{% block qms_content %}
+<div class="container-fluid px-3" style="max-width: 1000px;">
+
+    <!-- 헤더 -->
+    <div class="mb-3">
+        <h5 class="fw-bold mb-1">
+            <a href="{% if mode == 'edit' %}{% url 'qms:change_request_detail' cr.pk %}{% else %}{% url 'qms:change_request_list' %}{% endif %}"
+               class="text-decoration-none text-muted">
+                <i class="bi bi-arrow-left me-2"></i>
+            </a>
+            {% if mode == 'create' %}4M 변경 신규 신청{% else %}4M 변경 신청 수정{% endif %}
+        </h5>
+    </div>
+
+    <form method="post" id="changeRequestForm">
+        {% csrf_token %}
+
+        <!-- 1. 기본 정보 -->
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-primary text-white fw-bold py-2">
+                <i class="bi bi-1-circle me-2"></i>기본 정보
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <!-- 공장 -->
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">공장</label>
+                        <input type="text" name="factory" class="form-control" value="{{ cr.factory|default:'2공장' }}" placeholder="예: 2공장">
+                    </div>
+
+                    <!-- 품번 (검색 팝업) -->
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">품번 <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <input type="text" name="part_no" id="partNo" class="form-control" required readonly
+                                   value="{{ cr.part_no }}" placeholder="품번 검색">
+                            <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#partSearchModal">
+                                <i class="bi bi-search"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 품명 (자동입력) -->
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">품명</label>
+                        <input type="text" name="part_name" id="partName" class="form-control bg-light" readonly
+                               value="{{ cr.part_name }}" placeholder="품번 선택 시 자동입력">
+                    </div>
+
+                    <!-- 품목군 (자동입력) -->
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">품목군</label>
+                        <input type="text" name="part_group" id="partGroup" class="form-control bg-light" readonly
+                               value="{{ cr.model_name }}" placeholder="품번 선택 시 자동입력">
+                    </div>
+
+                    <!-- 4M 유형 -->
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">4M 유형 <span class="text-danger">*</span></label>
+                        <select name="change_type" class="form-select" required>
+                            <option value="">선택</option>
+                            {% for code, label in type_choices %}
+                            <option value="{{ code }}" {% if cr.change_type == code %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- 변경 등급 -->
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">변경구분(A/B/C/D)</label>
+                        <select name="change_grade" class="form-select">
+                            <option value="">선택 (미정)</option>
+                            {% for code, label in grade_choices %}
+                            <option value="{{ code }}" {% if cr.change_grade == code %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- 사내/사외 체크박스 -->
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">사내/사외</label>
+                        <div class="d-flex gap-3 mt-2">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="is_internal" id="isInternal" value="1"
+                                       {% if cr.is_internal %}checked{% endif %}>
+                                <label class="form-check-label" for="isInternal">사내</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="is_external" id="isExternal" value="1"
+                                       {% if cr.is_external %}checked{% endif %}>
+                                <label class="form-check-label" for="isExternal">사외</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 목표완료일 -->
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">목표완료일</label>
+                        <input type="date" name="target_date" class="form-control" value="{{ cr.target_date|date:'Y-m-d' }}">
+                    </div>
+
+                    <!-- 협력사 (검색 팝업) -->
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">협력사 <span class="text-danger">*</span></label>
+                        {% if is_vendor %}
+                        <input type="text" class="form-control bg-light" value="{{ vendor_org.name }}" readonly>
+                        <input type="hidden" name="vendor_id" value="{{ vendor_org.id }}">
+                        {% else %}
+                        <div class="input-group">
+                            <input type="text" id="vendorName" class="form-control" readonly required
+                                   value="{% if cr.vendor %}{{ cr.vendor.name }}{% endif %}" placeholder="협력사 검색">
+                            <input type="hidden" name="vendor_id" id="vendorId" value="{{ cr.vendor_id }}">
+                            <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#vendorSearchModal">
+                                <i class="bi bi-search"></i>
+                            </button>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. 결재선 지정 -->
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-light fw-bold py-2">
+                <i class="bi bi-2-circle me-2"></i>결재선 지정
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">검토1 선택</label>
+                        <select name="reviewer_id" class="form-select">
+                            <option value="">--- 검토1 선택 ---</option>
+                            {% for u in approvers %}
+                            <option value="{{ u.id }}"
+                                {% if existing_reviewer and existing_reviewer.assignee_id == u.id %}selected{% endif %}>
+                                {{ u.username }}{% if u.profile.org %} ({{ u.profile.org.name }}){% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">실제 서명(검토1)을 진행할 담당자를 선택하세요.</small>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">검토2 선택 (선택)</label>
+                        <select name="reviewer2_id" class="form-select">
+                            <option value="">--- 검토2 선택(해당 시) ---</option>
+                            {% for u in approvers %}
+                            <option value="{{ u.id }}"
+                                {% if existing_reviewer2 and existing_reviewer2.assignee_id == u.id %}selected{% endif %}>
+                                {{ u.username }}{% if u.profile.org %} ({{ u.profile.org.name }}){% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">검토 단계를 추가하려면 지정하세요. (미지정 시 검토1 → 최종 승인)</small>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">최종 승인자 선택 <span class="text-danger">*</span></label>
+                        <select name="approver_id" class="form-select" required>
+                            <option value="">--- 승인자 선택 ---</option>
+                            {% for u in approvers %}
+                            <option value="{{ u.id }}"
+                                {% if existing_approver and existing_approver.assignee_id == u.id %}selected{% endif %}>
+                                {{ u.username }}{% if u.profile.org %} ({{ u.profile.org.name }}){% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">최종 결재 권한을 가진 관리자를 선택하세요.</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. 변경 상세 -->
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-light fw-bold py-2">
+                <i class="bi bi-3-circle me-2"></i>변경 상세
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">변경 사유 <span class="text-danger">*</span></label>
+                    <textarea name="reason" class="form-control" rows="3" required
+                              placeholder="변경이 필요한 이유를 상세히 작성해주세요.">{{ cr.reason }}</textarea>
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-danger">변경 전 <span class="text-danger">*</span></label>
+                        <textarea name="content_before" class="form-control" rows="4" required
+                                  placeholder="현재 상태를 기술해주세요.">{{ cr.content_before }}</textarea>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-success">변경 후 <span class="text-danger">*</span></label>
+                        <textarea name="content_after" class="form-control" rows="4" required
+                                  placeholder="변경 후 상태를 기술해주세요.">{{ cr.content_after }}</textarea>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <label class="form-label fw-bold">영향받는 특성/항목</label>
+                    <textarea name="affected_items" class="form-control" rows="2"
+                              placeholder="변경으로 영향받는 품질특성, 공정 등을 기술해주세요.">{{ cr.affected_items }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- 버튼 -->
+        <div class="d-flex justify-content-end gap-2 mb-4">
+            <a href="{% if mode == 'edit' %}{% url 'qms:change_request_detail' cr.pk %}{% else %}{% url 'qms:change_request_list' %}{% endif %}"
+               class="btn btn-secondary">
+                <i class="bi bi-x-lg me-1"></i>취소
+            </a>
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-check-lg me-1"></i>{% if mode == 'create' %}신청서 작성{% else %}수정 저장{% endif %}
+            </button>
+        </div>
+
+    </form>
+
+</div>
+
+<!-- 품번 검색 팝업 -->
+<div class="modal fade" id="partSearchModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-search me-2"></i>품번 검색</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group mb-3">
+                    <input type="text" id="partSearchInput" class="form-control" placeholder="품번 또는 품명으로 검색...">
+                    <button type="button" class="btn btn-primary" onclick="searchParts()">
+                        <i class="bi bi-search"></i> 검색
+                    </button>
+                </div>
+                <div id="partSearchResults" style="max-height: 400px; overflow-y: auto;">
+                    <table class="table table-hover table-sm">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th>품번</th>
+                                <th>품명</th>
+                                <th>품목군</th>
+                                <th>협력사</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="partSearchBody">
+                            <tr><td colspan="5" class="text-center text-muted py-4">검색어를 입력하세요</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 협력사 검색 팝업 -->
+<div class="modal fade" id="vendorSearchModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-building me-2"></i>협력사 검색</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group mb-3">
+                    <input type="text" id="vendorSearchInput" class="form-control" placeholder="협력사명 검색...">
+                    <button type="button" class="btn btn-primary" onclick="searchVendors()">
+                        <i class="bi bi-search"></i> 검색
+                    </button>
+                </div>
+                <div id="vendorSearchResults" style="max-height: 300px; overflow-y: auto;">
+                    <div class="list-group" id="vendorSearchBody">
+                        <div class="list-group-item text-center text-muted">검색어를 입력하세요</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// 품번 검색
+function searchParts() {
+    const query = document.getElementById('partSearchInput').value.trim();
+    if (query.length < 2) {
+        alert('2자 이상 입력해주세요.');
+        return;
+    }
+
+    fetch(`/api/parts/search/?q=${encodeURIComponent(query)}`)
+        .then(response => response.json())
+        .then(data => {
+            const tbody = document.getElementById('partSearchBody');
+            const results = data.results || [];
+            if (results.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">검색 결과가 없습니다</td></tr>';
+                return;
+            }
+            tbody.innerHTML = results.map(p => `
+                <tr style="cursor:pointer;" onclick="selectPart('${p.part_no}', '${p.part_name}', '${p.part_group || ''}', '${p.vendor_id || ''}', '${p.vendor_name || ''}')">
+                    <td class="fw-bold text-primary">${p.part_no}</td>
+                    <td>${p.part_name}</td>
+                    <td>${p.part_group || '-'}</td>
+                    <td>${p.vendor_name || '-'}</td>
+                    <td><button type="button" class="btn btn-sm btn-outline-primary">선택</button></td>
+                </tr>
+            `).join('');
+        })
+        .catch(err => {
+            console.error(err);
+            alert('검색 중 오류가 발생했습니다.');
+        });
+}
+
+function selectPart(partNo, partName, partGroup, vendorId, vendorName) {
+    document.getElementById('partNo').value = partNo;
+    document.getElementById('partName').value = partName;
+    document.getElementById('partGroup').value = partGroup;
+
+    // 협력사도 자동 선택 (내부 사용자인 경우)
+    if (vendorId && document.getElementById('vendorId')) {
+        document.getElementById('vendorId').value = vendorId;
+        document.getElementById('vendorName').value = vendorName;
+    }
+
+    bootstrap.Modal.getInstance(document.getElementById('partSearchModal')).hide();
+}
+
+// 협력사 검색
+function searchVendors() {
+    const query = document.getElementById('vendorSearchInput').value.trim();
+    if (query.length < 1) {
+        alert('검색어를 입력해주세요.');
+        return;
+    }
+
+    fetch(`/api/vendors/search/?q=${encodeURIComponent(query)}`)
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('vendorSearchBody');
+            const results = data.results || [];
+            if (results.length === 0) {
+                container.innerHTML = '<div class="list-group-item text-center text-muted">검색 결과가 없습니다</div>';
+                return;
+            }
+            container.innerHTML = results.map(v => `
+                <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                        onclick="selectVendor('${v.id}', '${v.name}')">
+                    <span class="fw-bold">${v.name}</span>
+                    <span class="badge bg-primary">선택</span>
+                </button>
+            `).join('');
+        })
+        .catch(err => {
+            console.error(err);
+            alert('검색 중 오류가 발생했습니다.');
+        });
+}
+
+function selectVendor(vendorId, vendorName) {
+    document.getElementById('vendorId').value = vendorId;
+    document.getElementById('vendorName').value = vendorName;
+    bootstrap.Modal.getInstance(document.getElementById('vendorSearchModal')).hide();
+}
+
+// Enter 키로 검색
+document.getElementById('partSearchInput')?.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); searchParts(); }
+});
+document.getElementById('vendorSearchInput')?.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); searchVendors(); }
+});
+</script>
+
+{% endblock %}

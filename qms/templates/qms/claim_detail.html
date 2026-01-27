@@ -1,0 +1,204 @@
+{% extends 'qms/qms_base.html' %}
+{% load humanize %}
+
+{% block title %}클레임 상세 - {{ claim.claim_no }}{% endblock %}
+
+{% block qms_content %}
+<div class="container-fluid p-0" style="max-width: 1200px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold">
+            <i class="bi bi-file-earmark-x me-2"></i>{{ claim.claim_no }}
+            <span class="badge bg-{% if claim.claim_type == 'QUALITY' %}danger{% elif claim.claim_type == 'DELIVERY' %}warning{% else %}secondary{% endif %} ms-2">
+                {{ claim.get_claim_type_display }}
+            </span>
+            <span class="badge bg-{% if claim.status == 'CLOSED' %}success{% elif claim.status == 'DRAFT' %}secondary{% else %}warning{% endif %}">
+                {{ claim.get_status_display }}
+            </span>
+        </h3>
+        <div>
+            {% if claim.status == 'DRAFT' %}
+            <form method="post" class="d-inline">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="issue">
+                <button type="submit" class="btn btn-primary me-2" onclick="return confirm('클레임을 발행하시겠습니까?');">
+                    <i class="bi bi-send me-1"></i>클레임 발행
+                </button>
+            </form>
+            {% endif %}
+            <a href="{% url 'qms:claim_list' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i>목록으로
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- 기본 정보 -->
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-dark text-white">
+                    <i class="bi bi-info-circle me-2"></i>기본 정보
+                </div>
+                <div class="card-body">
+                    <table class="table table-borderless mb-0">
+                        <tr>
+                            <th class="text-muted" style="width: 100px;">클레임번호</th>
+                            <td class="fw-bold">{{ claim.claim_no }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">협력사</th>
+                            <td>{{ claim.vendor.name }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">발생일</th>
+                            <td>{{ claim.issue_date }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">발행일</th>
+                            <td>{{ claim.issued_date|default:'-' }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">품번</th>
+                            <td>{{ claim.part_no }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">품명</th>
+                            <td>{{ claim.part_name }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">LOT번호</th>
+                            <td>{{ claim.lot_no|default:'-' }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">발행자</th>
+                            <td>{{ claim.issued_by.username }}</td>
+                        </tr>
+                        {% if claim.non_conformance %}
+                        <tr>
+                            <th class="text-muted">관련 부적합</th>
+                            <td><a href="{% url 'qms:nc_detail' pk=claim.non_conformance.pk %}">{{ claim.non_conformance.nc_no }}</a></td>
+                        </tr>
+                        {% endif %}
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 클레임 내용 -->
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-danger text-white">
+                    <i class="bi bi-exclamation-circle me-2"></i>클레임 내용
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-4">
+                            <div class="small text-muted">클레임수량</div>
+                            <div class="h4 fw-bold text-danger">{{ claim.claim_qty|intcomma }}</div>
+                        </div>
+                        <div class="col-4">
+                            <div class="small text-muted">클레임유형</div>
+                            <div class="fw-bold">{{ claim.get_claim_type_display }}</div>
+                        </div>
+                        <div class="col-4">
+                            <div class="small text-muted">클레임금액</div>
+                            <div class="h4 fw-bold text-primary">
+                                {% if claim.claim_amount %}{{ claim.claim_amount|intcomma }}원{% else %}-{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="small text-muted">클레임상세</div>
+                        <div class="p-3 bg-light rounded">{{ claim.claim_detail }}</div>
+                    </div>
+                    {% if claim.photo %}
+                    <div>
+                        <div class="small text-muted mb-2">불량사진</div>
+                        <img src="{{ claim.photo.url }}" class="img-fluid rounded" style="max-height: 200px;">
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 처리 정보 -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-info text-white">
+            <i class="bi bi-gear me-2"></i>처리 정보
+        </div>
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="update">
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">처리상태</label>
+                        <select name="status" class="form-select">
+                            {% for value, label in status_choices %}
+                            <option value="{{ value }}" {% if claim.status == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">보상방법</label>
+                        <input type="text" name="compensation_type" class="form-control" value="{{ claim.compensation_type }}" placeholder="교체, 수리, 반품, 비용공제 등">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">보상금액(원)</label>
+                        <input type="number" name="compensation_amount" class="form-control" value="{{ claim.compensation_amount|default:'' }}" placeholder="보상금액">
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">협력사 답변</label>
+                        <textarea name="vendor_response" class="form-control" rows="3">{{ claim.vendor_response }}</textarea>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">처리결과</label>
+                        <textarea name="resolution_detail" class="form-control" rows="3">{{ claim.resolution_detail }}</textarea>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">처리완료일</label>
+                        <div class="form-control bg-light">{{ claim.resolved_date|default:'-' }}</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">종결일</label>
+                        <div class="form-control bg-light">{{ claim.closed_date|default:'-' }}</div>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <h6 class="fw-bold text-success mb-3"><i class="bi bi-cash-coin me-2"></i>정산 정보</h6>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">정산상태</label>
+                        <select name="settlement_status" class="form-select">
+                            <option value="NOT_SETTLED" {% if claim.settlement_status == 'NOT_SETTLED' %}selected{% endif %}>미정산</option>
+                            <option value="IN_PROGRESS" {% if claim.settlement_status == 'IN_PROGRESS' %}selected{% endif %}>정산중</option>
+                            <option value="SETTLED" {% if claim.settlement_status == 'SETTLED' %}selected{% endif %}>정산완료</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">정산일</label>
+                        <input type="date" name="settlement_date" class="form-control" value="{{ claim.settlement_date|date:'Y-m-d' }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">정산비고</label>
+                        <input type="text" name="settlement_remark" class="form-control" value="{{ claim.settlement_remark }}" placeholder="정산 관련 비고">
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-end">
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>저장</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
