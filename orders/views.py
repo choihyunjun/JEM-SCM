@@ -872,7 +872,7 @@ def inventory_list(request):
                     'demand_qty': dq,
                     'in_qty': iq,
                     'stock': temp_stock,
-                    'is_danger': temp_stock < 0
+                    'is_danger': temp_stock < 200  # 안전재고 200개 미만 시 위험 표시
                 })
 
             inventory_data.append({
