@@ -15,18 +15,36 @@
 
         <div class="top-actions">
             {% if user.is_superuser or user|has_perm:'can_scm_inventory_view' %}
-            <form method="get" class="control-block">
+            <form method="get" class="control-block" id="searchForm">
                 <input type="hidden" name="show_all" value="{{ show_all|lower }}">
                 <input type="hidden" name="search" value="1">
+                <input type="hidden" name="vendor_id" id="hiddenVendorId" value="{{ selected_vendor_id|default:'' }}">
 
-                <select name="vendor_id" class="form-select form-select-sm shadow-sm vendor-select">
-                    <option value="">전체 업체</option>
-                    {% for v in vendor_list %}
-                        <option value="{{ v.id }}" {% if selected_vendor_id == v.id|stringformat:"s" %}selected{% endif %}>
-                            {{ v.name }}
-                        </option>
-                    {% endfor %}
-                </select>
+                <!-- 업체 검색 영역 -->
+                <div class="position-relative vendor-search-wrap">
+                    {% if selected_vendor_name %}
+                    <div id="selectedVendorBadge" class="selected-vendor-badge">
+                        <span class="badge bg-primary px-3 py-2">
+                            <i class="bi bi-building me-1"></i>
+                            <span id="selectedVendorText">{{ selected_vendor_name }}</span>
+                            <button type="button" class="btn-close btn-close-white ms-2" style="font-size: 0.5rem;" onclick="clearVendorSelection()"></button>
+                        </span>
+                    </div>
+                    <input type="text" id="vendorSearchInput" class="form-control form-control-sm shadow-sm"
+                           placeholder="업체명 검색..." autocomplete="off" style="display: none;">
+                    {% else %}
+                    <div id="selectedVendorBadge" class="selected-vendor-badge" style="display: none;">
+                        <span class="badge bg-primary px-3 py-2">
+                            <i class="bi bi-building me-1"></i>
+                            <span id="selectedVendorText"></span>
+                            <button type="button" class="btn-close btn-close-white ms-2" style="font-size: 0.5rem;" onclick="clearVendorSelection()"></button>
+                        </span>
+                    </div>
+                    <input type="text" id="vendorSearchInput" class="form-control form-control-sm shadow-sm"
+                           placeholder="업체명 검색..." autocomplete="off">
+                    {% endif %}
+                    <div id="vendorSearchResults" class="vendor-search-results list-group shadow"></div>
+                </div>
 
                 <div class="input-group input-group-sm search-group">
                     <input type="text" name="q" value="{{ q|default:'' }}"
@@ -611,7 +629,111 @@ document.addEventListener('click', function(e) {
             vendorSearchResults.style.display = 'none';
         }
     }
+    // 상단 업체 검색 팝업도 닫기
+    const topVendorInput = document.getElementById('vendorSearchInput');
+    const topVendorResults = document.getElementById('vendorSearchResults');
+    if (topVendorInput && topVendorResults) {
+        if (!topVendorInput.contains(e.target) && !topVendorResults.contains(e.target)) {
+            topVendorResults.style.display = 'none';
+        }
+    }
 });
+
+// ========== 상단 업체 검색 기능 ==========
+const allVendors = [
+    {% for v in vendor_list %}
+    { id: '{{ v.id }}', name: '{{ v.name|escapejs }}' },
+    {% endfor %}
+];
+
+const topVendorSearchInput = document.getElementById('vendorSearchInput');
+const topVendorSearchResults = document.getElementById('vendorSearchResults');
+const hiddenVendorId = document.getElementById('hiddenVendorId');
+const selectedVendorBadge = document.getElementById('selectedVendorBadge');
+const selectedVendorText = document.getElementById('selectedVendorText');
+
+let topSearchTimeout = null;
+
+if (topVendorSearchInput) {
+    topVendorSearchInput.addEventListener('input', function() {
+        clearTimeout(topSearchTimeout);
+        const query = this.value.trim().toLowerCase();
+
+        topSearchTimeout = setTimeout(() => {
+            topVendorSearchResults.innerHTML = '';
+
+            if (query.length < 1) {
+                // 빈 입력이면 전체 업체 표시 (최대 20개)
+                const showList = allVendors.slice(0, 20);
+                showList.forEach(vendor => {
+                    const item = document.createElement('button');
+                    item.type = 'button';
+                    item.className = 'list-group-item list-group-item-action';
+                    item.innerHTML = `<i class="bi bi-building me-2 text-muted"></i>${vendor.name}`;
+                    item.onclick = () => selectTopVendor(vendor.id, vendor.name);
+                    topVendorSearchResults.appendChild(item);
+                });
+                if (allVendors.length > 20) {
+                    const moreItem = document.createElement('div');
+                    moreItem.className = 'list-group-item text-muted small text-center';
+                    moreItem.textContent = `외 ${allVendors.length - 20}개 업체 (검색어 입력)`;
+                    topVendorSearchResults.appendChild(moreItem);
+                }
+                topVendorSearchResults.style.display = 'block';
+                return;
+            }
+
+            const filtered = allVendors.filter(v => v.name.toLowerCase().includes(query));
+
+            if (filtered.length === 0) {
+                topVendorSearchResults.innerHTML = '<div class="list-group-item text-muted small">검색 결과 없음</div>';
+            } else {
+                filtered.slice(0, 15).forEach(vendor => {
+                    const item = document.createElement('button');
+                    item.type = 'button';
+                    item.className = 'list-group-item list-group-item-action';
+                    item.innerHTML = `<i class="bi bi-building me-2 text-muted"></i>${vendor.name}`;
+                    item.onclick = () => selectTopVendor(vendor.id, vendor.name);
+                    topVendorSearchResults.appendChild(item);
+                });
+            }
+            topVendorSearchResults.style.display = 'block';
+        }, 150);
+    });
+
+    topVendorSearchInput.addEventListener('focus', function() {
+        // 포커스 시 팝업 표시
+        if (this.value.trim() === '') {
+            this.dispatchEvent(new Event('input'));
+        }
+    });
+
+    topVendorSearchInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const firstResult = topVendorSearchResults.querySelector('.list-group-item-action');
+            if (firstResult && topVendorSearchResults.style.display !== 'none') {
+                firstResult.click();
+            }
+        }
+    });
+}
+
+function selectTopVendor(vendorId, vendorName) {
+    hiddenVendorId.value = vendorId;
+    selectedVendorText.textContent = vendorName;
+    selectedVendorBadge.style.display = 'inline-block';
+    topVendorSearchInput.style.display = 'none';
+    topVendorSearchResults.style.display = 'none';
+}
+
+function clearVendorSelection() {
+    hiddenVendorId.value = '';
+    selectedVendorBadge.style.display = 'none';
+    topVendorSearchInput.style.display = 'block';
+    topVendorSearchInput.value = '';
+    topVendorSearchInput.focus();
+}
 </script>
 
 <style>
@@ -629,8 +751,37 @@ document.addEventListener('click', function(e) {
 }
 .btn-block{ gap: 6px; }
 .toggle-block{ margin-left: 4px; }
-.vendor-select{ width: 180px; }
 .search-group{ width: 220px; }
+
+/* 업체 검색 팝업 스타일 */
+.vendor-search-wrap {
+    width: 200px;
+}
+.vendor-search-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1050;
+    max-height: 280px;
+    overflow-y: auto;
+    display: none;
+    background: white;
+    border-radius: 4px;
+}
+.vendor-search-results .list-group-item-action {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+.vendor-search-results .list-group-item-action:hover {
+    background-color: #e9ecef;
+}
+.selected-vendor-badge .badge {
+    font-size: 0.8rem;
+    display: inline-flex;
+    align-items: center;
+}
 .top-control .btn,
 .top-control .form-select,
 .top-control .form-control{

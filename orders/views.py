@@ -606,6 +606,7 @@ def inventory_list(request):
     show_all = request.GET.get('show_all') == 'true'
     selected_v = request.GET.get('vendor_id')
     q = request.GET.get('q', '')
+    search_submitted = request.GET.get('search') == '1'  # 조회 버튼 클릭 여부
 
     part_qs = Part.objects.select_related('vendor').filter(vendor__isnull=False).order_by('vendor__name', 'part_name')
 
@@ -622,99 +623,103 @@ def inventory_list(request):
     if q:
         part_qs = part_qs.filter(Q(part_no__icontains=q) | Q(part_name__icontains=q))
 
-    if not show_all:
-        act_pnos = Demand.objects.filter(due_date__range=[today, end_date]).values_list('part__part_no', flat=True).distinct()
-        wms_pnos = MaterialStock.objects.filter(quantity__gt=0).values_list('part__part_no', flat=True).distinct()
-        combined_pnos = set(list(act_pnos) + list(wms_pnos))
-        part_qs = part_qs.filter(part_no__in=combined_pnos)
-
     # ============================================
-    # 최적화: 모든 데이터를 미리 조회 (N+1 쿼리 방지)
-    # ============================================
-    from material.models import Warehouse
-    from collections import defaultdict
-
-    # 1. 품목 리스트 확정 (쿼리 실행)
-    parts = list(part_qs)
-    part_ids = [p.id for p in parts]
-
-    # 2. 자재창고(2000, 4200) 조회
-    target_warehouses = Warehouse.objects.filter(code__in=['2000', '4200'])
-    target_wh_ids = list(target_warehouses.values_list('id', flat=True))
-
-    # 3. MaterialStock 일괄 조회 (part별 재고 합계)
-    if target_wh_ids:
-        stock_qs = MaterialStock.objects.filter(
-            part_id__in=part_ids,
-            warehouse_id__in=target_wh_ids
-        ).values('part_id').annotate(total_qty=Sum('quantity'))
-    else:
-        stock_qs = MaterialStock.objects.filter(
-            part_id__in=part_ids
-        ).values('part_id').annotate(total_qty=Sum('quantity'))
-
-    stock_map = {item['part_id']: item['total_qty'] or 0 for item in stock_qs}
-
-    # 4. Incoming 일괄 조회 (part별, 날짜별 입고량)
-    incoming_qs = Incoming.objects.filter(
-        part_id__in=part_ids,
-        in_date__range=[today, end_date]
-    ).values('part_id', 'in_date').annotate(total_qty=Sum('quantity'))
-
-    incoming_map = defaultdict(lambda: defaultdict(int))
-    for item in incoming_qs:
-        incoming_map[item['part_id']][item['in_date']] = item['total_qty'] or 0
-
-    # 5. Demand 일괄 조회 (part별, 날짜별 소요량)
-    demand_qs = Demand.objects.filter(
-        part_id__in=part_ids,
-        due_date__range=[today, end_date]
-    ).values('part_id', 'due_date').annotate(total_qty=Sum('quantity'))
-
-    demand_map = defaultdict(lambda: defaultdict(int))
-    for item in demand_qs:
-        demand_map[item['part_id']][item['due_date']] = item['total_qty'] or 0
-
-    # ============================================
-    # 메모리에서 과부족 계산
+    # 조회 버튼을 눌렀을 때만 데이터 로드
     # ============================================
     inventory_data = []
 
-    for part in parts:
-        daily_status = []
+    if search_submitted:
+        if not show_all:
+            act_pnos = Demand.objects.filter(due_date__range=[today, end_date]).values_list('part__part_no', flat=True).distinct()
+            wms_pnos = MaterialStock.objects.filter(quantity__gt=0).values_list('part__part_no', flat=True).distinct()
+            combined_pnos = set(list(act_pnos) + list(wms_pnos))
+            part_qs = part_qs.filter(part_no__in=combined_pnos)
 
-        # WMS 현재 재고
-        current_wms_stock = stock_map.get(part.id, 0)
+        # ============================================
+        # 최적화: 모든 데이터를 미리 조회 (N+1 쿼리 방지)
+        # ============================================
+        from material.models import Warehouse
+        from collections import defaultdict
 
-        # 오늘 입고량 (WMS에 이미 반영된 금일 입고)
-        today_incoming = incoming_map[part.id].get(today, 0)
+        # 1. 품목 리스트 확정 (쿼리 실행)
+        parts = list(part_qs)
+        part_ids = [p.id for p in parts]
 
-        # 시업재고 = WMS 현재 재고 - 오늘 입고량
-        opening_stock = current_wms_stock - today_incoming
-        temp_stock = opening_stock
+        # 2. 자재창고(2000, 4200) 조회
+        target_warehouses = Warehouse.objects.filter(code__in=['2000', '4200'])
+        target_wh_ids = list(target_warehouses.values_list('id', flat=True))
 
-        for dt in date_range:
-            dq = demand_map[part.id].get(dt, 0)
-            iq = incoming_map[part.id].get(dt, 0)
+        # 3. MaterialStock 일괄 조회 (part별 재고 합계)
+        if target_wh_ids:
+            stock_qs = MaterialStock.objects.filter(
+                part_id__in=part_ids,
+                warehouse_id__in=target_wh_ids
+            ).values('part_id').annotate(total_qty=Sum('quantity'))
+        else:
+            stock_qs = MaterialStock.objects.filter(
+                part_id__in=part_ids
+            ).values('part_id').annotate(total_qty=Sum('quantity'))
 
-            # 입고/소요 반영
-            temp_stock = temp_stock - dq + iq
+        stock_map = {item['part_id']: item['total_qty'] or 0 for item in stock_qs}
 
-            daily_status.append({
-                'date': dt,
-                'demand_qty': dq,
-                'in_qty': iq,
-                'stock': temp_stock,
-                'is_danger': temp_stock < 0
+        # 4. Incoming 일괄 조회 (part별, 날짜별 입고량)
+        incoming_qs = Incoming.objects.filter(
+            part_id__in=part_ids,
+            in_date__range=[today, end_date]
+        ).values('part_id', 'in_date').annotate(total_qty=Sum('quantity'))
+
+        incoming_map = defaultdict(lambda: defaultdict(int))
+        for item in incoming_qs:
+            incoming_map[item['part_id']][item['in_date']] = item['total_qty'] or 0
+
+        # 5. Demand 일괄 조회 (part별, 날짜별 소요량)
+        demand_qs = Demand.objects.filter(
+            part_id__in=part_ids,
+            due_date__range=[today, end_date]
+        ).values('part_id', 'due_date').annotate(total_qty=Sum('quantity'))
+
+        demand_map = defaultdict(lambda: defaultdict(int))
+        for item in demand_qs:
+            demand_map[item['part_id']][item['due_date']] = item['total_qty'] or 0
+
+        # ============================================
+        # 메모리에서 과부족 계산
+        # ============================================
+        for part in parts:
+            daily_status = []
+
+            # WMS 현재 재고
+            current_wms_stock = stock_map.get(part.id, 0)
+
+            # 오늘 입고량 (WMS에 이미 반영된 금일 입고)
+            today_incoming = incoming_map[part.id].get(today, 0)
+
+            # 시업재고 = WMS 현재 재고 - 오늘 입고량
+            opening_stock = current_wms_stock - today_incoming
+            temp_stock = opening_stock
+
+            for dt in date_range:
+                dq = demand_map[part.id].get(dt, 0)
+                iq = incoming_map[part.id].get(dt, 0)
+
+                # 입고/소요 반영
+                temp_stock = temp_stock - dq + iq
+
+                daily_status.append({
+                    'date': dt,
+                    'demand_qty': dq,
+                    'in_qty': iq,
+                    'stock': temp_stock,
+                    'is_danger': temp_stock < 0
+                })
+
+            inventory_data.append({
+                'vendor_name': part.vendor.name if part.vendor else '(미연결)',
+                'part_no': part.part_no,
+                'part_name': part.part_name,
+                'base_stock': opening_stock,
+                'daily_status': daily_status
             })
-
-        inventory_data.append({
-            'vendor_name': part.vendor.name if part.vendor else '(미연결)',
-            'part_no': part.part_no,
-            'part_name': part.part_name,
-            'base_stock': opening_stock,
-            'daily_status': daily_status
-        })
 
     latest_inv_date = None
     last_inv_obj = Inventory.objects.exclude(last_inventory_date__isnull=True).order_by('-last_inventory_date').first()
@@ -730,6 +735,13 @@ def inventory_list(request):
     # 품번만으로 관련 발주 있는지 확인용 (날짜 무관하게 경고 표시)
     pending_order_parts = list(set(po[0] for po in pending_orders))
 
+    # 선택된 업체명 (검색 팝업에 표시용)
+    selected_vendor_name = ''
+    if selected_v:
+        selected_vendor_obj = next((v for v in vendor_list if str(v.id) == selected_v), None)
+        if selected_vendor_obj:
+            selected_vendor_name = selected_vendor_obj.name
+
     return render(request, 'inventory_list.html', {
         'date_range': date_range,
         'inventory_data': inventory_data,
@@ -737,12 +749,14 @@ def inventory_list(request):
         'active_menu': 'inventory',
         'show_all': show_all,
         'selected_vendor_id': selected_v,
+        'selected_vendor_name': selected_vendor_name,
         'user_name': user.username,
         'vendor_name': user_vendor.name if user_vendor else "관리자",
         'q': q,
         'inventory_ref_date': latest_inv_date,
         'pending_order_keys': pending_order_keys,
-        'pending_order_parts': pending_order_parts
+        'pending_order_parts': pending_order_parts,
+        'search_submitted': search_submitted,
     })
 
 @login_required
