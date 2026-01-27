@@ -588,7 +588,17 @@ def inventory_list(request):
     """
     user = request.user
     today = timezone.localtime().date()
+
+    # 협력업체 사용자 판별 (2가지 경로)
+    # 1. Vendor.user 필드 (구 방식)
     user_vendor = Vendor.objects.filter(user=user).first()
+    # 2. UserProfile.org → Organization.linked_vendor (신 방식)
+    if not user_vendor and not user.is_superuser:
+        try:
+            if hasattr(user, 'profile') and user.profile.org and user.profile.org.linked_vendor:
+                user_vendor = user.profile.org.linked_vendor
+        except Exception:
+            pass
 
     if MaterialStock is None:
         messages.error(request, "WMS(MaterialStock) 연동 모델을 불러올 수 없습니다. material 앱/모델 연결을 확인해주세요.")
