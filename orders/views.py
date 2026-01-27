@@ -576,10 +576,22 @@ def order_close_action(request):
 @login_required
 @menu_permission_required('can_scm_order_edit')
 def order_approve_all(request):
+    user = request.user
     q = Order.objects.filter(approved_at__isnull=True, is_closed=False)
-    user_vendor = Vendor.objects.filter(user=request.user).first()
-    if not request.user.is_superuser and user_vendor:
+
+    # 협력업체 사용자 판별 (2가지 경로)
+    user_vendor = Vendor.objects.filter(user=user).first()
+    if not user_vendor and not user.is_superuser:
+        try:
+            if hasattr(user, 'profile') and user.profile.org and user.profile.org.linked_vendor:
+                user_vendor = user.profile.org.linked_vendor
+        except Exception:
+            pass
+
+    # 협력업체 사용자는 자신의 발주만 승인 가능
+    if not user.is_superuser and user_vendor:
         q = q.filter(vendor=user_vendor)
+
     q.update(approved_at=timezone.now())
     return redirect('order_list')
 
@@ -595,8 +607,24 @@ def order_approve(request, order_id):
 @login_required
 @menu_permission_required('can_view_orders')
 def order_export(request):
-    user_vendor = Vendor.objects.filter(user=request.user).first()
-    orders = Order.objects.all().order_by('-created_at') if request.user.is_superuser else Order.objects.filter(vendor=user_vendor).order_by('-created_at')
+    user = request.user
+
+    # 협력업체 사용자 판별 (2가지 경로)
+    user_vendor = Vendor.objects.filter(user=user).first()
+    if not user_vendor and not user.is_superuser:
+        try:
+            if hasattr(user, 'profile') and user.profile.org and user.profile.org.linked_vendor:
+                user_vendor = user.profile.org.linked_vendor
+        except Exception:
+            pass
+
+    # 관리자는 전체, 협력업체는 자신의 발주만
+    if user.is_superuser:
+        orders = Order.objects.all().order_by('-created_at')
+    elif user_vendor:
+        orders = Order.objects.filter(vendor=user_vendor).order_by('-created_at')
+    else:
+        orders = Order.objects.all().order_by('-created_at')
 
     wb = openpyxl.Workbook()
     ws = wb.active
