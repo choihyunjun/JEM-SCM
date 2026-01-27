@@ -122,6 +122,14 @@ const itemCount = document.getElementById('itemCount');
 const successSound = document.getElementById('successSound');
 const errorSound = document.getElementById('errorSound');
 
+// XSS 방지용 HTML 이스케이프 함수
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
 // 스캔 처리 (서버에서 QR 데이터 파싱)
 async function doScan() {
     const tagId = tagInput.value.trim();
@@ -178,14 +186,15 @@ async function doScan() {
 
 function addItemRow(item) {
     const tr = document.createElement('tr');
+    const partName = item.part_name ? String(item.part_name).substring(0, 20) : '';
 
     tr.innerHTML = `
         <td class="text-center"><i class="bi bi-check-circle-fill text-success"></i></td>
-        <td class="small text-primary">${item.tag_id}</td>
-        <td class="fw-bold">${item.part_no}</td>
-        <td class="small">${item.part_name.substring(0, 20)}</td>
-        <td class="small">${item.lot_no}</td>
-        <td class="text-end fw-bold">${item.scanned_qty.toLocaleString()}</td>
+        <td class="small text-primary">${escapeHtml(item.tag_id)}</td>
+        <td class="fw-bold">${escapeHtml(item.part_no)}</td>
+        <td class="small">${escapeHtml(partName)}</td>
+        <td class="small">${escapeHtml(item.lot_no)}</td>
+        <td class="text-end fw-bold">${Number(item.scanned_qty).toLocaleString()}</td>
     `;
 
     // 맨 위에 추가

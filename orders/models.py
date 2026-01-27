@@ -154,14 +154,14 @@ class Incoming(models.Model):
 
 # 6. 라벨 발행 이력 (LabelPrintLog)
 class LabelPrintLog(models.Model):
-    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, verbose_name="협력사")
-    part = models.ForeignKey(Part, on_delete=models.CASCADE, verbose_name="품목")
+    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, related_name='labels', verbose_name="협력사")
+    part = models.ForeignKey(Part, on_delete=models.CASCADE, related_name='labels', verbose_name="품목")
     part_no = models.CharField(max_length=50, verbose_name="품번")
     printed_qty = models.IntegerField(verbose_name="발행수량")
     snp = models.IntegerField(verbose_name="포장단위(SNP)")
-    
+
     # [✅ 신규 추가] 어떤 발주 건에 대한 라벨인지 연결 (FK)
-    order = models.ForeignKey(Order, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="원본 발주서")
+    order = models.ForeignKey(Order, on_delete=models.SET_NULL, null=True, blank=True, related_name='labels', verbose_name="원본 발주서")
     
     printed_at = models.DateTimeField(auto_now_add=True, verbose_name="발행일시")
 
@@ -193,9 +193,9 @@ class DeliveryOrder(models.Model):
 # 8. 납품서 상세 품목 (DeliveryOrderItem)
 class DeliveryOrderItem(models.Model):
     order = models.ForeignKey(DeliveryOrder, on_delete=models.CASCADE, related_name='items', verbose_name="납품서 번호")
-    
+
     # [✅ 신규 추가] ERP 추적용 필드 및 원본 발주 연결
-    linked_order = models.ForeignKey(Order, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="원본 발주서")
+    linked_order = models.ForeignKey(Order, on_delete=models.SET_NULL, null=True, blank=True, related_name='delivery_items', verbose_name="원본 발주서")
     erp_order_no = models.CharField(max_length=50, blank=True, null=True, verbose_name="ERP 발주번호")
     erp_order_seq = models.CharField(max_length=20, blank=True, null=True, verbose_name="ERP 발주순번")
 
@@ -348,8 +348,8 @@ class ReturnLog(models.Model):
     - 수입검사 불량 시 데이터 생성 (is_confirmed=False)
     - 협력사 확인 시 (is_confirmed=True) -> 재고 차감 및 납품가능수량 복구
     """
-    delivery_order = models.ForeignKey('DeliveryOrder', on_delete=models.CASCADE, verbose_name="관련 납품서")
-    part = models.ForeignKey('Part', on_delete=models.CASCADE, verbose_name="품목")
+    delivery_order = models.ForeignKey('DeliveryOrder', on_delete=models.CASCADE, related_name='return_logs', verbose_name="관련 납품서")
+    part = models.ForeignKey('Part', on_delete=models.CASCADE, related_name='return_logs', verbose_name="품목")
     quantity = models.IntegerField("반출 대상 수량")
     
     # 불량 사유 (QMS에서 입력한 내용 연동)
@@ -456,7 +456,7 @@ class QnA(models.Model):
 
     # 질문자 (협력사 또는 직원)
     author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='qna_questions', verbose_name="질문자")
-    vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="협력사")
+    vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, blank=True, related_name='qnas', verbose_name="협력사")
 
     # 답변
     answer = models.TextField("답변", blank=True, null=True)

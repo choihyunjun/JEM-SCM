@@ -56,7 +56,7 @@ urlpatterns = [
     path('api/part-exists/', views.api_part_exists, name='api_part_exists'),
 
     # LOT 관리 API
-    path('stock/lot-details/<str:part_no>/', views.get_lot_details, name='get_lot_details'),
+    path('stock/lot-details/<str:part_no>/', views.get_lot_details, name='wms_lot_details'),
     path('api/available-lots/', views.api_get_available_lots, name='api_get_available_lots'),
 
     # BOM 관리

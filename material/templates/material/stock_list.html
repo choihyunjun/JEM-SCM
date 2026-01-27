@@ -177,6 +177,14 @@
 </style>
 
 <script>
+// XSS 방지용 HTML 이스케이프 함수
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
 function showLotDetails(partNo, warehouseCode) {
     const modal = new bootstrap.Modal(document.getElementById('lotDetailModal'));
     const contentDiv = document.getElementById('lotDetailContent');
@@ -203,7 +211,7 @@ function showLotDetails(partNo, warehouseCode) {
             if (data.error) {
                 contentDiv.innerHTML = `
                     <div class="alert alert-danger">
-                        <i class="bi bi-exclamation-triangle me-2"></i>${data.error}
+                        <i class="bi bi-exclamation-triangle me-2"></i>${escapeHtml(data.error)}
                     </div>
                 `;
                 return;
@@ -214,12 +222,12 @@ function showLotDetails(partNo, warehouseCode) {
             html += '<div class="card border-0 bg-light mb-3">';
             html += '  <div class="card-body">';
             html += '    <div class="row">';
-            html += '      <div class="col-md-4"><strong>품번:</strong> <span class="text-primary">' + data.part_no + '</span></div>';
-            html += '      <div class="col-md-8"><strong>품명:</strong> ' + data.part_name + '</div>';
+            html += '      <div class="col-md-4"><strong>품번:</strong> <span class="text-primary">' + escapeHtml(data.part_no) + '</span></div>';
+            html += '      <div class="col-md-8"><strong>품명:</strong> ' + escapeHtml(data.part_name) + '</div>';
             html += '    </div>';
             html += '    <div class="row mt-2">';
-            html += '      <div class="col-md-6"><strong>협력사:</strong> ' + data.vendor_name + '</div>';
-            html += '      <div class="col-md-6"><strong>전체 재고:</strong> <span class="text-primary fw-bold fs-5">' + data.total_quantity.toLocaleString() + ' EA</span></div>';
+            html += '      <div class="col-md-6"><strong>협력사:</strong> ' + escapeHtml(data.vendor_name) + '</div>';
+            html += '      <div class="col-md-6"><strong>전체 재고:</strong> <span class="text-primary fw-bold fs-5">' + Number(data.total_quantity).toLocaleString() + ' EA</span></div>';
             html += '    </div>';
             html += '  </div>';
             html += '</div>';
@@ -227,8 +235,8 @@ function showLotDetails(partNo, warehouseCode) {
             if (data.fifo_warning) {
                 html += '<div class="alert alert-warning border-warning">';
                 html += '  <i class="bi bi-exclamation-triangle-fill me-2"></i>';
-                html += '  <strong>FIFO 경고!</strong> 가장 오래된 LOT가 <strong>' + data.oldest_days + '일</strong> 경과했습니다. ';
-                html += '  (LOT: ' + data.oldest_lot + ')';
+                html += '  <strong>FIFO 경고!</strong> 가장 오래된 LOT가 <strong>' + Number(data.oldest_days) + '일</strong> 경과했습니다. ';
+                html += '  (LOT: ' + escapeHtml(data.oldest_lot) + ')';
                 html += '</div>';
             }
 
@@ -249,20 +257,20 @@ function showLotDetails(partNo, warehouseCode) {
 
                 data.lot_details.forEach(function(lot) {
                     let daysClass = '';
-                    let daysText = lot.days_old + '일';
+                    let daysText = Number(lot.days_old) + '일';
 
                     if (lot.days_old >= 60) {
                         daysClass = 'text-danger fw-bold';
-                        daysText = lot.days_old + '일 (위험)';
+                        daysText = Number(lot.days_old) + '일 (위험)';
                     } else if (lot.days_old >= 30) {
                         daysClass = 'text-warning fw-bold';
-                        daysText = lot.days_old + '일 (주의)';
+                        daysText = Number(lot.days_old) + '일 (주의)';
                     }
 
                     html += '<tr>';
-                    html += '  <td><span class="badge bg-secondary me-1">' + lot.warehouse_code + '</span>' + lot.warehouse + '</td>';
-                    html += '  <td class="text-center fw-bold text-primary">' + lot.lot_no + '</td>';
-                    html += '  <td class="text-end fw-bold">' + lot.quantity.toLocaleString() + ' EA</td>';
+                    html += '  <td><span class="badge bg-secondary me-1">' + escapeHtml(lot.warehouse_code) + '</span>' + escapeHtml(lot.warehouse) + '</td>';
+                    html += '  <td class="text-center fw-bold text-primary">' + escapeHtml(lot.lot_no) + '</td>';
+                    html += '  <td class="text-end fw-bold">' + Number(lot.quantity).toLocaleString() + ' EA</td>';
                     html += '  <td class="text-center ' + daysClass + '">' + daysText + '</td>';
                     html += '</tr>';
                 });

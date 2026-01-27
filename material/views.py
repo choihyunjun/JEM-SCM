@@ -2932,9 +2932,9 @@ def inventory_check_scan(request, pk):
     })
 
 
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
 
-@csrf_exempt
+@require_POST
 def inventory_check_scan_api(request, pk):
     """재고조사 QR 스캔 API (AJAX)"""
     from django.http import JsonResponse

@@ -263,29 +263,46 @@ def order_list(request):
 
     today = timezone.localtime().date()
     overdue_list = []
-    active_overdue = Order.objects.filter(due_date__lt=today, is_closed=False, approved_at__isnull=False)
+    active_overdue = Order.objects.filter(
+        due_date__lt=today, is_closed=False, approved_at__isnull=False
+    ).select_related('vendor')
 
     if not (user.is_superuser or (_is_internal(user))):
         active_overdue = active_overdue.filter(vendor=user_vendor) if user_vendor else active_overdue.none()
     elif selected_vendor:
         active_overdue = active_overdue.filter(vendor_id=selected_vendor)
 
-    for o in active_overdue.order_by('due_date'):
-        # 해당 발주건에 연결된 입고 수량 계산
-        # 1) DeliveryOrderItem을 통해 linked_order로 연결된 입고
-        linked_incoming = DeliveryOrderItem.objects.filter(
-            linked_order=o,
-            order__status__in=['RECEIVED', 'APPROVED']
-        ).aggregate(Sum('total_qty'))['total_qty__sum'] or 0
+    # N+1 최적화: 모든 미납 발주의 입고 수량을 한 번에 계산
+    overdue_ids = list(active_overdue.values_list('id', flat=True))
+    overdue_erp_nos = list(active_overdue.exclude(erp_order_no__isnull=True).exclude(erp_order_no='').values_list('erp_order_no', flat=True))
 
-        # 2) 같은 품번의 Incoming 중 해당 발주 기간 내 입고 (linked_order 없는 경우 대비)
-        if linked_incoming == 0:
-            # ERP 발주번호로 매칭 시도
-            if o.erp_order_no:
-                linked_incoming = DeliveryOrderItem.objects.filter(
-                    erp_order_no=o.erp_order_no,
-                    order__status__in=['RECEIVED', 'APPROVED']
-                ).aggregate(Sum('total_qty'))['total_qty__sum'] or 0
+    # linked_order로 연결된 입고 수량 집계
+    linked_incoming_by_order = {}
+    if overdue_ids:
+        linked_qs = DeliveryOrderItem.objects.filter(
+            linked_order_id__in=overdue_ids,
+            order__status__in=['RECEIVED', 'APPROVED']
+        ).values('linked_order_id').annotate(total=Sum('total_qty'))
+        for item in linked_qs:
+            linked_incoming_by_order[item['linked_order_id']] = item['total'] or 0
+
+    # ERP 발주번호로 연결된 입고 수량 집계
+    linked_incoming_by_erp = {}
+    if overdue_erp_nos:
+        erp_qs = DeliveryOrderItem.objects.filter(
+            erp_order_no__in=overdue_erp_nos,
+            order__status__in=['RECEIVED', 'APPROVED']
+        ).values('erp_order_no').annotate(total=Sum('total_qty'))
+        for item in erp_qs:
+            linked_incoming_by_erp[item['erp_order_no']] = item['total'] or 0
+
+    for o in active_overdue.order_by('due_date'):
+        # 미리 계산된 입고 수량 사용
+        linked_incoming = linked_incoming_by_order.get(o.id, 0)
+
+        # linked_order로 입고가 없으면 ERP 발주번호로 확인
+        if linked_incoming == 0 and o.erp_order_no:
+            linked_incoming = linked_incoming_by_erp.get(o.erp_order_no, 0)
 
         rem = o.quantity - linked_incoming
 
