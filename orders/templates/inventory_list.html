@@ -20,31 +20,16 @@
                 <input type="hidden" name="search" value="1">
                 <input type="hidden" name="vendor_id" id="hiddenVendorId" value="{{ selected_vendor_id|default:'' }}">
 
-                <!-- 업체 검색 영역 -->
-                <div class="position-relative vendor-search-wrap">
+                <!-- 업체 선택 버튼 -->
+                <button type="button" class="btn btn-sm btn-outline-secondary shadow-sm" onclick="openVendorSearchModal()" id="vendorSelectBtn">
+                    <i class="bi bi-building me-1"></i>
                     {% if selected_vendor_name %}
-                    <div id="selectedVendorBadge" class="selected-vendor-badge">
-                        <span class="badge bg-primary px-3 py-2">
-                            <i class="bi bi-building me-1"></i>
-                            <span id="selectedVendorText">{{ selected_vendor_name }}</span>
-                            <button type="button" class="btn-close btn-close-white ms-2" style="font-size: 0.5rem;" onclick="clearVendorSelection()"></button>
-                        </span>
-                    </div>
-                    <input type="text" id="vendorSearchInput" class="form-control form-control-sm shadow-sm"
-                           placeholder="업체명 검색..." autocomplete="off" style="display: none;">
+                    <span id="selectedVendorText">{{ selected_vendor_name }}</span>
                     {% else %}
-                    <div id="selectedVendorBadge" class="selected-vendor-badge" style="display: none;">
-                        <span class="badge bg-primary px-3 py-2">
-                            <i class="bi bi-building me-1"></i>
-                            <span id="selectedVendorText"></span>
-                            <button type="button" class="btn-close btn-close-white ms-2" style="font-size: 0.5rem;" onclick="clearVendorSelection()"></button>
-                        </span>
-                    </div>
-                    <input type="text" id="vendorSearchInput" class="form-control form-control-sm shadow-sm"
-                           placeholder="업체명 검색..." autocomplete="off">
+                    <span id="selectedVendorText">전체 업체</span>
                     {% endif %}
-                    <div id="vendorSearchResults" class="vendor-search-results list-group shadow"></div>
-                </div>
+                    <i class="bi bi-chevron-down ms-1"></i>
+                </button>
 
                 <div class="input-group input-group-sm search-group">
                     <input type="text" name="q" value="{{ q|default:'' }}"
@@ -193,6 +178,31 @@
     </div>
 </div>
 {% endif %}
+
+<!-- 업체 검색 모달 -->
+<div class="modal fade" id="vendorSearchModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-secondary text-white py-2">
+                <h6 class="modal-title"><i class="bi bi-building me-2"></i>업체 선택</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-3">
+                <input type="text" id="vendorModalSearchInput" class="form-control mb-3"
+                       placeholder="업체명 검색..." autocomplete="off">
+                <div id="vendorModalList" style="max-height: 300px; overflow-y: auto;">
+                    <!-- 업체 목록이 여기에 표시됨 -->
+                </div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-outline-danger btn-sm" onclick="selectVendorFromModal('', '전체 업체')">
+                    <i class="bi bi-x-circle me-1"></i>전체 업체 (선택 해제)
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">닫기</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <div class="modal fade" id="orderModal" tabindex="-1">
     <div class="modal-dialog">
@@ -622,118 +632,98 @@ document.getElementById('bulkShortageForm').addEventListener('submit', function(
     });
 });
 
-// 외부 클릭 시 업체 검색 결과 닫기
+// 외부 클릭 시 업체 검색 결과 닫기 (일괄 발주 모달용)
 document.addEventListener('click', function(e) {
     if (vendorSearchInput && vendorSearchResults) {
         if (!vendorSearchInput.contains(e.target) && !vendorSearchResults.contains(e.target)) {
             vendorSearchResults.style.display = 'none';
         }
     }
-    // 상단 업체 검색 팝업도 닫기
-    const topVendorInput = document.getElementById('vendorSearchInput');
-    const topVendorResults = document.getElementById('vendorSearchResults');
-    if (topVendorInput && topVendorResults) {
-        if (!topVendorInput.contains(e.target) && !topVendorResults.contains(e.target)) {
-            topVendorResults.style.display = 'none';
-        }
-    }
 });
 
-// ========== 상단 업체 검색 기능 ==========
+// ========== 업체 검색 모달 기능 ==========
 const allVendors = [
     {% for v in vendor_list %}
     { id: '{{ v.id }}', name: '{{ v.name|escapejs }}' },
     {% endfor %}
 ];
 
-const topVendorSearchInput = document.getElementById('vendorSearchInput');
-const topVendorSearchResults = document.getElementById('vendorSearchResults');
-const hiddenVendorId = document.getElementById('hiddenVendorId');
-const selectedVendorBadge = document.getElementById('selectedVendorBadge');
-const selectedVendorText = document.getElementById('selectedVendorText');
+let vendorSearchModal = null;
 
-let topSearchTimeout = null;
+function openVendorSearchModal() {
+    if (!vendorSearchModal) {
+        vendorSearchModal = new bootstrap.Modal(document.getElementById('vendorSearchModal'));
+    }
 
-if (topVendorSearchInput) {
-    topVendorSearchInput.addEventListener('input', function() {
-        clearTimeout(topSearchTimeout);
-        const query = this.value.trim().toLowerCase();
+    // 검색창 초기화
+    document.getElementById('vendorModalSearchInput').value = '';
+    renderVendorList('');
 
-        topSearchTimeout = setTimeout(() => {
-            topVendorSearchResults.innerHTML = '';
+    vendorSearchModal.show();
 
-            if (query.length < 1) {
-                // 빈 입력이면 전체 업체 표시 (최대 20개)
-                const showList = allVendors.slice(0, 20);
-                showList.forEach(vendor => {
-                    const item = document.createElement('button');
-                    item.type = 'button';
-                    item.className = 'list-group-item list-group-item-action';
-                    item.innerHTML = `<i class="bi bi-building me-2 text-muted"></i>${vendor.name}`;
-                    item.onclick = () => selectTopVendor(vendor.id, vendor.name);
-                    topVendorSearchResults.appendChild(item);
-                });
-                if (allVendors.length > 20) {
-                    const moreItem = document.createElement('div');
-                    moreItem.className = 'list-group-item text-muted small text-center';
-                    moreItem.textContent = `외 ${allVendors.length - 20}개 업체 (검색어 입력)`;
-                    topVendorSearchResults.appendChild(moreItem);
-                }
-                topVendorSearchResults.style.display = 'block';
-                return;
-            }
+    // 모달 열린 후 검색창에 포커스
+    setTimeout(() => {
+        document.getElementById('vendorModalSearchInput').focus();
+    }, 300);
+}
 
-            const filtered = allVendors.filter(v => v.name.toLowerCase().includes(query));
+function renderVendorList(query) {
+    const listContainer = document.getElementById('vendorModalList');
+    listContainer.innerHTML = '';
 
-            if (filtered.length === 0) {
-                topVendorSearchResults.innerHTML = '<div class="list-group-item text-muted small">검색 결과 없음</div>';
-            } else {
-                filtered.slice(0, 15).forEach(vendor => {
-                    const item = document.createElement('button');
-                    item.type = 'button';
-                    item.className = 'list-group-item list-group-item-action';
-                    item.innerHTML = `<i class="bi bi-building me-2 text-muted"></i>${vendor.name}`;
-                    item.onclick = () => selectTopVendor(vendor.id, vendor.name);
-                    topVendorSearchResults.appendChild(item);
-                });
-            }
-            topVendorSearchResults.style.display = 'block';
-        }, 150);
-    });
+    const q = query.trim().toLowerCase();
+    const filtered = q ? allVendors.filter(v => v.name.toLowerCase().includes(q)) : allVendors;
 
-    topVendorSearchInput.addEventListener('focus', function() {
-        // 포커스 시 팝업 표시
-        if (this.value.trim() === '') {
-            this.dispatchEvent(new Event('input'));
-        }
-    });
+    if (filtered.length === 0) {
+        listContainer.innerHTML = '<div class="text-center text-muted py-3">검색 결과가 없습니다.</div>';
+        return;
+    }
 
-    topVendorSearchInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            const firstResult = topVendorSearchResults.querySelector('.list-group-item-action');
-            if (firstResult && topVendorSearchResults.style.display !== 'none') {
-                firstResult.click();
-            }
-        }
+    filtered.forEach(vendor => {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center';
+        item.innerHTML = `
+            <span><i class="bi bi-building me-2 text-primary"></i>${vendor.name}</span>
+            <i class="bi bi-chevron-right text-muted"></i>
+        `;
+        item.onclick = () => selectVendorFromModal(vendor.id, vendor.name);
+        listContainer.appendChild(item);
     });
 }
 
-function selectTopVendor(vendorId, vendorName) {
-    hiddenVendorId.value = vendorId;
-    selectedVendorText.textContent = vendorName;
-    selectedVendorBadge.style.display = 'inline-block';
-    topVendorSearchInput.style.display = 'none';
-    topVendorSearchResults.style.display = 'none';
+function selectVendorFromModal(vendorId, vendorName) {
+    document.getElementById('hiddenVendorId').value = vendorId;
+    document.getElementById('selectedVendorText').textContent = vendorName;
+
+    // 버튼 스타일 변경 (선택됨 표시)
+    const btn = document.getElementById('vendorSelectBtn');
+    if (vendorId) {
+        btn.classList.remove('btn-outline-secondary');
+        btn.classList.add('btn-primary');
+    } else {
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-outline-secondary');
+    }
+
+    if (vendorSearchModal) {
+        vendorSearchModal.hide();
+    }
 }
 
-function clearVendorSelection() {
-    hiddenVendorId.value = '';
-    selectedVendorBadge.style.display = 'none';
-    topVendorSearchInput.style.display = 'block';
-    topVendorSearchInput.value = '';
-    topVendorSearchInput.focus();
-}
+// 모달 내 검색 입력 이벤트
+document.getElementById('vendorModalSearchInput')?.addEventListener('input', function() {
+    renderVendorList(this.value);
+});
+
+// Enter 키로 첫 번째 결과 선택
+document.getElementById('vendorModalSearchInput')?.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        const firstItem = document.querySelector('#vendorModalList .list-group-item-action');
+        if (firstItem) firstItem.click();
+    }
+});
 </script>
 
 <style>
@@ -753,34 +743,21 @@ function clearVendorSelection() {
 .toggle-block{ margin-left: 4px; }
 .search-group{ width: 220px; }
 
-/* 업체 검색 팝업 스타일 */
-.vendor-search-wrap {
-    width: 200px;
+/* 업체 선택 버튼 */
+#vendorSelectBtn {
+    min-width: 140px;
+    text-align: left;
 }
-.vendor-search-results {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    z-index: 1050;
-    max-height: 280px;
-    overflow-y: auto;
-    display: none;
-    background: white;
-    border-radius: 4px;
-}
-.vendor-search-results .list-group-item-action {
-    padding: 8px 12px;
+
+/* 업체 검색 모달 리스트 */
+#vendorModalList .list-group-item-action {
+    padding: 10px 15px;
     cursor: pointer;
-    font-size: 0.85rem;
+    border-left: none;
+    border-right: none;
 }
-.vendor-search-results .list-group-item-action:hover {
-    background-color: #e9ecef;
-}
-.selected-vendor-badge .badge {
-    font-size: 0.8rem;
-    display: inline-flex;
-    align-items: center;
+#vendorModalList .list-group-item-action:hover {
+    background-color: #e3f2fd;
 }
 .top-control .btn,
 .top-control .form-select,

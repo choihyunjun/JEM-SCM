@@ -630,10 +630,9 @@ def inventory_list(request):
 
     if search_submitted:
         if not show_all:
-            act_pnos = Demand.objects.filter(due_date__range=[today, end_date]).values_list('part__part_no', flat=True).distinct()
-            wms_pnos = MaterialStock.objects.filter(quantity__gt=0).values_list('part__part_no', flat=True).distinct()
-            combined_pnos = set(list(act_pnos) + list(wms_pnos))
-            part_qs = part_qs.filter(part_no__in=combined_pnos)
+            # 소요 품목만: Demand(소요량)가 있는 품목만 표시
+            demand_pnos = Demand.objects.filter(due_date__range=[today, end_date]).values_list('part__part_no', flat=True).distinct()
+            part_qs = part_qs.filter(part_no__in=demand_pnos)
 
         # ============================================
         # 최적화: 모든 데이터를 미리 조회 (N+1 쿼리 방지)
