@@ -2321,7 +2321,14 @@ def vendor_delivery_close_month(request):
 def scm_alert_dashboard(request):
     """SCM 종합 대시보드 - 발주/입고 현황 + 알림"""
     user = request.user
+    # 협력사 감지 - 기존 방식(Vendor.user)과 새 방식(UserProfile.org.linked_vendor) 모두 지원
     user_vendor = Vendor.objects.filter(user=user).first()
+    if not user_vendor and not user.is_superuser:
+        try:
+            if hasattr(user, 'profile') and user.profile.org and user.profile.org.linked_vendor:
+                user_vendor = user.profile.org.linked_vendor
+        except Exception:
+            pass
     today = timezone.localtime().date()
     this_month_start = today.replace(day=1)
 
