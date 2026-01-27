@@ -14,17 +14,27 @@
 
     <div class="card shadow-sm border-0 mb-4">
         <div class="card-body bg-light">
-            <form method="get" class="row g-3 align-items-end">
+            <form method="get" class="row g-3 align-items-end" id="searchForm">
+                <!-- 선택된 업체 ID들을 저장하는 hidden input -->
+                <input type="hidden" name="vendor_ids" id="hiddenVendorIds" value="{{ selected_vendor_ids|default:'' }}">
+                <input type="hidden" name="only_with_demand" id="hiddenOnlyWithDemand" value="{{ only_with_demand|yesno:'true,false' }}">
+
                 <div class="col-md-3">
                     <label class="form-label small fw-bold">협력사 선택</label>
-                    <select name="vendor_id" class="form-select form-select-sm">
-                        <option value="">== 전체 업체 ==</option>
-                        {% for v in vendor_list %}
-                            <option value="{{ v.id }}" {% if selected_vendor == v.id|stringformat:"s" %}selected{% endif %}>{{ v.name }}</option>
-                        {% endfor %}
-                    </select>
+                    <button type="button" class="btn btn-sm btn-outline-secondary w-100 text-start"
+                            onclick="openVendorModal()" id="vendorSelectBtn">
+                        <i class="bi bi-building me-1"></i>
+                        <span id="selectedVendorText">
+                            {% if selected_vendor_names %}
+                                {{ selected_vendor_names|truncatechars:20 }}
+                            {% else %}
+                                전체 업체
+                            {% endif %}
+                        </span>
+                        <i class="bi bi-chevron-down float-end mt-1"></i>
+                    </button>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label small fw-bold">품번 검색</label>
                     <input type="text" name="part_no" class="form-control form-control-sm" placeholder="품번 입력..." value="{{ part_no|default:'' }}">
                 </div>
@@ -36,12 +46,27 @@
                         <input type="date" name="end_date" class="form-control" value="{{ end_date|default:'' }}">
                     </div>
                 </div>
-                <div class="col-md-2">
-                    <button type="submit" class="btn btn-sm btn-primary w-100 fw-bold">
+                <div class="col-md-3 d-flex align-items-end gap-2">
+                    <button type="submit" class="btn btn-sm btn-primary fw-bold">
                         <i class="bi bi-search me-1"></i> 조건 검색
                     </button>
                 </div>
             </form>
+
+            <!-- 선택된 업체 뱃지 및 필터 옵션 -->
+            <div class="d-flex justify-content-between align-items-center mt-2" style="min-height: 28px;">
+                <div id="selectedVendorBadges">
+                    <!-- JavaScript로 동적 생성 -->
+                </div>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="onlyWithDemandSwitch"
+                           {% if only_with_demand %}checked{% endif %}
+                           onchange="toggleOnlyWithDemand()">
+                    <label class="form-check-label small" for="onlyWithDemandSwitch">
+                        <i class="bi bi-funnel me-1"></i>소요량 있는 업체만
+                    </label>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -80,9 +105,9 @@
                             <td class="text-start">{{ d.part.part_name }}</td>
                             <td>
                                 <div class="input-group input-group-sm">
-                                    <input type="number" class="form-control text-center bg-white" 
+                                    <input type="number" class="form-control text-center bg-white"
                                            value="{{ d.quantity }}" readonly>
-                                    <button type="button" class="btn btn-outline-primary" 
+                                    <button type="button" class="btn btn-outline-primary"
                                             onclick="editDemand('{{ d.part.part_no }}', '{{ d.due_date|date:'Y-m-d' }}', '{{ d.quantity }}')">
                                         <i class="bi bi-pencil"></i>
                                     </button>
@@ -101,6 +126,57 @@
     </div>
 </div>
 
+<!-- 협력사 검색 모달 (복수 선택 가능) -->
+<div class="modal fade" id="vendorSearchModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white py-2">
+                <h6 class="modal-title"><i class="bi bi-building me-2"></i>협력사 선택 (복수 선택 가능)</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-3">
+                <div class="row">
+                    <!-- 왼쪽: 검색 영역 -->
+                    <div class="col-md-7">
+                        <input type="text" id="vendorModalSearchInput" class="form-control"
+                               placeholder="업체명을 입력하세요..." autocomplete="off">
+                        <div id="vendorModalList" class="mt-2 border rounded" style="max-height: 300px; overflow-y: auto;">
+                            <div class="text-center text-muted py-4">
+                                <i class="bi bi-search fs-3 d-block mb-2"></i>
+                                검색어를 입력하면 결과가 표시됩니다
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 오른쪽: 선택된 업체 목록 -->
+                    <div class="col-md-5">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="fw-bold text-primary"><i class="bi bi-check2-square me-1"></i>선택된 업체</span>
+                            <button type="button" class="btn btn-outline-danger btn-sm" onclick="clearAllSelectedVendors()">
+                                <i class="bi bi-x-lg"></i> 전체 해제
+                            </button>
+                        </div>
+                        <div id="selectedVendorList" class="border rounded p-2" style="max-height: 300px; overflow-y: auto; min-height: 100px; background: #f8f9fa;">
+                            <div class="text-center text-muted py-3 empty-msg">
+                                <i class="bi bi-inbox d-block mb-1"></i>
+                                선택된 업체가 없습니다
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer py-2 justify-content-between">
+                <span class="text-muted small"><i class="bi bi-info-circle me-1"></i>선택 안하면 전체 업체 조회</span>
+                <div>
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="applyVendorSelection()">
+                        <i class="bi bi-check-lg me-1"></i>적용
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 // 전체 선택/해제 로직
 document.getElementById('selectAll').addEventListener('change', function() {
@@ -111,7 +187,7 @@ document.getElementById('selectAll').addEventListener('change', function() {
 // 과부족 시트와 동일한 수정 함수 (fetch 사용)
 function editDemand(partNo, date, currentQty) {
     const newQty = prompt(`${date}의 소요량을 수정하시겠습니까?`, currentQty);
-    
+
     if (newQty !== null && !isNaN(newQty) && newQty.trim() !== "") {
         const formData = new FormData();
         formData.append('part_no', partNo);
@@ -132,11 +208,262 @@ function editDemand(partNo, date, currentQty) {
         });
     }
 }
+
+// ========== 협력사 검색 모달 기능 (복수 선택) ==========
+const allVendors = [
+    {% for v in vendor_list %}
+    { id: '{{ v.id }}', name: '{{ v.name|escapejs }}' },
+    {% endfor %}
+];
+
+// 선택된 업체 저장 (id -> name 매핑)
+let selectedVendors = new Map();
+
+// 초기값 로드 (URL에서 전달된 값)
+const initialVendorIds = '{{ selected_vendor_ids|default:"" }}'.split(',').filter(id => id);
+initialVendorIds.forEach(id => {
+    const vendor = allVendors.find(v => v.id === id);
+    if (vendor) {
+        selectedVendors.set(vendor.id, vendor.name);
+    }
+});
+
+let vendorSearchModal = null;
+
+function openVendorModal() {
+    if (!vendorSearchModal) {
+        vendorSearchModal = new bootstrap.Modal(document.getElementById('vendorSearchModal'));
+    }
+
+    // 검색창 초기화
+    document.getElementById('vendorModalSearchInput').value = '';
+    renderVendorSearchList('');
+    renderSelectedVendorList();
+
+    vendorSearchModal.show();
+
+    setTimeout(() => document.getElementById('vendorModalSearchInput').focus(), 300);
+}
+
+function renderVendorSearchList(query) {
+    const listContainer = document.getElementById('vendorModalList');
+    const q = query.trim().toLowerCase();
+
+    if (q.length === 0) {
+        // 검색어 없으면 전체 목록 표시 (최대 20개)
+        const displayVendors = allVendors.slice(0, 20);
+        renderVendorItems(displayVendors, listContainer, q);
+        if (allVendors.length > 20) {
+            const moreDiv = document.createElement('div');
+            moreDiv.className = 'text-center text-muted small py-2 border-top';
+            moreDiv.textContent = `외 ${allVendors.length - 20}개 업체 (검색어를 입력하세요)`;
+            listContainer.appendChild(moreDiv);
+        }
+        return;
+    }
+
+    if (q.length < 2) {
+        listContainer.innerHTML = '<div class="text-center text-muted py-3">2글자 이상 입력해주세요</div>';
+        return;
+    }
+
+    const filtered = allVendors.filter(v => v.name.toLowerCase().includes(q)).slice(0, 20);
+
+    if (filtered.length === 0) {
+        listContainer.innerHTML = '<div class="text-center text-muted py-3"><i class="bi bi-emoji-frown me-1"></i>검색 결과가 없습니다</div>';
+        return;
+    }
+
+    renderVendorItems(filtered, listContainer, q);
+
+    const totalMatched = allVendors.filter(v => v.name.toLowerCase().includes(q)).length;
+    if (totalMatched > 20) {
+        const moreDiv = document.createElement('div');
+        moreDiv.className = 'text-center text-muted small py-2 border-top';
+        moreDiv.textContent = `외 ${totalMatched - 20}건 더 있음`;
+        listContainer.appendChild(moreDiv);
+    }
+}
+
+function renderVendorItems(vendors, container, query) {
+    container.innerHTML = '';
+    vendors.forEach(vendor => {
+        const isSelected = selectedVendors.has(vendor.id);
+        const item = document.createElement('div');
+        item.className = `list-group-item list-group-item-action d-flex justify-content-between align-items-center ${isSelected ? 'active' : ''}`;
+        item.style.cursor = 'pointer';
+
+        let displayName = vendor.name;
+        if (query && query.length >= 2) {
+            displayName = vendor.name.replace(new RegExp(`(${query})`, 'gi'), '<strong>$1</strong>');
+        }
+
+        item.innerHTML = `
+            <span><i class="bi bi-building me-2"></i>${displayName}</span>
+            <i class="bi ${isSelected ? 'bi-check-circle-fill' : 'bi-circle'}"></i>
+        `;
+        item.onclick = () => toggleVendorSelection(vendor.id, vendor.name);
+        container.appendChild(item);
+    });
+}
+
+function toggleVendorSelection(vendorId, vendorName) {
+    if (selectedVendors.has(vendorId)) {
+        selectedVendors.delete(vendorId);
+    } else {
+        selectedVendors.set(vendorId, vendorName);
+    }
+    // 리스트 다시 렌더링
+    const query = document.getElementById('vendorModalSearchInput').value;
+    renderVendorSearchList(query);
+    renderSelectedVendorList();
+}
+
+function renderSelectedVendorList() {
+    const container = document.getElementById('selectedVendorList');
+
+    if (selectedVendors.size === 0) {
+        container.innerHTML = `
+            <div class="text-center text-muted py-3 empty-msg">
+                <i class="bi bi-inbox d-block mb-1"></i>
+                선택된 업체가 없습니다
+            </div>`;
+        return;
+    }
+
+    container.innerHTML = '';
+    selectedVendors.forEach((name, id) => {
+        const badge = document.createElement('div');
+        badge.className = 'd-flex justify-content-between align-items-center mb-1 p-2 bg-white rounded border';
+        badge.innerHTML = `
+            <span class="small"><i class="bi bi-building text-primary me-1"></i>${name}</span>
+            <button type="button" class="btn btn-sm btn-link text-danger p-0" onclick="removeVendorSelection('${id}')">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        `;
+        container.appendChild(badge);
+    });
+}
+
+function removeVendorSelection(vendorId) {
+    selectedVendors.delete(vendorId);
+    const query = document.getElementById('vendorModalSearchInput').value;
+    renderVendorSearchList(query);
+    renderSelectedVendorList();
+}
+
+function clearAllSelectedVendors() {
+    selectedVendors.clear();
+    const query = document.getElementById('vendorModalSearchInput').value;
+    renderVendorSearchList(query);
+    renderSelectedVendorList();
+}
+
+function applyVendorSelection() {
+    // hidden input에 선택된 ID들 저장
+    const ids = Array.from(selectedVendors.keys()).join(',');
+    document.getElementById('hiddenVendorIds').value = ids;
+
+    // 버튼 텍스트 업데이트
+    const btn = document.getElementById('vendorSelectBtn');
+    const textSpan = document.getElementById('selectedVendorText');
+
+    if (selectedVendors.size === 0) {
+        textSpan.textContent = '전체 업체';
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-outline-secondary');
+    } else if (selectedVendors.size === 1) {
+        textSpan.textContent = Array.from(selectedVendors.values())[0];
+        btn.classList.remove('btn-outline-secondary');
+        btn.classList.add('btn-primary');
+    } else {
+        textSpan.textContent = `${selectedVendors.size}개 업체 선택됨`;
+        btn.classList.remove('btn-outline-secondary');
+        btn.classList.add('btn-primary');
+    }
+
+    // 뱃지 영역 업데이트
+    updateSelectedBadges();
+
+    vendorSearchModal.hide();
+}
+
+function updateSelectedBadges() {
+    const container = document.getElementById('selectedVendorBadges');
+    container.innerHTML = '';
+
+    if (selectedVendors.size === 0) return;
+
+    selectedVendors.forEach((name, id) => {
+        const badge = document.createElement('span');
+        badge.className = 'badge bg-primary me-1 mb-1';
+        badge.style.fontSize = '0.8rem';
+        badge.innerHTML = `
+            ${name}
+            <i class="bi bi-x ms-1" style="cursor: pointer;" onclick="removeBadgeVendor('${id}')"></i>
+        `;
+        container.appendChild(badge);
+    });
+}
+
+function removeBadgeVendor(vendorId) {
+    selectedVendors.delete(vendorId);
+    applyVendorSelection();
+}
+
+// 검색 입력 이벤트 (debounce)
+let vendorSearchDebounce = null;
+document.getElementById('vendorModalSearchInput')?.addEventListener('input', function() {
+    clearTimeout(vendorSearchDebounce);
+    const val = this.value;
+    vendorSearchDebounce = setTimeout(() => renderVendorSearchList(val), 150);
+});
+
+// 페이지 로드 시 초기 뱃지 표시
+document.addEventListener('DOMContentLoaded', function() {
+    updateSelectedBadges();
+
+    // 버튼 스타일 초기화
+    if (selectedVendors.size > 0) {
+        const btn = document.getElementById('vendorSelectBtn');
+        btn.classList.remove('btn-outline-secondary');
+        btn.classList.add('btn-primary');
+    }
+});
+
+// 소요량 있는 업체만 필터 토글
+function toggleOnlyWithDemand() {
+    const isChecked = document.getElementById('onlyWithDemandSwitch').checked;
+    document.getElementById('hiddenOnlyWithDemand').value = isChecked ? 'true' : 'false';
+
+    // 폼 제출 (페이지 새로고침)
+    document.getElementById('searchForm').submit();
+}
 </script>
 
 <style>
     .header-title { font-size: 1.3rem; font-weight: 700; color: #2c3e50; }
     .table th { font-weight: 600; }
     .hover-shadow:hover { box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important; transition: 0.3s; }
+
+    /* 모달 내 리스트 아이템 스타일 */
+    #vendorModalList .list-group-item {
+        padding: 10px 15px;
+        border-left: none;
+        border-right: none;
+        border-radius: 0;
+    }
+    #vendorModalList .list-group-item:hover:not(.active) {
+        background-color: #e3f2fd;
+    }
+    #vendorModalList .list-group-item.active {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+    }
+
+    /* 선택된 업체 뱃지 스타일 */
+    #selectedVendorBadges .badge {
+        padding: 6px 10px;
+    }
 </style>
 {% endblock %}

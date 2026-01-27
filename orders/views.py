@@ -945,20 +945,53 @@ def demand_manage(request):
     if not request.user.is_superuser:
         return redirect('inventory_list')
 
-    v_id, p_no, sd, ed = request.GET.get('vendor_id'), request.GET.get('part_no'), request.GET.get('start_date'), request.GET.get('end_date')
+    # 복수 업체 ID 지원 (콤마로 구분)
+    vendor_ids_str = request.GET.get('vendor_ids', '')
+    vendor_ids = [v.strip() for v in vendor_ids_str.split(',') if v.strip()]
+
+    p_no = request.GET.get('part_no', '')
+    sd = request.GET.get('start_date', '')
+    ed = request.GET.get('end_date', '')
+    only_with_demand = request.GET.get('only_with_demand', '') == 'true'
+
     demands = Demand.objects.select_related('part', 'part__vendor').all().order_by('-due_date')
 
-    if v_id:
-        demands = demands.filter(part__vendor_id=v_id)
+    # 복수 업체 필터링
+    if vendor_ids:
+        demands = demands.filter(part__vendor_id__in=vendor_ids)
     if p_no:
         demands = demands.filter(part__part_no__icontains=p_no)
     if sd and ed:
         demands = demands.filter(due_date__range=[sd, ed])
 
+    # 선택된 업체 이름 조회 (뱃지 표시용)
+    selected_vendor_names = ''
+    if vendor_ids:
+        names = list(Vendor.objects.filter(id__in=vendor_ids).values_list('name', flat=True))
+        selected_vendor_names = ', '.join(names)
+
+    # 업체 목록 조회 (소요량 있는 업체만 필터 옵션)
+    if only_with_demand:
+        # 소요량이 있는 업체 ID 목록 조회
+        vendor_ids_with_demand = Demand.objects.values_list('part__vendor_id', flat=True).distinct()
+        vendor_list = Vendor.objects.filter(id__in=vendor_ids_with_demand).order_by('name')
+    else:
+        vendor_list = Vendor.objects.all().order_by('name')
+
     return render(
         request,
         'demand_manage.html',
-        {'demands': demands[:500], 'vendor_list': Vendor.objects.all().order_by('name'), 'active_menu': 'inventory'}
+        {
+            'demands': demands[:500],
+            'vendor_list': vendor_list,
+            'active_menu': 'inventory',
+            'selected_vendor_ids': vendor_ids_str,
+            'selected_vendor_names': selected_vendor_names,
+            'part_no': p_no,
+            'start_date': sd,
+            'end_date': ed,
+            'only_with_demand': only_with_demand,
+        }
     )
 
 @login_required
