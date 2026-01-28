@@ -684,6 +684,7 @@ def process_tag_print(request):
         context = {
             'part_no': part_no,
             'part_name': part_name,
+            'part_group': part.part_group if part else '',  # 품목군 추가
             'quantity': quantity,
             'lot_no': lot_no,
             'print_mode': print_mode,

@@ -62,12 +62,22 @@
 
         /* 라벨 제목 */
         .label-title {
-            text-align: center;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             font-weight: bold;
             font-size: 12pt;
             border-bottom: 2px solid #000;
-            padding: 5px;
+            padding: 5px 8px;
             background: #f0f0f0;
+        }
+        .label-part-group {
+            font-size: 9pt;
+            color: #333;
+            background: #fff;
+            padding: 1px 6px;
+            border-radius: 3px;
+            border: 1px solid #999;
         }
 
         /* 라벨 내용 테이블 */
@@ -192,7 +202,10 @@
     <div id="preview-container">
         {% for tag in tag_list %}
         <div class="label">
-            <div class="label-title">공정 현품표</div>
+            <div class="label-title">
+                <span>공정 현품표</span>
+                {% if part_group %}<span class="label-part-group">{{ part_group }}</span>{% endif %}
+            </div>
             <table class="label-table">
                 <tr>
                     <td class="qr-cell" rowspan="4">
