@@ -523,3 +523,19 @@ class InventoryUploadLog(models.Model):
 
     def __str__(self):
         return f"[{self.get_upload_type_display()}] {self.part_no} - {self.error_reason}"
+
+
+# 로그인 내역 기록
+class LoginLog(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="사용자")
+    login_at = models.DateTimeField(auto_now_add=True, verbose_name="로그인 시간")
+    ip_address = models.GenericIPAddressField(null=True, blank=True, verbose_name="IP 주소")
+    user_agent = models.CharField(max_length=500, blank=True, null=True, verbose_name="브라우저 정보")
+
+    class Meta:
+        verbose_name = "로그인 내역"
+        verbose_name_plural = "로그인 내역"
+        ordering = ['-login_at']
+
+    def __str__(self):
+        return f"{self.user.username} - {self.login_at.strftime('%Y-%m-%d %H:%M')}"

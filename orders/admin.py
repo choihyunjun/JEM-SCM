@@ -10,7 +10,7 @@ from import_export.widgets import ForeignKeyWidget
 
 from django.core.exceptions import ObjectDoesNotExist
 
-from .models import Vendor, Order, Part, Inventory, Incoming, Organization, UserProfile, Notice, QnA
+from .models import Vendor, Order, Part, Inventory, Incoming, Organization, UserProfile, Notice, QnA, LoginLog
 
 
 class UserProfileInlineForm(forms.ModelForm):
@@ -179,3 +179,30 @@ class QnAAdmin(admin.ModelAdmin):
             obj.answered_by = request.user
             obj.answered_at = timezone.now()
         super().save_model(request, obj, form, change)
+
+
+# ============================================
+# 로그인 내역
+# ============================================
+
+@admin.register(LoginLog)
+class LoginLogAdmin(admin.ModelAdmin):
+    list_display = ("user", "login_at", "ip_address", "short_user_agent")
+    list_filter = ("login_at", "user")
+    search_fields = ("user__username", "ip_address")
+    readonly_fields = ("user", "login_at", "ip_address", "user_agent")
+    ordering = ("-login_at",)
+    date_hierarchy = "login_at"
+
+    def short_user_agent(self, obj):
+        """User-Agent 짧게 표시"""
+        if obj.user_agent:
+            return obj.user_agent[:80] + "..." if len(obj.user_agent) > 80 else obj.user_agent
+        return "-"
+    short_user_agent.short_description = "브라우저"
+
+    def has_add_permission(self, request):
+        return False  # 수동 추가 불가
+
+    def has_change_permission(self, request, obj=None):
+        return False  # 수정 불가
