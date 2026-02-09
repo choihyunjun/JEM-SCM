@@ -435,8 +435,10 @@ def manual_incoming(request):
                         lot_no=lot_date,
                         defaults={'quantity': 0}
                     )
-                    stock.quantity = F('quantity') + qty
-                    stock.save()
+                    MaterialStock.objects.filter(pk=stock.pk).update(
+                        quantity=F('quantity') + qty
+                    )
+                    stock.refresh_from_db()
 
                     # (2) 수불 이력 생성
                     trx_no = f"IN-{timezone.now().strftime('%y%m%d%H%M%S')}-{request.user.id}-{i}"
