@@ -1,0 +1,724 @@
+{% extends 'material/material_base.html' %}
+{% load humanize %}
+
+{% block title %}랙 위치 관리{% endblock %}
+
+{% block material_content %}
+<style>
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+    .page-header h4 {
+        margin: 0;
+        font-weight: 700;
+        color: #2c3e50;
+    }
+    .section-tabs .btn {
+        padding: 6px 16px;
+        font-weight: 600;
+    }
+    .main-container {
+        display: flex;
+        gap: 25px;
+    }
+    .warehouse-area {
+        flex: 1;
+        background: #2c3e50;
+        border-radius: 12px;
+        padding: 25px;
+        overflow-x: auto;
+    }
+    .warehouse-inner {
+        display: flex;
+        justify-content: center;
+        gap: 50px;
+    }
+    .wall-box {
+        background: #34495e;
+        border-radius: 12px;
+        padding: 20px;
+    }
+    .wall-title {
+        text-align: center;
+        color: #fff;
+        font-weight: 700;
+        font-size: 1.3rem;
+        padding: 12px 35px;
+        border-radius: 8px;
+        margin-bottom: 18px;
+    }
+    .wall-title.wall-a { background: #3498db; }
+    .wall-title.wall-b { background: #e74c3c; }
+    .wall-title.wall-2f { background: #9b59b6; }
+    /* 2공장 전용 스타일 */
+    .pallet-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 190px);
+        gap: 15px;
+    }
+    .pallet-row {
+        margin-bottom: 15px;
+    }
+    .add-pallet-btn {
+        width: 100%;
+        height: 48px;
+        background: rgba(255,255,255,0.1);
+        border: 2px dashed rgba(255,255,255,0.3);
+        border-radius: 8px;
+        color: rgba(255,255,255,0.5);
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s;
+        margin-top: 15px;
+    }
+    .add-pallet-btn:hover {
+        background: rgba(255,255,255,0.15);
+        border-color: #f39c12;
+        color: #f39c12;
+    }
+    .floor-row {
+        display: flex;
+        gap: 18px;
+    }
+    .floor-col {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    .floor-labels {
+        display: flex;
+        gap: 18px;
+        margin-top: 15px;
+    }
+    .floor-label {
+        color: #f39c12;
+        font-size: 1.1rem;
+        font-weight: 700;
+        padding: 10px 18px;
+        width: 190px;
+        text-align: center;
+    }
+    .cells-stack {
+        display: flex;
+        flex-direction: column-reverse;
+        gap: 12px;
+        min-height: 50px;
+    }
+    .rack-cell {
+        width: 190px;
+        height: 115px;
+        background: #fff;
+        border: 2px solid #bdc3c7;
+        border-radius: 10px;
+        padding: 10px;
+        text-align: center;
+        cursor: move;
+        transition: all 0.15s;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    .rack-cell:hover {
+        border-color: #3498db;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+        transform: translateY(-2px);
+    }
+    .rack-cell.has-part {
+        background: #d5f5e3;
+        border-color: #27ae60;
+    }
+    .rack-cell.dragging { opacity: 0.5; }
+    .rack-cell.drag-over { border-color: #27ae60; background: #abebc6; }
+    .rack-position {
+        font-size: 0.9rem;
+        color: #7f8c8d;
+        font-weight: 600;
+    }
+    .rack-part-no {
+        font-weight: 700;
+        color: #c0392b;
+        font-size: 1.15rem;
+        margin-top: 6px;
+    }
+    .rack-part-name {
+        font-size: 0.85rem;
+        color: #555;
+        line-height: 1.3;
+        word-break: keep-all;
+    }
+    .rack-delete {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        background: #e74c3c;
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        font-size: 12px;
+        cursor: pointer;
+        opacity: 0;
+        transition: opacity 0.15s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .rack-cell:hover .rack-delete { opacity: 1; }
+    .add-btn {
+        width: 190px;
+        height: 48px;
+        background: rgba(255,255,255,0.1);
+        border: 2px dashed rgba(255,255,255,0.3);
+        border-radius: 8px;
+        color: rgba(255,255,255,0.5);
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 12px;
+    }
+    .add-btn:hover {
+        background: rgba(255,255,255,0.15);
+        border-color: #f39c12;
+        color: #f39c12;
+    }
+    .aisle-area {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 0 15px;
+    }
+    .aisle-text {
+        color: rgba(255,255,255,0.5);
+        font-size: 0.9rem;
+        font-weight: 600;
+        margin-bottom: 10px;
+        margin-top: 50px;
+    }
+    .aisle-line {
+        flex: 1;
+        width: 4px;
+        background: repeating-linear-gradient(to bottom, #f39c12 0, #f39c12 10px, transparent 10px, transparent 20px);
+        border-radius: 2px;
+        min-height: 200px;
+    }
+    .sidebar {
+        width: 280px;
+        flex-shrink: 0;
+    }
+    .sidebar-card {
+        background: #fff;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        margin-bottom: 12px;
+    }
+    .sidebar-header {
+        padding: 10px 12px;
+        border-bottom: 1px solid #eee;
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: #2c3e50;
+    }
+    .sidebar-body {
+        padding: 10px;
+    }
+    #partSearch {
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 0.9rem;
+    }
+    .part-list {
+        margin-top: 10px;
+        max-height: 180px;
+        overflow-y: auto;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+    .part-chip {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 5px 10px;
+        font-size: 0.8rem;
+        cursor: grab;
+        transition: all 0.15s;
+    }
+    .part-chip:hover {
+        background: #e3f2fd;
+        border-color: #3498db;
+    }
+    .part-chip.assigned {
+        background: #d5f5e3;
+        border-color: #27ae60;
+        opacity: 0.7;
+    }
+    .part-chip.dragging { opacity: 0.5; }
+    .legend-row {
+        display: flex;
+        gap: 15px;
+        flex-wrap: wrap;
+    }
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.8rem;
+        color: #666;
+    }
+    .legend-dot {
+        width: 14px;
+        height: 14px;
+        border-radius: 3px;
+    }
+    .legend-dot.assigned { background: #d5f5e3; border: 1px solid #27ae60; }
+    .legend-dot.empty { background: #fff; border: 1px solid #bdc3c7; }
+    .info-bar {
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 6px;
+        padding: 8px 12px;
+        margin-bottom: 12px;
+        font-size: 0.85rem;
+        color: #666;
+    }
+</style>
+
+<div class="page-header">
+    <h4><i class="bi bi-grid-3x3 me-2"></i>랙 위치 관리</h4>
+    <div class="section-tabs btn-group">
+        {% for code, name in sections %}
+        <a href="?section={{ code }}" class="btn btn-sm {% if section == code %}btn-primary{% else %}btn-outline-primary{% endif %}">{{ name }}</a>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="info-bar">
+    <i class="bi bi-info-circle me-1"></i>
+    품목 검색 후 드래그하여 랙에 배치 | 랙 간 드래그로 품목 교환 | 빈 칸에 배치하면 품목 지정
+</div>
+
+<div class="main-container">
+    <div class="warehouse-area">
+        {% if section == '2F' %}
+        <!-- 2공장: 2행 × 3열 파렛트 그리드 -->
+        <div class="wall-box">
+            <div class="wall-title wall-2f">2공장</div>
+            <div class="pallet-row">
+                <div class="pallet-grid">
+                    {% for rack in wall_a.1 %}
+                    <div class="rack-cell {% if rack.part %}has-part{% endif %}" data-rack-id="{{ rack.id }}" draggable="true">
+                        <button class="rack-delete" onclick="deleteRack({{ rack.id }}, '{{ rack.position_code }}')" title="삭제"><i class="bi bi-x"></i></button>
+                        <div class="rack-position">{{ rack.position_code }}</div>
+                        {% if rack.part %}
+                        <div class="rack-part-no">{{ rack.part.part_no }}</div>
+                        <div class="rack-part-name">{{ rack.part.part_name }}</div>
+                        {% else %}
+                        <span style="color:#ccc;font-size:1.2rem;">—</span>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="pallet-row">
+                <div class="pallet-grid">
+                    {% for rack in wall_a.2 %}
+                    <div class="rack-cell {% if rack.part %}has-part{% endif %}" data-rack-id="{{ rack.id }}" draggable="true">
+                        <button class="rack-delete" onclick="deleteRack({{ rack.id }}, '{{ rack.position_code }}')" title="삭제"><i class="bi bi-x"></i></button>
+                        <div class="rack-position">{{ rack.position_code }}</div>
+                        {% if rack.part %}
+                        <div class="rack-part-no">{{ rack.part.part_no }}</div>
+                        <div class="rack-part-name">{{ rack.part.part_name }}</div>
+                        {% else %}
+                        <span style="color:#ccc;font-size:1.2rem;">—</span>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <button class="add-pallet-btn" onclick="openAddModal2F()"><i class="bi bi-plus me-1"></i>파렛트 추가</button>
+        </div>
+        {% else %}
+        <!-- 3공장: A열/B열 + 통로 -->
+        <div class="warehouse-inner">
+            <!-- A열 -->
+            <div class="wall-box">
+                <div class="wall-title wall-a">A열</div>
+                <div class="floor-row">
+                    <div class="floor-col">
+                        <div class="cells-stack">
+                            {% for rack in wall_a.2 %}
+                            <div class="rack-cell {% if rack.part %}has-part{% endif %}" data-rack-id="{{ rack.id }}" draggable="true">
+                                <button class="rack-delete" onclick="deleteRack({{ rack.id }}, '{{ rack.position_code }}')" title="삭제"><i class="bi bi-x"></i></button>
+                                <div class="rack-position">{{ rack.position_code }}</div>
+                                {% if rack.part %}
+                                <div class="rack-part-no">{{ rack.part.part_no }}</div>
+                                <div class="rack-part-name">{{ rack.part.part_name }}</div>
+                                {% else %}
+                                <span style="color:#ccc;font-size:1.2rem;">—</span>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <button class="add-btn" onclick="addNextRack('A', 2)"><i class="bi bi-plus me-1"></i>추가</button>
+                    </div>
+                    <div class="floor-col">
+                        <div class="cells-stack">
+                            {% for rack in wall_a.1 %}
+                            <div class="rack-cell {% if rack.part %}has-part{% endif %}" data-rack-id="{{ rack.id }}" draggable="true">
+                                <button class="rack-delete" onclick="deleteRack({{ rack.id }}, '{{ rack.position_code }}')" title="삭제"><i class="bi bi-x"></i></button>
+                                <div class="rack-position">{{ rack.position_code }}</div>
+                                {% if rack.part %}
+                                <div class="rack-part-no">{{ rack.part.part_no }}</div>
+                                <div class="rack-part-name">{{ rack.part.part_name }}</div>
+                                {% else %}
+                                <span style="color:#ccc;font-size:1.2rem;">—</span>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <button class="add-btn" onclick="addNextRack('A', 1)"><i class="bi bi-plus me-1"></i>추가</button>
+                    </div>
+                </div>
+                <div class="floor-labels">
+                    <div class="floor-label">2층</div>
+                    <div class="floor-label">1층</div>
+                </div>
+            </div>
+
+            {% if section == '3F' %}
+            <!-- 통로 -->
+            <div class="aisle-area">
+                <div class="aisle-text">통로</div>
+                <div class="aisle-line"></div>
+            </div>
+
+            <!-- B열 -->
+            <div class="wall-box">
+                <div class="wall-title wall-b">B열</div>
+                <div class="floor-row">
+                    <div class="floor-col">
+                        <div class="cells-stack">
+                            {% for rack in wall_b.1 %}
+                            <div class="rack-cell {% if rack.part %}has-part{% endif %}" data-rack-id="{{ rack.id }}" draggable="true">
+                                <button class="rack-delete" onclick="deleteRack({{ rack.id }}, '{{ rack.position_code }}')" title="삭제"><i class="bi bi-x"></i></button>
+                                <div class="rack-position">{{ rack.position_code }}</div>
+                                {% if rack.part %}
+                                <div class="rack-part-no">{{ rack.part.part_no }}</div>
+                                <div class="rack-part-name">{{ rack.part.part_name }}</div>
+                                {% else %}
+                                <span style="color:#ccc;font-size:1.2rem;">—</span>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <button class="add-btn" onclick="addNextRack('B', 1)"><i class="bi bi-plus me-1"></i>추가</button>
+                    </div>
+                    <div class="floor-col">
+                        <div class="cells-stack">
+                            {% for rack in wall_b.2 %}
+                            <div class="rack-cell {% if rack.part %}has-part{% endif %}" data-rack-id="{{ rack.id }}" draggable="true">
+                                <button class="rack-delete" onclick="deleteRack({{ rack.id }}, '{{ rack.position_code }}')" title="삭제"><i class="bi bi-x"></i></button>
+                                <div class="rack-position">{{ rack.position_code }}</div>
+                                {% if rack.part %}
+                                <div class="rack-part-no">{{ rack.part.part_no }}</div>
+                                <div class="rack-part-name">{{ rack.part.part_name }}</div>
+                                {% else %}
+                                <span style="color:#ccc;font-size:1.2rem;">—</span>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <button class="add-btn" onclick="addNextRack('B', 2)"><i class="bi bi-plus me-1"></i>추가</button>
+                    </div>
+                </div>
+                <div class="floor-labels">
+                    <div class="floor-label">1층</div>
+                    <div class="floor-label">2층</div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="sidebar">
+        <div class="sidebar-card">
+            <div class="sidebar-header"><i class="bi bi-search me-1"></i>품목 검색</div>
+            <div class="sidebar-body">
+                <input type="text" id="partSearch" placeholder="품번 또는 품명 입력..." autocomplete="off">
+                <div class="part-list" id="partPalette">
+                    <span class="text-muted" style="font-size:0.8rem;">2글자 이상 입력하세요</span>
+                </div>
+            </div>
+        </div>
+        <div class="sidebar-card">
+            <div class="sidebar-header">범례</div>
+            <div class="sidebar-body">
+                <div class="legend-row">
+                    <div class="legend-item"><div class="legend-dot assigned"></div>배치됨</div>
+                    <div class="legend-item"><div class="legend-dot empty"></div>빈 칸</div>
+                </div>
+            </div>
+        </div>
+        <button class="btn btn-warning w-100" data-bs-toggle="modal" data-bs-target="#addRackModal">
+            <i class="bi bi-plus-lg me-1"></i>수동 랙 추가
+        </button>
+    </div>
+</div>
+
+<!-- 랙 추가 모달 -->
+<div class="modal fade" id="addRackModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="add_rack">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title">랙 위치 추가</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small">위치코드</label>
+                        <input type="text" name="position_code" id="positionCode" class="form-control form-control-sm" placeholder="A-1-1" required>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-4">
+                            <label class="form-label small">열</label>
+                            <select name="row_label" id="rowLabel" class="form-select form-select-sm" onchange="updatePositionCode()">
+                                <option value="A">A</option>
+                                <option value="B">B</option>
+                            </select>
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label small">층</label>
+                            <select name="row_num" id="rowNum" class="form-select form-select-sm" onchange="updatePositionCode()">
+                                <option value="1">1층</option>
+                                <option value="2">2층</option>
+                            </select>
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label small">번호</label>
+                            <input type="number" name="col_num" id="colNum" class="form-control form-control-sm" value="1" min="1" onchange="updatePositionCode()">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+                    <button type="submit" class="btn btn-sm btn-primary">추가</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 2공장 파렛트 추가 모달 -->
+<div class="modal fade" id="addPalletModal2F" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="add_rack">
+                <input type="hidden" name="row_label" value="A">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title">파렛트 추가</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small">위치코드</label>
+                        <input type="text" name="position_code" id="positionCode2F" class="form-control form-control-sm" placeholder="P-1-1" required>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="form-label small">행 (1~2)</label>
+                            <select name="row_num" id="rowNum2F" class="form-select form-select-sm" onchange="updatePositionCode2F()">
+                                <option value="1">1행</option>
+                                <option value="2">2행</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small">열 (1~3)</label>
+                            <select name="col_num" id="colNum2F" class="form-select form-select-sm" onchange="updatePositionCode2F()">
+                                <option value="1">1열</option>
+                                <option value="2">2열</option>
+                                <option value="3">3열</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+                    <button type="submit" class="btn btn-sm btn-primary">추가</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+const csrfToken = '{{ csrf_token }}';
+const currentSection = '{{ section }}';
+let draggedItem = null;
+let dragSource = null;
+
+const maxColNums = {
+    'A': { '1': {{ max_col.A.1 }}, '2': {{ max_col.A.2 }} },
+    'B': { '1': {{ max_col.B.1 }}, '2': {{ max_col.B.2 }} }
+};
+
+// 2공장용 함수
+function updatePositionCode2F() {
+    const row = document.getElementById('rowNum2F').value;
+    const col = document.getElementById('colNum2F').value;
+    document.getElementById('positionCode2F').value = `P-${row}-${col}`;
+}
+
+function openAddModal2F() {
+    document.getElementById('rowNum2F').value = '1';
+    document.getElementById('colNum2F').value = '1';
+    updatePositionCode2F();
+    new bootstrap.Modal(document.getElementById('addPalletModal2F')).show();
+}
+
+function updatePositionCode() {
+    const row = document.getElementById('rowLabel').value;
+    const floor = document.getElementById('rowNum').value;
+    const col = document.getElementById('colNum').value;
+    document.getElementById('positionCode').value = `${row}-${floor}-${col}`;
+}
+
+function openAddModal(rowLabel, rowNum, colNum) {
+    document.getElementById('rowLabel').value = rowLabel;
+    document.getElementById('rowNum').value = rowNum;
+    document.getElementById('colNum').value = colNum || 1;
+    updatePositionCode();
+    new bootstrap.Modal(document.getElementById('addRackModal')).show();
+}
+
+function addNextRack(rowLabel, rowNum) {
+    const nextCol = maxColNums[rowLabel][rowNum] + 1;
+    openAddModal(rowLabel, rowNum, nextCol);
+}
+
+// 품목 검색
+let searchTimeout = null;
+const partPalette = document.getElementById('partPalette');
+const partSearch = document.getElementById('partSearch');
+
+partSearch.addEventListener('input', function() {
+    const query = this.value.trim();
+    if (searchTimeout) clearTimeout(searchTimeout);
+    if (query.length < 2) {
+        partPalette.innerHTML = '<span class="text-muted" style="font-size:0.8rem;">2글자 이상 입력하세요</span>';
+        return;
+    }
+    searchTimeout = setTimeout(() => {
+        fetch(`/wms/api/part-search/?q=${encodeURIComponent(query)}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.results.length === 0) {
+                    partPalette.innerHTML = '<span class="text-muted" style="font-size:0.8rem;">결과 없음</span>';
+                    return;
+                }
+                partPalette.innerHTML = '';
+                data.results.forEach(part => {
+                    const chip = document.createElement('div');
+                    chip.className = `part-chip ${part.assigned ? 'assigned' : ''}`;
+                    chip.dataset.partId = part.id;
+                    chip.draggable = true;
+                    chip.title = part.part_name;
+                    chip.textContent = part.part_no;
+                    chip.addEventListener('dragstart', handlePartDragStart);
+                    chip.addEventListener('dragend', handlePartDragEnd);
+                    partPalette.appendChild(chip);
+                });
+            })
+            .catch(() => {
+                partPalette.innerHTML = '<span class="text-danger" style="font-size:0.8rem;">오류 발생</span>';
+            });
+    }, 300);
+});
+
+function handlePartDragStart(e) {
+    draggedItem = e.target;
+    dragSource = 'palette';
+    e.target.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+}
+
+function handlePartDragEnd(e) {
+    e.target.classList.remove('dragging');
+    draggedItem = null;
+    dragSource = null;
+}
+
+document.querySelectorAll('.rack-cell').forEach(cell => {
+    cell.addEventListener('dragstart', (e) => {
+        if (!cell.classList.contains('has-part')) { e.preventDefault(); return; }
+        draggedItem = cell;
+        dragSource = 'rack';
+        cell.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+    });
+    cell.addEventListener('dragend', () => {
+        cell.classList.remove('dragging');
+        draggedItem = null;
+        dragSource = null;
+    });
+    cell.addEventListener('dragover', (e) => { e.preventDefault(); cell.classList.add('drag-over'); });
+    cell.addEventListener('dragleave', () => { cell.classList.remove('drag-over'); });
+    cell.addEventListener('drop', (e) => {
+        e.preventDefault();
+        cell.classList.remove('drag-over');
+        const targetRackId = cell.dataset.rackId;
+        if (dragSource === 'palette') {
+            assignPart(targetRackId, draggedItem.dataset.partId);
+        } else if (dragSource === 'rack') {
+            const sourceRackId = draggedItem.dataset.rackId;
+            if (sourceRackId !== targetRackId) swapParts(sourceRackId, targetRackId);
+        }
+    });
+});
+
+function assignPart(rackId, partId) {
+    fetch('/wms/raw-material/rack-manage/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken },
+        body: `action=assign_part&rack_id=${rackId}&part_id=${partId}`
+    }).then(r => { if (r.ok) location.reload(); });
+}
+
+function swapParts(sourceRackId, targetRackId) {
+    fetch('/wms/raw-material/rack-manage/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken },
+        body: `action=swap_parts&source_rack_id=${sourceRackId}&target_rack_id=${targetRackId}`
+    }).then(r => { if (r.ok) location.reload(); });
+}
+
+function deleteRack(rackId, positionCode) {
+    if (confirm(`${positionCode} 삭제?`)) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.innerHTML = `<input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}"><input type="hidden" name="action" value="delete_rack"><input type="hidden" name="rack_id" value="${rackId}">`;
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+updatePositionCode();
+</script>
+{% endblock %}

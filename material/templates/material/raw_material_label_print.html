@@ -1,0 +1,329 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>원재료 라벨 출력</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: "Malgun Gothic", sans-serif;
+            background: #555;
+        }
+
+        /* 상단 버튼 영역 */
+        .no-print {
+            background: #2c3e50;
+            color: white;
+            padding: 15px 20px;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .print-info {
+            font-size: 14pt;
+        }
+
+        .print-info strong {
+            color: #f39c12;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 10px 25px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 11pt;
+            transition: all 0.15s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .btn-print {
+            background: #27ae60;
+            color: #fff;
+        }
+
+        .btn-print:hover {
+            background: #219a52;
+        }
+
+        .btn-close {
+            background: #95a5a6;
+            color: #fff;
+        }
+
+        .btn-close:hover {
+            background: #7f8c8d;
+        }
+
+        /* 화면 미리보기 컨테이너 */
+        #preview-container {
+            padding: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            justify-content: center;
+        }
+
+        /* 라벨 카드 - 80mm x 50mm */
+        .label {
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            width: 80mm;
+            height: 50mm;
+            border: 2px solid #000;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 라벨 제목 */
+        .label-title {
+            font-weight: bold;
+            font-size: 11pt;
+            text-align: center;
+            border-bottom: 2px solid #000;
+            padding: 4px;
+            background: #f0f0f0;
+            letter-spacing: 2px;
+        }
+
+        /* 라벨 바디 */
+        .label-body {
+            display: flex;
+            flex: 1;
+            padding: 2mm 3mm;
+            gap: 3mm;
+        }
+
+        /* QR 코드 영역 */
+        .qr-area {
+            width: 23mm;
+            height: 23mm;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        /* 정보 영역 */
+        .info-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 0.5mm;
+        }
+
+        .info-row {
+            display: flex;
+            align-items: baseline;
+            gap: 2mm;
+        }
+
+        .info-label {
+            font-size: 7pt;
+            color: #555;
+            font-weight: bold;
+            width: 10mm;
+            flex-shrink: 0;
+        }
+
+        .info-value {
+            font-weight: bold;
+            font-size: 9pt;
+        }
+
+        .part-no {
+            font-size: 14pt !important;
+            font-family: monospace;
+            letter-spacing: 0.5px;
+        }
+
+        .part-name {
+            font-size: 8pt !important;
+            font-weight: normal !important;
+            max-width: 38mm;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .qty-value {
+            font-size: 12pt !important;
+            color: #c0392b;
+        }
+
+        /* 라벨 푸터 */
+        .label-footer {
+            border-top: 1px dashed #999;
+            padding: 2px;
+            text-align: center;
+            background: #fafafa;
+        }
+
+        .label-id {
+            font-family: 'Consolas', monospace;
+            font-size: 8pt;
+            color: #333;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+        }
+
+        /* 인쇄 스타일 - 라벨 프린터 */
+        @media print {
+            body {
+                background: white;
+                margin: 0;
+                padding: 0;
+            }
+
+            .no-print {
+                display: none !important;
+            }
+
+            @page {
+                size: 80mm 50mm;
+                margin: 0;
+            }
+
+            #preview-container {
+                display: block;
+                padding: 0;
+                margin: 0;
+            }
+
+            .label {
+                width: 80mm;
+                height: 50mm;
+                box-shadow: none;
+                page-break-after: always;
+                margin: 0;
+            }
+
+            .label:last-child {
+                page-break-after: auto;
+            }
+        }
+
+        /* 빈 상태 */
+        .empty-state {
+            color: white;
+            text-align: center;
+            padding: 50px;
+            width: 100%;
+        }
+
+        .empty-state p {
+            font-size: 18pt;
+            margin-bottom: 15px;
+        }
+
+        .empty-state a {
+            color: #3498db;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 상단 버튼 -->
+    <div class="no-print">
+        <div class="print-info">
+            🏷️ <strong>원재료 라벨 출력</strong>
+            <span style="margin-left: 20px;">총 <strong>{{ labels|length }}장</strong></span>
+            <span style="margin-left: 15px; font-size: 10pt; color: #bdc3c7;">80mm × 50mm</span>
+        </div>
+        <div class="btn-group">
+            <button onclick="window.print()" class="btn btn-print">🖨️ 인쇄</button>
+            <a href="{% url 'material:raw_material_incoming' %}" class="btn btn-close">← 돌아가기</a>
+        </div>
+    </div>
+
+    <!-- 라벨 미리보기 -->
+    <div id="preview-container">
+        {% for label in labels %}
+        <div class="label">
+            <div class="label-title">원재료 입고 라벨</div>
+            <div class="label-body">
+                <div class="qr-area" id="qr_{{ forloop.counter0 }}"></div>
+                <div class="info-area">
+                    <div class="info-row">
+                        <span class="info-label">품번</span>
+                        <span class="info-value part-no">{{ label.part_no }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">품명</span>
+                        <span class="info-value part-name" title="{{ label.part_name }}">{{ label.part_name }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">LOT</span>
+                        <span class="info-value">{{ label.lot_no|date:"Y-m-d" }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">수량</span>
+                        <span class="info-value qty-value">{{ label.quantity }}kg</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">유효</span>
+                        <span class="info-value">{{ label.expiry_date|date:"Y-m-d" }}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="label-footer">
+                <span class="label-id">{{ label.label_id }}</span>
+            </div>
+        </div>
+        {% empty %}
+        <div class="empty-state">
+            <p>출력할 라벨이 없습니다.</p>
+            <a href="{% url 'material:raw_material_incoming' %}">입고 페이지로 이동</a>
+        </div>
+        {% endfor %}
+    </div>
+
+    <script>
+        // QR 코드 생성 - 각 라벨별 고유 label_id
+        const labelList = [
+            {% for label in labels %}
+            {
+                index: {{ forloop.counter0 }},
+                label_id: "{{ label.label_id }}",
+                part_no: "{{ label.part_no }}",
+                quantity: "{{ label.quantity }}",
+                lot_no: "{{ label.lot_no|date:'Y-m-d' }}"
+            }{% if not forloop.last %},{% endif %}
+            {% endfor %}
+        ];
+
+        labelList.forEach(label => {
+            const el = document.getElementById(`qr_${label.index}`);
+            if (el) {
+                // QR 데이터: LABEL_ID|품번|수량|LOT
+                const qrData = `${label.label_id}|${label.part_no}|${label.quantity}|${label.lot_no}`;
+                new QRCode(el, {
+                    text: qrData,
+                    width: 80,
+                    height: 80,
+                    colorDark: "#000000",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,248 @@
+{% extends 'material/material_base.html' %}
+{% load humanize %}
+
+{% block title %}원재료 입고{% endblock %}
+
+{% block material_content %}
+<style>
+    .form-label { font-weight: 600; font-size: 0.9rem; color: #495057; margin-bottom: 0.4rem; }
+    .card { border: none; box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.05); border-radius: 0.5rem; }
+    .card-header { background-color: #fff; border-bottom: 2px solid #f1f3f5; padding: 1rem 1.25rem; }
+    .status-badge { font-size: 0.75rem; padding: 0.25rem 0.6rem; border-radius: 20px; }
+    .status-pending { background: #fff3cd; color: #856404; }
+    .status-approved { background: #d4edda; color: #155724; }
+    .status-printed { background: #cce5ff; color: #004085; }
+    .table-hover tbody tr:hover { background-color: #f8f9fa; }
+    .inspection-row { cursor: pointer; transition: background 0.15s; }
+    .inspection-row:hover { background-color: #e8f4fd !important; }
+    .inspection-row.selected { background-color: #d4edda !important; }
+    .btn-print { padding: 0.25rem 0.75rem; font-size: 0.8rem; }
+    .empty-state { padding: 3rem 1rem; text-align: center; color: #6c757d; }
+    .empty-state i { font-size: 3rem; margin-bottom: 1rem; display: block; opacity: 0.5; }
+    .label-qty { font-size: 0.75rem; background: #e9ecef; padding: 2px 6px; border-radius: 4px; }
+</style>
+
+<div class="container-fluid p-0">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold text-dark m-0">
+                <i class="bi bi-box-arrow-in-down text-success me-2"></i>원재료 입고
+            </h3>
+            <span class="text-muted small">수입검사 합격 판정 후 라벨을 발행합니다. 각 라벨은 고유하며 중복 발행되지 않습니다.</span>
+        </div>
+        <div>
+            <a href="{% url 'material:raw_material_layout' %}" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-grid-3x3-gap me-1"></i>창고 레이아웃
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- 좌측: 수입검사 합격 대기 목록 -->
+        <div class="col-lg-8">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <strong class="text-success">
+                        <i class="bi bi-check-circle me-1"></i>수입검사 합격 - 라벨 발행 대기
+                    </strong>
+                    <span class="badge bg-success rounded-pill">{{ approved_inspections|length }}건</span>
+                </div>
+                <div class="card-body p-0">
+                    {% if approved_inspections %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0 align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-3" style="width: 12%;">검사일시</th>
+                                    <th style="width: 15%;">품번</th>
+                                    <th>품명</th>
+                                    <th class="text-end" style="width: 10%;">수량</th>
+                                    <th class="text-center" style="width: 10%;">LOT</th>
+                                    <th style="width: 12%;">거래처</th>
+                                    <th class="text-center" style="width: 12%;">라벨 상태</th>
+                                    <th class="text-center" style="width: 10%;">관리</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for insp in approved_inspections %}
+                                <tr class="inspection-row">
+                                    <td class="ps-3 small text-muted">
+                                        {{ insp.inspected_at|date:"m/d H:i" }}
+                                    </td>
+                                    <td class="fw-bold text-primary">
+                                        {{ insp.inbound_transaction.part.part_no }}
+                                    </td>
+                                    <td class="small">
+                                        {{ insp.inbound_transaction.part.part_name|truncatechars:25 }}
+                                    </td>
+                                    <td class="text-end fw-bold">
+                                        {{ insp.inbound_transaction.quantity|intcomma }}kg
+                                    </td>
+                                    <td class="text-center small">
+                                        {{ insp.inbound_transaction.lot_no|date:"Y-m-d"|default:"-" }}
+                                    </td>
+                                    <td class="small text-muted">
+                                        {{ insp.inbound_transaction.vendor.name|default:"-"|truncatechars:10 }}
+                                    </td>
+                                    <td class="text-center">
+                                        {% if insp.label_count > 0 %}
+                                        <span class="status-badge status-printed">
+                                            <i class="bi bi-check"></i> {{ insp.label_count }}장 발행됨
+                                        </span>
+                                        {% else %}
+                                        <span class="status-badge status-approved">미발행</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">
+                                        <form method="post" style="display: inline;">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="print_labels">
+                                            <input type="hidden" name="inspection_id" value="{{ insp.id }}">
+                                            {% if insp.label_count > 0 %}
+                                            <button type="submit" class="btn btn-outline-secondary btn-print" title="재출력">
+                                                <i class="bi bi-printer"></i> 재출력
+                                            </button>
+                                            {% else %}
+                                            <button type="submit" class="btn btn-success btn-print" title="라벨 발행">
+                                                <i class="bi bi-qr-code"></i> 라벨발행
+                                            </button>
+                                            {% endif %}
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="empty-state">
+                        <i class="bi bi-inbox"></i>
+                        <p class="mb-1">수입검사 합격 대기 건이 없습니다</p>
+                        <small class="text-muted">입고처리 후 수입검사를 진행해주세요</small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- 수입검사 대기중 목록 -->
+            <div class="card shadow-sm">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <strong class="text-warning">
+                        <i class="bi bi-hourglass-split me-1"></i>수입검사 대기중
+                    </strong>
+                    <span class="badge bg-warning text-dark rounded-pill">{{ pending_inspections|length }}건</span>
+                </div>
+                <div class="card-body p-0">
+                    {% if pending_inspections %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0 align-middle small">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-3">입고일시</th>
+                                    <th>품번</th>
+                                    <th>품명</th>
+                                    <th class="text-end">수량</th>
+                                    <th>거래처</th>
+                                    <th class="text-center">상태</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for insp in pending_inspections %}
+                                <tr>
+                                    <td class="ps-3 text-muted">
+                                        {{ insp.inbound_transaction.date|date:"m/d H:i" }}
+                                    </td>
+                                    <td class="fw-bold">{{ insp.inbound_transaction.part.part_no }}</td>
+                                    <td>{{ insp.inbound_transaction.part.part_name|truncatechars:20 }}</td>
+                                    <td class="text-end">{{ insp.inbound_transaction.quantity|intcomma }}kg</td>
+                                    <td class="text-muted">{{ insp.inbound_transaction.vendor.name|default:"-"|truncatechars:8 }}</td>
+                                    <td class="text-center">
+                                        <span class="status-badge status-pending">검사대기</span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="empty-state py-4">
+                        <i class="bi bi-clipboard-check" style="font-size: 2rem;"></i>
+                        <p class="mb-0 small">검사 대기중인 건이 없습니다</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 우측: 안내 및 최근 발행 라벨 -->
+        <div class="col-lg-4">
+            <!-- 입고 프로세스 안내 -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light">
+                    <strong><i class="bi bi-info-circle me-1"></i>입고 프로세스</strong>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-start mb-3">
+                        <span class="badge bg-primary rounded-pill me-2">1</span>
+                        <div>
+                            <strong>입고처리</strong>
+                            <p class="text-muted small mb-0">자재 입고 시 수입검사 대상으로 등록</p>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-start mb-3">
+                        <span class="badge bg-warning text-dark rounded-pill me-2">2</span>
+                        <div>
+                            <strong>수입검사</strong>
+                            <p class="text-muted small mb-0">QMS에서 검사 진행 후 합격 판정</p>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-start mb-3">
+                        <span class="badge bg-success rounded-pill me-2">3</span>
+                        <div>
+                            <strong>라벨 발행</strong>
+                            <p class="text-muted small mb-0">합격 건에 대해 고유 QR 라벨 발행</p>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-start">
+                        <span class="badge bg-secondary rounded-pill me-2">4</span>
+                        <div>
+                            <strong>창고 입고</strong>
+                            <p class="text-muted small mb-0">라벨 부착 후 원재료 창고로 이동</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 최근 발행 라벨 -->
+            <div class="card shadow-sm">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <strong><i class="bi bi-qr-code me-1"></i>최근 발행 라벨</strong>
+                    <span class="badge bg-info rounded-pill">{{ recent_labels|length }}건</span>
+                </div>
+                <div class="card-body p-0" style="max-height: 350px; overflow-y: auto;">
+                    {% if recent_labels %}
+                    <ul class="list-group list-group-flush">
+                        {% for label in recent_labels %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center py-2">
+                            <div>
+                                <div class="fw-bold small text-primary">{{ label.part_no }}</div>
+                                <div class="text-muted" style="font-size: 0.7rem;">
+                                    {{ label.label_id }} | {{ label.printed_at|date:"m/d H:i" }}
+                                </div>
+                            </div>
+                            <span class="label-qty">{{ label.quantity }}kg</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <div class="empty-state py-4">
+                        <i class="bi bi-tag" style="font-size: 2rem;"></i>
+                        <p class="mb-0 small">발행된 라벨이 없습니다</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

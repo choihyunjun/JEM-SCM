@@ -1,0 +1,116 @@
+{% extends 'material/material_base.html' %}
+{% load humanize %}
+
+{% block title %}원재료 품목 설정{% endblock %}
+
+{% block material_content %}
+<div class="container-fluid p-0">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold text-secondary m-0">
+            <i class="bi bi-sliders me-2"></i>원재료 품목 설정
+        </h3>
+    </div>
+
+    <div class="row">
+        <!-- 설정 추가/수정 폼 -->
+        <div class="col-lg-4">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-primary text-white">
+                    <strong><i class="bi bi-gear me-2"></i>품목 설정</strong>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">품목 선택 <span class="text-danger">*</span></label>
+                            <select name="part_id" class="form-select" required>
+                                <option value="">-- 품목 선택 --</option>
+                                {% for part in parts %}
+                                <option value="{{ part.id }}">{{ part.part_no }} - {{ part.part_name }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">랙에 배치된 품목만 표시됩니다.</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">안전재고 (kg)</label>
+                            <input type="number" name="safety_stock" class="form-control"
+                                   value="0" min="0">
+                            <div class="form-text">이 수량 이하면 <span class="text-danger">빨간색</span> 표시</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">경고재고 (kg)</label>
+                            <input type="number" name="warning_stock" class="form-control"
+                                   value="0" min="0">
+                            <div class="form-text">이 수량 이하면 <span class="text-warning">노란색</span> 표시</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">보관기간 (일)</label>
+                            <input type="number" name="shelf_life_days" class="form-control"
+                                   value="365" min="1">
+                            <div class="form-text">입고일로부터 유효기간 계산</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">단위중량 (kg/포대)</label>
+                            <input type="number" name="unit_weight" class="form-control"
+                                   value="25" min="0.01" step="0.01">
+                            <div class="form-text">라벨 발행 시 포대 수 계산에 사용</div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-check-lg me-1"></i>저장
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- 설정 목록 -->
+        <div class="col-lg-8">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white">
+                    <strong>품목별 설정 현황</strong>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>품번</th>
+                                    <th>품명</th>
+                                    <th class="text-end">안전재고</th>
+                                    <th class="text-end">경고재고</th>
+                                    <th class="text-end">보관기간</th>
+                                    <th class="text-end">단위중량</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for setting in settings %}
+                                <tr>
+                                    <td class="fw-bold">{{ setting.part.part_no }}</td>
+                                    <td>{{ setting.part.part_name|truncatechars:20 }}</td>
+                                    <td class="text-end">{{ setting.safety_stock|intcomma }} kg</td>
+                                    <td class="text-end">{{ setting.warning_stock|intcomma }} kg</td>
+                                    <td class="text-end">{{ setting.shelf_life_days }}일</td>
+                                    <td class="text-end">{{ setting.unit_weight }} kg</td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center py-4 text-muted">
+                                        설정된 품목이 없습니다.
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

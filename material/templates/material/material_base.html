@@ -103,6 +103,18 @@
     </div>
     {% endif %}
 
+    {# ERP 연동 - can_wms_stock_view (기본 조회 권한) #}
+    {% if user|has_perm:'can_wms_stock_view' %}
+    <a class="nav-link dropdown-toggle collapsed" data-bs-toggle="collapse" href="#erpSubmenu" role="button" aria-expanded="false">
+        <i class="bi bi-cloud-upload me-2"></i> ERP 연동
+    </a>
+    <div class="collapse" id="erpSubmenu">
+        <a href="{% url 'material:erp_sync' %}" class="submenu-item {% if request.resolver_match.url_name == 'erp_sync' or request.resolver_match.url_name == 'erp_sync_export' %}active{% endif %}">
+            - 엑셀 변환
+        </a>
+    </div>
+    {% endif %}
+
 </div>
 {% endblock %}
 

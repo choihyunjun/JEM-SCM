@@ -3357,3 +3357,680 @@ def inventory_summary_excel(request):
 
     wb.save(response)
     return response
+
+
+# =============================================================================
+# ERP 동기화 - 엑셀 변환 내보내기
+# =============================================================================
+
+@wms_permission_required('can_wms_stock_view')
+def erp_sync(request):
+    """
+    ERP 동기화 페이지 - 입고/출고/이동 내역을 ERP 양식 엑셀로 변환
+    """
+    from datetime import datetime, timedelta
+
+    # 기본 날짜 범위 (오늘)
+    today = timezone.now().date()
+    date_from = request.GET.get('date_from', today.strftime('%Y-%m-%d'))
+    date_to = request.GET.get('date_to', today.strftime('%Y-%m-%d'))
+    sync_type = request.GET.get('sync_type', 'IN')  # IN, OUT, TRANSFER
+
+    # 날짜 파싱
+    try:
+        start_date = datetime.strptime(date_from, '%Y-%m-%d').date()
+        end_date = datetime.strptime(date_to, '%Y-%m-%d').date()
+    except ValueError:
+        start_date = today
+        end_date = today
+
+    # 트랜잭션 유형별 필터링
+    if sync_type == 'IN':
+        type_filter = ['IN_SCM', 'IN_MANUAL']
+        title = '입고 처리'
+    elif sync_type == 'OUT':
+        type_filter = ['OUT_PROD', 'OUT_RETURN']
+        title = '출고 처리'
+    else:  # TRANSFER
+        type_filter = ['TRANSFER']
+        title = '이동 처리'
+
+    # 트랜잭션 조회
+    transactions = MaterialTransaction.objects.filter(
+        transaction_type__in=type_filter,
+        date__date__gte=start_date,
+        date__date__lte=end_date
+    ).select_related('part', 'warehouse_from', 'warehouse_to', 'vendor', 'actor').order_by('-date')
+
+    # 창고 목록 (이동처리용)
+    warehouses = Warehouse.objects.filter(is_active=True).order_by('code')
+
+    context = {
+        'title': title,
+        'sync_type': sync_type,
+        'date_from': date_from,
+        'date_to': date_to,
+        'transactions': transactions,
+        'warehouses': warehouses,
+        'transaction_count': transactions.count(),
+    }
+
+    return render(request, 'material/erp_sync.html', context)
+
+
+@wms_permission_required('can_wms_stock_view')
+def erp_sync_export(request):
+    """
+    ERP 양식 엑셀 내보내기 - 더존 iCUBE 업로드 형식
+    - 입고: 거래구분, 입고일자, 거래처코드, 환종, 환율, 과세구분, 단가구분, 창고코드, 품번, 입고수량, 재고단위수량, 장소코드
+    """
+    from datetime import datetime
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+
+    sync_type = request.GET.get('sync_type', 'IN')
+    date_from = request.GET.get('date_from')
+    date_to = request.GET.get('date_to')
+
+    # 날짜 파싱
+    today = timezone.now().date()
+    try:
+        start_date = datetime.strptime(date_from, '%Y-%m-%d').date() if date_from else today
+        end_date = datetime.strptime(date_to, '%Y-%m-%d').date() if date_to else today
+    except ValueError:
+        start_date = today
+        end_date = today
+
+    # 트랜잭션 유형별 필터링
+    if sync_type == 'IN':
+        type_filter = ['IN_SCM', 'IN_MANUAL']
+        title = '입고등록'
+    elif sync_type == 'OUT':
+        type_filter = ['OUT_PROD', 'OUT_RETURN']
+        title = '출고등록'
+    else:  # TRANSFER
+        type_filter = ['TRANSFER']
+        title = '재고이동'
+
+    # 트랜잭션 조회
+    transactions = MaterialTransaction.objects.filter(
+        transaction_type__in=type_filter,
+        date__date__gte=start_date,
+        date__date__lte=end_date
+    ).select_related('part', 'warehouse_from', 'warehouse_to', 'vendor', 'actor').order_by('date')
+
+    # 엑셀 생성
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'sheet1'
+
+    # 스타일
+    header_font = Font(bold=True, size=10)
+    header_fill = PatternFill(start_color='DAEEF3', end_color='DAEEF3', fill_type='solid')
+    code_fill = PatternFill(start_color='FDE9D9', end_color='FDE9D9', fill_type='solid')
+
+    if sync_type == 'IN':
+        # ========== 입고등록 ERP 양식 ==========
+        # Row 1: 한글 헤더
+        headers_kr = ['거래구분', '입고일자', '거래처코드', '환종', '환율', '과세구분', '단가구분', '창고코드', '품번', '입고수량', '재고단위수량', '장소코드']
+        for col, header in enumerate(headers_kr, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center')
+
+        # Row 2: ERP 코드
+        headers_code = ['PO_FG', 'RCV_DT', 'TR_CD', 'EXCH_CD', 'EXCH_RT', 'VAT_FG', 'UMVAT_FG', 'WH_CD', 'ITEM_CD', 'PO_QT', 'RCV_QT', 'LC_CD']
+        for col, code in enumerate(headers_code, 1):
+            cell = ws.cell(row=2, column=col, value=code)
+            cell.font = Font(size=9)
+            cell.fill = code_fill
+            cell.alignment = Alignment(horizontal='center')
+
+        # Row 3+: 데이터
+        row_num = 3
+        for trx in transactions:
+            part = trx.part
+            vendor = trx.vendor
+
+            row_data = [
+                '0',  # 거래구분: 0=DOMESTIC
+                trx.date.strftime('%Y%m%d'),  # 입고일자: YYYYMMDD
+                vendor.erp_code if vendor and vendor.erp_code else '',  # 거래처코드 (ERP코드)
+                'KRW',  # 환종
+                1,  # 환율
+                '0',  # 과세구분: 0=매입과세
+                '0',  # 단가구분: 0=부가세미포함
+                trx.warehouse_to.code if trx.warehouse_to else '',  # 창고코드
+                part.part_no if part else '',  # 품번
+                abs(trx.quantity),  # 입고수량
+                abs(trx.quantity),  # 재고단위수량 (동일)
+                trx.warehouse_to.code if trx.warehouse_to else '',  # 장소코드 = 창고코드
+            ]
+
+            for col, value in enumerate(row_data, 1):
+                ws.cell(row=row_num, column=col, value=value)
+
+            row_num += 1
+
+        # 열 너비 조정
+        col_widths = {'A': 10, 'B': 12, 'C': 12, 'D': 8, 'E': 8, 'F': 10, 'G': 10, 'H': 10, 'I': 20, 'J': 12, 'K': 14, 'L': 10}
+
+    elif sync_type == 'OUT':
+        # ========== 출고등록 (임시 - 출고 양식 확인 후 수정 필요) ==========
+        headers_kr = ['품번', '품명', '수량', '출고창고', '출고일자', '용도', '비고']
+        for col, header in enumerate(headers_kr, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+
+        row_num = 2
+        for trx in transactions:
+            part = trx.part
+            usage = '생산불출' if trx.transaction_type == 'OUT_PROD' else '반품출고'
+            row_data = [
+                part.part_no if part else '',
+                part.part_name if part else '',
+                abs(trx.quantity),
+                trx.warehouse_from.code if trx.warehouse_from else '',
+                trx.date.strftime('%Y%m%d'),
+                usage,
+                trx.remark or '',
+            ]
+            for col, value in enumerate(row_data, 1):
+                ws.cell(row=row_num, column=col, value=value)
+            row_num += 1
+
+        col_widths = {'A': 20, 'B': 25, 'C': 10, 'D': 12, 'E': 12, 'F': 12, 'G': 20}
+
+    else:  # TRANSFER
+        # ========== 재고이동 (임시 - 이동 양식 확인 후 수정 필요) ==========
+        headers_kr = ['품번', '품명', '수량', '출발창고', '도착창고', '이동일자', '비고']
+        for col, header in enumerate(headers_kr, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+
+        row_num = 2
+        for trx in transactions:
+            part = trx.part
+            row_data = [
+                part.part_no if part else '',
+                part.part_name if part else '',
+                abs(trx.quantity),
+                trx.warehouse_from.code if trx.warehouse_from else '',
+                trx.warehouse_to.code if trx.warehouse_to else '',
+                trx.date.strftime('%Y%m%d'),
+                trx.remark or '',
+            ]
+            for col, value in enumerate(row_data, 1):
+                ws.cell(row=row_num, column=col, value=value)
+            row_num += 1
+
+        col_widths = {'A': 20, 'B': 25, 'C': 10, 'D': 12, 'E': 12, 'F': 12, 'G': 20}
+
+    # 열 너비 적용
+    for col, width in col_widths.items():
+        ws.column_dimensions[col].width = width
+
+    # 응답 생성
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    type_name = {'IN': 'incoming', 'OUT': 'outgoing', 'TRANSFER': 'transfer'}.get(sync_type, 'sync')
+    filename = f"ERP_{title}_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.xlsx"
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+    wb.save(response)
+    return response
+
+
+# =============================================================================
+# 원재료 관리 - 창고 레이아웃, 입고, 랙 관리
+# =============================================================================
+
+from .models import RawMaterialRack, RawMaterialSetting, RawMaterialLabel
+
+
+@wms_permission_required('can_wms_stock_view')
+def raw_material_layout(request):
+    """
+    원재료 창고 레이아웃 - 실시간 재고 현황 표시
+    실제 창고 구조 반영:
+    - A열: 왼쪽 벽면 (2층/1층)
+    - B열: 오른쪽 벽면 (2층/1층) - 마주보는 형태
+    - 가운데: 통로
+    """
+    section = request.GET.get('section', '3F')
+
+    # 해당 구역의 랙 목록 조회
+    racks = RawMaterialRack.objects.filter(
+        section=section,
+        is_active=True
+    ).select_related('part')
+
+    def get_rack_info(rack):
+        """랙별 재고 정보 조회"""
+        stock_qty = 0
+        stock_status = 'empty'
+
+        if rack.part:
+            stock = MaterialStock.objects.filter(
+                part=rack.part,
+                warehouse__code='3000'
+            ).aggregate(total=Sum('quantity'))
+            stock_qty = stock['total'] or 0
+
+            try:
+                setting = rack.part.raw_material_setting
+                safety = setting.safety_stock
+                warning = setting.warning_stock
+            except RawMaterialSetting.DoesNotExist:
+                safety = 0
+                warning = 0
+
+            if stock_qty <= 0:
+                stock_status = 'empty'
+            elif stock_qty < safety:
+                stock_status = 'danger'
+            elif stock_qty < warning:
+                stock_status = 'warning'
+            else:
+                stock_status = 'safe'
+
+        return {
+            'rack': rack,
+            'stock_qty': stock_qty,
+            'stock_status': stock_status,
+        }
+
+    # A열, B열 분리 후 col_num 오름차순 정렬
+    wall_a = {'1': [], '2': []}
+    wall_b = {'1': [], '2': []}
+
+    for rack in racks:
+        rack_info = get_rack_info(rack)
+        floor = str(rack.row_num)
+
+        if rack.row_label.upper() == 'A':
+            wall_a[floor].append(rack_info)
+        elif rack.row_label.upper() == 'B':
+            wall_b[floor].append(rack_info)
+
+    # col_num 오름차순 정렬
+    for floor in wall_a:
+        wall_a[floor] = sorted(wall_a[floor], key=lambda x: x['rack'].col_num)
+    for floor in wall_b:
+        wall_b[floor] = sorted(wall_b[floor], key=lambda x: x['rack'].col_num)
+
+    context = {
+        'section': section,
+        'section_display': '3공장' if section == '3F' else '2공장',
+        'wall_a': wall_a,
+        'wall_b': wall_b,
+        'sections': RawMaterialRack.SECTION_CHOICES,
+    }
+
+    return render(request, 'material/raw_material_layout.html', context)
+
+
+@wms_permission_required('can_wms_inout_view')
+def raw_material_incoming(request):
+    """
+    원재료 입고 처리 - QR 라벨 발행 포함
+    수입검사 OK 판정된 건에 대해서만 라벨 발행 가능
+    각 라벨은 고유하며, 동일 입고 건에 대해 중복 발행 불가
+    """
+    from datetime import timedelta
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        # 라벨 발행 처리 (수입검사 OK 건)
+        if action == 'print_labels':
+            inspection_id = request.POST.get('inspection_id')
+
+            try:
+                inspection = ImportInspection.objects.get(id=inspection_id)
+
+                # 검사 상태 확인
+                if inspection.status != 'APPROVED':
+                    messages.error(request, '수입검사 합격 판정이 필요합니다.')
+                    return redirect('material:raw_material_incoming')
+
+                trx = inspection.inbound_transaction
+                part = trx.part
+                qty = float(trx.quantity)
+                lot = trx.lot_no or timezone.now().date()
+                vendor = trx.vendor
+
+                # 이미 라벨이 발행된 건인지 확인 (중복 방지 - 고유 라벨 보장)
+                existing_labels = RawMaterialLabel.objects.filter(incoming_transaction=trx)
+                if existing_labels.exists():
+                    messages.warning(request, f'이미 라벨이 발행된 건입니다. (발행 라벨: {existing_labels.count()}장)')
+                    label_ids = ','.join([str(l.id) for l in existing_labels])
+                    return redirect(f'/wms/raw-material/label-print/?ids={label_ids}')
+
+                # 품목 설정 조회
+                try:
+                    setting = part.raw_material_setting
+                    unit_weight = float(setting.unit_weight)
+                    shelf_life = setting.shelf_life_days
+                except RawMaterialSetting.DoesNotExist:
+                    unit_weight = 25.0
+                    shelf_life = 365
+
+                # 라벨 개수 계산
+                label_count = int(qty / unit_weight)
+                if qty % unit_weight > 0:
+                    label_count += 1
+
+                # 원재료 창고로 재고 이동 (검사대기 → 원재료창고)
+                warehouse = Warehouse.objects.filter(code='3000').first()
+
+                with transaction.atomic():
+                    # 원재료창고 재고 추가
+                    stock, created = MaterialStock.objects.get_or_create(
+                        warehouse=warehouse,
+                        part=part,
+                        lot_no=lot,
+                        defaults={'quantity': 0}
+                    )
+                    stock.quantity += int(qty)
+                    stock.save()
+
+                    # QR 라벨 생성 (고유 라벨 - 각 포대별 유일한 ID)
+                    expiry_date = lot + timedelta(days=shelf_life)
+                    labels = []
+
+                    for i in range(label_count):
+                        label_qty = unit_weight if (i < label_count - 1 or qty % unit_weight == 0) else (qty % unit_weight)
+                        label = RawMaterialLabel.objects.create(
+                            label_id=RawMaterialLabel.generate_label_id(),
+                            part=part,
+                            part_no=part.part_no,
+                            part_name=part.part_name,
+                            lot_no=lot,
+                            quantity=label_qty,
+                            expiry_date=expiry_date,
+                            incoming_transaction=trx,
+                            vendor=vendor,
+                            status='INSTOCK',
+                            printed_by=request.user,
+                        )
+                        labels.append(label)
+
+                    # 입고 트랜잭션 업데이트
+                    trx.warehouse_to = warehouse
+                    trx.remark = f'{trx.remark or ""} [원재료 라벨 {label_count}장 발행]'.strip()
+                    trx.save()
+
+                messages.success(request, f'{part.part_no} - {label_count}장 라벨 발행 완료')
+
+                # 라벨 출력 페이지로 리다이렉트
+                label_ids = ','.join([str(l.id) for l in labels])
+                return redirect(f'/wms/raw-material/label-print/?ids={label_ids}')
+
+            except ImportInspection.DoesNotExist:
+                messages.error(request, '해당 수입검사 건을 찾을 수 없습니다.')
+            except Exception as e:
+                messages.error(request, f'라벨 발행 실패: {str(e)}')
+
+            return redirect('material:raw_material_incoming')
+
+    # 수입검사 합격(APPROVED) 건 목록 조회 - ZR, INK 품번만
+    approved_inspections = []
+    if ImportInspection:
+        approved_inspections = ImportInspection.objects.filter(
+            status='APPROVED'
+        ).filter(
+            Q(inbound_transaction__part__part_no__icontains='ZR') |
+            Q(inbound_transaction__part__part_no__icontains='INK')
+        ).select_related(
+            'inbound_transaction',
+            'inbound_transaction__part',
+            'inbound_transaction__vendor'
+        ).order_by('-inspected_at')
+
+        # 이미 라벨 발행된 건 표시
+        for insp in approved_inspections:
+            insp.label_count = RawMaterialLabel.objects.filter(
+                incoming_transaction=insp.inbound_transaction
+            ).count()
+
+    # 수입검사 대기중인 건 목록 - ZR, INK 품번만
+    pending_inspections = []
+    if ImportInspection:
+        pending_inspections = ImportInspection.objects.filter(
+            status='PENDING'
+        ).filter(
+            Q(inbound_transaction__part__part_no__icontains='ZR') |
+            Q(inbound_transaction__part__part_no__icontains='INK')
+        ).select_related(
+            'inbound_transaction',
+            'inbound_transaction__part',
+            'inbound_transaction__vendor'
+        ).order_by('-inbound_transaction__date')[:10]
+
+    # 최근 발행된 라벨 목록
+    recent_labels = RawMaterialLabel.objects.select_related(
+        'part', 'vendor'
+    ).order_by('-printed_at')[:20]
+
+    context = {
+        'approved_inspections': approved_inspections,
+        'pending_inspections': pending_inspections,
+        'recent_labels': recent_labels,
+        'today': timezone.now().date().strftime('%Y-%m-%d'),
+    }
+
+    return render(request, 'material/raw_material_incoming.html', context)
+
+
+@wms_permission_required('can_wms_stock_view')
+def raw_material_rack_manage(request):
+    """
+    랙 위치 관리 - 추가/수정/삭제, 품목 배치
+    """
+    section = request.GET.get('section', '3F')
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if action == 'add_rack':
+            position_code = request.POST.get('position_code')
+            row_label = request.POST.get('row_label')
+            row_num = request.POST.get('row_num')
+            col_num = request.POST.get('col_num')
+
+            if position_code and row_label:
+                # 중복 체크 (같은 구역 내에서만)
+                if RawMaterialRack.objects.filter(section=section, position_code=position_code).exists():
+                    messages.error(request, f'[{section}] 위치코드 {position_code}는 이미 존재합니다.')
+                else:
+                    RawMaterialRack.objects.create(
+                        section=section,
+                        position_code=position_code,
+                        row_label=row_label,
+                        row_num=int(row_num or 1),
+                        col_num=int(col_num or 1),
+                    )
+                    messages.success(request, f'랙 위치 {position_code} 추가 완료')
+
+        elif action == 'assign_part':
+            rack_id = request.POST.get('rack_id')
+            part_id = request.POST.get('part_id')
+
+            rack = RawMaterialRack.objects.get(id=rack_id)
+            rack.part_id = part_id if part_id else None
+            rack.save()
+            messages.success(request, f'{rack.position_code} 품목 배치 완료')
+
+        elif action == 'swap_parts':
+            # 랙 간 품목 교환
+            source_rack_id = request.POST.get('source_rack_id')
+            target_rack_id = request.POST.get('target_rack_id')
+
+            source_rack = RawMaterialRack.objects.get(id=source_rack_id)
+            target_rack = RawMaterialRack.objects.get(id=target_rack_id)
+
+            # 두 랙의 품목을 교환
+            source_part = source_rack.part
+            target_part = target_rack.part
+
+            source_rack.part = target_part
+            target_rack.part = source_part
+
+            source_rack.save()
+            target_rack.save()
+
+            messages.success(request, f'{source_rack.position_code} ↔ {target_rack.position_code} 품목 교환 완료')
+
+        elif action == 'delete_rack':
+            rack_id = request.POST.get('rack_id')
+            rack = RawMaterialRack.objects.get(id=rack_id)
+            position = rack.position_code
+            rack.delete()
+            messages.success(request, f'랙 위치 {position} 삭제 완료')
+
+        return redirect(f'/wms/raw-material/rack-manage/?section={section}')
+
+    racks = RawMaterialRack.objects.filter(section=section).select_related('part')
+    parts = Part.objects.all().order_by('part_no')
+
+    # 이미 랙에 배치된 품목 ID 목록
+    assigned_parts = set(RawMaterialRack.objects.filter(part__isnull=False).values_list('part_id', flat=True))
+
+    # A열, B열 분리 후 col_num 오름차순 정렬
+    wall_a = {'1': [], '2': []}
+    wall_b = {'1': [], '2': []}
+
+    for rack in racks:
+        floor = str(rack.row_num)
+        if rack.row_label.upper() == 'A':
+            wall_a[floor].append(rack)
+        elif rack.row_label.upper() == 'B':
+            wall_b[floor].append(rack)
+
+    # col_num 오름차순 정렬
+    for floor in wall_a:
+        wall_a[floor] = sorted(wall_a[floor], key=lambda x: x.col_num)
+    for floor in wall_b:
+        wall_b[floor] = sorted(wall_b[floor], key=lambda x: x.col_num)
+
+    # 각 층별 최대 col_num (다음 번호 계산용)
+    max_col = {
+        'A': {
+            '1': max([r.col_num for r in wall_a['1']], default=0),
+            '2': max([r.col_num for r in wall_a['2']], default=0),
+        },
+        'B': {
+            '1': max([r.col_num for r in wall_b['1']], default=0),
+            '2': max([r.col_num for r in wall_b['2']], default=0),
+        }
+    }
+
+    context = {
+        'section': section,
+        'section_display': '3공장' if section == '3F' else '2공장',
+        'wall_a': wall_a,
+        'wall_b': wall_b,
+        'max_col': max_col,
+        'parts': parts,
+        'assigned_parts': assigned_parts,
+        'sections': RawMaterialRack.SECTION_CHOICES,
+    }
+
+    return render(request, 'material/raw_material_rack_manage.html', context)
+
+
+@wms_permission_required('can_wms_stock_view')
+def raw_material_setting(request):
+    """
+    원재료 품목 설정 - 안전재고, 보관기간 설정
+    """
+    if request.method == 'POST':
+        part_id = request.POST.get('part_id')
+        safety_stock = request.POST.get('safety_stock', 0)
+        warning_stock = request.POST.get('warning_stock', 0)
+        shelf_life_days = request.POST.get('shelf_life_days', 365)
+        unit_weight = request.POST.get('unit_weight', 25)
+
+        part = Part.objects.get(id=part_id)
+        setting, created = RawMaterialSetting.objects.update_or_create(
+            part=part,
+            defaults={
+                'safety_stock': int(safety_stock),
+                'warning_stock': int(warning_stock),
+                'shelf_life_days': int(shelf_life_days),
+                'unit_weight': float(unit_weight),
+            }
+        )
+        messages.success(request, f'{part.part_no} 설정 저장 완료')
+        return redirect('/wms/raw-material/setting/')
+
+    # 랙에 배치된 품목 목록
+    rack_parts = RawMaterialRack.objects.filter(
+        part__isnull=False
+    ).values_list('part_id', flat=True).distinct()
+
+    settings = RawMaterialSetting.objects.select_related('part').order_by('part__part_no')
+    parts = Part.objects.filter(id__in=rack_parts).order_by('part_no')
+
+    context = {
+        'settings': settings,
+        'parts': parts,
+    }
+
+    return render(request, 'material/raw_material_setting.html', context)
+
+
+@wms_permission_required('can_wms_stock_view')
+def raw_material_label_print(request):
+    """
+    QR 라벨 출력 화면
+    """
+    ids = request.GET.get('ids', '')
+    label_ids = [int(i) for i in ids.split(',') if i.isdigit()]
+
+    labels = RawMaterialLabel.objects.filter(id__in=label_ids).order_by('id')
+
+    context = {
+        'labels': labels,
+    }
+
+    return render(request, 'material/raw_material_label_print.html', context)
+
+
+@wms_permission_required('can_wms_stock_view')
+def api_part_search(request):
+    """
+    품목 검색 API - 품번/품명으로 검색
+    """
+    from django.http import JsonResponse
+    from django.db.models import Q
+
+    query = request.GET.get('q', '').strip()
+
+    if len(query) < 2:
+        return JsonResponse({'results': []})
+
+    # 이미 랙에 배치된 품목 ID 목록
+    assigned_parts = set(RawMaterialRack.objects.filter(
+        part__isnull=False
+    ).values_list('part_id', flat=True))
+
+    # 품번 또는 품명으로 검색 (최대 30개)
+    parts = Part.objects.filter(
+        Q(part_no__icontains=query) | Q(part_name__icontains=query)
+    ).order_by('part_no')[:30]
+
+    results = []
+    for part in parts:
+        results.append({
+            'id': part.id,
+            'part_no': part.part_no,
+            'part_name': part.part_name,
+            'assigned': part.id in assigned_parts,
+        })
+
+    return JsonResponse({'results': results})

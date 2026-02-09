@@ -59,6 +59,10 @@ urlpatterns = [
     path('stock/lot-details/<str:part_no>/', views.get_lot_details, name='wms_lot_details'),
     path('api/available-lots/', views.api_get_available_lots, name='api_get_available_lots'),
 
+    # ERP 동기화
+    path('erp-sync/', views.erp_sync, name='erp_sync'),
+    path('erp-sync/export/', views.erp_sync_export, name='erp_sync_export'),
+
     # BOM 관리
     path('bom/', views.bom_list, name='bom_list'),
     path('bom/upload/', views.bom_upload, name='bom_upload'),
@@ -70,4 +74,12 @@ urlpatterns = [
     path('bom/detail/<str:part_no>/', views.bom_detail, name='bom_detail'),
     path('api/bom/calculate/', views.api_bom_calculate, name='api_bom_calculate'),
     path('bom/register-demand/', views.bom_register_demand, name='bom_register_demand'),
+
+    # 원재료 관리
+    path('raw-material/', views.raw_material_layout, name='raw_material_layout'),
+    path('raw-material/incoming/', views.raw_material_incoming, name='raw_material_incoming'),
+    path('raw-material/rack-manage/', views.raw_material_rack_manage, name='raw_material_rack_manage'),
+    path('raw-material/setting/', views.raw_material_setting, name='raw_material_setting'),
+    path('raw-material/label-print/', views.raw_material_label_print, name='raw_material_label_print'),
+    path('api/part-search/', views.api_part_search, name='api_part_search'),
 ]

@@ -1,0 +1,232 @@
+{% extends 'material/material_base.html' %}
+{% load humanize %}
+
+{% block title %}ERP 엑셀 변환{% endblock %}
+
+{% block material_content %}
+<div class="container-fluid p-0">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold text-secondary m-0">
+            <i class="bi bi-file-earmark-spreadsheet me-2"></i>ERP 엑셀 변환
+        </h3>
+    </div>
+
+    <!-- 안내 카드 -->
+    <div class="alert alert-info border-0 shadow-sm mb-4">
+        <div class="d-flex align-items-center">
+            <i class="bi bi-info-circle-fill me-3 fs-4"></i>
+            <div>
+                <strong>ERP 동기화 지원</strong><br>
+                <small class="text-muted">
+                    WMS에서 처리된 입고/출고/이동 내역을 ERP 업로드용 엑셀 양식으로 변환합니다.<br>
+                    변환된 엑셀을 더존 iCUBE ERP에 업로드하여 재고를 동기화하세요.
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <!-- 처리 유형 탭 -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-white py-0">
+            <ul class="nav nav-tabs card-header-tabs" id="syncTypeTabs">
+                <li class="nav-item">
+                    <a class="nav-link {% if sync_type == 'IN' %}active{% endif %} py-3 px-4"
+                       href="?sync_type=IN&date_from={{ date_from }}&date_to={{ date_to }}">
+                        <i class="bi bi-box-arrow-in-down me-2 text-success"></i>
+                        <strong>입고 처리</strong>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if sync_type == 'OUT' %}active{% endif %} py-3 px-4"
+                       href="?sync_type=OUT&date_from={{ date_from }}&date_to={{ date_to }}">
+                        <i class="bi bi-box-arrow-up me-2 text-danger"></i>
+                        <strong>출고 처리</strong>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if sync_type == 'TRANSFER' %}active{% endif %} py-3 px-4"
+                       href="?sync_type=TRANSFER&date_from={{ date_from }}&date_to={{ date_to }}">
+                        <i class="bi bi-arrow-left-right me-2 text-primary"></i>
+                        <strong>이동 처리</strong>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        <div class="card-body">
+            <!-- 검색 필터 -->
+            <form method="get" class="row g-3 align-items-end mb-4">
+                <input type="hidden" name="sync_type" value="{{ sync_type }}">
+                <div class="col-auto">
+                    <label class="form-label small text-muted">시작일</label>
+                    <input type="date" name="date_from" class="form-control" value="{{ date_from }}">
+                </div>
+                <div class="col-auto">
+                    <label class="form-label small text-muted">종료일</label>
+                    <input type="date" name="date_to" class="form-control" value="{{ date_to }}">
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-search me-1"></i>조회
+                    </button>
+                </div>
+                <div class="col-auto">
+                    <button type="button" class="btn btn-outline-secondary" onclick="setToday()">오늘</button>
+                </div>
+                <div class="col-auto">
+                    <button type="button" class="btn btn-outline-secondary" onclick="setThisWeek()">이번 주</button>
+                </div>
+                <div class="col-auto">
+                    <button type="button" class="btn btn-outline-secondary" onclick="setThisMonth()">이번 달</button>
+                </div>
+            </form>
+
+            <!-- 결과 요약 -->
+            <div class="d-flex justify-content-between align-items-center border-bottom pb-3 mb-3">
+                <div>
+                    <span class="badge bg-secondary fs-6">
+                        {{ title }} | 총 <strong>{{ transaction_count|intcomma }}</strong>건
+                    </span>
+                </div>
+                {% if transaction_count > 0 %}
+                <a href="{% url 'material:erp_sync_export' %}?sync_type={{ sync_type }}&date_from={{ date_from }}&date_to={{ date_to }}"
+                   class="btn btn-success">
+                    <i class="bi bi-download me-2"></i>ERP 엑셀 다운로드
+                </a>
+                {% endif %}
+            </div>
+
+            <!-- 데이터 미리보기 테이블 -->
+            {% if transactions %}
+            <div class="table-responsive" style="max-height: 500px;">
+                <table class="table table-hover table-bordered mb-0 align-middle" style="font-size: 0.9rem;">
+                    <thead class="table-light sticky-top">
+                        <tr class="text-center">
+                            <th style="width: 50px;">No</th>
+                            <th style="width: 140px;">품번</th>
+                            <th style="min-width: 150px;">품명</th>
+                            <th style="width: 90px;">수량</th>
+                            {% if sync_type == 'IN' %}
+                            <th style="width: 120px;">입고창고</th>
+                            <th style="width: 100px;">LOT</th>
+                            <th style="width: 100px;">입고일</th>
+                            <th style="width: 120px;">거래처</th>
+                            {% elif sync_type == 'OUT' %}
+                            <th style="width: 120px;">출고창고</th>
+                            <th style="width: 100px;">LOT</th>
+                            <th style="width: 100px;">출고일</th>
+                            <th style="width: 100px;">용도</th>
+                            {% else %}
+                            <th style="width: 100px;">출발창고</th>
+                            <th style="width: 100px;">도착창고</th>
+                            <th style="width: 100px;">LOT</th>
+                            <th style="width: 100px;">이동일</th>
+                            {% endif %}
+                            <th style="min-width: 120px;">비고</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for trx in transactions %}
+                        <tr>
+                            <td class="text-center text-muted">{{ forloop.counter }}</td>
+                            <td class="fw-bold font-monospace">{{ trx.part.part_no }}</td>
+                            <td>{{ trx.part.part_name }}</td>
+                            <td class="text-end fw-bold pe-3">{{ trx.quantity|intcomma }}</td>
+                            {% if sync_type == 'IN' %}
+                            <td class="text-center">{{ trx.warehouse_to.name|default:"-" }}</td>
+                            <td class="text-center">{{ trx.lot_no|date:"Y-m-d"|default:"-" }}</td>
+                            <td class="text-center">{{ trx.date|date:"Y-m-d" }}</td>
+                            <td>{{ trx.vendor.name|default:"-" }}</td>
+                            {% elif sync_type == 'OUT' %}
+                            <td class="text-center">{{ trx.warehouse_from.name|default:"-" }}</td>
+                            <td class="text-center">{{ trx.lot_no|date:"Y-m-d"|default:"-" }}</td>
+                            <td class="text-center">{{ trx.date|date:"Y-m-d" }}</td>
+                            <td class="text-center">
+                                {% if trx.transaction_type == 'OUT_PROD' %}
+                                <span class="badge bg-primary">생산불출</span>
+                                {% else %}
+                                <span class="badge bg-warning text-dark">반품출고</span>
+                                {% endif %}
+                            </td>
+                            {% else %}
+                            <td class="text-center">{{ trx.warehouse_from.name|default:"-" }}</td>
+                            <td class="text-center">{{ trx.warehouse_to.name|default:"-" }}</td>
+                            <td class="text-center">{{ trx.lot_no|date:"Y-m-d"|default:"-" }}</td>
+                            <td class="text-center">{{ trx.date|date:"Y-m-d" }}</td>
+                            {% endif %}
+                            <td class="text-muted small">{{ trx.remark|default:"-" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-inbox text-muted" style="font-size: 4rem;"></i>
+                <p class="text-muted mt-3">조회된 {{ title }} 내역이 없습니다.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- 사용 안내 -->
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-light">
+            <i class="bi bi-question-circle me-2"></i>사용 방법
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <h6 class="fw-bold text-success"><i class="bi bi-1-circle me-2"></i>입고 처리</h6>
+                    <p class="small text-muted mb-3">
+                        - SCM 납품 입고 및 수기 입고 내역<br>
+                        - ERP 자재 입고 메뉴에 업로드<br>
+                        - 거래처별 입고 내역 자동 분류
+                    </p>
+                </div>
+                <div class="col-md-4">
+                    <h6 class="fw-bold text-danger"><i class="bi bi-2-circle me-2"></i>출고 처리</h6>
+                    <p class="small text-muted mb-3">
+                        - 생산 불출 및 반품 출고 내역<br>
+                        - ERP 자재 출고 메뉴에 업로드<br>
+                        - 출고 용도별 내역 구분
+                    </p>
+                </div>
+                <div class="col-md-4">
+                    <h6 class="fw-bold text-primary"><i class="bi bi-3-circle me-2"></i>이동 처리</h6>
+                    <p class="small text-muted mb-3">
+                        - 창고 간 재고 이동 내역<br>
+                        - ERP 재고 이동 메뉴에 업로드<br>
+                        - 출발/도착 창고 정보 포함
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function setToday() {
+    const today = new Date().toISOString().split('T')[0];
+    document.querySelector('input[name="date_from"]').value = today;
+    document.querySelector('input[name="date_to"]').value = today;
+}
+
+function setThisWeek() {
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+
+    document.querySelector('input[name="date_from"]').value = monday.toISOString().split('T')[0];
+    document.querySelector('input[name="date_to"]').value = today.toISOString().split('T')[0];
+}
+
+function setThisMonth() {
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+
+    document.querySelector('input[name="date_from"]').value = firstDay.toISOString().split('T')[0];
+    document.querySelector('input[name="date_to"]').value = today.toISOString().split('T')[0];
+}
+</script>
+{% endblock %}

@@ -533,6 +533,45 @@
                             </div>
                             {% endif %}
 
+                            {# ERP 연동 - can_wms_stock_view 권한 필요 #}
+                            {% if user|has_perm:'can_wms_stock_view' %}
+                            <a class="nav-link collapsed {% if request.resolver_match.url_name in 'erp_sync,erp_sync_export' %}active{% endif %}"
+                               href="#" data-bs-toggle="collapse" data-bs-target="#collapseERP"
+                               aria-expanded="{% if request.resolver_match.url_name in 'erp_sync,erp_sync_export' %}true{% else %}false{% endif %}"
+                               aria-controls="collapseERP">
+                                <div class="sb-nav-link-icon"><i class="bi bi-cloud-upload"></i></div>
+                                ERP 연동
+                                <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
+                            </a>
+                            <div class="collapse {% if request.resolver_match.url_name in 'erp_sync,erp_sync_export' %}show{% endif %}"
+                                 id="collapseERP" data-bs-parent="#sidenavAccordion">
+                                <nav class="sb-sidenav-menu-nested nav">
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'erp_sync' %}active{% endif %}" href="{% url 'material:erp_sync' %}">엑셀 변환</a>
+                                </nav>
+                            </div>
+                            {% endif %}
+
+                            {# 원재료 관리 - can_wms_stock_view 권한 필요 #}
+                            {% if user|has_perm:'can_wms_stock_view' %}
+                            <a class="nav-link collapsed {% if 'raw_material' in request.resolver_match.url_name %}active{% endif %}"
+                               href="#" data-bs-toggle="collapse" data-bs-target="#collapseRawMaterial"
+                               aria-expanded="{% if 'raw_material' in request.resolver_match.url_name %}true{% else %}false{% endif %}"
+                               aria-controls="collapseRawMaterial">
+                                <div class="sb-nav-link-icon"><i class="bi bi-box-seam"></i></div>
+                                원재료 관리
+                                <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
+                            </a>
+                            <div class="collapse {% if 'raw_material' in request.resolver_match.url_name %}show{% endif %}"
+                                 id="collapseRawMaterial" data-bs-parent="#sidenavAccordion">
+                                <nav class="sb-sidenav-menu-nested nav">
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'raw_material_layout' %}active{% endif %}" href="{% url 'material:raw_material_layout' %}">창고 레이아웃</a>
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'raw_material_incoming' %}active{% endif %}" href="{% url 'material:raw_material_incoming' %}">원재료 입고</a>
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'raw_material_rack_manage' %}active{% endif %}" href="{% url 'material:raw_material_rack_manage' %}">랙 위치 관리</a>
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'raw_material_setting' %}active{% endif %}" href="{% url 'material:raw_material_setting' %}">품목 설정</a>
+                                </nav>
+                            </div>
+                            {% endif %}
+
                         {# ====================================================== #}
                         {# 3. SCM 메뉴 (기본) #}
                         {# ====================================================== #}

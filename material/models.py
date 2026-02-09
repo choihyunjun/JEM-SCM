@@ -570,3 +570,162 @@ class InventoryCheckSessionItem(models.Model):
     def __str__(self):
         status = "✅" if self.is_matched else "⚠️"
         return f"{status} [{self.tag_id}] {self.part_no} x {self.scanned_qty}"
+
+
+# -----------------------------------------------------------------------------
+# 13. 원재료 랙 위치 (Raw Material Rack)
+# -----------------------------------------------------------------------------
+class RawMaterialRack(models.Model):
+    """
+    [WMS] 원재료 창고 랙 위치 정의
+    - 격자형 레이아웃의 각 칸 정보
+    - 예: A-1-1, B-2-5 등
+    """
+    SECTION_CHOICES = [
+        ('3F', '3공장'),
+        ('2F', '2공장'),
+    ]
+
+    section = models.CharField("구역", max_length=10, choices=SECTION_CHOICES, default='3F')
+    position_code = models.CharField("위치코드", max_length=20, db_index=True)  # A-1-1, B-2-5 (구역별 unique)
+    row_label = models.CharField("행 라벨", max_length=10)  # A, B
+    row_num = models.IntegerField("행 번호", default=1)  # 1, 2, 3
+    col_num = models.IntegerField("열 번호", default=1)  # 1, 2, 3...
+
+    # 배치된 품목 (null이면 빈 칸)
+    part = models.ForeignKey(Part, on_delete=models.SET_NULL, null=True, blank=True,
+                              verbose_name="배치 품목", related_name='rack_positions')
+
+    display_order = models.IntegerField("표시순서", default=0)
+    is_active = models.BooleanField("사용여부", default=True)
+
+    created_at = models.DateTimeField("생성일시", auto_now_add=True)
+    updated_at = models.DateTimeField("수정일시", auto_now=True)
+
+    class Meta:
+        verbose_name = "원재료 랙 위치"
+        verbose_name_plural = "13. 원재료 랙 위치"
+        ordering = ['section', 'row_label', '-row_num', '-col_num']
+        unique_together = [['section', 'position_code']]  # 구역별로 위치코드 unique
+
+    def __str__(self):
+        part_info = f" - {self.part.part_no}" if self.part else " (빈칸)"
+        return f"[{self.get_section_display()}] {self.position_code}{part_info}"
+
+
+# -----------------------------------------------------------------------------
+# 14. 원재료 품목 설정 (Raw Material Setting)
+# -----------------------------------------------------------------------------
+class RawMaterialSetting(models.Model):
+    """
+    [WMS] 원재료 품목별 설정
+    - 안전재고, 보관기간 등 품목별 관리 설정
+    """
+    part = models.OneToOneField(Part, on_delete=models.CASCADE, verbose_name="품목",
+                                 related_name='raw_material_setting')
+
+    safety_stock = models.IntegerField("안전재고", default=0, help_text="이 수량 이하면 경고")
+    warning_stock = models.IntegerField("경고재고", default=0, help_text="이 수량 이하면 주의 (안전재고보다 높게)")
+
+    shelf_life_days = models.IntegerField("보관기간(일)", default=365, help_text="입고일로부터 유효기간")
+    unit_weight = models.DecimalField("단위중량(kg)", max_digits=10, decimal_places=2, default=25,
+                                       help_text="포대당 중량 (기본 25kg)")
+
+    remark = models.TextField("비고", blank=True)
+
+    created_at = models.DateTimeField("생성일시", auto_now_add=True)
+    updated_at = models.DateTimeField("수정일시", auto_now=True)
+
+    class Meta:
+        verbose_name = "원재료 품목 설정"
+        verbose_name_plural = "14. 원재료 품목 설정"
+
+    def __str__(self):
+        return f"{self.part.part_no} - 안전재고: {self.safety_stock}, 보관: {self.shelf_life_days}일"
+
+
+# -----------------------------------------------------------------------------
+# 15. 원재료 QR 라벨 (Raw Material Label)
+# -----------------------------------------------------------------------------
+class RawMaterialLabel(models.Model):
+    """
+    [WMS] 원재료 QR 라벨 발행 이력
+    - 입고 시 포대별 QR 라벨 발행
+    - 각 라벨은 고유 ID를 가짐
+    """
+    STATUS_CHOICES = [
+        ('PRINTED', '발행'),
+        ('INSTOCK', '재고'),
+        ('USED', '사용완료'),
+        ('EXPIRED', '유효기간만료'),
+        ('DISPOSED', '폐기'),
+    ]
+
+    # 고유 라벨 ID
+    label_id = models.CharField("라벨ID", max_length=30, unique=True, db_index=True)  # RM-20260207-0001
+
+    # 품목 정보
+    part = models.ForeignKey(Part, on_delete=models.CASCADE, verbose_name="품목")
+    part_no = models.CharField("품번", max_length=50)
+    part_name = models.CharField("품명", max_length=200)
+
+    # LOT 및 수량
+    lot_no = models.DateField("LOT번호(입고일)")
+    quantity = models.DecimalField("수량(kg)", max_digits=10, decimal_places=2, default=25)
+
+    # 유효기간
+    expiry_date = models.DateField("유효기간", null=True, blank=True)
+
+    # 입고 정보
+    incoming_transaction = models.ForeignKey(MaterialTransaction, on_delete=models.SET_NULL,
+                                              null=True, blank=True, verbose_name="입고 트랜잭션")
+    vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="거래처")
+
+    # 상태 관리
+    status = models.CharField("상태", max_length=15, choices=STATUS_CHOICES, default='PRINTED')
+
+    # 현재 위치
+    current_rack = models.ForeignKey(RawMaterialRack, on_delete=models.SET_NULL, null=True, blank=True,
+                                      verbose_name="현재 위치")
+
+    # 발행 정보
+    printed_at = models.DateTimeField("발행일시", auto_now_add=True)
+    printed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                    related_name='rawmaterial_labels_printed', verbose_name="발행자")
+
+    # 사용(출고) 정보
+    used_at = models.DateTimeField("사용일시", null=True, blank=True)
+    used_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                 related_name='rawmaterial_labels_used', verbose_name="사용자")
+
+    class Meta:
+        verbose_name = "원재료 QR 라벨"
+        verbose_name_plural = "15. 원재료 QR 라벨"
+        ordering = ['-printed_at']
+
+    def __str__(self):
+        return f"[{self.label_id}] {self.part_no} / {self.lot_no} / {self.quantity}kg"
+
+    @classmethod
+    def generate_label_id(cls):
+        """고유 라벨 ID 생성 (RM-YYYYMMDD-XXXX)"""
+        today = timezone.now().strftime('%Y%m%d')
+        prefix = f"RM-{today}-"
+
+        last_label = cls.objects.filter(label_id__startswith=prefix).order_by('-label_id').first()
+        if last_label:
+            try:
+                last_seq = int(last_label.label_id.split('-')[-1])
+                new_seq = last_seq + 1
+            except (ValueError, IndexError):
+                new_seq = 1
+        else:
+            new_seq = 1
+
+        return f"{prefix}{new_seq:04d}"
+
+    def is_expired(self):
+        """유효기간 만료 여부 확인"""
+        if self.expiry_date:
+            return timezone.now().date() > self.expiry_date
+        return False
