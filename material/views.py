@@ -474,6 +474,17 @@ def manual_incoming(request):
                             target_warehouse_code=target_wh_code,
                             status='PENDING'
                         )
+                    elif ImportInspection:
+                        # 무검사 입고도 라벨 발행 대기 목록에 표시되도록
+                        ImportInspection.objects.create(
+                            inbound_transaction=trx_obj,
+                            lot_no=lot_date,
+                            target_warehouse_code=warehouse.code,
+                            status='APPROVED',
+                            inspected_at=timezone.now(),
+                            qty_good=qty,
+                            remark='무검사 수기입고 (수입검사 생략)',
+                        )
 
                     success_count += 1
 
