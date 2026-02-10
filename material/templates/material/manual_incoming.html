@@ -59,17 +59,28 @@
                         </div>
                     </div>
 
-                    <div class="col-md-3">
-                        <label class="form-label small">입고 창고 (To)</label>
+                    <div class="col-md-3" id="warehouseCol">
+                        <label class="form-label small" id="warehouseLabel">입고 창고 (To)</label>
                         <select name="warehouse_id" id="selWarehouse" class="form-select" required>
                             <option value="">== 창고 선택 ==</option>
                             {% for w in warehouses %}
-                                <option value="{{ w.id }}">{{ w.name }} ({{ w.code }})</option>
+                                <option value="{{ w.id }}" data-code="{{ w.code }}">{{ w.name }} ({{ w.code }})</option>
                             {% endfor %}
                         </select>
                     </div>
 
-                    <div class="col-md-4">
+                    <div class="col-md-3" id="targetWarehouseCol" style="display: none;">
+                        <label class="form-label small text-success fw-bold">합격 후 입고 창고</label>
+                        <select name="target_warehouse_id" id="selTargetWarehouse" class="form-select border-success">
+                            <option value="">== 창고 선택 ==</option>
+                            {% for w in warehouses %}
+                                <option value="{{ w.id }}" data-code="{{ w.code }}">{{ w.name }} ({{ w.code }})</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text small text-success">수입검사 합격 시 입고될 창고</div>
+                    </div>
+
+                    <div class="col-md" id="vendorCol">
                         <label class="form-label small">공급처 (Vendor)</label>
                         <div class="input-group">
                             <input type="text" class="form-control bg-light" id="displayVendor" placeholder="업체 선택" readonly onclick="openVendorModal()" style="cursor: pointer;">
@@ -281,17 +292,32 @@
         const box = document.getElementById('inspectionBox');
         const label = document.getElementById('lblInspection');
         const select = document.getElementById('selWarehouse');
+        const targetCol = document.getElementById('targetWarehouseCol');
+        const targetSelect = document.getElementById('selTargetWarehouse');
+        const warehouseLabel = document.getElementById('warehouseLabel');
 
         if (checkBox.checked) {
             box.classList.add('active');
             label.innerText = "진행 (On)";
             label.classList.remove('text-muted');
             label.classList.add('text-danger', 'fw-bold');
-            
+
             // 검사대기장 자동 선택
             for (let i = 0; i < select.options.length; i++) {
                 if (select.options[i].text.includes("검사")) {
                     select.selectedIndex = i;
+                    break;
+                }
+            }
+
+            // 합격 후 입고 창고 필드 표시
+            targetCol.style.display = '';
+            warehouseLabel.textContent = '검사 대기 창고';
+
+            // 원재료 창고 자동 선택 (기본값)
+            for (let i = 0; i < targetSelect.options.length; i++) {
+                if (targetSelect.options[i].text.includes("원재료") || targetSelect.options[i].getAttribute('data-code') === '3000') {
+                    targetSelect.selectedIndex = i;
                     break;
                 }
             }
@@ -300,7 +326,7 @@
             label.innerText = "미진행";
             label.classList.add('text-muted');
             label.classList.remove('text-danger', 'fw-bold');
-            
+
             // 자재창고 자동 선택
             for (let i = 0; i < select.options.length; i++) {
                 if (select.options[i].text.includes("자재")) {
@@ -308,6 +334,11 @@
                     break;
                 }
             }
+
+            // 합격 후 입고 창고 필드 숨김
+            targetCol.style.display = 'none';
+            targetSelect.value = '';
+            warehouseLabel.textContent = '입고 창고 (To)';
         }
     }
 
@@ -428,6 +459,10 @@
 
         if (!wh) { alert("입고 창고를 선택해주세요."); return false; }
         if (!vendor) { alert("공급처(Vendor)를 선택해주세요."); return false; }
+
+        var inspection = document.getElementById('chkInspection').checked;
+        var targetWh = document.querySelector('select[name="target_warehouse_id"]').value;
+        if (inspection && !targetWh) { alert("합격 후 입고 창고를 선택해주세요."); return false; }
 
         return confirm("총 " + count + "건의 자재를 입고 처리하시겠습니까?");
     }

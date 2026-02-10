@@ -381,6 +381,8 @@ def manual_incoming(request):
             vendor_id = request.POST.get('vendor_id')
             needs_inspection = request.POST.get('needs_inspection')
 
+            target_warehouse_id = request.POST.get('target_warehouse_id')
+
             part_ids = request.POST.getlist('part_ids[]')
             lot_nos = request.POST.getlist('lot_nos[]')
             quantities = request.POST.getlist('quantities[]')
@@ -458,8 +460,18 @@ def manual_incoming(request):
 
                     # (3) 수입검사 요청
                     if needs_inspection and ImportInspection:
+                        # 합격 후 입고 창고 코드 조회
+                        target_wh_code = '2000'
+                        if target_warehouse_id:
+                            try:
+                                target_wh = Warehouse.objects.get(id=target_warehouse_id)
+                                target_wh_code = target_wh.code
+                            except Warehouse.DoesNotExist:
+                                pass
                         ImportInspection.objects.create(
                             inbound_transaction=trx_obj,
+                            lot_no=lot_date,
+                            target_warehouse_code=target_wh_code,
                             status='PENDING'
                         )
 
