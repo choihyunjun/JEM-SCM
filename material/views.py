@@ -3736,22 +3736,8 @@ def raw_material_incoming(request):
                 # 유효기간 - 모달에서 입력받은 값 사용
                 shelf_life = int(request.POST.get('shelf_life_days', 365))
 
-                # 원재료 창고로 재고 이동
-                warehouse = Warehouse.objects.filter(code='3000').first()
-
+                # 라벨 발행만 수행 (재고는 입고처리 시 이미 추가됨)
                 with transaction.atomic():
-                    # 원재료창고 재고 추가
-                    stock, created = MaterialStock.objects.get_or_create(
-                        warehouse=warehouse,
-                        part=part,
-                        lot_no=lot,
-                        defaults={'quantity': 0}
-                    )
-                    MaterialStock.objects.filter(pk=stock.pk).update(
-                        quantity=F('quantity') + int(qty)
-                    )
-
-                    # QR 라벨 생성
                     expiry_date = lot + timedelta(days=shelf_life)
                     labels = []
 
@@ -3772,8 +3758,7 @@ def raw_material_incoming(request):
                         )
                         labels.append(label)
 
-                    # 입고 트랜잭션 업데이트
-                    trx.warehouse_to = warehouse
+                    # 입고 트랜잭션에 라벨 발행 기록
                     trx.remark = f'{trx.remark or ""} [라벨 {pkg_count}장 발행 ({pkg_qty}{dict(RawMaterialLabel.UNIT_CHOICES).get(unit, unit)}×{pkg_count})]'.strip()
                     trx.save()
 
