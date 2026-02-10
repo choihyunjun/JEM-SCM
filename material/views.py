@@ -3705,28 +3705,42 @@ def raw_material_incoming(request):
                 lot = trx.lot_no or timezone.now().date()
                 vendor = trx.vendor
 
-                # 이미 라벨이 발행된 건인지 확인 (중복 방지 - 고유 라벨 보장)
+                action = request.POST.get('action')
+
+                # 재출력: 기존 라벨을 다시 인쇄
+                if action == 'reprint_labels':
+                    existing_labels = RawMaterialLabel.objects.filter(incoming_transaction=trx)
+                    if existing_labels.exists():
+                        label_ids = ','.join([str(l.id) for l in existing_labels])
+                        return redirect(f'/wms/raw-material/label-print/?ids={label_ids}')
+                    else:
+                        messages.warning(request, '발행된 라벨이 없습니다.')
+                        return redirect('material:raw_material_incoming')
+
+                # 이미 라벨이 발행된 건인지 확인 (중복 방지)
                 existing_labels = RawMaterialLabel.objects.filter(incoming_transaction=trx)
                 if existing_labels.exists():
                     messages.warning(request, f'이미 라벨이 발행된 건입니다. (발행 라벨: {existing_labels.count()}장)')
                     label_ids = ','.join([str(l.id) for l in existing_labels])
                     return redirect(f'/wms/raw-material/label-print/?ids={label_ids}')
 
-                # 품목 설정 조회
+                # 모달에서 입력받은 값
+                unit = request.POST.get('unit', 'KG')
+                pkg_qty = float(request.POST.get('pkg_qty', 25))
+                pkg_count = int(request.POST.get('pkg_count', 1))
+
+                if pkg_qty <= 0 or pkg_count <= 0:
+                    messages.error(request, '포장 단위수량과 포장 수는 0보다 커야 합니다.')
+                    return redirect('material:raw_material_incoming')
+
+                # 유효기간 조회
                 try:
                     setting = part.raw_material_setting
-                    unit_weight = float(setting.unit_weight)
                     shelf_life = setting.shelf_life_days
                 except RawMaterialSetting.DoesNotExist:
-                    unit_weight = 25.0
                     shelf_life = 365
 
-                # 라벨 개수 계산
-                label_count = int(qty / unit_weight)
-                if qty % unit_weight > 0:
-                    label_count += 1
-
-                # 원재료 창고로 재고 이동 (검사대기 → 원재료창고)
+                # 원재료 창고로 재고 이동
                 warehouse = Warehouse.objects.filter(code='3000').first()
 
                 with transaction.atomic():
@@ -3737,22 +3751,23 @@ def raw_material_incoming(request):
                         lot_no=lot,
                         defaults={'quantity': 0}
                     )
-                    stock.quantity += int(qty)
-                    stock.save()
+                    MaterialStock.objects.filter(pk=stock.pk).update(
+                        quantity=F('quantity') + int(qty)
+                    )
 
-                    # QR 라벨 생성 (고유 라벨 - 각 포대별 유일한 ID)
+                    # QR 라벨 생성
                     expiry_date = lot + timedelta(days=shelf_life)
                     labels = []
 
-                    for i in range(label_count):
-                        label_qty = unit_weight if (i < label_count - 1 or qty % unit_weight == 0) else (qty % unit_weight)
+                    for i in range(pkg_count):
                         label = RawMaterialLabel.objects.create(
                             label_id=RawMaterialLabel.generate_label_id(),
                             part=part,
                             part_no=part.part_no,
                             part_name=part.part_name,
                             lot_no=lot,
-                            quantity=label_qty,
+                            quantity=pkg_qty,
+                            unit=unit,
                             expiry_date=expiry_date,
                             incoming_transaction=trx,
                             vendor=vendor,
@@ -3763,10 +3778,10 @@ def raw_material_incoming(request):
 
                     # 입고 트랜잭션 업데이트
                     trx.warehouse_to = warehouse
-                    trx.remark = f'{trx.remark or ""} [원재료 라벨 {label_count}장 발행]'.strip()
+                    trx.remark = f'{trx.remark or ""} [라벨 {pkg_count}장 발행 ({pkg_qty}{dict(RawMaterialLabel.UNIT_CHOICES).get(unit, unit)}×{pkg_count})]'.strip()
                     trx.save()
 
-                messages.success(request, f'{part.part_no} - {label_count}장 라벨 발행 완료')
+                messages.success(request, f'{part.part_no} - {pkg_count}장 라벨 발행 완료 ({pkg_qty}{dict(RawMaterialLabel.UNIT_CHOICES).get(unit, unit)}×{pkg_count})')
 
                 # 라벨 출력 페이지로 리다이렉트
                 label_ids = ','.join([str(l.id) for l in labels])

@@ -16,11 +16,16 @@
     .table-hover tbody tr:hover { background-color: #f8f9fa; }
     .inspection-row { cursor: pointer; transition: background 0.15s; }
     .inspection-row:hover { background-color: #e8f4fd !important; }
-    .inspection-row.selected { background-color: #d4edda !important; }
     .btn-print { padding: 0.25rem 0.75rem; font-size: 0.8rem; }
     .empty-state { padding: 3rem 1rem; text-align: center; color: #6c757d; }
     .empty-state i { font-size: 3rem; margin-bottom: 1rem; display: block; opacity: 0.5; }
     .label-qty { font-size: 0.75rem; background: #e9ecef; padding: 2px 6px; border-radius: 4px; }
+    .calc-result { font-size: 1.3rem; font-weight: 700; color: #198754; }
+    .calc-mismatch { color: #dc3545; }
+    .modal-info-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f1f3f5; font-size: 0.9rem; }
+    .modal-info-row:last-child { border-bottom: none; }
+    .modal-info-label { color: #6c757d; }
+    .modal-info-value { font-weight: 600; color: #212529; }
 </style>
 
 <div class="container-fluid p-0">
@@ -77,7 +82,7 @@
                                         {{ insp.inbound_transaction.part.part_name|truncatechars:25 }}
                                     </td>
                                     <td class="text-end fw-bold">
-                                        {{ insp.inbound_transaction.quantity|intcomma }}kg
+                                        {{ insp.inbound_transaction.quantity|intcomma }}
                                     </td>
                                     <td class="text-center small">
                                         {{ insp.inbound_transaction.lot_no|date:"Y-m-d"|default:"-" }}
@@ -101,21 +106,20 @@
                                     <td class="text-center">
                                         {% if insp.is_scm %}
                                         <span class="text-muted small">-</span>
-                                        {% else %}
+                                        {% elif insp.label_count > 0 %}
                                         <form method="post" style="display: inline;">
                                             {% csrf_token %}
-                                            <input type="hidden" name="action" value="print_labels">
+                                            <input type="hidden" name="action" value="reprint_labels">
                                             <input type="hidden" name="inspection_id" value="{{ insp.id }}">
-                                            {% if insp.label_count > 0 %}
                                             <button type="submit" class="btn btn-outline-secondary btn-print" title="재출력">
                                                 <i class="bi bi-printer"></i> 재출력
                                             </button>
-                                            {% else %}
-                                            <button type="submit" class="btn btn-success btn-print" title="라벨 발행">
-                                                <i class="bi bi-qr-code"></i> 라벨발행
-                                            </button>
-                                            {% endif %}
                                         </form>
+                                        {% else %}
+                                        <button type="button" class="btn btn-success btn-print"
+                                                onclick="openLabelModal('{{ insp.id }}', '{{ insp.inbound_transaction.part.part_no }}', '{{ insp.inbound_transaction.part.part_name|truncatechars:30 }}', {{ insp.inbound_transaction.quantity }})">
+                                            <i class="bi bi-qr-code"></i> 라벨발행
+                                        </button>
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -163,7 +167,7 @@
                                     </td>
                                     <td class="fw-bold">{{ insp.inbound_transaction.part.part_no }}</td>
                                     <td>{{ insp.inbound_transaction.part.part_name|truncatechars:20 }}</td>
-                                    <td class="text-end">{{ insp.inbound_transaction.quantity|intcomma }}kg</td>
+                                    <td class="text-end">{{ insp.inbound_transaction.quantity|intcomma }}</td>
                                     <td class="text-muted">{{ insp.inbound_transaction.vendor.name|default:"-"|truncatechars:8 }}</td>
                                     <td class="text-center">
                                         <span class="status-badge status-pending">검사대기</span>
@@ -209,7 +213,7 @@
                         <span class="badge bg-success rounded-pill me-2">3</span>
                         <div>
                             <strong>라벨 발행</strong>
-                            <p class="text-muted small mb-0">합격 건에 대해 고유 QR 라벨 발행</p>
+                            <p class="text-muted small mb-0">포장 단위/수량 입력 후 라벨 발행</p>
                         </div>
                     </div>
                     <div class="d-flex align-items-start">
@@ -239,7 +243,7 @@
                                     {{ label.label_id }} | {{ label.printed_at|date:"m/d H:i" }}
                                 </div>
                             </div>
-                            <span class="label-qty">{{ label.quantity }}kg</span>
+                            <span class="label-qty">{{ label.quantity }}{{ label.get_unit_display }}</span>
                         </li>
                         {% endfor %}
                     </ul>
@@ -254,4 +258,134 @@
         </div>
     </div>
 </div>
+
+<!-- 라벨 발행 모달 -->
+<div class="modal fade" id="labelModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="bi bi-qr-code me-2"></i>라벨 발행</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" id="labelForm">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="print_labels">
+                <input type="hidden" name="inspection_id" id="modalInspectionId">
+                <div class="modal-body">
+                    <!-- 품목 정보 -->
+                    <div class="bg-light rounded p-3 mb-3">
+                        <div class="modal-info-row">
+                            <span class="modal-info-label">품번</span>
+                            <span class="modal-info-value" id="modalPartNo"></span>
+                        </div>
+                        <div class="modal-info-row">
+                            <span class="modal-info-label">품명</span>
+                            <span class="modal-info-value" id="modalPartName"></span>
+                        </div>
+                        <div class="modal-info-row">
+                            <span class="modal-info-label">입고수량</span>
+                            <span class="modal-info-value" id="modalTotalQty"></span>
+                        </div>
+                    </div>
+
+                    <!-- 입력 필드 -->
+                    <div class="row g-3">
+                        <div class="col-4">
+                            <label class="form-label">단위</label>
+                            <select class="form-select" name="unit" id="modalUnit" onchange="calcLabels()">
+                                <option value="KG">kg</option>
+                                <option value="EA">EA</option>
+                                <option value="L">L</option>
+                                <option value="M">m</option>
+                            </select>
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label">포장 단위수량</label>
+                            <input type="number" class="form-control" name="pkg_qty" id="modalPkgQty"
+                                   step="0.01" min="0.01" placeholder="25" oninput="calcLabels()">
+                            <div class="form-text small">1포대/박스당</div>
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label">포장 수</label>
+                            <input type="number" class="form-control" name="pkg_count" id="modalPkgCount"
+                                   min="1" placeholder="40" oninput="calcLabels()">
+                            <div class="form-text small">라벨 발행 수</div>
+                        </div>
+                    </div>
+
+                    <!-- 계산 결과 -->
+                    <div class="mt-3 p-3 bg-light rounded text-center">
+                        <div class="text-muted small mb-1">합계</div>
+                        <div class="calc-result" id="calcTotal">-</div>
+                        <div class="small mt-1" id="calcWarning" style="display:none;">
+                            <i class="bi bi-exclamation-triangle"></i> 입고수량과 다릅니다
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">취소</button>
+                    <button type="submit" class="btn btn-success" id="btnSubmitLabel" disabled>
+                        <i class="bi bi-qr-code me-1"></i>라벨 발행 (<span id="labelCountText">0</span>장)
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+let modalTotalQty = 0;
+
+function openLabelModal(inspId, partNo, partName, totalQty) {
+    modalTotalQty = parseFloat(totalQty);
+    document.getElementById('modalInspectionId').value = inspId;
+    document.getElementById('modalPartNo').textContent = partNo;
+    document.getElementById('modalPartName').textContent = partName;
+    document.getElementById('modalTotalQty').textContent = Number(totalQty).toLocaleString();
+
+    // 초기화
+    document.getElementById('modalUnit').value = 'KG';
+    document.getElementById('modalPkgQty').value = '';
+    document.getElementById('modalPkgCount').value = '';
+    document.getElementById('calcTotal').textContent = '-';
+    document.getElementById('calcTotal').className = 'calc-result';
+    document.getElementById('calcWarning').style.display = 'none';
+    document.getElementById('btnSubmitLabel').disabled = true;
+    document.getElementById('labelCountText').textContent = '0';
+
+    new bootstrap.Modal(document.getElementById('labelModal')).show();
+}
+
+function calcLabels() {
+    const pkgQty = parseFloat(document.getElementById('modalPkgQty').value) || 0;
+    const pkgCount = parseInt(document.getElementById('modalPkgCount').value) || 0;
+    const unitText = document.getElementById('modalUnit').options[document.getElementById('modalUnit').selectedIndex].text;
+    const total = pkgQty * pkgCount;
+    const calcEl = document.getElementById('calcTotal');
+    const warnEl = document.getElementById('calcWarning');
+    const btnEl = document.getElementById('btnSubmitLabel');
+    const cntEl = document.getElementById('labelCountText');
+
+    if (pkgQty > 0 && pkgCount > 0) {
+        calcEl.textContent = Number(total).toLocaleString() + unitText;
+        cntEl.textContent = pkgCount;
+
+        if (Math.abs(total - modalTotalQty) > 0.01) {
+            calcEl.className = 'calc-result calc-mismatch';
+            warnEl.style.display = 'block';
+        } else {
+            calcEl.className = 'calc-result';
+            warnEl.style.display = 'none';
+        }
+
+        btnEl.disabled = false;
+    } else {
+        calcEl.textContent = '-';
+        calcEl.className = 'calc-result';
+        warnEl.style.display = 'none';
+        btnEl.disabled = true;
+        cntEl.textContent = '0';
+    }
+}
+</script>
 {% endblock %}

@@ -670,8 +670,15 @@ class RawMaterialLabel(models.Model):
     part_name = models.CharField("품명", max_length=200)
 
     # LOT 및 수량
+    UNIT_CHOICES = [
+        ('KG', 'kg'),
+        ('EA', 'EA'),
+        ('L', 'L'),
+        ('M', 'm'),
+    ]
     lot_no = models.DateField("LOT번호(입고일)")
-    quantity = models.DecimalField("수량(kg)", max_digits=10, decimal_places=2, default=25)
+    quantity = models.DecimalField("수량", max_digits=10, decimal_places=2, default=25)
+    unit = models.CharField("단위", max_length=5, choices=UNIT_CHOICES, default='KG')
 
     # 유효기간
     expiry_date = models.DateField("유효기간", null=True, blank=True)
@@ -704,7 +711,7 @@ class RawMaterialLabel(models.Model):
         ordering = ['-printed_at']
 
     def __str__(self):
-        return f"[{self.label_id}] {self.part_no} / {self.lot_no} / {self.quantity}kg"
+        return f"[{self.label_id}] {self.part_no} / {self.lot_no} / {self.quantity}{self.get_unit_display()}"
 
     @classmethod
     def generate_label_id(cls):

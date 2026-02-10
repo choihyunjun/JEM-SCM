@@ -275,7 +275,7 @@
                     </div>
                     <div class="info-row">
                         <span class="info-label">수량</span>
-                        <span class="info-value qty-value">{{ label.quantity }}kg</span>
+                        <span class="info-value qty-value">{{ label.quantity }}{{ label.get_unit_display }}</span>
                     </div>
                     <div class="info-row">
                         <span class="info-label">유효</span>
@@ -304,6 +304,7 @@
                 label_id: "{{ label.label_id }}",
                 part_no: "{{ label.part_no }}",
                 quantity: "{{ label.quantity }}",
+                unit: "{{ label.get_unit_display }}",
                 lot_no: "{{ label.lot_no|date:'Y-m-d' }}"
             }{% if not forloop.last %},{% endif %}
             {% endfor %}
@@ -313,7 +314,7 @@
             const el = document.getElementById(`qr_${label.index}`);
             if (el) {
                 // QR 데이터: LABEL_ID|품번|수량|LOT
-                const qrData = `${label.label_id}|${label.part_no}|${label.quantity}|${label.lot_no}`;
+                const qrData = `${label.label_id}|${label.part_no}|${label.quantity}${label.unit}|${label.lot_no}`;
                 new QRCode(el, {
                     text: qrData,
                     width: 80,
