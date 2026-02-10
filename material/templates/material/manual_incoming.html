@@ -237,7 +237,7 @@
                         {% for item in history_page %}
                         <tr style="cursor:pointer;"
                             onclick="openHistoryDetail({{ item.id }}, '{{ item.transaction_no }}', '{{ item.date|date:"Y-m-d H:i" }}', '{{ item.part.part_no }}', '{{ item.part.part_name|escapejs }}', {{ item.quantity }}, '{{ item.lot_no|date:"Y-m-d"|default:"-" }}', '{{ item.warehouse_to.name|default:"-"|escapejs }}', '{{ item.vendor.name|default:"-"|escapejs }}', '{{ item.actor.username|default:"-" }}', '{{ item.remark|default:""|escapejs }}', {{ item.label_count }}, '{{ item.inspection_status|default:"" }}', {{ item.can_cancel|yesno:"true,false" }})"
-                            class="{% if '[취소됨]' in item.remark %}table-secondary text-decoration-line-through{% endif %}">
+                            class="">
                             <td class="small">{{ item.date|date:"Y-m-d H:i" }}</td>
                             <td class="small fw-bold text-primary">{{ item.transaction_no }}</td>
                             <td class="small">{{ item.part.part_no }}</td>
@@ -246,19 +246,18 @@
                             <td class="small">{{ item.lot_no|date:"Y-m-d"|default:"-" }}</td>
                             <td class="small">{{ item.warehouse_to.name|default:"-" }}</td>
                             <td>
-                                {% if '[취소됨]' in item.remark %}
-                                    <span class="badge bg-danger">취소</span>
-                                {% elif item.label_count > 0 %}
+                                {% if item.label_count > 0 %}
                                     <span class="badge bg-success">라벨발행</span>
                                 {% else %}
-                                    <span class="badge bg-primary">정상</span>
+                                    <span class="badge bg-secondary">대기</span>
                                 {% endif %}
                             </td>
                             <td>
                                 {% if item.can_cancel %}
                                 <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1"
-                                        onclick="event.stopPropagation(); openCancelModal({{ item.id }}, '{{ item.transaction_no }}', '{{ item.part.part_no }}', {{ item.quantity }})">
-                                    <i class="bi bi-x-circle"></i>
+                                        onclick="event.stopPropagation(); openCancelModal({{ item.id }}, '{{ item.transaction_no }}', '{{ item.part.part_no }}', {{ item.quantity }})"
+                                        title="입고 삭제">
+                                    <i class="bi bi-trash"></i>
                                 </button>
                                 {% else %}
                                     <span class="text-muted small">-</span>
@@ -324,7 +323,7 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
                     <button type="button" class="btn btn-danger" id="detailCancelBtn" style="display:none;">
-                        <i class="bi bi-x-circle me-1"></i>입고 취소
+                        <i class="bi bi-trash me-1"></i>입고 삭제
                     </button>
                 </div>
             </div>
@@ -336,11 +335,11 @@
         <div class="modal-dialog modal-dialog-centered modal-sm">
             <div class="modal-content">
                 <div class="modal-header bg-danger text-white">
-                    <h5 class="modal-title fw-bold"><i class="bi bi-exclamation-triangle me-2"></i>입고 취소</h5>
+                    <h5 class="modal-title fw-bold"><i class="bi bi-exclamation-triangle me-2"></i>입고 삭제</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body text-center">
-                    <p class="mb-1">다음 입고 건을 취소하시겠습니까?</p>
+                    <p class="mb-1">다음 입고 건을 삭제하시겠습니까?</p>
                     <p class="fw-bold text-danger" id="cancelTrxInfo"></p>
                     <p class="small text-muted">재고가 차감되며, 이 작업은 되돌릴 수 없습니다.</p>
                 </div>
@@ -348,7 +347,7 @@
                     <form method="post" id="cancelForm">
                         {% csrf_token %}
                         <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">아니오</button>
-                        <button type="submit" class="btn btn-danger"><i class="bi bi-x-circle me-1"></i>취소 확인</button>
+                        <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>삭제 확인</button>
                     </form>
                 </div>
             </div>
