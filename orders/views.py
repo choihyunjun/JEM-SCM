@@ -1428,7 +1428,7 @@ def create_delivery_order(request):
     order_ids = request.POST.getlist('order_ids[]')
     lot_nos = request.POST.getlist('lot_nos[]')
 
-    if _get_role(request.user) == 'VENDOR':
+    if _get_role(request.user) == 'VENDOR' and not request.user.is_superuser:
         user_vendor = _get_user_vendor(request.user)
         if not user_vendor:
             messages.error(request, "협력사 정보가 연결되어 있지 않습니다.")
