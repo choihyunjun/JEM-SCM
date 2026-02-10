@@ -4068,12 +4068,19 @@ def raw_material_incoming(request):
                     messages.error(request, '포장 단위수량과 포장 수는 0보다 커야 합니다.')
                     return redirect('material:raw_material_incoming')
 
-                # 유효기간 - 모달에서 입력받은 값 사용 (0이면 미적용)
-                shelf_life = int(request.POST.get('shelf_life_days', 0))
+                # 유효기간 - 모달에서 직접 선택한 날짜 사용
+                expiry_date_str = request.POST.get('expiry_date', '').strip()
+                if expiry_date_str:
+                    from datetime import datetime as _dt
+                    try:
+                        expiry_date = _dt.strptime(expiry_date_str, '%Y-%m-%d').date()
+                    except ValueError:
+                        expiry_date = None
+                else:
+                    expiry_date = None
 
                 # 라벨 발행만 수행 (재고는 입고처리 시 이미 추가됨)
                 with transaction.atomic():
-                    expiry_date = lot + timedelta(days=shelf_life) if shelf_life > 0 else None
                     labels = []
 
                     for i in range(pkg_count):
