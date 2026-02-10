@@ -3,7 +3,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>원재료 라벨 출력</title>
+    <title>현품표 출력</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
     <style>
@@ -282,7 +282,7 @@
     <div class="no-print">
         <div class="toolbar-top">
             <div class="print-info">
-                🏷️ <strong>원재료 라벨 출력</strong>
+                🏷️ <strong>현품표 출력</strong>
                 <span style="margin-left: 20px;">총 <strong>{{ labels|length }}장</strong></span>
                 <span id="sizeInfo" style="margin-left: 15px; font-size: 10pt; color: #bdc3c7;">80mm × 50mm</span>
             </div>
@@ -315,7 +315,7 @@
     <div id="preview-container">
         {% for label in labels %}
         <div class="label size-medium">
-            <div class="label-title">원재료 입고 라벨</div>
+            <div class="label-title">현 품 표</div>
             <div class="label-body">
                 <div class="qr-area" id="qr_{{ forloop.counter0 }}"></div>
                 <div class="info-area">
