@@ -1936,18 +1936,6 @@ def receive_delivery_order_confirm(request):
                         erp_order_no=item.erp_order_no,
                         erp_order_seq=item.erp_order_seq
                     )
-                    # 무검사 직납도 라벨 발행 대기 목록에 표시되도록
-                    # ImportInspection을 APPROVED 상태로 생성
-                    if ImportInspection is not None:
-                        ImportInspection.objects.create(
-                            inbound_transaction=trx,
-                            lot_no=item.lot_no,
-                            target_warehouse_code=direct_warehouse_code or '4200',
-                            status='APPROVED',
-                            inspected_at=timezone.now(),
-                            qty_good=item.total_qty,
-                            remark='무검사 직납 (수입검사 생략)',
-                        )
 
             msg = f"{'수입검사 요청' if inspection_needed == 'yes' else '직납 입고'} 완료 (입고창고: {target_wh.name})"
             messages.success(request, f"납품서 처리 완료: {msg}")
