@@ -3904,6 +3904,29 @@ def raw_material_incoming(request):
     if request.method == 'POST':
         action = request.POST.get('action')
 
+        # 라벨 취소 (삭제)
+        if action == 'cancel_labels':
+            inspection_id = request.POST.get('inspection_id')
+            try:
+                insp = ImportInspection.objects.get(id=inspection_id)
+                trx = insp.inbound_transaction
+                deleted_count = RawMaterialLabel.objects.filter(incoming_transaction=trx).delete()[0]
+                if deleted_count > 0:
+                    # 트랜잭션 remark에서 라벨 발행 기록 제거
+                    remark = trx.remark or ''
+                    import re
+                    remark = re.sub(r'\s*\[라벨 \d+장 발행.*?\]', '', remark).strip()
+                    trx.remark = remark
+                    trx.save(update_fields=['remark'])
+                    messages.success(request, f'{trx.part.part_no} - 라벨 {deleted_count}장 취소 완료')
+                else:
+                    messages.info(request, '취소할 라벨이 없습니다.')
+            except ImportInspection.DoesNotExist:
+                messages.error(request, '해당 수입검사 건을 찾을 수 없습니다.')
+            except Exception as e:
+                messages.error(request, f'라벨 취소 실패: {str(e)}')
+            return redirect('material:raw_material_incoming')
+
         # 라벨 발행 처리 (수입검사 OK 건)
         if action == 'print_labels':
             inspection_id = request.POST.get('inspection_id')

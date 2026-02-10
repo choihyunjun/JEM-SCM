@@ -107,10 +107,16 @@
                                         {% if insp.is_scm %}
                                         <span class="text-muted small">-</span>
                                         {% elif insp.label_count > 0 %}
-                                        <button type="button" class="btn btn-outline-secondary btn-print"
-                                                onclick="openReprintModal('{{ insp.id }}', '{{ insp.inbound_transaction.part.part_no }}', '{{ insp.inbound_transaction.part.part_name|truncatechars:20 }}')" title="재출력">
-                                            <i class="bi bi-printer"></i> 재출력
-                                        </button>
+                                        <div class="btn-group btn-group-sm">
+                                            <button type="button" class="btn btn-outline-secondary btn-print"
+                                                    onclick="openReprintModal('{{ insp.id }}', '{{ insp.inbound_transaction.part.part_no }}', '{{ insp.inbound_transaction.part.part_name|truncatechars:20 }}')" title="재출력">
+                                                <i class="bi bi-printer"></i> 재출력
+                                            </button>
+                                            <button type="button" class="btn btn-outline-danger btn-print"
+                                                    onclick="openLabelCancelModal('{{ insp.id }}', '{{ insp.inbound_transaction.part.part_no }}', {{ insp.label_count }})" title="라벨 취소">
+                                                <i class="bi bi-trash"></i> 취소
+                                            </button>
+                                        </div>
                                         {% else %}
                                         <button type="button" class="btn btn-success btn-print"
                                                 onclick="openLabelModal('{{ insp.id }}', '{{ insp.inbound_transaction.part.part_no }}', '{{ insp.inbound_transaction.part.part_name|truncatechars:30 }}', {{ insp.inbound_transaction.quantity }}, {{ insp.has_setting|yesno:'true,false' }}, {{ insp.setting_unit_weight }}, {{ insp.setting_shelf_life }})">
@@ -359,6 +365,31 @@
     </div>
 </div>
 
+<!-- 라벨 취소 확인 모달 -->
+<div class="modal fade" id="labelCancelModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-exclamation-triangle me-2"></i>라벨 취소</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center">
+                <p class="mb-1" id="labelCancelInfo"></p>
+                <p class="small text-muted">발행된 라벨이 모두 삭제됩니다.</p>
+            </div>
+            <div class="modal-footer justify-content-center">
+                <form method="post" id="labelCancelForm">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="cancel_labels">
+                    <input type="hidden" name="inspection_id" id="labelCancelInspId">
+                    <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">아니오</button>
+                    <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>삭제 확인</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- 재출력 모달 -->
 <div class="modal fade" id="reprintModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -580,6 +611,14 @@ function calcLabels() {
         btnEl.disabled = true;
         cntEl.textContent = '0';
     }
+}
+
+// ===== 라벨 취소 모달 =====
+function openLabelCancelModal(inspId, partNo, labelCount) {
+    document.getElementById('labelCancelInspId').value = inspId;
+    document.getElementById('labelCancelInfo').innerHTML =
+        '<strong>' + partNo + '</strong><br>발행된 라벨 <strong class="text-danger">' + labelCount + '장</strong>을 취소하시겠습니까?';
+    new bootstrap.Modal(document.getElementById('labelCancelModal')).show();
 }
 
 // ===== 재출력 모달 =====
