@@ -3779,34 +3779,30 @@ def raw_material_incoming(request):
 
             return redirect('material:raw_material_incoming')
 
-    # 수입검사 합격(APPROVED) 건 목록 조회 - ZR, INK 품번만
+    # 수입검사 합격(APPROVED) 건 목록 조회 - 전체 품목
     approved_inspections = []
     if ImportInspection:
         approved_inspections = ImportInspection.objects.filter(
             status='APPROVED'
-        ).filter(
-            Q(inbound_transaction__part__part_no__icontains='ZR') |
-            Q(inbound_transaction__part__part_no__icontains='INK')
         ).select_related(
             'inbound_transaction',
             'inbound_transaction__part',
             'inbound_transaction__vendor'
         ).order_by('-inspected_at')
 
-        # 이미 라벨 발행된 건 표시
+        # 이미 라벨 발행된 건 표시 + SCM/WMS 구분
         for insp in approved_inspections:
+            trx = insp.inbound_transaction
+            insp.is_scm = (trx.transaction_type == 'IN_SCM')
             insp.label_count = RawMaterialLabel.objects.filter(
-                incoming_transaction=insp.inbound_transaction
+                incoming_transaction=trx
             ).count()
 
-    # 수입검사 대기중인 건 목록 - ZR, INK 품번만
+    # 수입검사 대기중인 건 목록 - 전체 품목
     pending_inspections = []
     if ImportInspection:
         pending_inspections = ImportInspection.objects.filter(
             status='PENDING'
-        ).filter(
-            Q(inbound_transaction__part__part_no__icontains='ZR') |
-            Q(inbound_transaction__part__part_no__icontains='INK')
         ).select_related(
             'inbound_transaction',
             'inbound_transaction__part',

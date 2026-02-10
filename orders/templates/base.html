@@ -453,22 +453,23 @@
 
                             {# 입고 관리 - can_wms_inout_view 또는 can_wms_inout 권한 필요 #}
                             {% if user|has_perm:'can_wms_inout_view' or user|has_perm:'can_wms_inout' %}
-                            <a class="nav-link collapsed {% if 'manual_incoming' in request.resolver_match.url_name or 'incoming_history' in request.resolver_match.url_name %}active{% endif %}"
+                            <a class="nav-link collapsed {% if 'manual_incoming' in request.resolver_match.url_name or 'incoming_history' in request.resolver_match.url_name or 'raw_material_incoming' in request.resolver_match.url_name %}active{% endif %}"
                                href="#"
                                data-bs-toggle="collapse"
                                data-bs-target="#collapseInboundWMS"
-                               aria-expanded="{% if 'manual_incoming' in request.resolver_match.url_name or 'incoming_history' in request.resolver_match.url_name %}true{% else %}false{% endif %}"
+                               aria-expanded="{% if 'manual_incoming' in request.resolver_match.url_name or 'incoming_history' in request.resolver_match.url_name or 'raw_material_incoming' in request.resolver_match.url_name %}true{% else %}false{% endif %}"
                                aria-controls="collapseInboundWMS">
                                 <div class="sb-nav-link-icon"><i class="bi bi-box-arrow-in-down"></i></div>
                                 입고 관리
                                 <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
                             </a>
-                            <div class="collapse {% if 'manual_incoming' in request.resolver_match.url_name or 'incoming_history' in request.resolver_match.url_name %}show{% endif %}"
+                            <div class="collapse {% if 'manual_incoming' in request.resolver_match.url_name or 'incoming_history' in request.resolver_match.url_name or 'raw_material_incoming' in request.resolver_match.url_name %}show{% endif %}"
                                  id="collapseInboundWMS"
                                  data-bs-parent="#sidenavAccordion">
                                 <nav class="sb-sidenav-menu-nested nav">
                                     <a class="nav-link {% if 'manual_incoming' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'material:manual_incoming' %}">입고처리</a>
                                     <a class="nav-link {% if 'incoming_history' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'material:incoming_history' %}">입고 내역 조회</a>
+                                    <a class="nav-link {% if 'raw_material_incoming' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'material:raw_material_incoming' %}">원재료 입고</a>
                                 </nav>
                             </div>
 
@@ -565,7 +566,6 @@
                                  id="collapseRawMaterial" data-bs-parent="#sidenavAccordion">
                                 <nav class="sb-sidenav-menu-nested nav">
                                     <a class="nav-link {% if request.resolver_match.url_name == 'raw_material_layout' %}active{% endif %}" href="{% url 'material:raw_material_layout' %}">창고 레이아웃</a>
-                                    <a class="nav-link {% if request.resolver_match.url_name == 'raw_material_incoming' %}active{% endif %}" href="{% url 'material:raw_material_incoming' %}">원재료 입고</a>
                                     <a class="nav-link {% if request.resolver_match.url_name == 'raw_material_rack_manage' %}active{% endif %}" href="{% url 'material:raw_material_rack_manage' %}">랙 위치 관리</a>
                                     <a class="nav-link {% if request.resolver_match.url_name == 'raw_material_setting' %}active{% endif %}" href="{% url 'material:raw_material_setting' %}">품목 설정</a>
                                 </nav>

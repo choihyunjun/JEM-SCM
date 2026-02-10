@@ -12,6 +12,7 @@
     .status-pending { background: #fff3cd; color: #856404; }
     .status-approved { background: #d4edda; color: #155724; }
     .status-printed { background: #cce5ff; color: #004085; }
+    .status-scm-done { background: #e2e3e5; color: #383d41; }
     .table-hover tbody tr:hover { background-color: #f8f9fa; }
     .inspection-row { cursor: pointer; transition: background 0.15s; }
     .inspection-row:hover { background-color: #e8f4fd !important; }
@@ -85,7 +86,11 @@
                                         {{ insp.inbound_transaction.vendor.name|default:"-"|truncatechars:10 }}
                                     </td>
                                     <td class="text-center">
-                                        {% if insp.label_count > 0 %}
+                                        {% if insp.is_scm %}
+                                        <span class="status-badge status-scm-done">
+                                            <i class="bi bi-check-circle"></i> 현품표 발행 완료
+                                        </span>
+                                        {% elif insp.label_count > 0 %}
                                         <span class="status-badge status-printed">
                                             <i class="bi bi-check"></i> {{ insp.label_count }}장 발행됨
                                         </span>
@@ -94,6 +99,9 @@
                                         {% endif %}
                                     </td>
                                     <td class="text-center">
+                                        {% if insp.is_scm %}
+                                        <span class="text-muted small">-</span>
+                                        {% else %}
                                         <form method="post" style="display: inline;">
                                             {% csrf_token %}
                                             <input type="hidden" name="action" value="print_labels">
@@ -108,6 +116,7 @@
                                             </button>
                                             {% endif %}
                                         </form>
+                                        {% endif %}
                                     </td>
                                 </tr>
                                 {% endfor %}
