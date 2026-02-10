@@ -277,10 +277,12 @@
                         <span class="info-label">수량</span>
                         <span class="info-value qty-value">{{ label.quantity }}{{ label.get_unit_display }}</span>
                     </div>
+                    {% if label.expiry_date %}
                     <div class="info-row">
                         <span class="info-label">유효</span>
                         <span class="info-value">{{ label.expiry_date|date:"Y-m-d" }}</span>
                     </div>
+                    {% endif %}
                 </div>
             </div>
             <div class="label-footer">

@@ -320,11 +320,26 @@
                                    min="1" placeholder="40" oninput="calcLabels()">
                             <div class="form-text small">라벨 발행 수</div>
                         </div>
-                        <div class="col-6 col-md-3">
-                            <label class="form-label">보관기간(일)</label>
-                            <input type="number" class="form-control" name="shelf_life_days" id="modalShelfLife"
-                                   min="1" value="365" oninput="calcExpiry()">
-                            <div class="form-text small" id="expiryPreview">유효기간 계산</div>
+                    </div>
+
+                    <!-- 유효기간 -->
+                    <div class="mt-3 p-3 border rounded" id="expirySection">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label class="form-label mb-0 fw-bold">유효기간</label>
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" id="expiryToggle" checked onchange="toggleExpiry()">
+                                <label class="form-check-label small" id="expiryToggleLabel" for="expiryToggle">적용</label>
+                            </div>
+                        </div>
+                        <div id="expiryInputArea">
+                            <div class="d-flex gap-2 mb-2">
+                                <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" onclick="setExpiryMonths(3)">3개월</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" onclick="setExpiryMonths(6)">6개월</button>
+                                <button type="button" class="btn btn-outline-primary btn-sm flex-fill" onclick="setExpiryMonths(12)">1년</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" onclick="setExpiryMonths(24)">2년</button>
+                            </div>
+                            <input type="date" class="form-control" name="expiry_date" id="modalExpiryDate">
+                            <input type="hidden" name="shelf_life_days" id="modalShelfLife" value="365">
                         </div>
                     </div>
 
@@ -358,43 +373,138 @@ function openLabelModal(inspId, partNo, partName, totalQty, hasSetting, unitWeig
     document.getElementById('modalPartName').textContent = partName;
     document.getElementById('modalTotalQty').textContent = Number(totalQty).toLocaleString();
 
-    // 품목설정 안내
     const settingAlert = document.getElementById('settingAlert');
     const noSettingAlert = document.getElementById('noSettingAlert');
 
     if (hasSetting) {
-        // 품목설정이 있으면 기본값 자동 세팅
         settingAlert.style.display = 'block';
         noSettingAlert.style.display = 'none';
         document.getElementById('settingAlertText').textContent =
-            `품목설정 적용됨 — 단위중량: ${unitWeight}kg, 보관기간: ${shelfLife}일`;
+            `품목설정 적용됨 — 단위중량: ${unitWeight}kg, 유효기간: ${shelfLife}일`;
 
         document.getElementById('modalUnit').value = 'KG';
         document.getElementById('modalPkgQty').value = unitWeight;
-        document.getElementById('modalShelfLife').value = shelfLife;
 
-        // 포장 수 자동 계산 (입고수량 / 단위중량)
         if (unitWeight > 0) {
             const autoCount = Math.round(totalQty / unitWeight);
             document.getElementById('modalPkgCount').value = autoCount > 0 ? autoCount : 1;
         }
+
+        // 유효기간 ON + 설정값으로 날짜 계산
+        document.getElementById('expiryToggle').checked = true;
+        toggleExpiry();
+        setExpiryDays(shelfLife);
     } else {
-        // 품목설정 없으면 수기 입력
         settingAlert.style.display = 'none';
         noSettingAlert.style.display = 'block';
 
         document.getElementById('modalUnit').value = 'KG';
         document.getElementById('modalPkgQty').value = '';
         document.getElementById('modalPkgCount').value = '';
-        document.getElementById('modalShelfLife').value = 365;
+
+        // 유효기간 OFF (단순 부품)
+        document.getElementById('expiryToggle').checked = false;
+        toggleExpiry();
     }
 
-    // 계산 초기화
     calcLabels();
-    calcExpiry();
-
     new bootstrap.Modal(document.getElementById('labelModal')).show();
 }
+
+// 유효기간 적용/미적용 토글
+function toggleExpiry() {
+    const on = document.getElementById('expiryToggle').checked;
+    const area = document.getElementById('expiryInputArea');
+    const label = document.getElementById('expiryToggleLabel');
+    const section = document.getElementById('expirySection');
+
+    if (on) {
+        area.style.display = '';
+        label.textContent = '적용';
+        label.className = 'form-check-label small text-success fw-bold';
+        section.classList.remove('bg-light');
+        section.style.borderColor = '';
+        // 기본 1년
+        if (!document.getElementById('modalExpiryDate').value) {
+            setExpiryMonths(12);
+        }
+    } else {
+        area.style.display = 'none';
+        label.textContent = '미적용';
+        label.className = 'form-check-label small text-muted';
+        section.classList.add('bg-light');
+        section.style.borderColor = '#dee2e6';
+        document.getElementById('modalExpiryDate').value = '';
+        document.getElementById('modalShelfLife').value = '0';
+    }
+}
+
+// 개월수 퀵 선택
+function setExpiryMonths(months) {
+    const today = new Date();
+    const expiry = new Date(today.getFullYear(), today.getMonth() + months, today.getDate());
+    setExpiryDateValue(expiry);
+
+    // 버튼 활성화 표시
+    document.querySelectorAll('#expiryInputArea .btn').forEach(b => {
+        b.classList.remove('btn-primary', 'btn-outline-primary');
+        b.classList.add('btn-outline-secondary');
+    });
+    const btnMap = {3: 0, 6: 1, 12: 2, 24: 3};
+    const btns = document.querySelectorAll('#expiryInputArea .btn');
+    if (btnMap[months] !== undefined && btns[btnMap[months]]) {
+        btns[btnMap[months]].classList.remove('btn-outline-secondary');
+        btns[btnMap[months]].classList.add('btn-primary');
+    }
+}
+
+// 일수로 유효기간 설정 (품목설정에서)
+function setExpiryDays(days) {
+    const today = new Date();
+    const expiry = new Date(today.getTime() + days * 86400000);
+    setExpiryDateValue(expiry);
+
+    // 버튼 활성 해제 (커스텀 일수이므로)
+    document.querySelectorAll('#expiryInputArea .btn').forEach(b => {
+        b.classList.remove('btn-primary', 'btn-outline-primary');
+        b.classList.add('btn-outline-secondary');
+    });
+}
+
+function setExpiryDateValue(dateObj) {
+    const yy = dateObj.getFullYear();
+    const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const dd = String(dateObj.getDate()).padStart(2, '0');
+    document.getElementById('modalExpiryDate').value = `${yy}-${mm}-${dd}`;
+
+    // shelf_life_days 계산 (서버용)
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const diff = Math.round((dateObj - today) / 86400000);
+    document.getElementById('modalShelfLife').value = diff > 0 ? diff : 0;
+}
+
+// 달력에서 직접 날짜 선택 시
+document.addEventListener('DOMContentLoaded', function() {
+    const expiryInput = document.getElementById('modalExpiryDate');
+    if (expiryInput) {
+        expiryInput.addEventListener('change', function() {
+            if (this.value) {
+                const parts = this.value.split('-');
+                const dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
+                const today = new Date();
+                today.setHours(0,0,0,0);
+                const diff = Math.round((dateObj - today) / 86400000);
+                document.getElementById('modalShelfLife').value = diff > 0 ? diff : 0;
+            }
+            // 퀵 버튼 해제
+            document.querySelectorAll('#expiryInputArea .btn').forEach(b => {
+                b.classList.remove('btn-primary', 'btn-outline-primary');
+                b.classList.add('btn-outline-secondary');
+            });
+        });
+    }
+});
 
 function calcLabels() {
     const pkgQty = parseFloat(document.getElementById('modalPkgQty').value) || 0;
@@ -425,23 +535,6 @@ function calcLabels() {
         warnEl.style.display = 'none';
         btnEl.disabled = true;
         cntEl.textContent = '0';
-    }
-}
-
-function calcExpiry() {
-    const days = parseInt(document.getElementById('modalShelfLife').value) || 0;
-    const preview = document.getElementById('expiryPreview');
-    if (days > 0) {
-        const today = new Date();
-        const expiry = new Date(today.getTime() + days * 86400000);
-        const yy = expiry.getFullYear();
-        const mm = String(expiry.getMonth() + 1).padStart(2, '0');
-        const dd = String(expiry.getDate()).padStart(2, '0');
-        preview.textContent = `→ ${yy}-${mm}-${dd}`;
-        preview.style.color = '#198754';
-    } else {
-        preview.textContent = '유효기간 계산';
-        preview.style.color = '';
     }
 }
 </script>
