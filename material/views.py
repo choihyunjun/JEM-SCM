@@ -499,13 +499,145 @@ def manual_incoming(request):
             messages.error(request, f"오류 발생: {str(e)}")
             return redirect('material:manual_incoming')
 
+    # === 입고처리 내역 (History) ===
+    history_qs = MaterialTransaction.objects.filter(
+        transaction_type='IN_MANUAL'
+    ).select_related(
+        'part', 'warehouse_to', 'vendor', 'actor'
+    ).order_by('-date', '-id')
+
+    history_q = (request.GET.get('hq') or '').strip()
+    if history_q:
+        history_qs = history_qs.filter(
+            Q(part__part_no__icontains=history_q) |
+            Q(part__part_name__icontains=history_q) |
+            Q(transaction_no__icontains=history_q)
+        )
+
+    history_wh = (request.GET.get('hwh') or '').strip()
+    if history_wh:
+        history_qs = history_qs.filter(warehouse_to_id=history_wh)
+
+    history_start = (request.GET.get('hstart') or '').strip()
+    history_end = (request.GET.get('hend') or '').strip()
+    if history_start and history_start not in ('None', 'null'):
+        history_qs = history_qs.filter(date__date__gte=history_start)
+    if history_end and history_end not in ('None', 'null'):
+        history_qs = history_qs.filter(date__date__lte=history_end)
+
+    history_paginator = Paginator(history_qs, 15)
+    history_page = history_paginator.get_page(request.GET.get('hpage'))
+
+    from .models import RawMaterialLabel
+    for item in history_page:
+        item.label_count = RawMaterialLabel.objects.filter(
+            incoming_transaction=item
+        ).count()
+        try:
+            item.inspection_status = item.inspection.status
+        except Exception:
+            item.inspection_status = None
+        item.can_cancel = (
+            item.label_count == 0
+            and '[취소됨]' not in (item.remark or '')
+        )
+
+    warehouses_qs = Warehouse.objects.filter(is_active=True).order_by('code')
+
     context = {
-        'warehouses': Warehouse.objects.filter(is_active=True).order_by('code'),
+        'warehouses': warehouses_qs,
         'vendors': Vendor.objects.all().order_by('name'),
         'parts': Part.objects.select_related('vendor').all().order_by('part_no'),
         'today': timezone.now().date(),
+        'history_page': history_page,
+        'history_q': history_q,
+        'history_wh': history_wh,
+        'history_start': history_start,
+        'history_end': history_end,
     }
     return render(request, 'material/manual_incoming.html', context)
+
+
+@wms_permission_required('can_wms_inout_edit')
+def cancel_manual_incoming(request, trx_id):
+    """[WMS] 수기 입고 취소 - 재고 차감 + 보상 트랜잭션 생성"""
+    if request.method != 'POST':
+        return redirect('material:manual_incoming')
+
+    trx = get_object_or_404(MaterialTransaction, pk=trx_id, transaction_type='IN_MANUAL')
+
+    if '[취소됨]' in (trx.remark or ''):
+        messages.warning(request, "이미 취소된 입고 건입니다.")
+        return redirect('material:manual_incoming')
+
+    from .models import RawMaterialLabel
+    label_count = RawMaterialLabel.objects.filter(incoming_transaction=trx).count()
+    if label_count > 0:
+        messages.error(request, f"라벨이 {label_count}장 발행된 입고 건은 취소할 수 없습니다.")
+        return redirect('material:manual_incoming')
+
+    is_closed, warning_msg, _ = check_closing_date(
+        trx.date.date() if hasattr(trx.date, 'date') and callable(trx.date.date) else trx.date
+    )
+    if is_closed:
+        messages.error(request, f"마감된 기간의 입고 건은 취소할 수 없습니다. ({warning_msg})")
+        return redirect('material:manual_incoming')
+
+    try:
+        with transaction.atomic():
+            stock = MaterialStock.objects.filter(
+                warehouse=trx.warehouse_to,
+                part=trx.part,
+                lot_no=trx.lot_no
+            ).first()
+
+            if not stock:
+                messages.error(request, "해당 재고를 찾을 수 없습니다.")
+                return redirect('material:manual_incoming')
+
+            if stock.quantity < trx.quantity:
+                messages.error(request, f"현재 재고({stock.quantity})가 입고 수량({trx.quantity})보다 적어 취소할 수 없습니다.")
+                return redirect('material:manual_incoming')
+
+            MaterialStock.objects.filter(pk=stock.pk).update(
+                quantity=F('quantity') - trx.quantity
+            )
+            stock.refresh_from_db()
+
+            # ImportInspection 삭제
+            if ImportInspection:
+                try:
+                    trx.inspection.delete()
+                except Exception:
+                    pass
+
+            # 보상 트랜잭션 생성
+            cancel_trx_no = f"CAN-{timezone.now().strftime('%y%m%d%H%M%S')}-{request.user.id}"
+            MaterialTransaction.objects.create(
+                transaction_no=cancel_trx_no,
+                transaction_type='ADJUST',
+                date=timezone.now(),
+                part=trx.part,
+                quantity=-trx.quantity,
+                lot_no=trx.lot_no,
+                warehouse_from=trx.warehouse_to,
+                result_stock=stock.quantity,
+                vendor=trx.vendor,
+                actor=request.user,
+                remark=f"[입고취소] 원본: {trx.transaction_no}"
+            )
+
+            # 원본 취소 표시
+            original_remark = trx.remark or ''
+            trx.remark = f"[취소됨] {original_remark}".strip()
+            trx.save(update_fields=['remark'])
+
+        messages.success(request, f"입고 건 [{trx.transaction_no}] 취소 완료 (재고 {trx.quantity}개 차감)")
+
+    except Exception as e:
+        messages.error(request, f"취소 처리 중 오류 발생: {str(e)}")
+
+    return redirect('material:manual_incoming')
 
 
 @wms_permission_required('can_wms_inout_view')

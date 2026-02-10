@@ -19,7 +19,8 @@ urlpatterns = [
     
     # 2. 입고 관리
     path('inbound/manual/', views.manual_incoming, name='manual_incoming'),
-    
+    path('inbound/manual/cancel/<int:trx_id>/', views.cancel_manual_incoming, name='cancel_manual_incoming'),
+
     # [핵심] views.incoming_history 함수와 연결하고, name도 'incoming_history'로 설정
     path('inbound/history/', views.incoming_history, name='incoming_history'),
 
