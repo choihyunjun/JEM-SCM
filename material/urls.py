@@ -81,5 +81,6 @@ urlpatterns = [
     path('raw-material/rack-manage/', views.raw_material_rack_manage, name='raw_material_rack_manage'),
     path('raw-material/setting/', views.raw_material_setting, name='raw_material_setting'),
     path('raw-material/label-print/', views.raw_material_label_print, name='raw_material_label_print'),
+    path('api/raw-material-labels/', views.api_raw_material_labels, name='api_raw_material_labels'),
     path('api/part-search/', views.api_part_search, name='api_part_search'),
 ]

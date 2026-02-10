@@ -3717,18 +3717,6 @@ def raw_material_incoming(request):
                 lot = trx.lot_no or timezone.now().date()
                 vendor = trx.vendor
 
-                action = request.POST.get('action')
-
-                # 재출력: 기존 라벨을 다시 인쇄
-                if action == 'reprint_labels':
-                    existing_labels = RawMaterialLabel.objects.filter(incoming_transaction=trx)
-                    if existing_labels.exists():
-                        label_ids = ','.join([str(l.id) for l in existing_labels])
-                        return redirect(f'/wms/raw-material/label-print/?ids={label_ids}')
-                    else:
-                        messages.warning(request, '발행된 라벨이 없습니다.')
-                        return redirect('material:raw_material_incoming')
-
                 # 이미 라벨이 발행된 건인지 확인 (중복 방지)
                 existing_labels = RawMaterialLabel.objects.filter(incoming_transaction=trx)
                 if existing_labels.exists():
@@ -3998,6 +3986,45 @@ def raw_material_setting(request):
     }
 
     return render(request, 'material/raw_material_setting.html', context)
+
+
+@wms_permission_required('can_wms_stock_view')
+def api_raw_material_labels(request):
+    """
+    수입검사 건의 발행된 라벨 목록 조회 API
+    """
+    from django.http import JsonResponse
+
+    inspection_id = request.GET.get('inspection_id')
+    if not inspection_id:
+        return JsonResponse({'labels': []})
+
+    try:
+        inspection = ImportInspection.objects.get(id=inspection_id)
+        trx = inspection.inbound_transaction
+        labels = RawMaterialLabel.objects.filter(incoming_transaction=trx).order_by('id')
+
+        result = []
+        for label in labels:
+            result.append({
+                'id': label.id,
+                'label_id': label.label_id,
+                'part_no': label.part_no,
+                'quantity': float(label.quantity),
+                'unit': label.get_unit_display(),
+                'lot_no': label.lot_no.strftime('%Y-%m-%d') if label.lot_no else '-',
+                'expiry_date': label.expiry_date.strftime('%Y-%m-%d') if label.expiry_date else None,
+                'printed_at': label.printed_at.strftime('%m/%d %H:%M') if label.printed_at else '-',
+            })
+
+        return JsonResponse({
+            'labels': result,
+            'part_no': trx.part.part_no,
+            'part_name': trx.part.part_name,
+            'total_qty': float(trx.quantity),
+        })
+    except ImportInspection.DoesNotExist:
+        return JsonResponse({'labels': []})
 
 
 @wms_permission_required('can_wms_stock_view')
