@@ -14,7 +14,7 @@
             background: #555;
         }
 
-        /* 상단 버튼 영역 */
+        /* ===== 상단 설정 영역 ===== */
         .no-print {
             background: #2c3e50;
             color: white;
@@ -22,22 +22,76 @@
             position: sticky;
             top: 0;
             z-index: 1000;
+        }
+
+        .toolbar-top {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            margin-bottom: 10px;
         }
 
-        .print-info {
-            font-size: 14pt;
-        }
+        .print-info { font-size: 14pt; }
+        .print-info strong { color: #f39c12; }
 
-        .print-info strong {
-            color: #f39c12;
-        }
-
-        .btn-group {
+        .btn-group-actions {
             display: flex;
             gap: 10px;
+        }
+
+        .toolbar-options {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 10px 15px;
+        }
+
+        .option-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .option-group > label {
+            font-size: 9pt;
+            color: #bdc3c7;
+            white-space: nowrap;
+        }
+
+        .mode-btn {
+            padding: 6px 14px;
+            border: 2px solid #555;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 9pt;
+            background: transparent;
+            color: #bdc3c7;
+            transition: all 0.15s;
+        }
+
+        .mode-btn.active {
+            border-color: #f39c12;
+            background: #f39c12;
+            color: #000;
+        }
+
+        .mode-btn:hover:not(.active) {
+            border-color: #95a5a6;
+            color: white;
+        }
+
+        .size-select {
+            padding: 6px 10px;
+            border-radius: 5px;
+            border: 2px solid #555;
+            background: #34495e;
+            color: white;
+            font-size: 9pt;
+            font-weight: bold;
+            cursor: pointer;
         }
 
         .btn {
@@ -53,25 +107,12 @@
             align-items: center;
         }
 
-        .btn-print {
-            background: #27ae60;
-            color: #fff;
-        }
+        .btn-print { background: #27ae60; color: #fff; }
+        .btn-print:hover { background: #219a52; }
+        .btn-back { background: #95a5a6; color: #fff; }
+        .btn-back:hover { background: #7f8c8d; }
 
-        .btn-print:hover {
-            background: #219a52;
-        }
-
-        .btn-close {
-            background: #95a5a6;
-            color: #fff;
-        }
-
-        .btn-close:hover {
-            background: #7f8c8d;
-        }
-
-        /* 화면 미리보기 컨테이너 */
+        /* ===== 미리보기 컨테이너 ===== */
         #preview-container {
             padding: 20px;
             display: flex;
@@ -80,45 +121,60 @@
             justify-content: center;
         }
 
-        /* 라벨 카드 - 80mm x 50mm */
+        #preview-container.sheet-mode {
+            gap: 3mm;
+            padding: 10px;
+        }
+
+        /* ===== 라벨 카드 ===== */
         .label {
             background: white;
             box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-            width: 80mm;
-            height: 50mm;
             border: 2px solid #000;
             display: flex;
             flex-direction: column;
         }
 
+        /* 크기별 라벨 */
+        .label.size-small  { width: 60mm; height: 40mm; }
+        .label.size-medium { width: 80mm; height: 50mm; }
+        .label.size-large  { width: 100mm; height: 70mm; }
+
         /* 라벨 제목 */
         .label-title {
             font-weight: bold;
-            font-size: 11pt;
             text-align: center;
             border-bottom: 2px solid #000;
-            padding: 4px;
             background: #f0f0f0;
             letter-spacing: 2px;
         }
+        .size-small .label-title  { font-size: 8pt; padding: 2px; }
+        .size-medium .label-title { font-size: 11pt; padding: 4px; }
+        .size-large .label-title  { font-size: 13pt; padding: 6px; }
 
         /* 라벨 바디 */
         .label-body {
             display: flex;
             flex: 1;
-            padding: 2mm 3mm;
-            gap: 3mm;
         }
+        .size-small .label-body  { padding: 1.5mm 2mm; gap: 2mm; }
+        .size-medium .label-body { padding: 2mm 3mm; gap: 3mm; }
+        .size-large .label-body  { padding: 3mm 4mm; gap: 4mm; }
 
         /* QR 코드 영역 */
         .qr-area {
-            width: 23mm;
-            height: 23mm;
             display: flex;
             align-items: center;
             justify-content: center;
             flex-shrink: 0;
         }
+        .qr-area img, .qr-area canvas {
+            max-width: 100% !important;
+            max-height: 100% !important;
+        }
+        .size-small .qr-area  { width: 16mm; height: 16mm; }
+        .size-medium .qr-area { width: 23mm; height: 23mm; }
+        .size-large .qr-area  { width: 30mm; height: 30mm; }
 
         /* 정보 영역 */
         .info-area {
@@ -126,8 +182,10 @@
             display: flex;
             flex-direction: column;
             justify-content: center;
-            gap: 0.5mm;
         }
+        .size-small .info-area  { gap: 0.3mm; }
+        .size-medium .info-area { gap: 0.5mm; }
+        .size-large .info-area  { gap: 1mm; }
 
         .info-row {
             display: flex;
@@ -136,89 +194,50 @@
         }
 
         .info-label {
-            font-size: 7pt;
             color: #555;
             font-weight: bold;
-            width: 10mm;
             flex-shrink: 0;
         }
+        .size-small .info-label  { font-size: 5.5pt; width: 8mm; }
+        .size-medium .info-label { font-size: 7pt; width: 10mm; }
+        .size-large .info-label  { font-size: 8pt; width: 12mm; }
 
-        .info-value {
-            font-weight: bold;
-            font-size: 9pt;
-        }
+        .info-value { font-weight: bold; }
+        .size-small .info-value  { font-size: 7pt; }
+        .size-medium .info-value { font-size: 9pt; }
+        .size-large .info-value  { font-size: 11pt; }
 
-        .part-no {
-            font-size: 14pt !important;
-            font-family: monospace;
-            letter-spacing: 0.5px;
-        }
+        .size-small .part-no  { font-size: 9pt !important; font-family: monospace; }
+        .size-medium .part-no { font-size: 14pt !important; font-family: monospace; letter-spacing: 0.5px; }
+        .size-large .part-no  { font-size: 16pt !important; font-family: monospace; letter-spacing: 0.5px; }
 
-        .part-name {
-            font-size: 8pt !important;
-            font-weight: normal !important;
-            max-width: 38mm;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
+        .size-small .part-name  { font-size: 6pt !important; font-weight: normal !important; max-width: 28mm; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .size-medium .part-name { font-size: 8pt !important; font-weight: normal !important; max-width: 38mm; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .size-large .part-name  { font-size: 9pt !important; font-weight: normal !important; max-width: 50mm; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-        .qty-value {
-            font-size: 12pt !important;
-            color: #c0392b;
-        }
+        .size-small .qty-value  { font-size: 9pt !important; color: #c0392b; }
+        .size-medium .qty-value { font-size: 12pt !important; color: #c0392b; }
+        .size-large .qty-value  { font-size: 14pt !important; color: #c0392b; }
 
         /* 라벨 푸터 */
         .label-footer {
             border-top: 1px dashed #999;
-            padding: 2px;
             text-align: center;
             background: #fafafa;
         }
+        .size-small .label-footer  { padding: 1px; }
+        .size-medium .label-footer { padding: 2px; }
+        .size-large .label-footer  { padding: 3px; }
 
         .label-id {
             font-family: 'Consolas', monospace;
-            font-size: 8pt;
             color: #333;
             font-weight: bold;
             letter-spacing: 0.5px;
         }
-
-        /* 인쇄 스타일 - 라벨 프린터 */
-        @media print {
-            body {
-                background: white;
-                margin: 0;
-                padding: 0;
-            }
-
-            .no-print {
-                display: none !important;
-            }
-
-            @page {
-                size: 80mm 50mm;
-                margin: 0;
-            }
-
-            #preview-container {
-                display: block;
-                padding: 0;
-                margin: 0;
-            }
-
-            .label {
-                width: 80mm;
-                height: 50mm;
-                box-shadow: none;
-                page-break-after: always;
-                margin: 0;
-            }
-
-            .label:last-child {
-                page-break-after: auto;
-            }
-        }
+        .size-small .label-id  { font-size: 6pt; }
+        .size-medium .label-id { font-size: 8pt; }
+        .size-large .label-id  { font-size: 9pt; }
 
         /* 빈 상태 */
         .empty-state {
@@ -227,36 +246,75 @@
             padding: 50px;
             width: 100%;
         }
+        .empty-state p { font-size: 18pt; margin-bottom: 15px; }
+        .empty-state a { color: #3498db; }
 
-        .empty-state p {
-            font-size: 18pt;
-            margin-bottom: 15px;
+        /* 인쇄 기본 (no-print 숨기기) */
+        @media print {
+            body { background: white; margin: 0; padding: 0; }
+            .no-print { display: none !important; }
         }
+    </style>
 
-        .empty-state a {
-            color: #3498db;
+    <!-- 동적 인쇄 스타일 (JS에서 교체) -->
+    <style id="dynamic-print-style">
+        @media print {
+            @page { size: 80mm 50mm; margin: 0; }
+            #preview-container {
+                display: block;
+                padding: 0;
+                margin: 0;
+            }
+            .label {
+                width: 80mm !important;
+                height: 50mm !important;
+                box-shadow: none;
+                page-break-after: always;
+                margin: 0;
+            }
+            .label:last-child { page-break-after: auto; }
         }
     </style>
 </head>
 <body>
 
-    <!-- 상단 버튼 -->
+    <!-- 상단 설정 -->
     <div class="no-print">
-        <div class="print-info">
-            🏷️ <strong>원재료 라벨 출력</strong>
-            <span style="margin-left: 20px;">총 <strong>{{ labels|length }}장</strong></span>
-            <span style="margin-left: 15px; font-size: 10pt; color: #bdc3c7;">80mm × 50mm</span>
+        <div class="toolbar-top">
+            <div class="print-info">
+                🏷️ <strong>원재료 라벨 출력</strong>
+                <span style="margin-left: 20px;">총 <strong>{{ labels|length }}장</strong></span>
+                <span id="sizeInfo" style="margin-left: 15px; font-size: 10pt; color: #bdc3c7;">80mm × 50mm</span>
+            </div>
+            <div class="btn-group-actions">
+                <button onclick="window.print()" class="btn btn-print">🖨️ 인쇄</button>
+                <a href="{% url 'material:raw_material_incoming' %}" class="btn btn-back">← 돌아가기</a>
+            </div>
         </div>
-        <div class="btn-group">
-            <button onclick="window.print()" class="btn btn-print">🖨️ 인쇄</button>
-            <a href="{% url 'material:raw_material_incoming' %}" class="btn btn-close">← 돌아가기</a>
+        <div class="toolbar-options">
+            <div class="option-group">
+                <label>프린터:</label>
+                <button type="button" class="mode-btn active" data-mode="roll" onclick="setPrintMode('roll')">🏷️ 라벨 프린터</button>
+                <button type="button" class="mode-btn" data-mode="sheet" onclick="setPrintMode('sheet')">📄 A4 프린터</button>
+            </div>
+            <div class="option-group">
+                <label>라벨 크기:</label>
+                <select class="size-select" id="sizeSelect" onchange="setLabelSize(this.value)">
+                    <option value="small">소형 (60×40mm)</option>
+                    <option value="medium" selected>표준 (80×50mm)</option>
+                    <option value="large">대형 (100×70mm)</option>
+                </select>
+            </div>
+            <div class="option-group" id="sheetInfo" style="display:none;">
+                <span style="font-size: 9pt; color: #f39c12;">📋 A4 1페이지당 <strong id="perPageCount">10</strong>장</span>
+            </div>
         </div>
     </div>
 
     <!-- 라벨 미리보기 -->
     <div id="preview-container">
         {% for label in labels %}
-        <div class="label">
+        <div class="label size-medium">
             <div class="label-title">원재료 입고 라벨</div>
             <div class="label-body">
                 <div class="qr-area" id="qr_{{ forloop.counter0 }}"></div>
@@ -298,7 +356,123 @@
     </div>
 
     <script>
-        // QR 코드 생성 - 각 라벨별 고유 label_id
+        // ===== 라벨 크기 설정 =====
+        const SIZES = {
+            small:  { w: 60,  h: 40, qr: 55,  display: '60mm × 40mm' },
+            medium: { w: 80,  h: 50, qr: 80,  display: '80mm × 50mm' },
+            large:  { w: 100, h: 70, qr: 110, display: '100mm × 70mm' }
+        };
+
+        let currentMode = 'roll';
+        let currentSize = 'medium';
+
+        // ===== 프린터 모드 변경 =====
+        function setPrintMode(mode) {
+            currentMode = mode;
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.mode === mode);
+            });
+            document.getElementById('sheetInfo').style.display = (mode === 'sheet') ? '' : 'none';
+            document.getElementById('preview-container').classList.toggle('sheet-mode', mode === 'sheet');
+            updatePrintStyle();
+        }
+
+        // ===== 라벨 크기 변경 =====
+        function setLabelSize(size) {
+            currentSize = size;
+            const s = SIZES[size];
+
+            // 라벨 크기 클래스 변경
+            document.querySelectorAll('.label').forEach(el => {
+                el.className = el.className.replace(/size-\w+/, 'size-' + size);
+            });
+
+            // 크기 정보 표시
+            document.getElementById('sizeInfo').textContent = s.display;
+
+            // QR 재생성
+            regenerateQR(s.qr);
+            updatePrintStyle();
+        }
+
+        // ===== 동적 인쇄 스타일 업데이트 =====
+        function updatePrintStyle() {
+            const s = SIZES[currentSize];
+            const styleEl = document.getElementById('dynamic-print-style');
+            let css = '';
+
+            if (currentMode === 'sheet') {
+                // A4 모아찍기
+                const cols = Math.floor((200 + 3) / (s.w + 3));
+                const rows = Math.floor((287 + 3) / (s.h + 3));
+                const perPage = cols * rows;
+                document.getElementById('perPageCount').textContent = perPage;
+
+                css = `
+                @media print {
+                    @page { size: A4; margin: 5mm; }
+                    #preview-container {
+                        display: grid !important;
+                        grid-template-columns: repeat(${cols}, ${s.w}mm) !important;
+                        gap: 3mm !important;
+                        padding: 0 !important;
+                        margin: 0 !important;
+                        width: 100% !important;
+                    }
+                    .label {
+                        width: ${s.w}mm !important;
+                        height: ${s.h}mm !important;
+                        box-shadow: none !important;
+                        page-break-inside: avoid !important;
+                        margin: 0 !important;
+                    }
+                }`;
+            } else {
+                // 라벨 프린터 - 1장씩
+                css = `
+                @media print {
+                    @page { size: ${s.w}mm ${s.h}mm; margin: 0; }
+                    #preview-container {
+                        display: block !important;
+                        padding: 0 !important;
+                        margin: 0 !important;
+                    }
+                    .label {
+                        width: ${s.w}mm !important;
+                        height: ${s.h}mm !important;
+                        box-shadow: none !important;
+                        page-break-after: always !important;
+                        margin: 0 !important;
+                    }
+                    .label:last-child {
+                        page-break-after: auto !important;
+                    }
+                }`;
+            }
+
+            styleEl.textContent = css;
+        }
+
+        // ===== QR 코드 재생성 =====
+        function regenerateQR(qrPixels) {
+            labelList.forEach(label => {
+                const el = document.getElementById('qr_' + label.index);
+                if (el) {
+                    el.innerHTML = '';
+                    const qrData = label.label_id + '|' + label.part_no + '|' + label.quantity + label.unit + '|' + label.lot_no;
+                    new QRCode(el, {
+                        text: qrData,
+                        width: qrPixels,
+                        height: qrPixels,
+                        colorDark: "#000000",
+                        colorLight: "#ffffff",
+                        correctLevel: QRCode.CorrectLevel.M
+                    });
+                }
+            });
+        }
+
+        // ===== QR 데이터 =====
         const labelList = [
             {% for label in labels %}
             {
@@ -312,21 +486,8 @@
             {% endfor %}
         ];
 
-        labelList.forEach(label => {
-            const el = document.getElementById(`qr_${label.index}`);
-            if (el) {
-                // QR 데이터: LABEL_ID|품번|수량|LOT
-                const qrData = `${label.label_id}|${label.part_no}|${label.quantity}${label.unit}|${label.lot_no}`;
-                new QRCode(el, {
-                    text: qrData,
-                    width: 80,
-                    height: 80,
-                    colorDark: "#000000",
-                    colorLight: "#ffffff",
-                    correctLevel: QRCode.CorrectLevel.M
-                });
-            }
-        });
+        // 초기 QR 생성
+        regenerateQR(SIZES[currentSize].qr);
     </script>
 </body>
 </html>
