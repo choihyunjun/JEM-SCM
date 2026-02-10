@@ -533,6 +533,44 @@
             </div>
         </div>
 
+        <!-- 유효기간 경고 -->
+        {% if expiry_expired or expiry_imminent %}
+        <div class="sidebar-card" style="border-color: {% if expiry_expired %}#fca5a5{% else %}#fcd34d{% endif %};">
+            <div class="sidebar-header" style="background: {% if expiry_expired %}linear-gradient(180deg, #fef2f2, #fee2e2){% else %}linear-gradient(180deg, #fffbeb, #fef3c7){% endif %}; color: {% if expiry_expired %}#991b1b{% else %}#92400e{% endif %};">
+                <i class="bi bi-exclamation-triangle me-2"></i>유효기간 경고
+            </div>
+            <div class="sidebar-body">
+                {% if expiry_expired %}
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span style="font-size:0.85rem; color:#dc2626; font-weight:600;">
+                        <i class="bi bi-x-circle-fill me-1"></i>기한 경과
+                    </span>
+                    <span class="badge" style="background:#dc2626;">{{ expiry_expired }}건</span>
+                </div>
+                {% endif %}
+                {% if expiry_imminent %}
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span style="font-size:0.85rem; color:#d97706; font-weight:600;">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i>30일 이내
+                    </span>
+                    <span class="badge" style="background:#d97706;">{{ expiry_imminent }}건</span>
+                </div>
+                {% endif %}
+                {% if expiry_warning %}
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span style="font-size:0.85rem; color:#2563eb; font-weight:500;">
+                        <i class="bi bi-info-circle me-1"></i>90일 이내
+                    </span>
+                    <span class="badge" style="background:#2563eb;">{{ expiry_warning }}건</span>
+                </div>
+                {% endif %}
+                <a href="{% url 'material:raw_material_expiry' %}{% if expiry_expired %}?status=expired{% elif expiry_imminent %}?status=imminent{% endif %}" class="btn btn-outline-danger btn-sm w-100 mt-1">
+                    <i class="bi bi-arrow-right me-1"></i>상세 확인
+                </a>
+            </div>
+        </div>
+        {% endif %}
+
         <!-- 빠른 메뉴 -->
         <div class="sidebar-card">
             <div class="sidebar-header">
@@ -548,6 +586,9 @@
                     </a>
                     <a href="{% url 'material:raw_material_setting' %}" class="btn btn-outline-secondary">
                         <i class="bi bi-sliders me-2"></i>품목 설정
+                    </a>
+                    <a href="{% url 'material:raw_material_expiry' %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-calendar-check me-2"></i>유효기간 관리
                     </a>
                 </div>
             </div>

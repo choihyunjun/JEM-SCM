@@ -1,0 +1,186 @@
+{% extends 'material/material_base.html' %}
+{% load humanize %}
+
+{% block title %}유효기간 관리{% endblock %}
+
+{% block material_content %}
+<style>
+    .summary-card {
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: 2px solid transparent;
+        text-decoration: none;
+        display: block;
+    }
+    .summary-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .summary-card.active-filter { border-color: #1e293b; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .summary-card .count { font-size: 2rem; font-weight: 700; line-height: 1; }
+    .summary-card .label { font-size: 0.85rem; margin-top: 6px; font-weight: 500; }
+
+    .card-expired { background: linear-gradient(135deg, #fef2f2, #fee2e2); }
+    .card-expired .count { color: #dc2626; }
+    .card-expired .label { color: #991b1b; }
+
+    .card-imminent { background: linear-gradient(135deg, #fffbeb, #fef3c7); }
+    .card-imminent .count { color: #d97706; }
+    .card-imminent .label { color: #92400e; }
+
+    .card-warning { background: linear-gradient(135deg, #eff6ff, #dbeafe); }
+    .card-warning .count { color: #2563eb; }
+    .card-warning .label { color: #1e40af; }
+
+    .card-safe { background: linear-gradient(135deg, #f0fdf4, #dcfce7); }
+    .card-safe .count { color: #16a34a; }
+    .card-safe .label { color: #166534; }
+
+    .badge-expired { background: #dc2626; color: #fff; }
+    .badge-imminent { background: #d97706; color: #fff; }
+    .badge-warning { background: #2563eb; color: #fff; }
+    .badge-safe { background: #16a34a; color: #fff; }
+
+    .d-day-text { font-weight: 700; font-size: 0.9rem; }
+    .d-day-expired { color: #dc2626; }
+    .d-day-imminent { color: #d97706; }
+    .d-day-warning { color: #2563eb; }
+    .d-day-safe { color: #16a34a; }
+
+    .table th { font-size: 0.8rem; color: #64748b; font-weight: 600; }
+    .table td { vertical-align: middle; font-size: 0.88rem; }
+    .row-expired { background: #fef2f2 !important; }
+    .row-imminent { background: #fffbeb !important; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="fw-bold text-dark m-0">
+            <i class="bi bi-calendar-check text-danger me-2"></i>유효기간 관리
+        </h3>
+        <span class="text-muted small">유효기간 임박/경과 품목을 모니터링합니다</span>
+    </div>
+    <a href="{% url 'material:raw_material_layout' %}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-grid-3x3-gap me-1"></i>창고 레이아웃
+    </a>
+</div>
+
+<!-- 요약 카드 -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <a href="?status=expired" class="summary-card card-expired {% if filter_status == 'expired' %}active-filter{% endif %}">
+            <div class="count">{{ count_expired }}</div>
+            <div class="label"><i class="bi bi-x-circle me-1"></i>기한 경과</div>
+        </a>
+    </div>
+    <div class="col-6 col-md-3">
+        <a href="?status=imminent" class="summary-card card-imminent {% if filter_status == 'imminent' %}active-filter{% endif %}">
+            <div class="count">{{ count_imminent }}</div>
+            <div class="label"><i class="bi bi-exclamation-triangle me-1"></i>30일 이내</div>
+        </a>
+    </div>
+    <div class="col-6 col-md-3">
+        <a href="?status=warning" class="summary-card card-warning {% if filter_status == 'warning' %}active-filter{% endif %}">
+            <div class="count">{{ count_warning }}</div>
+            <div class="label"><i class="bi bi-info-circle me-1"></i>90일 이내</div>
+        </a>
+    </div>
+    <div class="col-6 col-md-3">
+        <a href="?status=safe" class="summary-card card-safe {% if filter_status == 'safe' %}active-filter{% endif %}">
+            <div class="count">{{ count_safe }}</div>
+            <div class="label"><i class="bi bi-check-circle me-1"></i>안전</div>
+        </a>
+    </div>
+</div>
+
+<!-- 필터 표시 -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        {% if filter_status == 'expired' %}
+            <span class="badge badge-expired fs-6 px-3 py-2"><i class="bi bi-x-circle me-1"></i>기한 경과 품목</span>
+        {% elif filter_status == 'imminent' %}
+            <span class="badge badge-imminent fs-6 px-3 py-2"><i class="bi bi-exclamation-triangle me-1"></i>30일 이내 임박</span>
+        {% elif filter_status == 'warning' %}
+            <span class="badge badge-warning fs-6 px-3 py-2"><i class="bi bi-info-circle me-1"></i>90일 이내 주의</span>
+        {% elif filter_status == 'safe' %}
+            <span class="badge badge-safe fs-6 px-3 py-2"><i class="bi bi-check-circle me-1"></i>안전 품목</span>
+        {% else %}
+            <span class="badge bg-dark fs-6 px-3 py-2"><i class="bi bi-list me-1"></i>전체 ({{ count_total }}건)</span>
+        {% endif %}
+    </div>
+    {% if filter_status != 'all' %}
+    <a href="?status=all" class="btn btn-outline-dark btn-sm">
+        <i class="bi bi-arrow-counterclockwise me-1"></i>전체 보기
+    </a>
+    {% endif %}
+</div>
+
+<!-- 테이블 -->
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        {% if labels %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3" style="width:12%;">품번</th>
+                        <th>품명</th>
+                        <th class="text-end" style="width:8%;">수량</th>
+                        <th class="text-center" style="width:9%;">LOT</th>
+                        <th class="text-center" style="width:9%;">유효기간</th>
+                        <th class="text-center" style="width:7%;">D-Day</th>
+                        <th class="text-center" style="width:7%;">상태</th>
+                        <th style="width:10%;">거래처</th>
+                        <th style="width:12%;">라벨ID</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for label in labels %}
+                    <tr class="{% if label.expiry_status == 'expired' %}row-expired{% elif label.expiry_status == 'imminent' %}row-imminent{% endif %}">
+                        <td class="ps-3 fw-bold text-primary">{{ label.part_no }}</td>
+                        <td class="small">{{ label.part_name|truncatechars:25 }}</td>
+                        <td class="text-end fw-bold">{{ label.quantity|floatformat:0 }}{{ label.get_unit_display }}</td>
+                        <td class="text-center small">{{ label.lot_no|date:"Y-m-d" }}</td>
+                        <td class="text-center small">{{ label.expiry_date|date:"Y-m-d" }}</td>
+                        <td class="text-center">
+                            {% if label.d_day < 0 %}
+                                <span class="d-day-text d-day-expired">D+{{ label.d_day|cut:"-" }}</span>
+                            {% elif label.d_day == 0 %}
+                                <span class="d-day-text d-day-expired">D-Day</span>
+                            {% elif label.d_day <= 30 %}
+                                <span class="d-day-text d-day-imminent">D-{{ label.d_day }}</span>
+                            {% elif label.d_day <= 90 %}
+                                <span class="d-day-text d-day-warning">D-{{ label.d_day }}</span>
+                            {% else %}
+                                <span class="d-day-text d-day-safe">D-{{ label.d_day }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if label.expiry_status == 'expired' %}
+                                <span class="badge badge-expired">경과</span>
+                            {% elif label.expiry_status == 'imminent' %}
+                                <span class="badge badge-imminent">임박</span>
+                            {% elif label.expiry_status == 'warning' %}
+                                <span class="badge badge-warning">주의</span>
+                            {% else %}
+                                <span class="badge badge-safe">안전</span>
+                            {% endif %}
+                        </td>
+                        <td class="small text-muted">{{ label.vendor.name|default:"-"|truncatechars:10 }}</td>
+                        <td>
+                            <span class="text-muted" style="font-size:0.75rem; font-family:monospace;">{{ label.label_id }}</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-check-circle d-block mb-2" style="font-size:3rem; opacity:0.3;"></i>
+            <p class="mb-0">해당 조건의 품목이 없습니다</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

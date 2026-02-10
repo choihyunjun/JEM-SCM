@@ -3676,15 +3676,100 @@ def raw_material_layout(request):
     for floor in wall_b:
         wall_b[floor] = sorted(wall_b[floor], key=lambda x: x['rack'].col_num)
 
+    # 유효기간 경고 데이터 (사이드바용)
+    today = timezone.now().date()
+    from datetime import timedelta
+    expiry_expired = RawMaterialLabel.objects.filter(
+        expiry_date__isnull=False,
+        expiry_date__lt=today,
+        status__in=['INSTOCK', 'PRINTED']
+    ).count()
+    expiry_imminent = RawMaterialLabel.objects.filter(
+        expiry_date__isnull=False,
+        expiry_date__gte=today,
+        expiry_date__lte=today + timedelta(days=30),
+        status__in=['INSTOCK', 'PRINTED']
+    ).count()
+    expiry_warning = RawMaterialLabel.objects.filter(
+        expiry_date__isnull=False,
+        expiry_date__gt=today + timedelta(days=30),
+        expiry_date__lte=today + timedelta(days=90),
+        status__in=['INSTOCK', 'PRINTED']
+    ).count()
+
     context = {
         'section': section,
         'section_display': '3공장' if section == '3F' else '2공장',
         'wall_a': wall_a,
         'wall_b': wall_b,
         'sections': RawMaterialRack.SECTION_CHOICES,
+        'expiry_expired': expiry_expired,
+        'expiry_imminent': expiry_imminent,
+        'expiry_warning': expiry_warning,
     }
 
     return render(request, 'material/raw_material_layout.html', context)
+
+
+@wms_permission_required('can_wms_stock_view')
+def raw_material_expiry(request):
+    """
+    유효기간 관리 - 임박/경과 품목 모니터링
+    """
+    from datetime import timedelta
+
+    today = timezone.now().date()
+    filter_status = request.GET.get('status', 'all')
+
+    # 유효기간이 있는 재고 라벨만 조회
+    base_qs = RawMaterialLabel.objects.filter(
+        expiry_date__isnull=False,
+        status__in=['INSTOCK', 'PRINTED']
+    ).select_related('part', 'vendor').order_by('expiry_date')
+
+    # 상태별 필터링
+    if filter_status == 'expired':
+        labels = base_qs.filter(expiry_date__lt=today)
+    elif filter_status == 'imminent':
+        labels = base_qs.filter(expiry_date__gte=today, expiry_date__lte=today + timedelta(days=30))
+    elif filter_status == 'warning':
+        labels = base_qs.filter(expiry_date__gt=today + timedelta(days=30), expiry_date__lte=today + timedelta(days=90))
+    elif filter_status == 'safe':
+        labels = base_qs.filter(expiry_date__gt=today + timedelta(days=90))
+    else:
+        labels = base_qs
+
+    # D-day 계산
+    for label in labels:
+        delta = (label.expiry_date - today).days
+        label.d_day = delta
+        if delta < 0:
+            label.expiry_status = 'expired'
+        elif delta <= 30:
+            label.expiry_status = 'imminent'
+        elif delta <= 90:
+            label.expiry_status = 'warning'
+        else:
+            label.expiry_status = 'safe'
+
+    # 요약 카운트
+    count_expired = base_qs.filter(expiry_date__lt=today).count()
+    count_imminent = base_qs.filter(expiry_date__gte=today, expiry_date__lte=today + timedelta(days=30)).count()
+    count_warning = base_qs.filter(expiry_date__gt=today + timedelta(days=30), expiry_date__lte=today + timedelta(days=90)).count()
+    count_safe = base_qs.filter(expiry_date__gt=today + timedelta(days=90)).count()
+
+    context = {
+        'labels': labels,
+        'filter_status': filter_status,
+        'today': today,
+        'count_expired': count_expired,
+        'count_imminent': count_imminent,
+        'count_warning': count_warning,
+        'count_safe': count_safe,
+        'count_total': count_expired + count_imminent + count_warning + count_safe,
+    }
+
+    return render(request, 'material/raw_material_expiry.html', context)
 
 
 @wms_permission_required('can_wms_inout_view')

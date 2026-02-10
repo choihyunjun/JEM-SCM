@@ -568,6 +568,7 @@
                                     <a class="nav-link {% if request.resolver_match.url_name == 'raw_material_layout' %}active{% endif %}" href="{% url 'material:raw_material_layout' %}">창고 레이아웃</a>
                                     <a class="nav-link {% if request.resolver_match.url_name == 'raw_material_rack_manage' %}active{% endif %}" href="{% url 'material:raw_material_rack_manage' %}">랙 위치 관리</a>
                                     <a class="nav-link {% if request.resolver_match.url_name == 'raw_material_setting' %}active{% endif %}" href="{% url 'material:raw_material_setting' %}">품목 설정</a>
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'raw_material_expiry' %}active{% endif %}" href="{% url 'material:raw_material_expiry' %}">유효기간 관리</a>
                                 </nav>
                             </div>
                             {% endif %}
