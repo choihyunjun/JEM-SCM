@@ -11,15 +11,22 @@
 
     <form method="post" id="transferForm">
         {% csrf_token %}
-        
+
         <div class="card shadow-sm border-success mb-4">
             <div class="card-header bg-success text-white fw-bold">
                 <i class="bi bi-plus-circle me-1"></i> 이동 대상 추가
             </div>
             <div class="card-body bg-light">
-                <!-- QR 스캔 입력란 -->
+                <!-- 이동 처리일 + QR 스캔 입력란 -->
                 <div class="row g-2 mb-3">
-                    <div class="col-12">
+                    <div class="col-md-2">
+                        <label class="small fw-bold mb-1 text-dark">
+                            <i class="bi bi-calendar-date me-1"></i>이동 처리일
+                        </label>
+                        <input type="date" name="transfer_date" id="transferDate"
+                               class="form-control fw-bold" value="{{ today }}">
+                    </div>
+                    <div class="col-md-10">
                         <label class="small fw-bold mb-1 text-primary">
                             <i class="bi bi-qr-code-scan me-1"></i>QR 코드 스캔 (빠른 입력)
                         </label>
@@ -27,11 +34,11 @@
                                placeholder="현품표 QR 코드를 스캔하세요"
                                autocomplete="off"
                                style="background: #f0f8ff; font-weight: bold;">
-                        <small class="text-muted">
-                            <i class="bi bi-info-circle"></i> QR 코드를 스캔하면 품번, 수량, LOT가 자동으로 입력됩니다.
-                        </small>
                     </div>
                 </div>
+                <small class="text-muted d-block mb-2">
+                    <i class="bi bi-info-circle"></i> QR 코드를 스캔하면 품번, 수량, LOT가 자동으로 입력됩니다. 이동 처리일을 과거 날짜로 설정하면 해당 일자로 이력이 생성됩니다.
+                </small>
 
                 <hr class="my-3">
 
@@ -121,11 +128,264 @@
             </div>
         </div>
     </form>
+
+    <!-- ============================================ -->
+    <!-- 이동 처리 내역 -->
+    <!-- ============================================ -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-clock-history me-1"></i> 이동 처리 내역</span>
+            <span class="badge bg-success rounded-pill">{{ history_count }}건</span>
+        </div>
+        <div class="card-body pb-2">
+            <form method="get" class="row g-2 align-items-end mb-3">
+                <div class="col-md-2">
+                    <label class="small fw-bold mb-1">시작일</label>
+                    <input type="date" name="hstart" class="form-control form-control-sm" value="{{ hstart }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="small fw-bold mb-1">종료일</label>
+                    <input type="date" name="hend" class="form-control form-control-sm" value="{{ hend }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="small fw-bold mb-1">창고</label>
+                    <select name="hwh" class="form-select form-select-sm">
+                        <option value="">전체</option>
+                        {% for loc in warehouses %}
+                        <option value="{{ loc.code }}" {% if hwh == loc.code|stringformat:"s" %}selected{% endif %}>({{ loc.code }}) {{ loc.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="small fw-bold mb-1">검색 (품번/품명/수불번호)</label>
+                    <input type="text" name="hq" class="form-control form-control-sm" value="{{ hq }}" placeholder="검색어 입력">
+                </div>
+                <div class="col-md-1">
+                    <button type="submit" class="btn btn-dark btn-sm w-100">
+                        <i class="bi bi-search"></i> 조회
+                    </button>
+                </div>
+                <div class="col-md-1">
+                    <a href="{% url 'material:stock_move' %}" class="btn btn-outline-secondary btn-sm w-100">초기화</a>
+                </div>
+            </form>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle text-center">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width:11%;">일시</th>
+                        <th style="width:15%;">수불번호</th>
+                        <th style="width:9%;">품번</th>
+                        <th>품명</th>
+                        <th style="width:7%;">수량</th>
+                        <th style="width:8%;">LOT</th>
+                        <th style="width:12%;">From</th>
+                        <th style="width:3%;">→</th>
+                        <th style="width:12%;">To</th>
+                        <th style="width:5%;">라벨</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for trx in history %}
+                    <tr style="cursor:pointer;" onclick="openTransferDetail({{ trx.pk }})">
+                        <td class="small">{{ trx.date|date:"Y-m-d H:i" }}</td>
+                        <td>
+                            <a href="javascript:void(0)" class="fw-bold text-primary text-decoration-none">{{ trx.transaction_no }}</a>
+                        </td>
+                        <td class="fw-bold">{{ trx.part.part_no }}</td>
+                        <td class="small text-start">{{ trx.part.part_name|truncatechars:20 }}</td>
+                        <td class="fw-bold text-end">{{ trx.quantity|floatformat:0 }}</td>
+                        <td class="small">{{ trx.lot_no|date:"Y-m-d"|default:"-" }}</td>
+                        <td class="small">{{ trx.warehouse_from.name|default:"-"|truncatechars:12 }}</td>
+                        <td class="text-muted">→</td>
+                        <td class="small">{{ trx.warehouse_to.name|default:"-"|truncatechars:12 }}</td>
+                        <td>
+                            {% if trx.label_count > 0 %}
+                            <span class="badge bg-warning text-dark"><i class="bi bi-tags"></i> {{ trx.label_count }}</span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="10" class="text-muted py-4">이동 처리 내역이 없습니다.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 페이지네이션 -->
+        {% if history.has_other_pages %}
+        <div class="card-footer bg-white d-flex justify-content-center py-2">
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    {% if history.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ history.previous_page_number }}&hstart={{ hstart }}&hend={{ hend }}&hwh={{ hwh }}&hq={{ hq }}">이전</a>
+                    </li>
+                    {% endif %}
+                    {% for num in history.paginator.page_range %}
+                        {% if history.number == num %}
+                        <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                        {% elif num > history.number|add:"-3" and num < history.number|add:"4" %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ num }}&hstart={{ hstart }}&hend={{ hend }}&hwh={{ hwh }}&hq={{ hq }}">{{ num }}</a>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+                    {% if history.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ history.next_page_number }}&hstart={{ hstart }}&hend={{ hend }}&hwh={{ hwh }}&hq={{ hq }}">다음</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 라벨 선택 모달 (제조현장 4300 이동 시) -->
+<div class="modal fade" id="labelSelectModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title fw-bold">
+                    <i class="bi bi-tags me-2"></i>투입 라벨 선택
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info small mb-3">
+                    <i class="bi bi-info-circle me-1"></i>
+                    제조현장(4300)으로 이동하는 품목입니다. 투입할 라벨(포대)을 선택해주세요.
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="fw-bold" id="labelModalPartInfo"></span>
+                    <div>
+                        <span class="text-muted small me-2">이동수량: <strong id="labelModalMoveQty">0</strong></span>
+                        <span class="text-primary fw-bold">선택합계: <strong id="labelModalSelectedQty">0</strong></span>
+                    </div>
+                </div>
+                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                    <table class="table table-sm table-hover mb-0 align-middle">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th style="width:40px;">
+                                    <input type="checkbox" id="labelCheckAll" class="form-check-input" onchange="toggleAllLabels(this)">
+                                </th>
+                                <th>라벨ID</th>
+                                <th class="text-end">수량</th>
+                                <th class="text-center">유효기간</th>
+                                <th class="text-center">D-Day</th>
+                                <th class="text-center">발행일</th>
+                            </tr>
+                        </thead>
+                        <tbody id="labelModalBody">
+                        </tbody>
+                    </table>
+                </div>
+                <div id="labelModalEmpty" class="text-center py-4 text-muted d-none">
+                    <i class="bi bi-tag d-block mb-2" style="font-size:2rem; opacity:0.3;"></i>
+                    <p class="mb-0">해당 품번/LOT에 발행된 라벨이 없습니다.<br>라벨 없이 이동합니다.</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn btn-warning fw-bold" id="labelSelectConfirmBtn" onclick="confirmLabelSelection()">
+                    <i class="bi bi-check-circle me-1"></i>선택 완료
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 이동 내역 세부 모달 -->
+<div class="modal fade" id="transferDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title fw-bold">
+                    <i class="bi bi-arrow-left-right me-2"></i>이동 내역 상세
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <table class="table table-sm table-bordered mb-3">
+                    <tbody>
+                        <tr>
+                            <th class="bg-light" style="width:25%;">수불번호</th>
+                            <td id="detailTrxNo" class="fw-bold text-primary"></td>
+                        </tr>
+                        <tr>
+                            <th class="bg-light">처리일시</th>
+                            <td id="detailDate"></td>
+                        </tr>
+                        <tr>
+                            <th class="bg-light">품번</th>
+                            <td id="detailPartNo" class="fw-bold"></td>
+                        </tr>
+                        <tr>
+                            <th class="bg-light">품명</th>
+                            <td id="detailPartName"></td>
+                        </tr>
+                        <tr>
+                            <th class="bg-light">수량</th>
+                            <td id="detailQty" class="fw-bold"></td>
+                        </tr>
+                        <tr>
+                            <th class="bg-light">LOT</th>
+                            <td id="detailLot"></td>
+                        </tr>
+                        <tr>
+                            <th class="bg-light">보내는 창고</th>
+                            <td id="detailFromWh"></td>
+                        </tr>
+                        <tr>
+                            <th class="bg-light">받는 창고</th>
+                            <td id="detailToWh"></td>
+                        </tr>
+                        <tr>
+                            <th class="bg-light">처리자</th>
+                            <td id="detailActor"></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <!-- 연결된 라벨 -->
+                <div id="detailLabelsSection" class="d-none">
+                    <h6 class="fw-bold mb-2">
+                        <i class="bi bi-tags text-warning me-1"></i>투입된 라벨
+                        <span class="badge bg-warning text-dark ms-1" id="detailLabelCount">0</span>
+                    </h6>
+                    <table class="table table-sm table-bordered mb-0 align-middle text-center">
+                        <thead class="table-light">
+                            <tr>
+                                <th>라벨ID</th>
+                                <th>수량</th>
+                                <th>유효기간</th>
+                                <th>투입시 잔여일</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detailLabelsBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
-    let currentLotData = null; // 현재 선택된 LOT의 재고 정보 저장
-    let qrScannedQty = null; // QR 코드에서 스캔된 수량 저장
+    let currentLotData = null;
+    let qrScannedQty = null;
 
     // ============================================
     // QR 코드 스캔 처리
@@ -133,7 +393,6 @@
     async function handleQRScan(qrData) {
         const qrInput = document.getElementById('qrScanInput');
 
-        // QR 데이터 파싱: "품번|수량|LOT"
         const parts = qrData.split('|');
 
         if (parts.length !== 3) {
@@ -152,7 +411,6 @@
             return;
         }
 
-        // 1. 보내는 창고와 받는 창고 확인
         const fromLoc = document.getElementById('selFromLoc').value;
         const toLoc = document.getElementById('selToLoc').value;
 
@@ -170,25 +428,18 @@
             return;
         }
 
-        // 2. 품번 입력
         document.getElementById('inputPart').value = partNo;
-
-        // 3. QR에서 스캔된 수량 저장
         qrScannedQty = parseInt(qty) || null;
 
-        // 4. LOT 목록 로드
         await loadAvailableLots();
 
-        // 5. LOT가 로드되면 QR의 LOT와 일치하는 것 자동 선택
         if (lotNo) {
             const lotMatched = await autoSelectLotByDate(lotNo);
 
             if (lotMatched) {
-                // LOT 매칭 성공 → 자동으로 행 추가
                 qrInput.value = '';
                 await addRow();
             } else {
-                // LOT 매칭 실패 → 수동 선택 필요
                 qrInput.value = '';
                 document.getElementById('selLot').focus();
             }
@@ -198,46 +449,39 @@
         }
     }
 
-    // LOT 날짜로 자동 선택 (성공 시 true, 실패 시 false 반환)
     function autoSelectLotByDate(lotDateStr) {
         const lotSelect = document.getElementById('selLot');
         const options = lotSelect.options;
 
-        for (let i = 1; i < options.length; i++) { // index 0은 placeholder
+        for (let i = 1; i < options.length; i++) {
             const optionLotNo = options[i].dataset.lotNo;
             if (optionLotNo === lotDateStr) {
                 lotSelect.selectedIndex = i;
-                onLotSelect(); // LOT 선택 이벤트 트리거
+                onLotSelect();
 
-                // QR에서 스캔된 수량으로 덮어쓰기 (있는 경우)
                 if (qrScannedQty) {
                     document.getElementById('inputQty').value = qrScannedQty;
                 }
-                return true; // 매칭 성공
+                return true;
             }
         }
 
-        // 일치하는 LOT를 못 찾은 경우
         alert(`QR 코드의 LOT(${lotDateStr})가 현재 창고에 없습니다.\n수동으로 LOT를 선택해주세요.`);
-        return false; // 매칭 실패
+        return false;
     }
 
-    // [신규] 품번 + 창고 변경 시 LOT 목록 자동 로드
     async function loadAvailableLots() {
         const partNo = document.getElementById('inputPart').value.trim();
         const fromLoc = document.getElementById('selFromLoc').value;
         const lotSelect = document.getElementById('selLot');
         const lotInfo = document.getElementById('lotInfo');
 
-        // 초기화
         lotSelect.innerHTML = '<option value="">:: 품번/창고 선택 후 표시 ::</option>';
         lotSelect.disabled = true;
         lotInfo.textContent = '';
         currentLotData = null;
 
-        if (!partNo || !fromLoc) {
-            return; // 품번이나 창고가 없으면 LOT 로드 안 함
-        }
+        if (!partNo || !fromLoc) return;
 
         try {
             const url = "{% url 'material:api_get_available_lots' %}?part_no=" + encodeURIComponent(partNo) + "&warehouse_code=" + encodeURIComponent(fromLoc);
@@ -257,7 +501,6 @@
                 return;
             }
 
-            // LOT 목록 구성 (FIFO 순서: 오래된 순)
             lotSelect.innerHTML = '<option value="">:: LOT 선택 ::</option>';
             data.lots.forEach((lot, index) => {
                 const option = document.createElement('option');
@@ -269,7 +512,6 @@
                 let displayText = lot.lot_no ? lot.lot_no : 'LOT 없음';
                 displayText += ` (재고: ${lot.quantity.toLocaleString()} EA, ${lot.days_old}일 경과)`;
 
-                // FIFO 추천 표시 (가장 오래된 것)
                 if (index === 0 && lot.lot_no) {
                     displayText += ' ⚠️ FIFO 추천';
                 }
@@ -289,7 +531,6 @@
         }
     }
 
-    // LOT 선택 시 정보 저장 및 수량 자동 입력
     function onLotSelect() {
         const lotSelect = document.getElementById('selLot');
         const selectedOption = lotSelect.options[lotSelect.selectedIndex];
@@ -303,7 +544,6 @@
                 days_old: parseInt(selectedOption.dataset.daysOld)
             };
 
-            // 재고 수량을 자동으로 입력 (사용자가 변경 가능)
             qtyInput.value = currentLotData.max_qty;
             qtyInput.max = currentLotData.max_qty;
         } else {
@@ -312,6 +552,10 @@
             qtyInput.removeAttribute('max');
         }
     }
+
+    // 라벨 선택 관련 변수
+    let pendingRowData = null;
+    let selectedLabelIds = [];
 
     // 행 추가 로직 (LOT 정보 포함)
     async function addRow() {
@@ -326,7 +570,6 @@
         const toVal = toSel.value;
         const toText = toSel.options[toSel.selectedIndex].text;
 
-        // 유효성 검사
         if(!partNo) { alert('품번을 입력해주세요.'); return; }
         if(!fromVal) { alert('보내는 창고를 선택해주세요.'); return; }
         if(!lotSel.value) { alert('LOT를 선택해주세요.'); return; }
@@ -334,14 +577,12 @@
         if(fromVal === toVal) { alert('보내는 곳과 받는 곳이 같습니다.'); return; }
         if(!qty || parseInt(qty) <= 0) { alert('수량은 1 이상이어야 합니다.'); return; }
 
-        // LOT 재고 수량 확인
         if (currentLotData && parseInt(qty) > currentLotData.max_qty) {
             alert(`선택한 LOT의 재고(${currentLotData.max_qty} EA)를 초과할 수 없습니다.`);
             return;
         }
 
-        // FIFO 경고 (첫 번째 LOT가 아닌 경우)
-        const firstOption = lotSel.options[1]; // index 0은 ":: LOT 선택 ::"
+        const firstOption = lotSel.options[1];
         if (firstOption && lotSel.selectedIndex > 1) {
             const firstLotDays = parseInt(firstOption.dataset.daysOld);
             if (currentLotData.days_old < firstLotDays) {
@@ -351,7 +592,6 @@
             }
         }
 
-        // 품번 존재 여부 서버 검증
         try {
             const url = "{% url 'material:api_part_exists' %}?part_no=" + encodeURIComponent(partNo);
             const res = await fetch(url, { method: 'GET' });
@@ -367,14 +607,126 @@
             return;
         }
 
-        // 빈 행 제거
+        // 제조현장(4300) 이동 시 라벨 선택 모달
+        if (toVal === '4300') {
+            pendingRowData = {
+                partNo, fromVal, fromText, toVal, toText,
+                qty, stockId: currentLotData.stock_id,
+                lotNo: currentLotData.lot_no
+            };
+            await showLabelSelectModal(partNo, currentLotData.lot_no, parseInt(qty));
+            return;
+        }
+
+        finalizeAddRow(partNo, fromVal, fromText, toVal, toText, qty, currentLotData.stock_id, currentLotData.lot_no, '[]');
+    }
+
+    // 라벨 선택 모달 표시
+    async function showLabelSelectModal(partNo, lotNo, moveQty) {
+        const modalBody = document.getElementById('labelModalBody');
+        const modalEmpty = document.getElementById('labelModalEmpty');
+        const checkAll = document.getElementById('labelCheckAll');
+
+        modalBody.innerHTML = '';
+        checkAll.checked = false;
+        selectedLabelIds = [];
+        document.getElementById('labelModalSelectedQty').textContent = '0';
+        document.getElementById('labelModalMoveQty').textContent = moveQty.toLocaleString();
+        document.getElementById('labelModalPartInfo').textContent = `${partNo} / LOT: ${lotNo}`;
+
+        try {
+            const url = "{% url 'material:api_labels_for_lot' %}?part_no=" + encodeURIComponent(partNo) + "&lot_no=" + encodeURIComponent(lotNo);
+            const res = await fetch(url);
+            const data = await res.json();
+
+            if (!data.success || data.count === 0) {
+                modalBody.innerHTML = '';
+                modalEmpty.classList.remove('d-none');
+                document.getElementById('labelSelectConfirmBtn').textContent = '라벨 없이 진행';
+            } else {
+                modalEmpty.classList.add('d-none');
+                document.getElementById('labelSelectConfirmBtn').innerHTML = '<i class="bi bi-check-circle me-1"></i>선택 완료';
+
+                data.labels.forEach(lb => {
+                    const dDayClass = lb.d_day === null ? '' :
+                        lb.d_day < 0 ? 'd-day-expired' :
+                        lb.d_day <= 30 ? 'd-day-imminent' :
+                        lb.d_day <= 90 ? 'd-day-warning' : 'd-day-safe';
+                    const dDayText = lb.d_day === null ? '-' :
+                        lb.d_day < 0 ? `D+${Math.abs(lb.d_day)}` :
+                        lb.d_day === 0 ? 'D-Day' : `D-${lb.d_day}`;
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>
+                            <input type="checkbox" class="form-check-input label-check"
+                                   value="${lb.id}" data-qty="${lb.quantity}"
+                                   onchange="updateLabelSelection()">
+                        </td>
+                        <td><span class="text-muted" style="font-size:0.8rem; font-family:monospace;">${lb.label_id}</span></td>
+                        <td class="text-end fw-bold">${lb.quantity}${lb.unit}</td>
+                        <td class="text-center small">${lb.expiry_date || '-'}</td>
+                        <td class="text-center"><span class="d-day-text ${dDayClass}">${dDayText}</span></td>
+                        <td class="text-center small">${lb.printed_at || '-'}</td>
+                    `;
+                    modalBody.appendChild(tr);
+                });
+            }
+        } catch (e) {
+            console.error(e);
+            modalBody.innerHTML = '';
+            modalEmpty.classList.remove('d-none');
+            document.getElementById('labelSelectConfirmBtn').textContent = '라벨 없이 진행';
+        }
+
+        const modal = new bootstrap.Modal(document.getElementById('labelSelectModal'));
+        modal.show();
+    }
+
+    function toggleAllLabels(checkAll) {
+        document.querySelectorAll('.label-check').forEach(cb => {
+            cb.checked = checkAll.checked;
+        });
+        updateLabelSelection();
+    }
+
+    function updateLabelSelection() {
+        let totalQty = 0;
+        selectedLabelIds = [];
+        document.querySelectorAll('.label-check:checked').forEach(cb => {
+            selectedLabelIds.push(parseInt(cb.value));
+            totalQty += parseFloat(cb.dataset.qty);
+        });
+        document.getElementById('labelModalSelectedQty').textContent = totalQty.toLocaleString();
+
+        const allChecks = document.querySelectorAll('.label-check');
+        const checkedCount = document.querySelectorAll('.label-check:checked').length;
+        document.getElementById('labelCheckAll').checked = allChecks.length > 0 && checkedCount === allChecks.length;
+    }
+
+    function confirmLabelSelection() {
+        const data = pendingRowData;
+        if (!data) return;
+
+        const labelIdsJson = JSON.stringify(selectedLabelIds);
+
+        bootstrap.Modal.getInstance(document.getElementById('labelSelectModal')).hide();
+
+        finalizeAddRow(data.partNo, data.fromVal, data.fromText, data.toVal, data.toText,
+                       data.qty, data.stockId, data.lotNo, labelIdsJson);
+        pendingRowData = null;
+    }
+
+    function finalizeAddRow(partNo, fromVal, fromText, toVal, toText, qty, stockId, lotNo, labelIdsJson) {
         const emptyRow = document.getElementById('emptyRow');
         if(emptyRow) emptyRow.remove();
 
         const tbody = document.getElementById('tableBody');
         const tr = document.createElement('tr');
 
-        const lotDisplay = currentLotData.lot_no === 'NO LOT' ? '-' : currentLotData.lot_no;
+        const lotDisplay = lotNo === 'NO LOT' ? '-' : lotNo;
+        const labelCount = JSON.parse(labelIdsJson).length;
+        const labelBadge = labelCount > 0 ? `<span class="badge bg-warning text-dark ms-1" title="선택된 라벨 ${labelCount}개"><i class="bi bi-tags"></i> ${labelCount}</span>` : '';
 
         tr.innerHTML = `
             <td class="fw-bold text-primary">
@@ -383,7 +735,7 @@
             </td>
             <td class="text-center">
                 ${lotDisplay}
-                <input type="hidden" name="stock_id[]" value="${currentLotData.stock_id}">
+                <input type="hidden" name="stock_id[]" value="${stockId}">
             </td>
             <td>
                 ${fromText}
@@ -391,8 +743,9 @@
             </td>
             <td class="text-muted"><i class="bi bi-arrow-right"></i></td>
             <td>
-                ${toText}
+                ${toText}${labelBadge}
                 <input type="hidden" name="to_loc[]" value="${toVal}">
+                <input type="hidden" name="label_ids[]" value='${labelIdsJson}'>
             </td>
             <td class="fw-bold">
                 ${parseInt(qty).toLocaleString()}
@@ -406,7 +759,6 @@
         tbody.appendChild(tr);
         updateCount();
 
-        // 입력창 초기화
         document.getElementById('inputPart').value = '';
         document.getElementById('selLot').innerHTML = '<option value="">:: 품번/창고 선택 후 표시 ::</option>';
         document.getElementById('selLot').disabled = true;
@@ -414,9 +766,8 @@
         document.getElementById('inputQty').value = '';
         document.getElementById('inputQty').removeAttribute('max');
         currentLotData = null;
-        qrScannedQty = null; // QR 스캔 수량 초기화
+        qrScannedQty = null;
 
-        // QR 입력창으로 포커스 이동 (다음 스캔 준비)
         document.getElementById('qrScanInput').focus();
     }
 
@@ -434,9 +785,72 @@
         document.getElementById('itemCount').innerText = count + "건";
     }
 
+    // ============================================
+    // 이동 내역 세부 조회
+    // ============================================
+    async function openTransferDetail(trxId) {
+        try {
+            const url = `/material/api/transfer-detail/${trxId}/`;
+            const res = await fetch(url);
+            const data = await res.json();
+
+            if (!data.success) {
+                alert(data.error || '조회 실패');
+                return;
+            }
+
+            const t = data.trx;
+            document.getElementById('detailTrxNo').textContent = t.transaction_no;
+            document.getElementById('detailDate').textContent = t.date;
+            document.getElementById('detailPartNo').textContent = t.part_no;
+            document.getElementById('detailPartName').textContent = t.part_name;
+            document.getElementById('detailQty').textContent = t.quantity.toLocaleString();
+            document.getElementById('detailLot').textContent = t.lot_no;
+            document.getElementById('detailFromWh').textContent = t.from_wh;
+            document.getElementById('detailToWh').textContent = t.to_wh;
+            document.getElementById('detailActor').textContent = t.actor;
+
+            // 연결된 라벨
+            const labelsSection = document.getElementById('detailLabelsSection');
+            const labelsBody = document.getElementById('detailLabelsBody');
+            labelsBody.innerHTML = '';
+
+            if (data.label_count > 0) {
+                labelsSection.classList.remove('d-none');
+                document.getElementById('detailLabelCount').textContent = data.label_count;
+
+                data.labels.forEach(lb => {
+                    const dDayText = lb.used_d_day === null ? '-' :
+                        lb.used_d_day < 0 ? `D+${Math.abs(lb.used_d_day)}` :
+                        lb.used_d_day === 0 ? 'D-Day' : `D-${lb.used_d_day}`;
+                    const dDayClass = lb.used_d_day === null ? '' :
+                        lb.used_d_day < 0 ? 'text-danger fw-bold' :
+                        lb.used_d_day <= 30 ? 'text-warning fw-bold' :
+                        lb.used_d_day <= 90 ? 'text-primary fw-bold' : 'text-success fw-bold';
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td><span style="font-size:0.8rem; font-family:monospace;">${lb.label_id}</span></td>
+                        <td class="fw-bold">${lb.quantity}${lb.unit}</td>
+                        <td class="small">${lb.expiry_date}</td>
+                        <td class="${dDayClass}">${dDayText}</td>
+                    `;
+                    labelsBody.appendChild(tr);
+                });
+            } else {
+                labelsSection.classList.add('d-none');
+            }
+
+            const modal = new bootstrap.Modal(document.getElementById('transferDetailModal'));
+            modal.show();
+        } catch (e) {
+            console.error(e);
+            alert('이동 내역 조회 중 오류가 발생했습니다.');
+        }
+    }
+
     // 이벤트 리스너 등록
     document.addEventListener('DOMContentLoaded', function() {
-        // QR 스캔 입력 이벤트 (엔터키로 스캔 완료)
         document.getElementById('qrScanInput').addEventListener('keypress', function(e) {
             if(e.key === 'Enter') {
                 e.preventDefault();
@@ -447,17 +861,13 @@
             }
         });
 
-        // 페이지 로드 시 QR 입력창에 포커스
         document.getElementById('qrScanInput').focus();
 
-        // 품번 또는 보내는 창고 변경 시 LOT 목록 로드
         document.getElementById('inputPart').addEventListener('change', loadAvailableLots);
         document.getElementById('selFromLoc').addEventListener('change', loadAvailableLots);
 
-        // LOT 선택 시 정보 저장
         document.getElementById('selLot').addEventListener('change', onLotSelect);
 
-        // 엔터키 입력 시 추가 동작
         document.getElementById('inputQty').addEventListener('keypress', function(e) {
             if(e.key === 'Enter') {
                 e.preventDefault();

@@ -85,4 +85,6 @@ urlpatterns = [
     path('raw-material/label-print/', views.raw_material_label_print, name='raw_material_label_print'),
     path('api/raw-material-labels/', views.api_raw_material_labels, name='api_raw_material_labels'),
     path('api/part-search/', views.api_part_search, name='api_part_search'),
+    path('api/labels-for-lot/', views.api_labels_for_lot, name='api_labels_for_lot'),
+    path('api/transfer-detail/<int:trx_id>/', views.api_transfer_detail, name='api_transfer_detail'),
 ]

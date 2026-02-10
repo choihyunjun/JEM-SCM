@@ -685,7 +685,8 @@ class RawMaterialLabel(models.Model):
 
     # 입고 정보
     incoming_transaction = models.ForeignKey(MaterialTransaction, on_delete=models.SET_NULL,
-                                              null=True, blank=True, verbose_name="입고 트랜잭션")
+                                              null=True, blank=True, related_name='incoming_labels',
+                                              verbose_name="입고 트랜잭션")
     vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="거래처")
 
     # 상태 관리
@@ -704,6 +705,9 @@ class RawMaterialLabel(models.Model):
     used_at = models.DateTimeField("사용일시", null=True, blank=True)
     used_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
                                  related_name='rawmaterial_labels_used', verbose_name="사용자")
+    used_transaction = models.ForeignKey(MaterialTransaction, on_delete=models.SET_NULL,
+                                          null=True, blank=True, related_name='used_labels',
+                                          verbose_name="사용(이동) 트랜잭션")
 
     class Meta:
         verbose_name = "원재료 QR 라벨"

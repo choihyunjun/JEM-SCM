@@ -1952,11 +1952,50 @@ def stock_move(request):
 
     # 1. 화면 보여주기 (GET)
     if request.method == 'GET':
-        # 전체 창고 조회 (필요시 .filter(is_active=True)로 변경)
+        from django.core.paginator import Paginator
+        from django.db.models import Q, Count
+
+        # 전체 창고 조회
         warehouses = Warehouse.objects.all().order_by('code')
+
+        # 이동 내역 조회
+        hstart = request.GET.get('hstart', '')
+        hend = request.GET.get('hend', '')
+        hwh = request.GET.get('hwh', '')
+        hq = request.GET.get('hq', '')
+
+        history_qs = MaterialTransaction.objects.filter(
+            transaction_type='TRANSFER'
+        ).select_related('part', 'warehouse_from', 'warehouse_to', 'actor').annotate(
+            label_count=Count('used_labels')
+        ).order_by('-date')
+
+        if hstart:
+            history_qs = history_qs.filter(date__date__gte=hstart)
+        if hend:
+            history_qs = history_qs.filter(date__date__lte=hend)
+        if hwh:
+            history_qs = history_qs.filter(
+                Q(warehouse_from__code=hwh) | Q(warehouse_to__code=hwh)
+            )
+        if hq:
+            history_qs = history_qs.filter(
+                Q(part__part_no__icontains=hq) | Q(part__part_name__icontains=hq) | Q(transaction_no__icontains=hq)
+            )
+
+        paginator = Paginator(history_qs, 20)
+        page_num = request.GET.get('page', 1)
+        history_page = paginator.get_page(page_num)
 
         context = {
             'warehouses': warehouses,
+            'today': timezone.now().strftime('%Y-%m-%d'),
+            'history': history_page,
+            'history_count': paginator.count,
+            'hstart': hstart,
+            'hend': hend,
+            'hwh': hwh,
+            'hq': hq,
         }
         return render(request, 'material/stock_move.html', context)
 
@@ -1967,6 +2006,19 @@ def stock_move(request):
         from_locs = request.POST.getlist('from_loc[]')
         to_locs = request.POST.getlist('to_loc[]')
         move_qtys = request.POST.getlist('move_qty[]')
+        label_ids_list = request.POST.getlist('label_ids[]')  # 라벨 선택 (JSON 문자열 리스트)
+
+        # 이동 처리일 (사용자 선택, 미선택 시 오늘)
+        from datetime import datetime as dt_cls
+        transfer_date_str = request.POST.get('transfer_date', '').strip()
+        if transfer_date_str:
+            try:
+                transfer_date = dt_cls.strptime(transfer_date_str, '%Y-%m-%d').date()
+                transfer_datetime = timezone.make_aware(dt_cls.combine(transfer_date, timezone.now().time()))
+            except ValueError:
+                transfer_datetime = timezone.now()
+        else:
+            transfer_datetime = timezone.now()
 
         success_count = 0
 
@@ -2045,10 +2097,10 @@ def stock_move(request):
 
                     lot_display = lot_no.strftime('%Y-%m-%d') if lot_no else 'NO LOT'
 
-                    MaterialTransaction.objects.create(
+                    trx_obj = MaterialTransaction.objects.create(
                         transaction_no=trx_no,
                         transaction_type='TRANSFER',
-                        date=timezone.now(),
+                        date=transfer_datetime,
                         part=part_obj,
                         quantity=qty,
                         lot_no=lot_no,  # LOT 정보 기록
@@ -2058,6 +2110,27 @@ def stock_move(request):
                         actor=request.user,
                         remark=f"재고이동 ({from_wh.name} -> {to_wh.name}) [LOT: {lot_display}]"
                     )
+
+                    # 제조현장(4300) 이동 시 선택된 라벨 USED 처리
+                    if to_wh.code == '4300' and i < len(label_ids_list):
+                        import json
+                        try:
+                            selected_ids = json.loads(label_ids_list[i]) if label_ids_list[i] else []
+                        except (json.JSONDecodeError, TypeError):
+                            selected_ids = []
+
+                        if selected_ids:
+                            RawMaterialLabel.objects.filter(
+                                id__in=selected_ids,
+                                part_no=p_no,
+                                lot_no=lot_no,
+                                status__in=['INSTOCK', 'PRINTED']
+                            ).update(
+                                status='USED',
+                                used_at=transfer_datetime,
+                                used_by=request.user,
+                                used_transaction=trx_obj,
+                            )
 
                     success_count += 1
 
@@ -3878,6 +3951,34 @@ def raw_material_expiry(request):
     count_warning = base_qs.filter(expiry_date__gt=today + timedelta(days=30), expiry_date__lte=today + timedelta(days=90)).count()
     count_safe = base_qs.filter(expiry_date__gt=today + timedelta(days=90)).count()
 
+    # 현장 투입 이력 (USED 라벨)
+    from django.db.models import Q
+    active_tab = request.GET.get('tab', 'stock')
+    used_search = request.GET.get('used_search', '').strip()
+    used_start = request.GET.get('used_start', '')
+    used_end = request.GET.get('used_end', '')
+
+    used_qs = RawMaterialLabel.objects.filter(
+        status='USED',
+        used_at__isnull=False,
+    ).select_related('part', 'vendor', 'used_by').order_by('-used_at')
+
+    if used_search:
+        used_qs = used_qs.filter(
+            Q(part_no__icontains=used_search) | Q(part_name__icontains=used_search)
+        )
+    if used_start:
+        used_qs = used_qs.filter(used_at__date__gte=used_start)
+    if used_end:
+        used_qs = used_qs.filter(used_at__date__lte=used_end)
+
+    # 투입 시점 잔여 D-DAY 계산 (고정값)
+    for ul in used_qs:
+        if ul.expiry_date and ul.used_at:
+            ul.used_d_day = (ul.expiry_date - ul.used_at.date()).days
+        else:
+            ul.used_d_day = None
+
     context = {
         'labels': labels,
         'filter_status': filter_status,
@@ -3887,6 +3988,12 @@ def raw_material_expiry(request):
         'count_warning': count_warning,
         'count_safe': count_safe,
         'count_total': count_expired + count_imminent + count_warning + count_safe,
+        'active_tab': active_tab,
+        'used_labels': used_qs,
+        'used_count': used_qs.count(),
+        'used_search': used_search,
+        'used_start': used_start,
+        'used_end': used_end,
     }
 
     return render(request, 'material/raw_material_expiry.html', context)
@@ -4305,3 +4412,89 @@ def api_part_search(request):
         })
 
     return JsonResponse({'results': results})
+
+
+@wms_permission_required('can_wms_stock_view')
+def api_labels_for_lot(request):
+    """
+    [API] 특정 품번+LOT의 사용 가능 라벨 목록 반환
+    재고이동 시 라벨 선택용
+    """
+    part_no = (request.GET.get('part_no') or '').strip()
+    lot_no_str = (request.GET.get('lot_no') or '').strip()
+
+    if not part_no or not lot_no_str:
+        return JsonResponse({'success': False, 'error': '품번과 LOT를 지정해주세요.'})
+
+    try:
+        from datetime import datetime as dt
+        lot_date = dt.strptime(lot_no_str, '%Y-%m-%d').date()
+    except ValueError:
+        return JsonResponse({'success': False, 'error': 'LOT 형식이 올바르지 않습니다.'})
+
+    labels = RawMaterialLabel.objects.filter(
+        part_no=part_no,
+        lot_no=lot_date,
+        status__in=['INSTOCK', 'PRINTED']
+    ).order_by('printed_at')
+
+    result = []
+    today = timezone.now().date()
+    for lb in labels:
+        d_day = (lb.expiry_date - today).days if lb.expiry_date else None
+        result.append({
+            'id': lb.id,
+            'label_id': lb.label_id,
+            'quantity': float(lb.quantity),
+            'unit': lb.get_unit_display(),
+            'expiry_date': lb.expiry_date.strftime('%Y-%m-%d') if lb.expiry_date else None,
+            'd_day': d_day,
+            'printed_at': lb.printed_at.strftime('%Y-%m-%d %H:%M') if lb.printed_at else None,
+        })
+
+    return JsonResponse({'success': True, 'labels': result, 'count': len(result)})
+
+
+@wms_permission_required('can_wms_stock_view')
+def api_transfer_detail(request, trx_id):
+    """
+    [API] 재고이동 트랜잭션 상세 + 연결된 라벨 목록 반환
+    """
+    try:
+        trx = MaterialTransaction.objects.select_related(
+            'part', 'warehouse_from', 'warehouse_to', 'actor'
+        ).get(pk=trx_id, transaction_type='TRANSFER')
+    except MaterialTransaction.DoesNotExist:
+        return JsonResponse({'success': False, 'error': '이동 내역을 찾을 수 없습니다.'})
+
+    # 연결된 라벨 (used_transaction FK)
+    labels_data = []
+    for lb in trx.used_labels.all().order_by('label_id'):
+        used_d_day = None
+        if lb.expiry_date and lb.used_at:
+            used_d_day = (lb.expiry_date - lb.used_at.date()).days
+        labels_data.append({
+            'label_id': lb.label_id,
+            'quantity': float(lb.quantity),
+            'unit': lb.get_unit_display(),
+            'expiry_date': lb.expiry_date.strftime('%Y-%m-%d') if lb.expiry_date else '-',
+            'used_d_day': used_d_day,
+        })
+
+    return JsonResponse({
+        'success': True,
+        'trx': {
+            'transaction_no': trx.transaction_no,
+            'date': trx.date.strftime('%Y-%m-%d %H:%M'),
+            'part_no': trx.part.part_no,
+            'part_name': trx.part.part_name,
+            'quantity': int(trx.quantity),
+            'lot_no': trx.lot_no.strftime('%Y-%m-%d') if trx.lot_no else '-',
+            'from_wh': f"({trx.warehouse_from.code}) {trx.warehouse_from.name}" if trx.warehouse_from else '-',
+            'to_wh': f"({trx.warehouse_to.code}) {trx.warehouse_to.name}" if trx.warehouse_to else '-',
+            'actor': trx.actor.username if trx.actor else '-',
+            'remark': trx.remark or '',
+        },
+        'labels': labels_data,
+        'label_count': len(labels_data),
+    })
