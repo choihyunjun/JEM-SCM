@@ -3733,12 +3733,8 @@ def raw_material_incoming(request):
                     messages.error(request, '포장 단위수량과 포장 수는 0보다 커야 합니다.')
                     return redirect('material:raw_material_incoming')
 
-                # 유효기간 조회
-                try:
-                    setting = part.raw_material_setting
-                    shelf_life = setting.shelf_life_days
-                except RawMaterialSetting.DoesNotExist:
-                    shelf_life = 365
+                # 유효기간 - 모달에서 입력받은 값 사용
+                shelf_life = int(request.POST.get('shelf_life_days', 365))
 
                 # 원재료 창고로 재고 이동
                 warehouse = Warehouse.objects.filter(code='3000').first()
@@ -3805,13 +3801,23 @@ def raw_material_incoming(request):
             'inbound_transaction__vendor'
         ).order_by('-inspected_at')
 
-        # 이미 라벨 발행된 건 표시 + SCM/WMS 구분
+        # 이미 라벨 발행된 건 표시 + SCM/WMS 구분 + 품목설정 로딩
         for insp in approved_inspections:
             trx = insp.inbound_transaction
             insp.is_scm = (trx.transaction_type == 'IN_SCM')
             insp.label_count = RawMaterialLabel.objects.filter(
                 incoming_transaction=trx
             ).count()
+            # 품목설정 데이터 (모달 기본값용)
+            try:
+                setting = trx.part.raw_material_setting
+                insp.setting_unit_weight = float(setting.unit_weight)
+                insp.setting_shelf_life = setting.shelf_life_days
+                insp.has_setting = True
+            except RawMaterialSetting.DoesNotExist:
+                insp.setting_unit_weight = 0
+                insp.setting_shelf_life = 365
+                insp.has_setting = False
 
     # 수입검사 대기중인 건 목록 - 전체 품목
     pending_inspections = []

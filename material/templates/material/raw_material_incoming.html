@@ -117,7 +117,7 @@
                                         </form>
                                         {% else %}
                                         <button type="button" class="btn btn-success btn-print"
-                                                onclick="openLabelModal('{{ insp.id }}', '{{ insp.inbound_transaction.part.part_no }}', '{{ insp.inbound_transaction.part.part_name|truncatechars:30 }}', {{ insp.inbound_transaction.quantity }})">
+                                                onclick="openLabelModal('{{ insp.id }}', '{{ insp.inbound_transaction.part.part_no }}', '{{ insp.inbound_transaction.part.part_name|truncatechars:30 }}', {{ insp.inbound_transaction.quantity }}, {{ insp.has_setting|yesno:'true,false' }}, {{ insp.setting_unit_weight }}, {{ insp.setting_shelf_life }})">
                                             <i class="bi bi-qr-code"></i> 라벨발행
                                         </button>
                                         {% endif %}
@@ -288,9 +288,18 @@
                         </div>
                     </div>
 
+                    <!-- 품목설정 안내 -->
+                    <div class="alert alert-info py-2 px-3 small mb-3" id="settingAlert" style="display:none;">
+                        <i class="bi bi-info-circle me-1"></i>
+                        <span id="settingAlertText"></span>
+                    </div>
+                    <div class="alert alert-warning py-2 px-3 small mb-3" id="noSettingAlert" style="display:none;">
+                        <i class="bi bi-exclamation-triangle me-1"></i>품목 설정이 등록되지 않은 품목입니다. 수기로 입력해주세요.
+                    </div>
+
                     <!-- 입력 필드 -->
                     <div class="row g-3">
-                        <div class="col-4">
+                        <div class="col-6 col-md-3">
                             <label class="form-label">단위</label>
                             <select class="form-select" name="unit" id="modalUnit" onchange="calcLabels()">
                                 <option value="KG">kg</option>
@@ -299,17 +308,23 @@
                                 <option value="M">m</option>
                             </select>
                         </div>
-                        <div class="col-4">
+                        <div class="col-6 col-md-3">
                             <label class="form-label">포장 단위수량</label>
                             <input type="number" class="form-control" name="pkg_qty" id="modalPkgQty"
                                    step="0.01" min="0.01" placeholder="25" oninput="calcLabels()">
                             <div class="form-text small">1포대/박스당</div>
                         </div>
-                        <div class="col-4">
+                        <div class="col-6 col-md-3">
                             <label class="form-label">포장 수</label>
                             <input type="number" class="form-control" name="pkg_count" id="modalPkgCount"
                                    min="1" placeholder="40" oninput="calcLabels()">
                             <div class="form-text small">라벨 발행 수</div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label">보관기간(일)</label>
+                            <input type="number" class="form-control" name="shelf_life_days" id="modalShelfLife"
+                                   min="1" value="365" oninput="calcExpiry()">
+                            <div class="form-text small" id="expiryPreview">유효기간 계산</div>
                         </div>
                     </div>
 
@@ -336,22 +351,47 @@
 <script>
 let modalTotalQty = 0;
 
-function openLabelModal(inspId, partNo, partName, totalQty) {
+function openLabelModal(inspId, partNo, partName, totalQty, hasSetting, unitWeight, shelfLife) {
     modalTotalQty = parseFloat(totalQty);
     document.getElementById('modalInspectionId').value = inspId;
     document.getElementById('modalPartNo').textContent = partNo;
     document.getElementById('modalPartName').textContent = partName;
     document.getElementById('modalTotalQty').textContent = Number(totalQty).toLocaleString();
 
-    // 초기화
-    document.getElementById('modalUnit').value = 'KG';
-    document.getElementById('modalPkgQty').value = '';
-    document.getElementById('modalPkgCount').value = '';
-    document.getElementById('calcTotal').textContent = '-';
-    document.getElementById('calcTotal').className = 'calc-result';
-    document.getElementById('calcWarning').style.display = 'none';
-    document.getElementById('btnSubmitLabel').disabled = true;
-    document.getElementById('labelCountText').textContent = '0';
+    // 품목설정 안내
+    const settingAlert = document.getElementById('settingAlert');
+    const noSettingAlert = document.getElementById('noSettingAlert');
+
+    if (hasSetting) {
+        // 품목설정이 있으면 기본값 자동 세팅
+        settingAlert.style.display = 'block';
+        noSettingAlert.style.display = 'none';
+        document.getElementById('settingAlertText').textContent =
+            `품목설정 적용됨 — 단위중량: ${unitWeight}kg, 보관기간: ${shelfLife}일`;
+
+        document.getElementById('modalUnit').value = 'KG';
+        document.getElementById('modalPkgQty').value = unitWeight;
+        document.getElementById('modalShelfLife').value = shelfLife;
+
+        // 포장 수 자동 계산 (입고수량 / 단위중량)
+        if (unitWeight > 0) {
+            const autoCount = Math.round(totalQty / unitWeight);
+            document.getElementById('modalPkgCount').value = autoCount > 0 ? autoCount : 1;
+        }
+    } else {
+        // 품목설정 없으면 수기 입력
+        settingAlert.style.display = 'none';
+        noSettingAlert.style.display = 'block';
+
+        document.getElementById('modalUnit').value = 'KG';
+        document.getElementById('modalPkgQty').value = '';
+        document.getElementById('modalPkgCount').value = '';
+        document.getElementById('modalShelfLife').value = 365;
+    }
+
+    // 계산 초기화
+    calcLabels();
+    calcExpiry();
 
     new bootstrap.Modal(document.getElementById('labelModal')).show();
 }
@@ -385,6 +425,23 @@ function calcLabels() {
         warnEl.style.display = 'none';
         btnEl.disabled = true;
         cntEl.textContent = '0';
+    }
+}
+
+function calcExpiry() {
+    const days = parseInt(document.getElementById('modalShelfLife').value) || 0;
+    const preview = document.getElementById('expiryPreview');
+    if (days > 0) {
+        const today = new Date();
+        const expiry = new Date(today.getTime() + days * 86400000);
+        const yy = expiry.getFullYear();
+        const mm = String(expiry.getMonth() + 1).padStart(2, '0');
+        const dd = String(expiry.getDate()).padStart(2, '0');
+        preview.textContent = `→ ${yy}-${mm}-${dd}`;
+        preview.style.color = '#198754';
+    } else {
+        preview.textContent = '유효기간 계산';
+        preview.style.color = '';
     }
 }
 </script>
