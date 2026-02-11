@@ -292,8 +292,8 @@
                     </table>
                 </div>
                 <div id="labelModalEmpty" class="text-center py-4 text-muted d-none">
-                    <i class="bi bi-tag d-block mb-2" style="font-size:2rem; opacity:0.3;"></i>
-                    <p class="mb-0">해당 품번/LOT에 발행된 라벨이 없습니다.<br>라벨 없이 이동합니다.</p>
+                    <i class="bi bi-truck d-block mb-2" style="font-size:2rem; opacity:0.3;"></i>
+                    <p class="mb-0">협력사 입고품입니다.<br>라벨 선택 없이 이동 처리됩니다.</p>
                 </div>
             </div>
             <div class="modal-footer">
@@ -593,13 +593,24 @@
             return;
         }
 
+        // FIFO 위반 검증 (사유 입력 필수)
+        let fifoReason = '';
         const firstOption = lotSel.options[1];
         if (firstOption && lotSel.selectedIndex > 1) {
             const firstLotDays = parseInt(firstOption.dataset.daysOld);
+            const firstLotNo = firstOption.dataset.lotNo;
             if (currentLotData.days_old < firstLotDays) {
-                if (!confirm(`⚠️ FIFO 위반 경고!\n\n더 오래된 LOT가 있습니다.\n그래도 선택한 LOT로 이동하시겠습니까?`)) {
+                const reason = prompt(
+                    `⚠️ FIFO 위반 경고!\n\n` +
+                    `선입선출 원칙에 따라 가장 오래된 LOT(${firstLotNo}, ${firstLotDays}일 경과)를 먼저 사용해야 합니다.\n` +
+                    `선택한 LOT: ${currentLotData.lot_no} (${currentLotData.days_old}일 경과)\n\n` +
+                    `FIFO를 무시하고 진행하려면 사유를 입력하세요:`
+                );
+                if (reason === null || reason.trim() === '') {
+                    alert('FIFO 위반 사유를 입력해야 진행할 수 있습니다.');
                     return;
                 }
+                fifoReason = reason.trim();
             }
         }
 
@@ -623,13 +634,14 @@
             pendingRowData = {
                 partNo, fromVal, fromText, toVal, toText,
                 qty, stockId: currentLotData.stock_id,
-                lotNo: currentLotData.lot_no
+                lotNo: currentLotData.lot_no,
+                fifoReason
             };
             await showLabelSelectModal(partNo, currentLotData.lot_no, parseInt(qty));
             return;
         }
 
-        finalizeAddRow(partNo, fromVal, fromText, toVal, toText, qty, currentLotData.stock_id, currentLotData.lot_no, '[]');
+        finalizeAddRow(partNo, fromVal, fromText, toVal, toText, qty, currentLotData.stock_id, currentLotData.lot_no, '[]', fifoReason);
     }
 
     // 라벨 선택 모달 표시
@@ -653,7 +665,7 @@
             if (!data.success || data.count === 0) {
                 modalBody.innerHTML = '';
                 modalEmpty.classList.remove('d-none');
-                document.getElementById('labelSelectConfirmBtn').textContent = '라벨 없이 진행';
+                document.getElementById('labelSelectConfirmBtn').textContent = '선택 없이 이동';
             } else {
                 modalEmpty.classList.add('d-none');
                 document.getElementById('labelSelectConfirmBtn').innerHTML = '<i class="bi bi-check-circle me-1"></i>선택 완료';
@@ -667,14 +679,19 @@
                         lb.d_day < 0 ? `D+${Math.abs(lb.d_day)}` :
                         lb.d_day === 0 ? 'D-Day' : `D-${lb.d_day}`;
 
+                    const typeBadge = lb.label_type === 'TAG'
+                        ? '<span class="badge bg-info text-white me-1">TAG</span>'
+                        : '<span class="badge bg-success text-white me-1">RM</span>';
+
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
                         <td>
                             <input type="checkbox" class="form-check-input label-check"
                                    value="${lb.id}" data-qty="${lb.quantity}"
+                                   data-type="${lb.label_type || 'RM'}"
                                    onchange="updateLabelSelection()">
                         </td>
-                        <td><span class="text-muted" style="font-size:0.8rem; font-family:monospace;">${lb.label_id}</span></td>
+                        <td>${typeBadge}<span class="text-muted" style="font-size:0.8rem; font-family:monospace;">${lb.label_id}</span></td>
                         <td class="text-end fw-bold">${lb.quantity}${lb.unit}</td>
                         <td class="text-center small">${lb.expiry_date || '-'}</td>
                         <td class="text-center"><span class="d-day-text ${dDayClass}">${dDayText}</span></td>
@@ -687,7 +704,7 @@
             console.error(e);
             modalBody.innerHTML = '';
             modalEmpty.classList.remove('d-none');
-            document.getElementById('labelSelectConfirmBtn').textContent = '라벨 없이 진행';
+            document.getElementById('labelSelectConfirmBtn').textContent = '선택 없이 이동';
         }
 
         const modal = new bootstrap.Modal(document.getElementById('labelSelectModal'));
@@ -705,7 +722,10 @@
         let totalQty = 0;
         selectedLabelIds = [];
         document.querySelectorAll('.label-check:checked').forEach(cb => {
-            selectedLabelIds.push(parseInt(cb.value));
+            selectedLabelIds.push({
+                id: parseInt(cb.value),
+                type: cb.dataset.type || 'RM'
+            });
             totalQty += parseFloat(cb.dataset.qty);
         });
         document.getElementById('labelModalSelectedQty').textContent = totalQty.toLocaleString();
@@ -724,11 +744,11 @@
         bootstrap.Modal.getInstance(document.getElementById('labelSelectModal')).hide();
 
         finalizeAddRow(data.partNo, data.fromVal, data.fromText, data.toVal, data.toText,
-                       data.qty, data.stockId, data.lotNo, labelIdsJson);
+                       data.qty, data.stockId, data.lotNo, labelIdsJson, data.fifoReason || '');
         pendingRowData = null;
     }
 
-    function finalizeAddRow(partNo, fromVal, fromText, toVal, toText, qty, stockId, lotNo, labelIdsJson) {
+    function finalizeAddRow(partNo, fromVal, fromText, toVal, toText, qty, stockId, lotNo, labelIdsJson, fifoReason) {
         const emptyRow = document.getElementById('emptyRow');
         if(emptyRow) emptyRow.remove();
 
@@ -736,8 +756,17 @@
         const tr = document.createElement('tr');
 
         const lotDisplay = lotNo === 'NO LOT' ? '-' : lotNo;
-        const labelCount = JSON.parse(labelIdsJson).length;
-        const labelBadge = labelCount > 0 ? `<span class="badge bg-warning text-dark ms-1" title="선택된 라벨 ${labelCount}개"><i class="bi bi-tags"></i> ${labelCount}</span>` : '';
+        const parsedLabels = JSON.parse(labelIdsJson);
+        const labelCount = parsedLabels.length;
+
+        const fifoBadge = fifoReason ? `<span class="badge bg-danger ms-1" title="FIFO 위반: ${fifoReason}"><i class="bi bi-exclamation-triangle"></i> FIFO</span>` : '';
+
+        // 라벨 뱃지: RM/TAG 구분 표시
+        const rmCount = parsedLabels.filter(x => (x.type || 'RM') === 'RM').length;
+        const tagCount = parsedLabels.filter(x => x.type === 'TAG').length;
+        let labelBadgeDetail = '';
+        if (rmCount > 0) labelBadgeDetail += `<span class="badge bg-success text-white ms-1">RM ${rmCount}</span>`;
+        if (tagCount > 0) labelBadgeDetail += `<span class="badge bg-info text-white ms-1">TAG ${tagCount}</span>`;
 
         tr.innerHTML = `
             <td class="fw-bold text-primary">
@@ -745,8 +774,9 @@
                 <input type="hidden" name="part_no[]" value="${partNo}">
             </td>
             <td class="text-center">
-                ${lotDisplay}
+                ${lotDisplay}${fifoBadge}
                 <input type="hidden" name="stock_id[]" value="${stockId}">
+                <input type="hidden" name="fifo_reason[]" value="${fifoReason || ''}">
             </td>
             <td>
                 ${fromText}
@@ -754,7 +784,7 @@
             </td>
             <td class="text-muted"><i class="bi bi-arrow-right"></i></td>
             <td>
-                ${toText}${labelBadge}
+                ${toText}${labelBadgeDetail}
                 <input type="hidden" name="to_loc[]" value="${toVal}">
                 <input type="hidden" name="label_ids[]" value='${labelIdsJson}'>
             </td>
@@ -839,9 +869,13 @@
                         lb.used_d_day <= 30 ? 'text-warning fw-bold' :
                         lb.used_d_day <= 90 ? 'text-primary fw-bold' : 'text-success fw-bold';
 
+                    const typeBadge = lb.label_type === 'TAG'
+                        ? '<span class="badge bg-info me-1">TAG</span>'
+                        : '<span class="badge bg-success me-1">RM</span>';
+
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
-                        <td><span style="font-size:0.8rem; font-family:monospace;">${lb.label_id}</span></td>
+                        <td>${typeBadge}<span style="font-size:0.8rem; font-family:monospace;">${lb.label_id}</span></td>
                         <td class="fw-bold">${lb.quantity}${lb.unit}</td>
                         <td class="small">${lb.expiry_date}</td>
                         <td class="${dDayClass}">${dDayText}</td>

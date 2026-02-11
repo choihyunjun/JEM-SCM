@@ -1967,7 +1967,10 @@ def stock_move(request):
         history_qs = MaterialTransaction.objects.filter(
             transaction_type='TRANSFER'
         ).select_related('part', 'warehouse_from', 'warehouse_to', 'actor').annotate(
-            label_count=Count('used_labels')
+            rm_label_count=Count('used_labels', distinct=True),
+            tag_count=Count('used_tags', distinct=True),
+        ).annotate(
+            label_count=F('rm_label_count') + F('tag_count')
         ).order_by('-date')
 
         if hstart:
@@ -2010,6 +2013,7 @@ def stock_move(request):
         to_locs = request.POST.getlist('to_loc[]')
         move_qtys = request.POST.getlist('move_qty[]')
         label_ids_list = request.POST.getlist('label_ids[]')  # 라벨 선택 (JSON 문자열 리스트)
+        fifo_reasons = request.POST.getlist('fifo_reason[]')  # FIFO 위반 사유
 
         # 이동 처리일 (사용자 선택, 미선택 시 오늘)
         from datetime import datetime as dt_cls
@@ -2095,6 +2099,20 @@ def stock_move(request):
                     # ✅ update(F()) 이후 실제 수량을 다시 읽어서 result_stock 숫자 저장
                     target_stock.refresh_from_db()
 
+                    # FIFO 검증 및 사유 기록
+                    fifo_remark = ""
+                    if lot_no:
+                        oldest_lot = MaterialStock.objects.filter(
+                            warehouse=from_wh,
+                            part=part_obj,
+                            quantity__gt=0,
+                            lot_no__isnull=False,
+                        ).order_by('lot_no').first()
+
+                        if oldest_lot and oldest_lot.lot_no < lot_no:
+                            fifo_reason = fifo_reasons[i] if i < len(fifo_reasons) else ''
+                            fifo_remark = f" [FIFO 위반: {fifo_reason or '사유 미입력'}]"
+
                     # 2-3. 이력(Transaction) 생성
                     trx_no = f"TRX-{timezone.now().strftime('%y%m%d%H%M%S%f')}-{request.user.id}-{i}"
 
@@ -2106,34 +2124,61 @@ def stock_move(request):
                         date=transfer_datetime,
                         part=part_obj,
                         quantity=qty,
-                        lot_no=lot_no,  # LOT 정보 기록
+                        lot_no=lot_no,
                         warehouse_from=from_wh,
                         warehouse_to=to_wh,
-                        result_stock=target_stock.quantity,   # ✅ 실제 숫자
+                        result_stock=target_stock.quantity,
                         actor=request.user,
-                        remark=f"재고이동 ({from_wh.name} -> {to_wh.name}) [LOT: {lot_display}]"
+                        remark=f"재고이동 ({from_wh.name} -> {to_wh.name}) [LOT: {lot_display}]{fifo_remark}"
                     )
 
-                    # 제조현장 이동 시 선택된 라벨 USED 처리
+                    # 제조현장 이동 시 선택된 라벨 USED 처리 (RM + TAG)
                     if to_wh.is_production and i < len(label_ids_list):
                         import json
                         try:
-                            selected_ids = json.loads(label_ids_list[i]) if label_ids_list[i] else []
+                            raw_label_data = json.loads(label_ids_list[i]) if label_ids_list[i] else []
                         except (json.JSONDecodeError, TypeError):
-                            selected_ids = []
+                            raw_label_data = []
 
-                        if selected_ids:
-                            RawMaterialLabel.objects.filter(
-                                id__in=selected_ids,
-                                part_no=p_no,
-                                lot_no=lot_no,
-                                status__in=['INSTOCK', 'PRINTED']
-                            ).update(
-                                status='USED',
-                                used_at=transfer_datetime,
-                                used_by=request.user,
-                                used_transaction=trx_obj,
-                            )
+                        if raw_label_data:
+                            from .models import ProcessTag
+                            rm_ids = []
+                            tag_ids = []
+                            for item in raw_label_data:
+                                if isinstance(item, dict):
+                                    if item.get('type') == 'TAG':
+                                        tag_ids.append(item['id'])
+                                    else:
+                                        rm_ids.append(item['id'])
+                                else:
+                                    rm_ids.append(item)  # 하위호환: 정수 = RM
+
+                            if rm_ids:
+                                RawMaterialLabel.objects.filter(
+                                    id__in=rm_ids,
+                                    part_no=p_no,
+                                    lot_no=lot_no,
+                                    status__in=['INSTOCK', 'PRINTED']
+                                ).update(
+                                    status='USED',
+                                    used_at=transfer_datetime,
+                                    used_by=request.user,
+                                    used_transaction=trx_obj,
+                                )
+
+                            if tag_ids:
+                                ProcessTag.objects.filter(
+                                    id__in=tag_ids,
+                                    part_no=p_no,
+                                    lot_no=lot_no,
+                                    status='PRINTED'
+                                ).update(
+                                    status='USED',
+                                    used_at=transfer_datetime,
+                                    used_by=request.user,
+                                    used_warehouse=to_wh,
+                                    used_transaction=trx_obj,
+                                )
 
                     success_count += 1
 
@@ -4450,25 +4495,52 @@ def api_labels_for_lot(request):
     except ValueError:
         return JsonResponse({'success': False, 'error': 'LOT 형식이 올바르지 않습니다.'})
 
-    labels = RawMaterialLabel.objects.filter(
+    from .models import ProcessTag
+
+    # RM 라벨 조회
+    rm_labels = RawMaterialLabel.objects.filter(
         part_no=part_no,
         lot_no=lot_date,
         status__in=['INSTOCK', 'PRINTED']
     ).order_by('printed_at')
 
+    # 공정현품표(TAG) 조회
+    tags = ProcessTag.objects.filter(
+        part_no=part_no,
+        lot_no=lot_date,
+        status='PRINTED'
+    ).order_by('printed_at')
+
     result = []
     today = timezone.now().date()
-    for lb in labels:
+
+    for lb in rm_labels:
         d_day = (lb.expiry_date - today).days if lb.expiry_date else None
         result.append({
             'id': lb.id,
             'label_id': lb.label_id,
+            'label_type': 'RM',
             'quantity': float(lb.quantity),
             'unit': lb.get_unit_display(),
             'expiry_date': lb.expiry_date.strftime('%Y-%m-%d') if lb.expiry_date else None,
             'd_day': d_day,
             'printed_at': lb.printed_at.strftime('%Y-%m-%d %H:%M') if lb.printed_at else None,
         })
+
+    for tag in tags:
+        result.append({
+            'id': tag.id,
+            'label_id': tag.tag_id,
+            'label_type': 'TAG',
+            'quantity': float(tag.quantity),
+            'unit': 'EA',
+            'expiry_date': None,
+            'd_day': None,
+            'printed_at': tag.printed_at.strftime('%Y-%m-%d %H:%M') if tag.printed_at else None,
+        })
+
+    # 발행일 기준 정렬 (오래된 것 먼저 = FIFO)
+    result.sort(key=lambda x: x['printed_at'] or '')
 
     return JsonResponse({'success': True, 'labels': result, 'count': len(result)})
 
@@ -4485,7 +4557,7 @@ def api_transfer_detail(request, trx_id):
     except MaterialTransaction.DoesNotExist:
         return JsonResponse({'success': False, 'error': '이동 내역을 찾을 수 없습니다.'})
 
-    # 연결된 라벨 (used_transaction FK)
+    # 연결된 라벨 (RM + TAG)
     labels_data = []
     for lb in trx.used_labels.all().order_by('label_id'):
         used_d_day = None
@@ -4493,10 +4565,21 @@ def api_transfer_detail(request, trx_id):
             used_d_day = (lb.expiry_date - lb.used_at.date()).days
         labels_data.append({
             'label_id': lb.label_id,
+            'label_type': 'RM',
             'quantity': float(lb.quantity),
             'unit': lb.get_unit_display(),
             'expiry_date': lb.expiry_date.strftime('%Y-%m-%d') if lb.expiry_date else '-',
             'used_d_day': used_d_day,
+        })
+
+    for tag in trx.used_tags.all().order_by('tag_id'):
+        labels_data.append({
+            'label_id': tag.tag_id,
+            'label_type': 'TAG',
+            'quantity': float(tag.quantity),
+            'unit': 'EA',
+            'expiry_date': '-',
+            'used_d_day': None,
         })
 
     return JsonResponse({

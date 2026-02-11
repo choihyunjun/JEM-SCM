@@ -384,6 +384,11 @@ class ProcessTag(models.Model):
                                  related_name='tags_used', verbose_name="사용자")
     used_warehouse = models.ForeignKey(Warehouse, on_delete=models.SET_NULL, null=True, blank=True,
                                         verbose_name="사용 창고")
+    used_transaction = models.ForeignKey(
+        'MaterialTransaction', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='used_tags',
+        verbose_name="사용(이동) 트랜잭션"
+    )
     scan_count = models.IntegerField("스캔 횟수", default=0)
 
     class Meta:
