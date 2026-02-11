@@ -64,7 +64,7 @@
                         <select name="warehouse_id" id="selWarehouse" class="form-select" required>
                             <option value="">== 창고 선택 ==</option>
                             {% for w in warehouses %}
-                                <option value="{{ w.id }}" data-code="{{ w.code }}">{{ w.name }} ({{ w.code }})</option>
+                                <option value="{{ w.id }}" data-code="{{ w.code }}">({{ w.code }}) {{ w.name }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -74,7 +74,7 @@
                         <select name="target_warehouse_id" id="selTargetWarehouse" class="form-select border-success">
                             <option value="">== 창고 선택 ==</option>
                             {% for w in warehouses %}
-                                <option value="{{ w.id }}" data-code="{{ w.code }}">{{ w.name }} ({{ w.code }})</option>
+                                <option value="{{ w.id }}" data-code="{{ w.code }}">({{ w.code }}) {{ w.name }}</option>
                             {% endfor %}
                         </select>
                     </div>
