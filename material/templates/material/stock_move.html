@@ -45,10 +45,12 @@
                 <!-- 수동 입력란 -->
                 <div class="row g-2 align-items-end">
 
-                    <div class="col-md-3">
+                    <div class="col-md-3 position-relative">
                         <label class="small fw-bold mb-1">품번 (Part No)</label>
-                        <input type="text" id="inputPart" class="form-control" placeholder="품번 검색/스캔">
-                        </div>
+                        <input type="text" id="inputPart" class="form-control" placeholder="품번/품명 검색" autocomplete="off">
+                        <div id="partSearchDropdown" class="position-absolute w-100 bg-white border rounded shadow-sm"
+                             style="display:none; z-index:1050; max-height:280px; overflow-y:auto; top:100%;"></div>
+                    </div>
 
                     <div class="col-md-2">
                         <label class="small fw-bold mb-1">보내는 창고 (From)</label>
@@ -553,6 +555,12 @@
         }
     }
 
+    function selectPart(partNo) {
+        document.getElementById('inputPart').value = partNo;
+        document.getElementById('partSearchDropdown').style.display = 'none';
+        loadAvailableLots();
+    }
+
     // 제조현장 창고 코드 목록
     const PRODUCTION_CODES = {{ production_codes|safe }};
 
@@ -866,7 +874,41 @@
 
         document.getElementById('qrScanInput').focus();
 
-        document.getElementById('inputPart').addEventListener('change', loadAvailableLots);
+        // 품번 자동완성
+        let partSearchTimer = null;
+        const partInput = document.getElementById('inputPart');
+        const partDropdown = document.getElementById('partSearchDropdown');
+
+        partInput.addEventListener('input', function() {
+            clearTimeout(partSearchTimer);
+            const q = this.value.trim();
+            if (q.length < 2) { partDropdown.style.display = 'none'; return; }
+            partSearchTimer = setTimeout(async () => {
+                try {
+                    const res = await fetch("{% url 'material:api_part_search' %}?q=" + encodeURIComponent(q));
+                    const data = await res.json();
+                    if (!data.results || data.results.length === 0) {
+                        partDropdown.innerHTML = '<div class="px-3 py-2 text-muted small">검색 결과 없음</div>';
+                        partDropdown.style.display = 'block';
+                        return;
+                    }
+                    partDropdown.innerHTML = data.results.map(r => `
+                        <div class="px-3 py-2 border-bottom" style="cursor:pointer;"
+                             onmousedown="selectPart('${r.part_no}')">
+                            <span class="fw-bold text-primary">${r.part_no}</span>
+                            <span class="text-muted small ms-2">${r.part_name}</span>
+                        </div>
+                    `).join('');
+                    partDropdown.style.display = 'block';
+                } catch(e) { partDropdown.style.display = 'none'; }
+            }, 300);
+        });
+
+        partInput.addEventListener('blur', function() {
+            setTimeout(() => { partDropdown.style.display = 'none'; }, 200);
+        });
+
+        partInput.addEventListener('change', loadAvailableLots);
         document.getElementById('selFromLoc').addEventListener('change', loadAvailableLots);
 
         document.getElementById('selLot').addEventListener('change', onLotSelect);
