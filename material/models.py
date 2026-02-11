@@ -18,6 +18,8 @@ class Warehouse(models.Model):
     code = models.CharField("창고코드", max_length=20, unique=True) # 예: WH_MAT, WH_LINE
     description = models.CharField("설명", max_length=200, blank=True, null=True)
     is_active = models.BooleanField("사용여부", default=True)
+    is_production = models.BooleanField("제조현장 여부", default=False,
+                                         help_text="체크하면 재고이동 시 라벨 선택 모달이 표시됩니다.")
 
     def __str__(self):
         return f"[{self.code}] {self.name}"

@@ -1987,8 +1987,11 @@ def stock_move(request):
         page_num = request.GET.get('page', 1)
         history_page = paginator.get_page(page_num)
 
+        production_codes = list(Warehouse.objects.filter(is_production=True).values_list('code', flat=True))
+
         context = {
             'warehouses': warehouses,
+            'production_codes': production_codes,
             'today': timezone.now().strftime('%Y-%m-%d'),
             'history': history_page,
             'history_count': paginator.count,
@@ -2111,8 +2114,8 @@ def stock_move(request):
                         remark=f"재고이동 ({from_wh.name} -> {to_wh.name}) [LOT: {lot_display}]"
                     )
 
-                    # 제조현장(4300) 이동 시 선택된 라벨 USED 처리
-                    if to_wh.code == '4300' and i < len(label_ids_list):
+                    # 제조현장 이동 시 선택된 라벨 USED 처리
+                    if to_wh.is_production and i < len(label_ids_list):
                         import json
                         try:
                             selected_ids = json.loads(label_ids_list[i]) if label_ids_list[i] else []
@@ -3913,12 +3916,19 @@ def raw_material_expiry(request):
 
     today = timezone.now().date()
     filter_status = request.GET.get('status', 'all')
+    stock_search = request.GET.get('search', '').strip()
 
     # 유효기간이 있는 재고 라벨만 조회
     base_qs = RawMaterialLabel.objects.filter(
         expiry_date__isnull=False,
         status__in=['INSTOCK', 'PRINTED']
     ).select_related('part', 'vendor').order_by('expiry_date')
+
+    if stock_search:
+        from django.db.models import Q as _Q
+        base_qs = base_qs.filter(
+            _Q(part_no__icontains=stock_search) | _Q(part_name__icontains=stock_search)
+        )
 
     # 상태별 필터링
     if filter_status == 'expired':
@@ -3994,6 +4004,7 @@ def raw_material_expiry(request):
         'used_search': used_search,
         'used_start': used_start,
         'used_end': used_end,
+        'stock_search': stock_search,
     }
 
     return render(request, 'material/raw_material_expiry.html', context)

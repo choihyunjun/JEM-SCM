@@ -249,7 +249,7 @@
     </div>
 </div>
 
-<!-- 라벨 선택 모달 (제조현장 4300 이동 시) -->
+<!-- 라벨 선택 모달 (제조현장 이동 시) -->
 <div class="modal fade" id="labelSelectModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
@@ -262,7 +262,7 @@
             <div class="modal-body">
                 <div class="alert alert-info small mb-3">
                     <i class="bi bi-info-circle me-1"></i>
-                    제조현장(4300)으로 이동하는 품목입니다. 투입할 라벨(포대)을 선택해주세요.
+                    제조현장으로 이동하는 품목입니다. 투입할 라벨을 선택해주세요.
                 </div>
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <span class="fw-bold" id="labelModalPartInfo"></span>
@@ -553,6 +553,9 @@
         }
     }
 
+    // 제조현장 창고 코드 목록
+    const PRODUCTION_CODES = {{ production_codes|safe }};
+
     // 라벨 선택 관련 변수
     let pendingRowData = null;
     let selectedLabelIds = [];
@@ -607,8 +610,8 @@
             return;
         }
 
-        // 제조현장(4300) 이동 시 라벨 선택 모달
-        if (toVal === '4300') {
+        // 제조현장 이동 시 라벨 선택 모달
+        if (PRODUCTION_CODES.includes(toVal)) {
             pendingRowData = {
                 partNo, fromVal, fromText, toVal, toText,
                 qty, stockId: currentLotData.stock_id,
