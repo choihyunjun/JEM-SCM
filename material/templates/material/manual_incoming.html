@@ -44,12 +44,12 @@
             </div>
             <div class="card-body bg-white">
                 <div class="row g-3 align-items-center">
-                    <div class="col-md-3">
+                    <div class="col-6 col-lg-2">
                         <label class="form-label small">입고 일자</label>
                         <input type="date" name="date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
                     </div>
-                    
-                    <div class="col-md-2">
+
+                    <div class="col-6 col-lg-2">
                         <label class="form-label small text-danger">수입검사 대상</label>
                         <div class="inspection-box" id="inspectionBox">
                             <label class="form-check-label small text-muted mb-0 me-2" for="chkInspection" id="lblInspection">미진행</label>
@@ -59,7 +59,7 @@
                         </div>
                     </div>
 
-                    <div class="col-md-3" id="warehouseCol">
+                    <div class="col-6 col-lg-3" id="warehouseCol">
                         <label class="form-label small" id="warehouseLabel">입고 창고 (To)</label>
                         <select name="warehouse_id" id="selWarehouse" class="form-select" required>
                             <option value="">== 창고 선택 ==</option>
@@ -69,7 +69,7 @@
                         </select>
                     </div>
 
-                    <div class="col-md-3" id="targetWarehouseCol" style="display: none;">
+                    <div class="col-6 col-lg-3" id="targetWarehouseCol" style="display: none;">
                         <label class="form-label small text-success fw-bold">합격 후 입고 창고</label>
                         <select name="target_warehouse_id" id="selTargetWarehouse" class="form-select border-success">
                             <option value="">== 창고 선택 ==</option>
@@ -80,7 +80,7 @@
                         <div class="form-text small text-success">수입검사 합격 시 입고될 창고</div>
                     </div>
 
-                    <div class="col-md" id="vendorCol">
+                    <div class="col-12 col-lg" id="vendorCol">
                         <label class="form-label small">공급처 (Vendor)</label>
                         <div class="input-group">
                             <input type="text" class="form-control bg-light" id="displayVendor" placeholder="업체 선택" readonly onclick="openVendorModal()" style="cursor: pointer;">
@@ -97,7 +97,7 @@
         <div class="card shadow-sm border-primary mb-4">
             <div class="card-body bg-light-blue">
                 <div class="row g-2 align-items-end">
-                    <div class="col-md-4">
+                    <div class="col-12 col-lg-3">
                         <label class="small fw-bold mb-1 text-primary">입고 품목 검색</label>
                         <input class="form-control" list="partOptions" id="inputPart" placeholder="품번 또는 품명 검색..." autocomplete="off">
                         <datalist id="partOptions">
@@ -110,7 +110,7 @@
                         <input type="hidden" id="selectedPartId">
                         <input type="hidden" id="selectedPartName">
                     </div>
-                    <div class="col-md-2">
+                    <div class="col-6 col-lg-2">
                         <label class="small fw-bold mb-1 text-primary">LOT 번호</label>
                         <div class="input-group">
                             <input type="text" id="inputLotNo" class="form-control" placeholder="YYYYMMDD">
@@ -120,15 +120,15 @@
                             <input type="date" id="hiddenDatePicker" class="d-none">
                         </div>
                     </div>
-                    <div class="col-md-1">
+                    <div class="col-6 col-lg-1">
                         <label class="small fw-bold mb-1 text-primary">수량</label>
                         <input type="number" id="inputQty" class="form-control text-end fw-bold" placeholder="0" min="1">
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-12 col-lg-4">
                         <label class="small fw-bold mb-1">비고 (선택)</label>
                         <input type="text" id="inputRemark" class="form-control" placeholder="특이사항 입력">
                     </div>
-                    <div class="col-md-1">
+                    <div class="col-12 col-lg-2">
                         <button type="button" class="btn btn-primary w-100 fw-bold" onclick="addItem()">
                             <i class="bi bi-plus-lg"></i> 추가
                         </button>
