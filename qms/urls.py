@@ -87,6 +87,8 @@ urlpatterns = [
     path('outgoing/', views.outgoing_inspection_list, name='outgoing_list'),
     path('outgoing/create/', views.outgoing_inspection_create, name='outgoing_create'),
     path('outgoing/<int:pk>/', views.outgoing_inspection_detail, name='outgoing_detail'),
+    path('outgoing/<int:pk>/edit/', views.outgoing_inspection_edit, name='outgoing_edit'),
+    path('outgoing/<int:pk>/delete/', views.outgoing_inspection_delete, name='outgoing_delete'),
 
     # ============================================
     # 부적합품 관리
@@ -94,6 +96,8 @@ urlpatterns = [
     path('nc/', views.nc_list, name='nc_list'),
     path('nc/create/', views.nc_create, name='nc_create'),
     path('nc/<int:pk>/', views.nc_detail, name='nc_detail'),
+    path('nc/<int:pk>/edit/', views.nc_edit, name='nc_edit'),
+    path('nc/<int:pk>/delete/', views.nc_delete, name='nc_delete'),
 
     # ============================================
     # 시정조치 (CAPA)
@@ -101,6 +105,8 @@ urlpatterns = [
     path('capa/', views.capa_list, name='capa_list'),
     path('capa/create/', views.capa_create, name='capa_create'),
     path('capa/<int:pk>/', views.capa_detail, name='capa_detail'),
+    path('capa/<int:pk>/edit/', views.capa_edit, name='capa_edit'),
+    path('capa/<int:pk>/delete/', views.capa_delete, name='capa_delete'),
 
     # ============================================
     # 협력사 클레임
@@ -108,6 +114,8 @@ urlpatterns = [
     path('claim/', views.claim_list, name='claim_list'),
     path('claim/create/', views.claim_create, name='claim_create'),
     path('claim/<int:pk>/', views.claim_detail, name='claim_detail'),
+    path('claim/<int:pk>/edit/', views.claim_edit, name='claim_edit'),
+    path('claim/<int:pk>/delete/', views.claim_delete, name='claim_delete'),
 
     # ============================================
     # 협력사 평가
@@ -115,6 +123,7 @@ urlpatterns = [
     path('rating/', views.vendor_rating_list, name='rating_list'),
     path('rating/create/', views.vendor_rating_create, name='rating_create'),
     path('rating/<int:pk>/', views.vendor_rating_detail, name='rating_detail'),
+    path('rating/<int:pk>/delete/', views.vendor_rating_delete, name='rating_delete'),
 
     # ============================================
     # ISIR (초도품검사)
@@ -122,6 +131,8 @@ urlpatterns = [
     path('isir/', views.isir_list, name='isir_list'),
     path('isir/create/', views.isir_create, name='isir_create'),
     path('isir/<int:pk>/', views.isir_detail, name='isir_detail'),
+    path('isir/<int:pk>/edit/', views.isir_edit, name='isir_edit'),
+    path('isir/<int:pk>/delete/', views.isir_delete, name='isir_delete'),
     path('isir/<int:pk>/pdf/', views.isir_pdf, name='isir_pdf'),
 
     # ============================================
@@ -130,6 +141,8 @@ urlpatterns = [
     path('voc/', views.voc_list, name='voc_list'),
     path('voc/create/', views.voc_create, name='voc_create'),
     path('voc/<int:pk>/', views.voc_detail, name='voc_detail'),
+    path('voc/<int:pk>/edit/', views.voc_edit, name='voc_edit'),
+    path('voc/<int:pk>/delete/', views.voc_delete, name='voc_delete'),
 
     # ============================================
     # 계측기 관리
@@ -137,6 +150,8 @@ urlpatterns = [
     path('gauge/', views.gauge_list, name='gauge_list'),
     path('gauge/create/', views.gauge_create, name='gauge_create'),
     path('gauge/<int:pk>/', views.gauge_detail, name='gauge_detail'),
+    path('gauge/<int:pk>/edit/', views.gauge_edit, name='gauge_edit'),
+    path('gauge/<int:pk>/delete/', views.gauge_delete, name='gauge_delete'),
 
     # ============================================
     # 품질문서 관리
@@ -144,4 +159,6 @@ urlpatterns = [
     path('qdoc/', views.qdoc_list, name='qdoc_list'),
     path('qdoc/create/', views.qdoc_create, name='qdoc_create'),
     path('qdoc/<int:pk>/', views.qdoc_detail, name='qdoc_detail'),
+    path('qdoc/<int:pk>/edit/', views.qdoc_edit, name='qdoc_edit'),
+    path('qdoc/<int:pk>/delete/', views.qdoc_delete, name='qdoc_delete'),
 ]

@@ -15,10 +15,19 @@
                 {{ capa.get_status_display }}
             </span>
         </h3>
-        <a href="{% url 'qms:capa_list' %}" class="btn btn-outline-secondary">
-            <i class="bi bi-arrow-left me-1"></i>목록으로
-        </a>
+        <div class="d-flex gap-2">
+            <a href="{% url 'qms:capa_edit' pk=capa.pk %}" class="btn btn-outline-primary">
+                <i class="bi bi-pencil me-1"></i>수정
+            </a>
+            <button type="button" class="btn btn-outline-danger" onclick="if(confirm('정말 삭제하시겠습니까?')) document.getElementById('deleteForm').submit();">
+                <i class="bi bi-trash me-1"></i>삭제
+            </button>
+            <a href="{% url 'qms:capa_list' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i>목록으로
+            </a>
+        </div>
     </div>
+    <form id="deleteForm" method="post" action="{% url 'qms:capa_delete' pk=capa.pk %}" style="display:none;">{% csrf_token %}</form>
 
     {% if capa.is_overdue %}
     <div class="alert alert-danger">

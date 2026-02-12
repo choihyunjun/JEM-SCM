@@ -1,11 +1,11 @@
 {% extends 'qms/qms_base.html' %}
 
-{% block title %}클레임 등록{% endblock %}
+{% block title %}클레임 {% if mode == 'edit' %}수정{% else %}등록{% endif %}{% endblock %}
 
 {% block qms_content %}
 <div class="container-fluid p-0" style="max-width: 900px;">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="fw-bold"><i class="bi bi-file-earmark-x me-2"></i>클레임 등록</h3>
+        <h3 class="fw-bold"><i class="bi bi-file-earmark-x me-2"></i>클레임 {% if mode == 'edit' %}수정{% else %}등록{% endif %}</h3>
         <a href="{% url 'qms:claim_list' %}" class="btn btn-outline-secondary">
             <i class="bi bi-arrow-left me-1"></i>목록으로
         </a>
@@ -22,13 +22,14 @@
                         <select name="claim_type" class="form-select" required>
                             <option value="">선택</option>
                             {% for value, label in type_choices %}
-                            <option value="{{ value }}">{{ label }}</option>
+                            <option value="{{ value }}" {% if mode == 'edit' and claim.claim_type == value %}selected{% endif %}>{{ label }}</option>
                             {% endfor %}
                         </select>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-bold">발생일 <span class="text-danger">*</span></label>
-                        <input type="date" name="issue_date" class="form-control" required>
+                        <input type="date" name="issue_date" class="form-control" required
+                               value="{% if mode == 'edit' %}{{ claim.issue_date|date:'Y-m-d' }}{% endif %}">
                     </div>
                 </div>
 
@@ -38,8 +39,10 @@
                     <div class="col-md-12">
                         <label class="form-label fw-bold">협력사 <span class="text-danger">*</span></label>
                         <div class="input-group">
-                            <input type="text" id="vendorName" class="form-control" placeholder="협력사 검색..." readonly required>
-                            <input type="hidden" name="vendor" id="vendorId" required>
+                            <input type="text" id="vendorName" class="form-control" placeholder="협력사 검색..." readonly required
+                                   value="{% if mode == 'edit' %}{{ claim.vendor.name }}{% endif %}">
+                            <input type="hidden" name="vendor" id="vendorId" required
+                                   value="{% if mode == 'edit' %}{{ claim.vendor_id }}{% endif %}">
                             <button type="button" class="btn btn-outline-secondary" onclick="openVendorSearchModal()">
                                 <i class="bi bi-search"></i>
                             </button>
@@ -51,7 +54,8 @@
                     <div class="col-md-6">
                         <label class="form-label fw-bold">품번 <span class="text-danger">*</span></label>
                         <div class="input-group">
-                            <input type="text" id="partNo" name="part_no" class="form-control" placeholder="품번 검색..." readonly required>
+                            <input type="text" id="partNo" name="part_no" class="form-control" placeholder="품번 검색..." readonly required
+                                   value="{% if mode == 'edit' %}{{ claim.part_no }}{% endif %}">
                             <button type="button" class="btn btn-outline-secondary" onclick="openPartSearchModal()">
                                 <i class="bi bi-search"></i>
                             </button>
@@ -62,22 +66,26 @@
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-bold">품명 <span class="text-danger">*</span></label>
-                        <input type="text" id="partName" name="part_name" class="form-control bg-light" readonly required>
+                        <input type="text" id="partName" name="part_name" class="form-control bg-light" readonly required
+                               value="{% if mode == 'edit' %}{{ claim.part_name }}{% endif %}">
                         <div class="form-text text-muted">품번 선택 시 자동 입력</div>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-bold">LOT번호</label>
-                        <input type="date" name="lot_no" id="lotNo" class="form-control" placeholder="날짜 선택">
+                        <input type="date" name="lot_no" id="lotNo" class="form-control" placeholder="날짜 선택"
+                               value="{% if mode == 'edit' and claim.lot_no %}{{ claim.lot_no }}{% endif %}">
                         <div class="form-text text-muted">LOT 날짜 선택 (YYYY-MM-DD)</div>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-bold">클레임 수량 <span class="text-danger">*</span></label>
-                        <input type="number" name="claim_qty" class="form-control" required min="1">
+                        <input type="number" name="claim_qty" class="form-control" required min="1"
+                               value="{% if mode == 'edit' %}{{ claim.claim_qty }}{% endif %}">
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-bold">클레임 금액</label>
                         <div class="input-group">
-                            <input type="number" name="claim_amount" class="form-control" min="0" placeholder="청구 금액">
+                            <input type="number" name="claim_amount" class="form-control" min="0" placeholder="청구 금액"
+                                   value="{% if mode == 'edit' and claim.claim_amount != None %}{{ claim.claim_amount }}{% endif %}">
                             <span class="input-group-text">원</span>
                         </div>
                         <div class="form-text text-muted">비용 클레임 시 청구 금액 입력</div>
@@ -89,17 +97,23 @@
                 <div class="row g-3">
                     <div class="col-12">
                         <label class="form-label fw-bold">클레임 내용 <span class="text-danger">*</span></label>
-                        <textarea name="claim_detail" class="form-control" rows="4" required placeholder="클레임 내용을 상세히 기술하세요"></textarea>
+                        <textarea name="claim_detail" class="form-control" rows="4" required placeholder="클레임 내용을 상세히 기술하세요">{% if mode == 'edit' %}{{ claim.claim_detail }}{% endif %}</textarea>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-bold">불량 사진</label>
                         <input type="file" name="photo" class="form-control" accept="image/*">
+                        {% if mode == 'edit' and claim.photo %}
+                        <div class="form-text text-muted">
+                            현재 파일: <a href="{{ claim.photo.url }}" target="_blank">{{ claim.photo.name }}</a>
+                            <br>새 파일을 선택하면 기존 파일이 교체됩니다.
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
 
                 <div class="d-flex justify-content-end gap-2 mt-4">
                     <a href="{% url 'qms:claim_list' %}" class="btn btn-secondary">취소</a>
-                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>등록</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>{% if mode == 'edit' %}수정{% else %}등록{% endif %}</button>
                 </div>
             </form>
         </div>

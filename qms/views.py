@@ -3837,3 +3837,378 @@ def qdoc_detail(request, pk):
         'status_choices': QualityDocument.STATUS_CHOICES,
         'category_choices': QualityDocument.CATEGORY_CHOICES,
     })
+
+
+# ============================================================================
+# 수정/삭제 기능 (전체 QMS 모듈)
+# ============================================================================
+
+# ── 출하검사 ──
+
+@login_required
+def outgoing_inspection_edit(request, pk):
+    """출하검사 수정"""
+    oi = get_object_or_404(OutgoingInspection, pk=pk)
+    if request.method == 'POST':
+        oi.inspection_date = request.POST.get('inspection_date', oi.inspection_date)
+        oi.part_no = request.POST.get('part_no', oi.part_no)
+        oi.part_name = request.POST.get('part_name', oi.part_name)
+        oi.lot_no = request.POST.get('lot_no', '')
+        oi.total_qty = int(request.POST.get('total_qty', oi.total_qty))
+        oi.sample_qty = int(request.POST.get('sample_qty', oi.sample_qty))
+        oi.customer_name = request.POST.get('customer_name', '')
+        oi.delivery_date = request.POST.get('delivery_date') or None
+        oi.save()
+        messages.success(request, '출하검사가 수정되었습니다.')
+        return redirect('qms:outgoing_detail', pk=pk)
+    return render(request, 'qms/outgoing_inspection_form.html', {
+        'mode': 'edit', 'oi': oi,
+    })
+
+@login_required
+@require_POST
+def outgoing_inspection_delete(request, pk):
+    """출하검사 삭제"""
+    oi = get_object_or_404(OutgoingInspection, pk=pk)
+    oi.delete()
+    messages.success(request, '출하검사가 삭제되었습니다.')
+    return redirect('qms:outgoing_list')
+
+
+# ── 부적합품 ──
+
+@login_required
+def nc_edit(request, pk):
+    """부적합품 수정"""
+    nc = get_object_or_404(NonConformance, pk=pk)
+    if request.method == 'POST':
+        nc.source = request.POST.get('source', nc.source)
+        nc.occurred_date = request.POST.get('occurred_date', nc.occurred_date)
+        nc.part_no = request.POST.get('part_no', nc.part_no)
+        nc.part_name = request.POST.get('part_name', nc.part_name)
+        nc.lot_no = request.POST.get('lot_no', '')
+        vendor_id = request.POST.get('vendor')
+        nc.vendor_id = vendor_id if vendor_id else None
+        nc.defect_qty = int(request.POST.get('defect_qty', nc.defect_qty))
+        nc.defect_type = request.POST.get('defect_type', nc.defect_type)
+        nc.defect_detail = request.POST.get('defect_detail', nc.defect_detail)
+        if request.FILES.get('photo'):
+            nc.photo = request.FILES['photo']
+        nc.save()
+        messages.success(request, '부적합 정보가 수정되었습니다.')
+        return redirect('qms:nc_detail', pk=pk)
+    vendors = Organization.objects.filter(org_type='VENDOR').order_by('name')
+    return render(request, 'qms/nc_form.html', {
+        'mode': 'edit', 'nc': nc,
+        'source_choices': NonConformance.SOURCE_CHOICES,
+        'vendors': vendors,
+    })
+
+@login_required
+@require_POST
+def nc_delete(request, pk):
+    """부적합품 삭제"""
+    nc = get_object_or_404(NonConformance, pk=pk)
+    nc.delete()
+    messages.success(request, '부적합 정보가 삭제되었습니다.')
+    return redirect('qms:nc_list')
+
+
+# ── 시정조치 (CAPA) ──
+
+@login_required
+def capa_edit(request, pk):
+    """시정조치 수정"""
+    capa = get_object_or_404(CorrectiveAction, pk=pk)
+    if request.method == 'POST':
+        capa.capa_type = request.POST.get('capa_type', capa.capa_type)
+        vendor_id = request.POST.get('vendor')
+        if vendor_id:
+            capa.vendor_id = vendor_id
+        capa.part_no = request.POST.get('part_no', capa.part_no)
+        capa.part_name = request.POST.get('part_name', capa.part_name)
+        capa.issue_title = request.POST.get('issue_title', capa.issue_title)
+        capa.issue_detail = request.POST.get('issue_detail', capa.issue_detail)
+        capa.request_date = request.POST.get('request_date', capa.request_date)
+        capa.due_date = request.POST.get('due_date', capa.due_date)
+        capa.save()
+        messages.success(request, '시정조치가 수정되었습니다.')
+        return redirect('qms:capa_detail', pk=pk)
+    vendors = Organization.objects.filter(org_type='VENDOR').order_by('name')
+    return render(request, 'qms/capa_form.html', {
+        'mode': 'edit', 'capa': capa,
+        'type_choices': CorrectiveAction.TYPE_CHOICES,
+        'vendors': vendors,
+    })
+
+@login_required
+@require_POST
+def capa_delete(request, pk):
+    """시정조치 삭제"""
+    capa = get_object_or_404(CorrectiveAction, pk=pk)
+    capa.delete()
+    messages.success(request, '시정조치가 삭제되었습니다.')
+    return redirect('qms:capa_list')
+
+
+# ── 협력사 클레임 ──
+
+@login_required
+def claim_edit(request, pk):
+    """클레임 수정"""
+    claim = get_object_or_404(VendorClaim, pk=pk)
+    if request.method == 'POST':
+        claim.claim_type = request.POST.get('claim_type', claim.claim_type)
+        claim.issue_date = request.POST.get('issue_date', claim.issue_date)
+        vendor_id = request.POST.get('vendor')
+        if vendor_id:
+            claim.vendor_id = vendor_id
+        claim.part_no = request.POST.get('part_no', claim.part_no)
+        claim.part_name = request.POST.get('part_name', claim.part_name)
+        claim.lot_no = request.POST.get('lot_no', '')
+        claim.claim_qty = int(request.POST.get('claim_qty', claim.claim_qty))
+        claim.claim_amount = request.POST.get('claim_amount') or None
+        claim.claim_detail = request.POST.get('claim_detail', claim.claim_detail)
+        if request.FILES.get('photo'):
+            claim.photo = request.FILES['photo']
+        claim.save()
+        messages.success(request, '클레임이 수정되었습니다.')
+        return redirect('qms:claim_detail', pk=pk)
+    vendors = Organization.objects.filter(org_type='VENDOR').order_by('name')
+    return render(request, 'qms/claim_form.html', {
+        'mode': 'edit', 'claim': claim,
+        'type_choices': VendorClaim.CLAIM_TYPE_CHOICES,
+        'vendors': vendors,
+    })
+
+@login_required
+@require_POST
+def claim_delete(request, pk):
+    """클레임 삭제"""
+    claim = get_object_or_404(VendorClaim, pk=pk)
+    claim.delete()
+    messages.success(request, '클레임이 삭제되었습니다.')
+    return redirect('qms:claim_list')
+
+
+# ── 협력사 평가 ──
+
+@login_required
+@require_POST
+def vendor_rating_delete(request, pk):
+    """협력사 평가 삭제"""
+    rating = get_object_or_404(VendorRating, pk=pk)
+    rating.delete()
+    messages.success(request, '협력사 평가가 삭제되었습니다.')
+    return redirect('qms:rating_list')
+
+
+# ── ISIR (초도품검사) ──
+
+@login_required
+def isir_edit(request, pk):
+    """ISIR 수정"""
+    isir = get_object_or_404(ISIR, pk=pk)
+    if request.method == 'POST':
+        isir.isir_type = request.POST.get('isir_type', isir.isir_type)
+        vendor_id = request.POST.get('vendor')
+        if vendor_id:
+            isir.vendor_id = vendor_id
+        isir.part_no = request.POST.get('part_no', isir.part_no)
+        isir.part_name = request.POST.get('part_name', isir.part_name)
+        isir.part_rev = request.POST.get('part_rev', '')
+        isir.drawing_no = request.POST.get('drawing_no', '')
+        isir.sample_qty = int(request.POST.get('sample_qty', isir.sample_qty))
+        isir.sample_lot = request.POST.get('sample_lot', '')
+        sample_received = request.POST.get('sample_received_date')
+        if sample_received:
+            isir.sample_received_date = sample_received
+        if request.FILES.get('report_file'):
+            isir.report_file = request.FILES['report_file']
+        if request.FILES.get('photo1'):
+            isir.photo1 = request.FILES['photo1']
+        if request.FILES.get('photo2'):
+            isir.photo2 = request.FILES['photo2']
+        cpk_value = request.POST.get('cpk_value')
+        isir.cpk_value = cpk_value if cpk_value else None
+        ppk_value = request.POST.get('ppk_value')
+        isir.ppk_value = ppk_value if ppk_value else None
+        isir.cpk_characteristic = request.POST.get('cpk_characteristic', '')
+        usl = request.POST.get('usl')
+        isir.usl = usl if usl else None
+        lsl = request.POST.get('lsl')
+        isir.lsl = lsl if lsl else None
+        process_mean = request.POST.get('process_mean')
+        isir.process_mean = process_mean if process_mean else None
+        process_std = request.POST.get('process_std')
+        isir.process_std = process_std if process_std else None
+        msa_grr = request.POST.get('msa_grr_percent')
+        isir.msa_grr_percent = msa_grr if msa_grr else None
+        msa_ndc = request.POST.get('msa_ndc')
+        isir.msa_ndc = msa_ndc if msa_ndc else None
+        isir.msa_result = request.POST.get('msa_result', '')
+        isir.save()
+        messages.success(request, 'ISIR이 수정되었습니다.')
+        return redirect('qms:isir_detail', pk=pk)
+    vendors = Organization.objects.filter(org_type='VENDOR').order_by('name')
+    return render(request, 'qms/isir_form.html', {
+        'mode': 'edit', 'isir': isir,
+        'type_choices': ISIR.ISIR_TYPE_CHOICES,
+        'vendors': vendors,
+    })
+
+@login_required
+@require_POST
+def isir_delete(request, pk):
+    """ISIR 삭제"""
+    isir = get_object_or_404(ISIR, pk=pk)
+    isir.delete()
+    messages.success(request, 'ISIR이 삭제되었습니다.')
+    return redirect('qms:isir_list')
+
+
+# ── VOC (고객의 소리) ──
+
+@login_required
+def voc_edit(request, pk):
+    """VOC 수정"""
+    voc = get_object_or_404(VOC, pk=pk)
+    if request.method == 'POST':
+        voc.source = request.POST.get('source', voc.source)
+        voc.severity = request.POST.get('severity', voc.severity)
+        voc.received_date = request.POST.get('received_date', voc.received_date)
+        voc.customer_name = request.POST.get('customer_name', voc.customer_name)
+        voc.customer_contact = request.POST.get('customer_contact', '')
+        voc.customer_phone = request.POST.get('customer_phone', '')
+        voc.part_no = request.POST.get('part_no', voc.part_no)
+        voc.part_name = request.POST.get('part_name', voc.part_name)
+        voc.lot_no = request.POST.get('lot_no', '')
+        voc.defect_qty = int(request.POST.get('defect_qty', voc.defect_qty))
+        voc.defect_type = request.POST.get('defect_type', voc.defect_type)
+        voc.defect_detail = request.POST.get('defect_detail', voc.defect_detail)
+        due_date = request.POST.get('due_date')
+        if due_date:
+            voc.due_date = due_date
+        assigned_to = request.POST.get('assigned_to')
+        if assigned_to:
+            voc.assigned_to_id = assigned_to
+        if request.FILES.get('photo'):
+            voc.photo = request.FILES['photo']
+        voc.save()
+        messages.success(request, 'VOC가 수정되었습니다.')
+        return redirect('qms:voc_detail', pk=pk)
+    from django.contrib.auth.models import User
+    users = User.objects.filter(is_active=True).order_by('username')
+    return render(request, 'qms/voc_form.html', {
+        'mode': 'edit', 'voc': voc,
+        'severity_choices': VOC.SEVERITY_CHOICES,
+        'source_choices': VOC.SOURCE_CHOICES,
+        'users': users,
+        'today': timezone.localdate(),
+    })
+
+@login_required
+@require_POST
+def voc_delete(request, pk):
+    """VOC 삭제"""
+    voc = get_object_or_404(VOC, pk=pk)
+    voc.delete()
+    messages.success(request, 'VOC가 삭제되었습니다.')
+    return redirect('qms:voc_list')
+
+
+# ── 계측기 ──
+
+@login_required
+def gauge_edit(request, pk):
+    """계측기 수정"""
+    gauge = get_object_or_404(Gauge, pk=pk)
+    if request.method == 'POST':
+        gauge.gauge_no = request.POST.get('gauge_no', gauge.gauge_no)
+        gauge.gauge_name = request.POST.get('gauge_name', gauge.gauge_name)
+        gauge.gauge_type = request.POST.get('gauge_type', gauge.gauge_type)
+        gauge.manufacturer = request.POST.get('manufacturer', '')
+        gauge.model_no = request.POST.get('model_no', '')
+        gauge.serial_no = request.POST.get('serial_no', '')
+        gauge.measurement_range = request.POST.get('measurement_range', '')
+        gauge.resolution = request.POST.get('resolution', '')
+        gauge.accuracy = request.POST.get('accuracy', '')
+        gauge.location = request.POST.get('location', '')
+        gauge.department = request.POST.get('department', '')
+        gauge.usage = request.POST.get('usage', '')
+        gauge.calibration_type = request.POST.get('calibration_type', 'EXTERNAL')
+        gauge.calibration_cycle = int(request.POST.get('calibration_cycle', gauge.calibration_cycle))
+        gauge.calibration_agency = request.POST.get('calibration_agency', '')
+        gauge.remark = request.POST.get('remark', '')
+        purchase_date = request.POST.get('purchase_date')
+        gauge.purchase_date = purchase_date if purchase_date else None
+        purchase_cost = request.POST.get('purchase_cost')
+        gauge.purchase_cost = purchase_cost if purchase_cost else None
+        manager_id = request.POST.get('manager')
+        gauge.manager_id = manager_id if manager_id else None
+        if request.FILES.get('photo'):
+            gauge.photo = request.FILES['photo']
+        if request.FILES.get('manual'):
+            gauge.manual = request.FILES['manual']
+        gauge.save()
+        messages.success(request, '계측기 정보가 수정되었습니다.')
+        return redirect('qms:gauge_detail', pk=pk)
+    from django.contrib.auth.models import User
+    users = User.objects.filter(is_active=True).order_by('username')
+    return render(request, 'qms/gauge_form.html', {
+        'mode': 'edit', 'gauge': gauge,
+        'type_choices': Gauge.TYPE_CHOICES,
+        'calibration_type_choices': Gauge.CALIBRATION_TYPE_CHOICES,
+        'users': users,
+    })
+
+@login_required
+@require_POST
+def gauge_delete(request, pk):
+    """계측기 삭제"""
+    gauge = get_object_or_404(Gauge, pk=pk)
+    gauge.delete()
+    messages.success(request, '계측기가 삭제되었습니다.')
+    return redirect('qms:gauge_list')
+
+
+# ── 품질문서 ──
+
+@login_required
+def qdoc_edit(request, pk):
+    """품질문서 수정"""
+    doc = get_object_or_404(QualityDocument, pk=pk)
+    if request.method == 'POST':
+        doc.doc_no = request.POST.get('doc_no', doc.doc_no)
+        doc.doc_name = request.POST.get('doc_name', doc.doc_name)
+        doc.category = request.POST.get('category', doc.category)
+        doc.version = request.POST.get('version', doc.version)
+        doc.description = request.POST.get('description', '')
+        doc.related_part_no = request.POST.get('related_part_no', '')
+        doc.related_process = request.POST.get('related_process', '')
+        effective_date = request.POST.get('effective_date')
+        if effective_date:
+            doc.effective_date = effective_date
+        expiry_date = request.POST.get('expiry_date')
+        doc.expiry_date = expiry_date if expiry_date else None
+        doc.is_controlled = request.POST.get('is_controlled') == 'on'
+        if request.FILES.get('file'):
+            doc.file = request.FILES['file']
+            doc.file_name = request.FILES['file'].name
+        doc.save()
+        messages.success(request, '품질문서가 수정되었습니다.')
+        return redirect('qms:qdoc_detail', pk=pk)
+    return render(request, 'qms/qdoc_form.html', {
+        'mode': 'edit', 'doc': doc,
+        'category_choices': QualityDocument.CATEGORY_CHOICES,
+        'today': timezone.localdate(),
+    })
+
+@login_required
+@require_POST
+def qdoc_delete(request, pk):
+    """품질문서 삭제"""
+    doc = get_object_or_404(QualityDocument, pk=pk)
+    doc.delete()
+    messages.success(request, '품질문서가 삭제되었습니다.')
+    return redirect('qms:qdoc_list')

@@ -22,8 +22,15 @@
             {% else %}
             <span class="badge bg-danger fs-6">폐기</span>
             {% endif %}
+            <a href="{% url 'qms:qdoc_edit' pk=doc.pk %}" class="btn btn-outline-primary btn-sm ms-2">
+                <i class="bi bi-pencil me-1"></i>수정
+            </a>
+            <button type="button" class="btn btn-outline-danger btn-sm" onclick="if(confirm('정말 삭제하시겠습니까?')) document.getElementById('deleteForm').submit();">
+                <i class="bi bi-trash me-1"></i>삭제
+            </button>
         </div>
     </div>
+    <form id="deleteForm" method="post" action="{% url 'qms:qdoc_delete' pk=doc.pk %}" style="display:none;">{% csrf_token %}</form>
 
     <div class="row g-4">
         <!-- 좌측: 문서 정보 -->

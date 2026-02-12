@@ -37,11 +37,18 @@
                 </button>
             </form>
             {% endif %}
+            <a href="{% url 'qms:isir_edit' pk=isir.pk %}" class="btn btn-outline-primary">
+                <i class="bi bi-pencil me-1"></i>수정
+            </a>
+            <button type="button" class="btn btn-outline-danger" onclick="if(confirm('정말 삭제하시겠습니까?')) document.getElementById('deleteForm').submit();">
+                <i class="bi bi-trash me-1"></i>삭제
+            </button>
             <a href="{% url 'qms:isir_list' %}" class="btn btn-outline-secondary">
                 <i class="bi bi-arrow-left me-1"></i>목록
             </a>
         </div>
     </div>
+    <form id="deleteForm" method="post" action="{% url 'qms:isir_delete' pk=isir.pk %}" style="display:none;">{% csrf_token %}</form>
 
     <div class="row">
         <!-- 좌측 컬럼 -->
