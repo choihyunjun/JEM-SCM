@@ -235,7 +235,7 @@
                         <th class="text-center text-secondary" style="width: 110px;">품목군</th>
                         <th class="text-secondary" style="width: 200px;">연결 업체</th>
                         <th class="text-center text-secondary" style="width: 70px;">상태</th>
-                        <th class="text-center text-secondary" style="width: 90px;">관리</th>
+                        <th class="text-center text-secondary" style="width: 110px;">관리</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -275,7 +275,7 @@
                         </td>
                         <td class="text-center">
                             <button type="button" class="btn btn-sm btn-outline-secondary"
-                                    style="border-radius: 8px; font-size: 0.8rem; padding: 4px 12px;"
+                                    style="border-radius: 8px; font-size: 0.8rem; padding: 4px 12px; white-space: nowrap;"
                                     data-bs-toggle="modal" data-bs-target="#editModal"
                                     onclick="openEditModal({{ part.id }}, '{{ part.part_no|escapejs }}', '{{ part.part_name|escapejs }}', '{{ part.part_group|escapejs }}', '{{ part.vendor.id|default:"" }}')">
                                 <i class="bi bi-pencil-square"></i> 수정
