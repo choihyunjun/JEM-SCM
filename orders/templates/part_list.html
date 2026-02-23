@@ -2,29 +2,134 @@
 {% load humanize %}
 
 {% block content %}
+<style>
+    .part-table th {
+        font-size: 0.85rem;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+        padding: 12px 16px;
+        white-space: nowrap;
+        border-bottom: 2px solid #dee2e6;
+    }
+    .part-table td {
+        font-size: 0.9rem;
+        padding: 11px 16px;
+        vertical-align: middle;
+    }
+    .part-table tbody tr {
+        border-bottom: 1px solid #f0f0f0;
+    }
+    .part-table tbody tr:hover {
+        background-color: #f0f7ff !important;
+    }
+    .part-no-cell {
+        font-family: 'Consolas', 'Monaco', monospace;
+        font-weight: 700;
+        font-size: 0.88rem;
+        color: #1a56db;
+        letter-spacing: 0.02em;
+    }
+    .part-name-cell {
+        font-weight: 500;
+        color: #333;
+    }
+    .group-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+    }
+    .group-ERP { background: #e8f4fd; color: #1565c0; border: 1px solid #bbdefb; }
+    .group-WMS { background: #fff3e0; color: #e65100; border: 1px solid #ffcc80; }
+    .group-RAW { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
+    .group-default { background: #f5f5f5; color: #616161; border: 1px solid #e0e0e0; }
+    .vendor-connected {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 10px;
+        background: #e8f5e9;
+        border-radius: 6px;
+        color: #2e7d32;
+        font-weight: 500;
+        font-size: 0.85rem;
+    }
+    .vendor-disconnected {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 10px;
+        background: #fff8e1;
+        border-radius: 6px;
+        color: #f57f17;
+        font-weight: 600;
+        font-size: 0.85rem;
+    }
+    .status-active {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #4caf50;
+        box-shadow: 0 0 4px rgba(76, 175, 80, 0.5);
+    }
+    .status-inactive {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #bdbdbd;
+    }
+    .search-card {
+        border: 1px solid #e3e8ef;
+        border-radius: 12px;
+    }
+    .excel-card {
+        border-radius: 12px;
+        border: 1px solid #c8e6c9;
+    }
+    .table-card {
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    .table-card .card-body {
+        padding: 0;
+    }
+</style>
+
 <div class="container-fluid p-0" style="max-width: 1920px;">
 
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h3 class="fw-bold">품목 마스터 관리
-        <span class="badge bg-secondary fs-6 ms-2">총 {{ parts|length }}건 (최대 200건)</span>
-    </h3>
-    <a href="{% url 'part_upload' %}" class="btn btn-success">
+    <div>
+        <h3 class="fw-bold mb-1">품목 마스터 관리</h3>
+        <span class="text-muted" style="font-size: 0.9rem;">
+            조회 결과 <strong class="text-dark">{{ parts|length }}</strong>건 <span class="text-secondary">(최대 200건)</span>
+        </span>
+    </div>
+    <a href="{% url 'part_upload' %}" class="btn btn-success btn-lg">
         <i class="bi bi-upload me-1"></i>품목 일괄 업로드
     </a>
 </div>
 
 <!-- 검색 및 필터 -->
-<div class="card shadow-sm mb-4">
-    <div class="card-body">
+<div class="card search-card shadow-sm mb-4">
+    <div class="card-body py-3 px-4">
         <form method="get" class="row g-3 align-items-end">
             <div class="col-md-3">
-                <label class="form-label">품번/품명 검색</label>
-                <input type="text" name="q" class="form-control"
-                       placeholder="품번 또는 품명 입력" value="{{ search_q }}">
+                <label class="form-label fw-semibold text-secondary" style="font-size: 0.8rem;">
+                    <i class="bi bi-search me-1"></i>품번/품명 검색
+                </label>
+                <input type="text" name="q" class="form-control form-control-lg"
+                       placeholder="품번 또는 품명 입력" value="{{ search_q }}"
+                       style="font-size: 0.95rem;">
             </div>
             <div class="col-md-2">
-                <label class="form-label">업체</label>
-                <select name="vendor" class="form-select">
+                <label class="form-label fw-semibold text-secondary" style="font-size: 0.8rem;">
+                    <i class="bi bi-building me-1"></i>업체
+                </label>
+                <select name="vendor" class="form-select" style="font-size: 0.95rem;">
                     <option value="">전체 업체</option>
                     {% for v in vendors %}
                     <option value="{{ v.id }}" {% if vendor_filter == v.id|stringformat:"s" %}selected{% endif %}>
@@ -34,8 +139,10 @@
                 </select>
             </div>
             <div class="col-md-2">
-                <label class="form-label">품목군</label>
-                <select name="group" class="form-select">
+                <label class="form-label fw-semibold text-secondary" style="font-size: 0.8rem;">
+                    <i class="bi bi-tag me-1"></i>품목군
+                </label>
+                <select name="group" class="form-select" style="font-size: 0.95rem;">
                     <option value="">전체 품목군</option>
                     {% for g in part_groups %}
                     <option value="{{ g }}" {% if group_filter == g %}selected{% endif %}>{{ g }}</option>
@@ -43,19 +150,20 @@
                 </select>
             </div>
             <div class="col-md-2">
-                <div class="form-check mt-4">
+                <div class="form-check" style="margin-top: 28px;">
                     <input type="checkbox" name="wms_only" value="1" class="form-check-input"
-                           id="wmsOnly" {% if wms_only == '1' %}checked{% endif %}>
-                    <label class="form-check-label" for="wmsOnly">
-                        <i class="bi bi-exclamation-circle text-warning"></i> 업체 미연결만
+                           id="wmsOnly" {% if wms_only == '1' %}checked{% endif %}
+                           style="width: 1.2em; height: 1.2em;">
+                    <label class="form-check-label fw-semibold" for="wmsOnly" style="font-size: 0.9rem;">
+                        <i class="bi bi-exclamation-circle text-warning me-1"></i>업체 미연결만
                     </label>
                 </div>
             </div>
             <div class="col-md-3 text-end">
-                <button type="submit" class="btn btn-primary">
+                <button type="submit" class="btn btn-primary btn-lg px-4" style="font-size: 0.95rem;">
                     <i class="bi bi-search me-1"></i>검색
                 </button>
-                <a href="{% url 'part_list' %}" class="btn btn-outline-secondary">
+                <a href="{% url 'part_list' %}" class="btn btn-outline-secondary btn-lg px-3" style="font-size: 0.95rem;">
                     <i class="bi bi-arrow-counterclockwise me-1"></i>초기화
                 </a>
             </div>
@@ -64,23 +172,27 @@
 </div>
 
 <!-- 안내 문구 -->
-<div class="alert alert-info mb-3">
-    <i class="bi bi-info-circle me-2"></i>
-    <strong>WMS 전용 품목:</strong> WMS에서 재고 업로드 시 품목 마스터에 없는 품번은 자동으로 등록됩니다.
-    발주를 위해서는 해당 품목에 업체를 연결해야 합니다.
+<div class="alert alert-info mb-3 d-flex align-items-center" style="border-radius: 10px; font-size: 0.9rem;">
+    <i class="bi bi-info-circle-fill fs-5 me-3 text-info"></i>
+    <div>
+        <strong>WMS 전용 품목:</strong> WMS에서 재고 업로드 시 품목 마스터에 없는 품번은 자동으로 등록됩니다.
+        발주를 위해서는 해당 품목에 업체를 연결해야 합니다.
+    </div>
 </div>
 
 <!-- 엑셀 일괄 업데이트 -->
-<div class="card shadow-sm mb-4">
-    <div class="card-header bg-success text-white">
-        <i class="bi bi-file-earmark-excel me-2"></i>엑셀로 품목군/업체 일괄 수정
+<div class="card excel-card shadow-sm mb-4">
+    <div class="card-header bg-success bg-opacity-10 border-bottom border-success border-opacity-25 py-2">
+        <span class="fw-bold text-success" style="font-size: 0.9rem;">
+            <i class="bi bi-file-earmark-excel me-2"></i>엑셀로 품목군/업체 일괄 수정
+        </span>
     </div>
-    <div class="card-body">
-        <div class="row align-items-end">
+    <div class="card-body py-3">
+        <div class="row align-items-center">
             <div class="col-md-6">
-                <p class="mb-2 text-muted small">
+                <p class="mb-2 text-muted" style="font-size: 0.85rem;">
                     <i class="bi bi-info-circle me-1"></i>
-                    양식: <strong>품번 | 품목군 | 업체코드</strong> → 업로드하면 일괄 적용됩니다.
+                    양식: <strong>품번 | 품목군 | 업체코드</strong> &rarr; 업로드하면 일괄 적용됩니다.
                 </p>
                 <div class="btn-group" role="group">
                     <a href="{% url 'part_vendor_template' %}" class="btn btn-outline-success">
@@ -96,7 +208,7 @@
                     {% csrf_token %}
                     <input type="hidden" name="action" value="upload_vendor_excel">
                     <div class="col-8">
-                        <label class="form-label small">엑셀 파일 업로드</label>
+                        <label class="form-label text-muted" style="font-size: 0.8rem;">엑셀 파일 업로드</label>
                         <input type="file" name="excel_file" class="form-control" accept=".xlsx,.xls" required>
                     </div>
                     <div class="col-4">
@@ -111,55 +223,62 @@
 </div>
 
 <!-- 품목 목록 테이블 -->
-<div class="card shadow-sm">
-    <div class="card-body p-0">
+<div class="card table-card shadow-sm">
+    <div class="card-body">
         <div class="table-responsive">
-            <table class="table table-hover table-striped mb-0 align-middle">
-                <thead class="table-dark">
-                    <tr>
-                        <th class="text-center" style="width: 70px;">ID</th>
-                        <th style="width: 160px;">품번</th>
-                        <th>품명</th>
-                        <th class="text-center" style="width: 100px;">품목군</th>
-                        <th style="width: 180px;">연결 업체</th>
-                        <th class="text-center" style="width: 80px;">상태</th>
-                        <th class="text-center" style="width: 100px;">관리</th>
+            <table class="table table-hover part-table mb-0">
+                <thead>
+                    <tr style="background: #f8f9fb;">
+                        <th class="text-center text-secondary" style="width: 60px;">#</th>
+                        <th class="text-secondary" style="width: 170px;">품번</th>
+                        <th class="text-secondary">품명</th>
+                        <th class="text-center text-secondary" style="width: 110px;">품목군</th>
+                        <th class="text-secondary" style="width: 200px;">연결 업체</th>
+                        <th class="text-center text-secondary" style="width: 70px;">상태</th>
+                        <th class="text-center text-secondary" style="width: 90px;">관리</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for part in parts %}
                     <tr>
-                        <td class="text-center text-muted">{{ part.id }}</td>
-                        <td><strong class="text-primary">{{ part.part_no }}</strong></td>
-                        <td>{{ part.part_name }}</td>
+                        <td class="text-center text-muted" style="font-size: 0.8rem;">{{ part.id }}</td>
+                        <td class="part-no-cell">{{ part.part_no }}</td>
+                        <td class="part-name-cell">{{ part.part_name }}</td>
                         <td class="text-center">
-                            <span class="badge {% if part.part_group == 'WMS' %}bg-info{% else %}bg-secondary{% endif %}">
-                                {{ part.part_group }}
-                            </span>
+                            {% if part.part_group == 'ERP' %}
+                            <span class="group-badge group-ERP">ERP</span>
+                            {% elif part.part_group == 'WMS' %}
+                            <span class="group-badge group-WMS">WMS</span>
+                            {% elif part.part_group == '원자재' or part.part_group == 'RAW' %}
+                            <span class="group-badge group-RAW">{{ part.part_group }}</span>
+                            {% else %}
+                            <span class="group-badge group-default">{{ part.part_group }}</span>
+                            {% endif %}
                         </td>
                         <td>
                             {% if part.vendor %}
-                            <span class="text-success">
-                                <i class="bi bi-building me-1"></i>{{ part.vendor.name }}
+                            <span class="vendor-connected">
+                                <i class="bi bi-check-circle-fill"></i>{{ part.vendor.name }}
                             </span>
                             {% else %}
-                            <span class="text-warning">
-                                <i class="bi bi-exclamation-triangle me-1"></i>미연결
+                            <span class="vendor-disconnected">
+                                <i class="bi bi-exclamation-triangle-fill"></i>미연결
                             </span>
                             {% endif %}
                         </td>
                         <td class="text-center">
                             {% if part.is_active %}
-                            <span class="badge bg-success">활성</span>
+                            <span class="status-active" title="활성"></span>
                             {% else %}
-                            <span class="badge bg-secondary">비활성</span>
+                            <span class="status-inactive" title="비활성"></span>
                             {% endif %}
                         </td>
                         <td class="text-center">
-                            <button type="button" class="btn btn-sm btn-outline-primary"
+                            <button type="button" class="btn btn-sm btn-outline-secondary"
+                                    style="border-radius: 8px; font-size: 0.8rem; padding: 4px 12px;"
                                     data-bs-toggle="modal" data-bs-target="#editModal"
                                     onclick="openEditModal({{ part.id }}, '{{ part.part_no|escapejs }}', '{{ part.part_name|escapejs }}', '{{ part.part_group|escapejs }}', '{{ part.vendor.id|default:"" }}')">
-                                <i class="bi bi-pencil"></i> 수정
+                                <i class="bi bi-pencil-square"></i> 수정
                             </button>
                         </td>
                     </tr>
@@ -186,8 +305,8 @@
 <!-- 품목 수정 모달 -->
 <div class="modal fade" id="editModal" tabindex="-1">
     <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
+        <div class="modal-content" style="border-radius: 12px; overflow: hidden;">
+            <div class="modal-header bg-primary bg-gradient text-white">
                 <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>품목 정보 수정</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
@@ -197,15 +316,16 @@
                 <input type="hidden" name="part_id" id="editPartId">
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label class="form-label">품번</label>
-                        <input type="text" class="form-control" id="editPartNo" readonly>
+                        <label class="form-label fw-semibold">품번</label>
+                        <input type="text" class="form-control bg-light" id="editPartNo" readonly
+                               style="font-family: monospace; font-weight: 600;">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">품명</label>
+                        <label class="form-label fw-semibold">품명</label>
                         <input type="text" name="part_name" id="editPartName" class="form-control" required>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">품목군</label>
+                        <label class="form-label fw-semibold">품목군</label>
                         <input type="text" name="part_group" id="editPartGroup" class="form-control"
                                placeholder="예: 일반, WMS, 원자재 등">
                     </div>
@@ -228,7 +348,7 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
                     <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-check me-1"></i>저장
+                        <i class="bi bi-check-lg me-1"></i>저장
                     </button>
                 </div>
             </form>
