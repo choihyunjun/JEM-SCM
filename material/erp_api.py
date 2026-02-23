@@ -812,7 +812,7 @@ def init_stock_from_erp(year=None, cutoff_date=None):
 
     for idx, item in enumerate(items):
         qty = int(item.get('invQt1', 0) or 0)
-        if qty == 0:
+        if qty <= 0:
             result['skipped_zero'] += 1
             continue
         part = part_map.get(item.get('itemCd', ''))
