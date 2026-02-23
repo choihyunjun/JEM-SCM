@@ -700,7 +700,7 @@ def sync_erp_incoming(date_from=None, date_to=None, skip_stock_update=False):
                             warehouse=trx.warehouse_to, part=trx.part, lot_no=trx.lot_no
                         ).first()
                         if stock:
-                            stock.quantity = max(0, stock.quantity - trx.quantity)
+                            stock.quantity = stock.quantity - trx.quantity
                             stock.save()
                     logger.info(f'ERP 삭제 감지: {trx.transaction_no} (ERP:{trx.erp_incoming_no}) 삭제')
                     trx.delete()
@@ -811,8 +811,8 @@ def init_stock_from_erp(year=None, cutoff_date=None):
     }, timeout=300)
 
     for idx, item in enumerate(items):
-        qty = item.get('invQt1', 0) or 0
-        if qty <= 0:
+        qty = int(item.get('invQt1', 0) or 0)
+        if qty == 0:
             result['skipped_zero'] += 1
             continue
         part = part_map.get(item.get('itemCd', ''))
@@ -1047,7 +1047,7 @@ def adjust_stock_to_erp():
             # SCM 초과 → 감소
             abs_diff = abs(diff)
             if stock:
-                stock.quantity = max(0, stock.quantity - abs_diff)
+                stock.quantity = stock.quantity - abs_diff
                 stock.save()
             trx_type = 'ADJ_ERP_OUT'
             result['decreased'] += 1
@@ -1534,7 +1534,7 @@ def adjust_stock_for_parts(part_nos):
         else:
             abs_diff = abs(diff)
             if stock:
-                stock.quantity = max(0, stock.quantity - abs_diff)
+                stock.quantity = stock.quantity - abs_diff
                 stock.save()
             trx_type = 'ADJ_ERP_OUT'
             result['decreased'] += 1
@@ -2141,7 +2141,7 @@ def sync_erp_adjustments(date_from=None, date_to=None, skip_stock_update=False):
                     else:  # 출고 → 재고 감소
                         from django.db.models.functions import Greatest
                         MaterialStock.objects.filter(id=stock.id).update(
-                            quantity=Greatest(models.F('quantity') - qty, models.Value(0))
+                            quantity=models.F('quantity') - qty
                         )
                     stock.refresh_from_db()
                     result_stock = stock.quantity
@@ -2381,7 +2381,7 @@ def sync_erp_issue(date_from=None, date_to=None, skip_stock_update=False):
                         defaults={'quantity': 0}
                     )
                     MaterialStock.objects.filter(id=stock.id).update(
-                        quantity=Greatest(models.F('quantity') - qty, models.Value(0))
+                        quantity=models.F('quantity') - qty
                     )
                     stock.refresh_from_db()
                     result_stock = stock.quantity
@@ -2842,7 +2842,7 @@ def sync_erp_stock_transfer(date_from=None, date_to=None, skip_stock_update=Fals
                                 warehouse=from_wh, part=part, lot_no=None, quantity=0
                             )
                         MaterialStock.objects.filter(id=from_stock.id).update(
-                            quantity=Greatest(models.F('quantity') - qty, models.Value(0))
+                            quantity=models.F('quantity') - qty
                         )
                         from_stock.refresh_from_db()
                         from_result = from_stock.quantity
@@ -3061,7 +3061,7 @@ def sync_erp_outgoing(date_from=None, date_to=None, skip_stock_update=False):
                         defaults={'quantity': 0}
                     )
                     MaterialStock.objects.filter(id=stock.id).update(
-                        quantity=Greatest(models.F('quantity') - qty, models.Value(0))
+                        quantity=models.F('quantity') - qty
                     )
                     stock.refresh_from_db()
                     result_stock = stock.quantity

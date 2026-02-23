@@ -144,19 +144,17 @@ class Command(BaseCommand):
 
         created = 0
         skipped_zero = 0
-        skipped_negative = 0
+        negative_count = 0
 
         for (wh_id, part_id), qty in stock_calc.items():
             if qty == 0:
                 skipped_zero += 1
                 continue
             if qty < 0:
-                # 음수 재고는 0으로 처리하되 경고 출력
+                negative_count += 1
                 self.stderr.write(self.style.WARNING(
-                    f'  경고: 창고={wh_id}, 품목={part_id} 계산 재고={qty} (음수→0으로 설정)'
+                    f'  경고: 창고={wh_id}, 품목={part_id} 계산 재고={qty} (음수 재고)'
                 ))
-                skipped_negative += 1
-                continue
 
             MaterialStock.objects.create(
                 warehouse_id=wh_id,
@@ -167,7 +165,7 @@ class Command(BaseCommand):
             created += 1
 
         self.stdout.write(self.style.SUCCESS(
-            f'  재고 재생성: {created}건 (건너뜀: 재고0={skipped_zero}건, 음수={skipped_negative}건)'
+            f'  재고 재생성: {created}건 (건너뜀: 재고0={skipped_zero}건, 음수재고={negative_count}건 포함)'
         ))
 
         # ─────────────────────────────────────────────
