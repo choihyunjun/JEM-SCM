@@ -1901,9 +1901,9 @@ def transfer_history(request):
     from django.db.models import Q
     from orders.models import Part
 
-    # 이동(TRANSFER) 타입만 조회
+    # 이동(TRANSFER, TRF_ERP) 타입 조회
     qs = MaterialTransaction.objects.filter(
-        transaction_type='TRANSFER'
+        transaction_type__in=['TRANSFER', 'TRF_ERP']
     ).select_related(
         'part', 'warehouse_from', 'warehouse_to', 'actor'
     ).order_by('-date', '-id')
