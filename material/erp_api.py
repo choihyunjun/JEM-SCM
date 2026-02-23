@@ -106,12 +106,14 @@ def call_erp_api(url, body):
         return False, None, f'ERP API 오류: {str(e)}'
 
 
-def register_erp_incoming(trx, qty, warehouse_code):
+def register_erp_incoming(trx, qty, warehouse_code, erp_order_no='', erp_order_seq=''):
     """
     ERP 입고정보 등록
     - trx: MaterialTransaction 객체
     - qty: 입고수량 (양품수량)
     - warehouse_code: 입고창고 코드 (예: '2000')
+    - erp_order_no: ERP 발주번호 (있으면 발주입고, 없으면 예외입고)
+    - erp_order_seq: ERP 발주순번
     Returns: (success: bool, erp_no: str or None, error: str or None)
     """
     if not getattr(settings, 'ERP_ENABLED', False):
@@ -151,7 +153,7 @@ def register_erp_incoming(trx, qty, warehouse_code):
         'deptCd': getattr(settings, 'ERP_DEFAULT_DEPT_CODE', '0630'),
         'divCd': settings.ERP_DIVISION_CODE,
         'vatFg': '0',          # 매입과세
-        'mapFg': '0',          # 예외입고
+        'mapFg': '1' if erp_order_no else '0',  # 1=발주입고, 0=예외입고
         'remarkDc': f'SCM 입고 ({trx.transaction_no})',
         'procFg': '1',         # 일괄
         'umvatFg': '0',        # 부가세미포함
@@ -173,6 +175,10 @@ def register_erp_incoming(trx, qty, warehouse_code):
             'lcCd': warehouse_code,
             'remarkDc': f'SCM ({trx.transaction_no})',
             'vatUm': 0,
+            **(  # 발주입고 시 발주번호/순번 포함
+                {'poNb': erp_order_no, 'poSq': erp_order_seq}
+                if erp_order_no else {}
+            ),
         }]
     }
 

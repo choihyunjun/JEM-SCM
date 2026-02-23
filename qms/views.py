@@ -1336,10 +1336,26 @@ def import_inspection_detail(request, pk):
                         ref_delivery_order=origin_trx.ref_delivery_order,
                     )
 
-                    # ERP 입고등록 (양품수량)
+                    # ERP 입고등록 (양품수량) - 원래 발주정보 추적
+                    erp_po_no, erp_po_seq = '', ''
+                    if origin_trx.ref_delivery_order:
+                        try:
+                            from orders.models import DeliveryOrderItem
+                            doi = DeliveryOrderItem.objects.filter(
+                                delivery_order__order_no=origin_trx.ref_delivery_order,
+                                part_no=part.part_no
+                            ).first()
+                            if doi:
+                                erp_po_no = doi.erp_order_no or ''
+                                erp_po_seq = doi.erp_order_seq or ''
+                        except Exception:
+                            pass
                     try:
                         from material.erp_api import register_erp_incoming
-                        erp_ok, erp_no, erp_err = register_erp_incoming(trx_ok, qty_good, target_code)
+                        erp_ok, erp_no, erp_err = register_erp_incoming(
+                            trx_ok, qty_good, target_code,
+                            erp_order_no=erp_po_no, erp_order_seq=erp_po_seq
+                        )
                         if erp_ok:
                             messages.info(request, f'ERP 입고등록 완료: {erp_no}')
                         elif erp_err:

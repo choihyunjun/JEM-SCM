@@ -1899,10 +1899,15 @@ def receive_delivery_order_confirm(request):
                             quantity=item.total_qty
                         )
 
-                trx_no = f"IN-SCM-{timezone.now().strftime('%y%m%d%H%M%S')}-{item.id}"
+                # ERP 발주 연결 여부로 발주입고/예외입고 구분
+                is_erp_order = bool(item.erp_order_no and item.erp_order_no.strip())
+                trx_type = 'IN_SCM' if is_erp_order else 'IN_MANUAL'
+                trx_prefix = 'IN-SCM' if is_erp_order else 'IN-MAN'
+
+                trx_no = f"{trx_prefix}-{timezone.now().strftime('%y%m%d%H%M%S')}-{item.id}"
                 trx = MaterialTransaction.objects.create(
                     transaction_no=trx_no,
-                    transaction_type='IN_SCM',
+                    transaction_type=trx_type,
                     part=part,
                     lot_no=item.lot_no,
                     quantity=item.total_qty,
@@ -1934,7 +1939,11 @@ def receive_delivery_order_confirm(request):
                     # ERP 입고등록 (무검사 직납 - 전체수량)
                     try:
                         from material.erp_api import register_erp_incoming
-                        erp_ok, erp_no, erp_err = register_erp_incoming(trx, item.total_qty, target_wh.code)
+                        erp_ok, erp_no, erp_err = register_erp_incoming(
+                            trx, item.total_qty, target_wh.code,
+                            erp_order_no=item.erp_order_no or '',
+                            erp_order_seq=item.erp_order_seq or ''
+                        )
                         if erp_ok:
                             messages.info(request, f'ERP 입고등록 완료: {erp_no} ({item.part_no})')
                         elif erp_err:
