@@ -6,7 +6,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator  # 페이징 처리
 from django.db import transaction
-from django.db.models import F, Sum, Q
+from django.db.models import F, Sum, Q, Value
+from django.db.models.functions import Greatest
 from django.utils import timezone
 from functools import wraps
 
@@ -5235,3 +5236,288 @@ def erp_master_sync(request):
         context['no_vendor_count'] = Part.objects.filter(vendor__isnull=True).count()
 
     return render(request, 'material/erp_master_sync.html', context)
+
+
+# =============================================================================
+# 출고 관리 (Outgoing)
+# =============================================================================
+
+@wms_permission_required('can_wms_inout_edit')
+def manual_outgoing(request):
+    """[WMS] 자재 수기 출고 처리"""
+    if request.method == 'POST':
+        try:
+            date_str = request.POST.get('date', timezone.now().date())
+            warehouse_id = request.POST.get('warehouse_id')
+            vendor_id = request.POST.get('vendor_id')
+
+            part_ids = request.POST.getlist('part_ids[]')
+            lot_nos = request.POST.getlist('lot_nos[]')
+            quantities = request.POST.getlist('quantities[]')
+            remarks = request.POST.getlist('remarks[]')
+
+            if not part_ids:
+                messages.error(request, "출고할 품목이 리스트에 없습니다.")
+                return redirect('material:manual_outgoing')
+
+            # 마감 기간 검증 (경고만 표시)
+            from datetime import datetime
+            if isinstance(date_str, str):
+                check_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+            else:
+                check_date = date_str
+            is_closed, warning_msg, _ = check_closing_date(check_date)
+            if is_closed:
+                messages.warning(request, warning_msg)
+
+            success_count = 0
+
+            with transaction.atomic():
+                warehouse = Warehouse.objects.get(id=warehouse_id)
+                vendor = Vendor.objects.get(id=vendor_id) if vendor_id else None
+
+                for i in range(len(part_ids)):
+                    p_id = part_ids[i]
+                    qty = int(quantities[i])
+                    rmk = remarks[i] if i < len(remarks) else ''
+                    lot_no_str = lot_nos[i] if i < len(lot_nos) and lot_nos[i] else None
+
+                    if qty <= 0:
+                        continue
+
+                    part = Part.objects.get(id=p_id)
+
+                    # LOT 번호 처리
+                    from datetime import datetime
+                    lot_date = None
+                    if lot_no_str:
+                        try:
+                            lot_date = datetime.strptime(lot_no_str, '%Y-%m-%d').date()
+                        except (ValueError, TypeError):
+                            pass
+
+                    # (1) 재고 확인 및 차감
+                    stock, _ = MaterialStock.objects.get_or_create(
+                        warehouse=warehouse,
+                        part=part,
+                        lot_no=lot_date,
+                        defaults={'quantity': 0}
+                    )
+
+                    if stock.quantity < qty:
+                        messages.warning(
+                            request,
+                            f"재고 부족: {part.part_no} (현재고 {stock.quantity}, 출고요청 {qty}) - 가용수량만큼 출고됩니다."
+                        )
+
+                    MaterialStock.objects.filter(pk=stock.pk).update(
+                        quantity=Greatest(F('quantity') - qty, Value(0))
+                    )
+                    stock.refresh_from_db()
+
+                    # (2) 수불 이력 생성
+                    trx_no = f"OUT-{timezone.now().strftime('%y%m%d%H%M%S')}-{request.user.id}-{i}"
+                    MaterialTransaction.objects.create(
+                        transaction_no=trx_no,
+                        transaction_type='OUT_MANUAL',
+                        date=date_str,
+                        part=part,
+                        quantity=-qty,
+                        lot_no=lot_date,
+                        warehouse_from=warehouse,
+                        result_stock=stock.quantity,
+                        vendor=vendor,
+                        actor=request.user,
+                        remark=rmk,
+                    )
+
+                    success_count += 1
+
+            if success_count > 0:
+                messages.success(request, f"총 {success_count}건 출고 처리가 완료되었습니다.")
+            else:
+                messages.warning(request, "저장된 항목이 없습니다.")
+
+            return redirect('material:manual_outgoing')
+
+        except Exception as e:
+            messages.error(request, f"오류 발생: {str(e)}")
+            return redirect('material:manual_outgoing')
+
+    # === 출고처리 내역 (History) ===
+    history_qs = MaterialTransaction.objects.filter(
+        transaction_type__in=['OUT_MANUAL', 'OUT_ERP', 'OUT_PROD', 'OUT_RETURN']
+    ).select_related(
+        'part', 'warehouse_from', 'vendor', 'actor'
+    ).order_by('-date', '-id')
+
+    history_q = (request.GET.get('hq') or '').strip()
+    if history_q:
+        history_qs = history_qs.filter(
+            Q(part__part_no__icontains=history_q) |
+            Q(part__part_name__icontains=history_q) |
+            Q(transaction_no__icontains=history_q)
+        )
+
+    history_wh = (request.GET.get('hwh') or '').strip()
+    if history_wh:
+        history_qs = history_qs.filter(warehouse_from_id=history_wh)
+
+    history_start = (request.GET.get('hstart') or '').strip()
+    history_end = (request.GET.get('hend') or '').strip()
+    if history_start and history_start not in ('None', 'null'):
+        history_qs = history_qs.filter(date__date__gte=history_start)
+    if history_end and history_end not in ('None', 'null'):
+        history_qs = history_qs.filter(date__date__lte=history_end)
+
+    history_paginator = Paginator(history_qs, 15)
+    history_page = history_paginator.get_page(request.GET.get('hpage'))
+
+    # 삭제 가능 여부
+    for item in history_page:
+        item.can_cancel = (item.transaction_type == 'OUT_MANUAL')
+
+    warehouses_qs = Warehouse.objects.filter(is_active=True).order_by('code')
+
+    context = {
+        'warehouses': warehouses_qs,
+        'vendors': Vendor.objects.all().order_by('name'),
+        'parts': Part.objects.select_related('vendor').all().order_by('part_no'),
+        'today': timezone.now().date(),
+        'history_page': history_page,
+        'history_q': history_q,
+        'history_wh': history_wh,
+        'history_start': history_start,
+        'history_end': history_end,
+    }
+    return render(request, 'material/manual_outgoing.html', context)
+
+
+@wms_permission_required('can_wms_inout_edit')
+def cancel_manual_outgoing(request, trx_id):
+    """[WMS] 수기 출고 삭제 - 재고 복원 + 트랜잭션 삭제"""
+    if request.method != 'POST':
+        return redirect('material:manual_outgoing')
+
+    trx = get_object_or_404(
+        MaterialTransaction, pk=trx_id,
+        transaction_type__in=['OUT_MANUAL', 'OUT_PROD', 'OUT_ERP', 'OUT_RETURN']
+    )
+
+    if trx.transaction_type == 'OUT_ERP':
+        messages.error(request, "ERP에서 동기화된 출고 건은 WMS에서 삭제할 수 없습니다.")
+        return redirect('material:manual_outgoing')
+
+    is_closed, warning_msg, _ = check_closing_date(
+        trx.date.date() if hasattr(trx.date, 'date') and callable(trx.date.date) else trx.date
+    )
+    if is_closed:
+        messages.error(request, f"마감된 기간의 출고 건은 삭제할 수 없습니다. ({warning_msg})")
+        return redirect('material:manual_outgoing')
+
+    trx_no = trx.transaction_no
+    trx_qty = abs(trx.quantity)
+
+    try:
+        with transaction.atomic():
+            # 재고 복원
+            stock, _ = MaterialStock.objects.get_or_create(
+                warehouse=trx.warehouse_from,
+                part=trx.part,
+                lot_no=trx.lot_no,
+                defaults={'quantity': 0}
+            )
+            MaterialStock.objects.filter(pk=stock.pk).update(
+                quantity=F('quantity') + trx_qty
+            )
+
+            trx.delete()
+
+        messages.success(request, f"출고 건 [{trx_no}] 삭제 완료 (재고 {trx_qty}개 복원)")
+
+    except Exception as e:
+        messages.error(request, f"취소 처리 중 오류 발생: {str(e)}")
+
+    return redirect('material:manual_outgoing')
+
+
+@wms_permission_required('can_wms_inout_view')
+def outgoing_history(request):
+    """[WMS] 출고 이력 조회"""
+    import re
+
+    qs = MaterialTransaction.objects.filter(
+        transaction_type__in=['OUT_MANUAL', 'OUT_ERP', 'OUT_PROD', 'OUT_RETURN']
+    ).select_related(
+        'part', 'warehouse_from', 'actor', 'vendor'
+    ).order_by('-date', '-id')
+
+    # 검색 필터
+    q = (request.GET.get('q') or '').strip()
+    if q:
+        qs = qs.filter(
+            Q(part__part_no__icontains=q) |
+            Q(part__part_name__icontains=q)
+        )
+
+    q_group = (request.GET.get('q_group') or '').strip()
+    if q_group:
+        qs = qs.filter(part__part_group__icontains=q_group)
+
+    q_vendor = (request.GET.get('q_vendor') or '').strip()
+    if q_vendor:
+        qs = qs.filter(vendor__name__icontains=q_vendor)
+
+    start_date = (request.GET.get('start_date') or '').strip()
+    end_date = (request.GET.get('end_date') or '').strip()
+    if start_date in ('None', 'null', 'NULL'):
+        start_date = ''
+    if end_date in ('None', 'null', 'NULL'):
+        end_date = ''
+    if start_date:
+        qs = qs.filter(date__date__gte=start_date)
+    if end_date:
+        qs = qs.filter(date__date__lte=end_date)
+
+    paginator = Paginator(qs, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    # 표시용 구분/비고
+    for item in page_obj:
+        if item.transaction_type == 'OUT_MANUAL':
+            item.display_type = "수기출고"
+            item.display_remark = item.remark or ""
+        elif item.transaction_type == 'OUT_ERP':
+            item.display_type = "ERP출고"
+            remark = item.remark or ""
+            item.display_remark = re.sub(r'^ERP출고\([^)]*\)\s*', '', remark)
+        elif item.transaction_type == 'OUT_PROD':
+            item.display_type = "생산불출"
+            item.display_remark = item.remark or ""
+        elif item.transaction_type == 'OUT_RETURN':
+            item.display_type = "반품출고"
+            item.display_remark = item.remark or ""
+        else:
+            item.display_type = "출고"
+            item.display_remark = item.remark or ""
+
+    # 품목군/거래처 목록
+    part_groups = list(
+        Part.objects.exclude(part_group__isnull=True).exclude(part_group='')
+        .values_list('part_group', flat=True).distinct().order_by('part_group')
+    )
+    vendors = list(
+        Vendor.objects.values('id', 'name', 'code').order_by('name')
+    )
+
+    context = {
+        'page_obj': page_obj,
+        'q': q,
+        'q_group': q_group,
+        'q_vendor': q_vendor,
+        'start_date': start_date,
+        'end_date': end_date,
+        'part_groups': part_groups,
+        'vendors': vendors,
+    }
+    return render(request, 'material/outgoing_history.html', context)

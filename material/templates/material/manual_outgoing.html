@@ -1,0 +1,743 @@
+{% extends 'material/material_base.html' %}
+
+{% block material_content %}
+<style>
+    .form-label { font-weight: 600; font-size: 0.9rem; color: #495057; margin-bottom: 0.4rem; }
+    .card { border: none; box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.05); border-radius: 0.5rem; }
+    .card-header { background-color: #fff; border-bottom: 2px solid #f1f3f5; padding: 1.2rem 1.5rem; }
+    .bg-light-red { background-color: #fff5f5; }
+</style>
+
+<div class="container-fluid" style="max-width: 1400px;">
+
+    <div class="d-flex justify-content-between align-items-center mb-4 pt-3">
+        <div>
+            <h3 class="fw-bold">출고처리</h3>
+            <span class="text-muted small">여러 품목을 리스트에 담아 한 번에 출고 처리합니다.</span>
+        </div>
+        <div>
+            <a href="{% url 'material:outgoing_history' %}" class="btn btn-white border shadow-sm btn-sm hover-shadow">
+                <i class="bi bi-clock-history me-1"></i> 출고 이력
+            </a>
+        </div>
+    </div>
+
+    <form method="post" id="outgoingForm">
+        {% csrf_token %}
+
+        <!-- 출고 공통 정보 -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-light fw-bold text-danger">
+                <i class="bi bi-info-circle me-1"></i> 출고 공통 정보 (Header)
+            </div>
+            <div class="card-body bg-white">
+                <div class="row g-3 align-items-center">
+                    <div class="col-6 col-lg-2">
+                        <label class="form-label small">출고 일자</label>
+                        <input type="date" name="date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
+                    </div>
+
+                    <div class="col-6 col-lg-3">
+                        <label class="form-label small">출고 창고 (From)</label>
+                        <select name="warehouse_id" id="selWarehouse" class="form-select" required>
+                            <option value="">== 창고 선택 ==</option>
+                            {% for w in warehouses %}
+                                <option value="{{ w.id }}" data-code="{{ w.code }}">({{ w.code }}) {{ w.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-12 col-lg">
+                        <label class="form-label small">거래처 (선택)</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control bg-light" id="displayVendor" placeholder="거래처 선택 (선택사항)" readonly onclick="openVendorModal()" style="cursor: pointer;">
+                            <button class="btn btn-outline-secondary" type="button" onclick="openVendorModal()">
+                                <i class="bi bi-search"></i>
+                            </button>
+                            <button class="btn btn-outline-danger" type="button" onclick="clearVendor()" title="거래처 해제">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </div>
+                        <input type="hidden" name="vendor_id" id="hiddenVendorId">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 품목 입력 (QR 스캔 포함) -->
+        <div class="card shadow-sm border-danger mb-4">
+            <div class="card-body bg-light-red">
+                <div class="row g-2 align-items-end">
+                    <div class="col-12 col-lg-3">
+                        <label class="small fw-bold mb-1 text-danger">출고 품목 검색</label>
+                        <div class="input-group">
+                            <input class="form-control" list="partOptions" id="inputPart" placeholder="품번 또는 품명 검색..." autocomplete="off">
+                            <button class="btn btn-outline-dark" type="button" onclick="openQrScanner()" title="QR 스캔">
+                                <i class="bi bi-qr-code-scan"></i>
+                            </button>
+                        </div>
+                        <datalist id="partOptions">
+                            {% for p in parts %}
+                                <option data-id="{{ p.id }}" value="{{ p.part_no }}">
+                                    {{ p.part_name }} ({{ p.vendor.name }})
+                                </option>
+                            {% endfor %}
+                        </datalist>
+                        <input type="hidden" id="selectedPartId">
+                        <input type="hidden" id="selectedPartName">
+                    </div>
+                    <div class="col-6 col-lg-2">
+                        <label class="small fw-bold mb-1 text-danger">LOT 번호</label>
+                        <div class="input-group">
+                            <input type="text" id="inputLotNo" class="form-control" placeholder="YYYYMMDD">
+                            <button class="btn btn-outline-secondary" type="button" id="btnCalendar" title="달력에서 선택">
+                                <i class="bi bi-calendar3"></i>
+                            </button>
+                            <input type="date" id="hiddenDatePicker" class="d-none">
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg-1">
+                        <label class="small fw-bold mb-1 text-danger">수량</label>
+                        <input type="number" id="inputQty" class="form-control text-end fw-bold" placeholder="0" min="1">
+                    </div>
+                    <div class="col-12 col-lg-4">
+                        <label class="small fw-bold mb-1">비고 (선택)</label>
+                        <input type="text" id="inputRemark" class="form-control" placeholder="출고 사유 입력">
+                    </div>
+                    <div class="col-12 col-lg-2">
+                        <button type="button" class="btn btn-danger w-100 fw-bold" onclick="addItem()">
+                            <i class="bi bi-plus-lg"></i> 추가
+                        </button>
+                    </div>
+                </div>
+                <div class="form-text mt-2 ms-1 text-danger fw-bold" id="partNameDisplay" style="min-height: 20px;"></div>
+            </div>
+        </div>
+
+        <!-- 출고 대기 목록 -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-list-check me-1"></i> 출고 대기 목록</span>
+                <span class="badge bg-danger rounded-pill" id="itemCount">0건</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 align-middle text-center">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 15%;">품번</th>
+                                <th class="text-start">품명</th>
+                                <th style="width: 12%;">LOT 번호</th>
+                                <th style="width: 12%;">수량</th>
+                                <th style="width: 20%;">비고</th>
+                                <th style="width: 10%;">관리</th>
+                            </tr>
+                        </thead>
+                        <tbody id="listBody">
+                            <tr id="emptyRow">
+                                <td colspan="6" class="text-muted py-5">
+                                    상단에서 품목을 검색하거나 <strong>QR 스캔</strong>하여 <strong>[추가]</strong> 버튼을 눌러주세요.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card-footer bg-white text-end py-3">
+                <button type="button" class="btn btn-light me-2 px-4" onclick="location.reload()">초기화</button>
+                <button type="submit" class="btn btn-danger btn-lg px-5 fw-bold shadow-sm" onclick="return validateForm()">
+                    <i class="bi bi-box-arrow-up me-2"></i> 출고 처리
+                </button>
+            </div>
+        </div>
+    </form>
+
+    <!-- ======================================= -->
+    <!-- 출고처리 내역 -->
+    <!-- ======================================= -->
+    <div class="card shadow-sm mt-4 mb-4">
+        <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-clock-history me-1 text-secondary"></i> 출고처리 내역</span>
+            <span class="badge bg-secondary rounded-pill">{{ history_page.paginator.count }}건</span>
+        </div>
+        <div class="card-body pb-2">
+            <!-- 필터 -->
+            <form method="get" class="row g-2 mb-3 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">시작일</label>
+                    <input type="date" name="hstart" class="form-control form-control-sm" value="{{ history_start|default:'' }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">종료일</label>
+                    <input type="date" name="hend" class="form-control form-control-sm" value="{{ history_end|default:'' }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">창고</label>
+                    <select name="hwh" class="form-select form-select-sm">
+                        <option value="">전체</option>
+                        {% for w in warehouses %}
+                        <option value="{{ w.id }}" {% if history_wh == w.id|stringformat:"d" %}selected{% endif %}>{{ w.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small mb-1">검색 (품번/품명/수불번호)</label>
+                    <input type="text" name="hq" class="form-control form-control-sm" placeholder="검색어 입력" value="{{ history_q|default:'' }}">
+                </div>
+                <div class="col-md-1">
+                    <button type="submit" class="btn btn-outline-secondary btn-sm w-100">
+                        <i class="bi bi-search"></i> 조회
+                    </button>
+                </div>
+                <div class="col-md-1">
+                    <a href="{% url 'material:manual_outgoing' %}" class="btn btn-outline-light btn-sm w-100 text-muted">초기화</a>
+                </div>
+            </form>
+
+            <!-- 내역 테이블 -->
+            <div class="table-responsive">
+                <table class="table table-hover table-sm mb-0 align-middle text-center">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:10%;">일시</th>
+                            <th style="width:13%;">수불번호</th>
+                            <th style="width:9%;">품번</th>
+                            <th class="text-start">품명</th>
+                            <th style="width:6%;">수량</th>
+                            <th style="width:8%;">LOT</th>
+                            <th style="width:9%;">출고창고</th>
+                            <th style="width:5%;">출처</th>
+                            <th style="width:6%;">관리</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in history_page %}
+                        <tr style="cursor:pointer;"
+                            onclick="openHistoryDetail({{ item.id }}, '{{ item.transaction_no }}', '{{ item.date|date:"Y-m-d H:i" }}', '{{ item.part.part_no }}', '{{ item.part.part_name|escapejs }}', {{ item.quantity }}, '{{ item.lot_no|date:"Y-m-d"|default:"-" }}', '{{ item.warehouse_from.name|default:"-"|escapejs }}', '{{ item.vendor.name|default:"-"|escapejs }}', '{{ item.actor.username|default:"-" }}', '{{ item.remark|default:""|escapejs }}', {{ item.can_cancel|yesno:"true,false" }})">
+                            <td class="small text-nowrap">{{ item.date|date:"Y-m-d H:i" }}</td>
+                            <td class="small fw-bold text-danger text-nowrap">{{ item.transaction_no }}</td>
+                            <td class="small">{{ item.part.part_no }}</td>
+                            <td class="text-start small text-truncate" style="max-width:200px;">{{ item.part.part_name }}</td>
+                            <td class="fw-bold text-end pe-3">{{ item.quantity }}</td>
+                            <td class="small">{{ item.lot_no|date:"Y-m-d"|default:"-" }}</td>
+                            <td class="small">{{ item.warehouse_from.name|default:"-" }}</td>
+                            <td>
+                                {% if item.transaction_type == 'OUT_ERP' %}
+                                    <span class="badge bg-warning text-dark">ERP</span>
+                                {% elif item.transaction_type == 'OUT_PROD' %}
+                                    <span class="badge bg-info text-dark">생산</span>
+                                {% elif item.transaction_type == 'OUT_RETURN' %}
+                                    <span class="badge bg-secondary">반품</span>
+                                {% else %}
+                                    <span class="badge bg-danger">수기</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.can_cancel %}
+                                <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1"
+                                        onclick="event.stopPropagation(); openCancelModal({{ item.id }}, '{{ item.transaction_no }}', '{{ item.part.part_no }}', {{ item.quantity }})"
+                                        title="출고 삭제">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                                {% else %}
+                                    <span class="text-muted small">-</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-muted py-4">출고처리 내역이 없습니다.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 페이지네이션 -->
+            {% if history_page.has_other_pages %}
+            <nav class="mt-3">
+                <ul class="pagination pagination-sm justify-content-center mb-0">
+                    {% if history_page.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?hpage={{ history_page.previous_page_number }}&hq={{ history_q }}&hwh={{ history_wh }}&hstart={{ history_start }}&hend={{ history_end }}">이전</a>
+                    </li>
+                    {% endif %}
+                    <li class="page-item disabled">
+                        <span class="page-link">{{ history_page.number }} / {{ history_page.paginator.num_pages }}</span>
+                    </li>
+                    {% if history_page.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?hpage={{ history_page.next_page_number }}&hq={{ history_q }}&hwh={{ history_wh }}&hstart={{ history_start }}&hend={{ history_end }}">다음</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- 출고 상세 모달 -->
+    <div class="modal fade" id="historyDetailModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-info-circle me-2"></i>출고 상세 정보</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <table class="table table-borderless mb-0">
+                        <tr><th class="text-muted" width="30%">수불번호</th><td id="detailTrxNo" class="fw-bold text-danger"></td></tr>
+                        <tr><th class="text-muted">출고일시</th><td id="detailDate"></td></tr>
+                        <tr><th class="text-muted">품번</th><td id="detailPartNo"></td></tr>
+                        <tr><th class="text-muted">품명</th><td id="detailPartName"></td></tr>
+                        <tr><th class="text-muted">수량</th><td id="detailQty" class="fw-bold fs-5"></td></tr>
+                        <tr><th class="text-muted">LOT 번호</th><td id="detailLot"></td></tr>
+                        <tr><th class="text-muted">출고 창고</th><td id="detailWarehouse"></td></tr>
+                        <tr><th class="text-muted">거래처</th><td id="detailVendor"></td></tr>
+                        <tr><th class="text-muted">처리자</th><td id="detailActor"></td></tr>
+                        <tr><th class="text-muted">비고</th><td id="detailRemark"></td></tr>
+                    </table>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+                    <button type="button" class="btn btn-danger" id="detailCancelBtn" style="display:none;">
+                        <i class="bi bi-trash me-1"></i>출고 삭제
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 취소 확인 모달 -->
+    <div class="modal fade" id="cancelConfirmModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-exclamation-triangle me-2"></i>출고 삭제</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <p class="mb-1">다음 출고 건을 삭제하시겠습니까?</p>
+                    <p class="fw-bold text-danger" id="cancelTrxInfo"></p>
+                    <p class="small text-muted">재고가 복원되며, 이 작업은 되돌릴 수 없습니다.</p>
+                </div>
+                <div class="modal-footer justify-content-center">
+                    <form method="post" id="cancelForm">
+                        {% csrf_token %}
+                        <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">아니오</button>
+                        <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>삭제 확인</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- QR 스캔 모달 -->
+    <div class="modal fade" id="qrScanModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-qr-code-scan me-2"></i>현품표 QR 스캔</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <div id="qr-reader" style="width: 100%;"></div>
+                    <div class="p-3">
+                        <div class="input-group">
+                            <input type="text" id="manualTagInput" class="form-control" placeholder="태그ID 직접 입력 (예: TAG-20260223-0001)">
+                            <button class="btn btn-outline-primary" type="button" onclick="lookupTag()">조회</button>
+                        </div>
+                        <div id="qrResult" class="mt-2 small"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 거래처 검색 모달 -->
+<div class="modal fade" id="vendorSearchModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title fw-bold"><i class="bi bi-building me-2"></i>거래처 검색</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="input-group mb-3">
+                    <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                    <input type="text" class="form-control" id="vendorSearchInput" placeholder="업체명 또는 코드를 입력하세요..." onkeyup="filterVendors()">
+                </div>
+                <div class="border rounded" style="max-height: 400px; overflow-y: auto;">
+                    <table class="table table-hover mb-0" id="vendorTable">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th width="30%" class="ps-4">업체코드</th>
+                                <th>업체명</th>
+                                <th width="15%" class="text-center">선택</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for v in vendors %}
+                            <tr>
+                                <td class="ps-4">{{ v.code }}</td>
+                                <td class="vendor-name fw-bold text-dark">{{ v.name }}</td>
+                                <td class="text-center">
+                                    <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3"
+                                            onclick="selectVendor('{{ v.id }}', '{{ v.name }}', '{{ v.code }}')">
+                                        선택
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- html5-qrcode CDN -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+<script>
+    var vendorModal, historyDetailModal, cancelConfirmModal, qrScanModal;
+    var html5QrCode = null;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var vendorModalEl = document.getElementById('vendorSearchModal');
+        if (vendorModalEl) vendorModal = new bootstrap.Modal(vendorModalEl);
+
+        var detailEl = document.getElementById('historyDetailModal');
+        if (detailEl) historyDetailModal = new bootstrap.Modal(detailEl);
+
+        var cancelEl = document.getElementById('cancelConfirmModal');
+        if (cancelEl) cancelConfirmModal = new bootstrap.Modal(cancelEl);
+
+        var qrEl = document.getElementById('qrScanModal');
+        if (qrEl) {
+            qrScanModal = new bootstrap.Modal(qrEl);
+            qrEl.addEventListener('hidden.bs.modal', function() {
+                if (html5QrCode && html5QrCode.isScanning) {
+                    html5QrCode.stop().catch(() => {});
+                }
+            });
+        }
+
+        // 자재창고 자동 선택
+        var sel = document.getElementById('selWarehouse');
+        for (var i = 0; i < sel.options.length; i++) {
+            if (sel.options[i].text.includes("자재")) {
+                sel.selectedIndex = i;
+                break;
+            }
+        }
+
+        setTodayAsDefault();
+        document.getElementById('inputLotNo').addEventListener('input', formatLotInput);
+        document.getElementById('btnCalendar').addEventListener('click', openDatePicker);
+        document.getElementById('hiddenDatePicker').addEventListener('change', function() {
+            if (this.value) document.getElementById('inputLotNo').value = this.value;
+        });
+    });
+
+    // === 거래처 모달 ===
+    window.openVendorModal = function() {
+        if (vendorModal) {
+            vendorModal.show();
+            setTimeout(() => document.getElementById('vendorSearchInput').focus(), 500);
+        }
+    };
+
+    window.selectVendor = function(id, name, code) {
+        document.getElementById('hiddenVendorId').value = id;
+        document.getElementById('displayVendor').value = `[${code}] ${name}`;
+        if (vendorModal) vendorModal.hide();
+    };
+
+    function clearVendor() {
+        document.getElementById('hiddenVendorId').value = '';
+        document.getElementById('displayVendor').value = '';
+    }
+
+    function filterVendors() {
+        const filter = document.getElementById('vendorSearchInput').value.toUpperCase();
+        const tr = document.getElementById('vendorTable').getElementsByTagName('tr');
+        for (let i = 1; i < tr.length; i++) {
+            let tdCode = tr[i].getElementsByTagName('td')[0];
+            let tdName = tr[i].getElementsByTagName('td')[1];
+            if (tdCode || tdName) {
+                let show = (tdCode.textContent.toUpperCase().indexOf(filter) > -1)
+                        || (tdName.textContent.toUpperCase().indexOf(filter) > -1);
+                tr[i].style.display = show ? "" : "none";
+            }
+        }
+    }
+
+    // === QR 스캔 ===
+    function openQrScanner() {
+        if (qrScanModal) qrScanModal.show();
+        document.getElementById('qrResult').innerHTML = '';
+
+        setTimeout(function() {
+            if (!html5QrCode) {
+                html5QrCode = new Html5Qrcode("qr-reader");
+            }
+            if (!html5QrCode.isScanning) {
+                html5QrCode.start(
+                    { facingMode: "environment" },
+                    { fps: 10, qrbox: { width: 250, height: 250 } },
+                    onQrScanSuccess,
+                    () => {}
+                ).catch(err => {
+                    document.getElementById('qrResult').innerHTML =
+                        '<div class="alert alert-warning small mb-0">카메라를 사용할 수 없습니다. 태그ID를 직접 입력해주세요.</div>';
+                });
+            }
+        }, 500);
+    }
+
+    function onQrScanSuccess(decodedText) {
+        if (html5QrCode && html5QrCode.isScanning) {
+            html5QrCode.stop().catch(() => {});
+        }
+        fetchTagInfo(decodedText.trim());
+    }
+
+    function lookupTag() {
+        var tagId = document.getElementById('manualTagInput').value.trim();
+        if (!tagId) { alert('태그ID를 입력하세요.'); return; }
+        fetchTagInfo(tagId);
+    }
+
+    function fetchTagInfo(tagId) {
+        var resultDiv = document.getElementById('qrResult');
+        resultDiv.innerHTML = '<span class="text-muted">조회 중...</span>';
+
+        fetch('/wms/api/tag/' + encodeURIComponent(tagId) + '/')
+            .then(r => r.json())
+            .then(data => {
+                if (data.tag) {
+                    var tag = data.tag;
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-success small mb-0">
+                            <strong>${tag.part_no}</strong> - ${tag.part_name}<br>
+                            수량: <strong>${tag.quantity}</strong> / LOT: ${tag.lot_no || '-'}<br>
+                            <button class="btn btn-sm btn-success mt-1" onclick="applyTag('${tag.part_no}', '${tag.part_name}', ${tag.quantity}, '${tag.lot_no || ''}')">
+                                <i class="bi bi-check-lg me-1"></i>적용
+                            </button>
+                        </div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="alert alert-danger small mb-0">${data.error || '태그를 찾을 수 없습니다.'}</div>`;
+                }
+            })
+            .catch(() => {
+                resultDiv.innerHTML = '<div class="alert alert-danger small mb-0">조회 실패</div>';
+            });
+    }
+
+    function applyTag(partNo, partName, qty, lotNo) {
+        // datalist에서 part_id 찾기
+        var options = document.getElementById('partOptions').options;
+        var partId = '';
+        for (var i = 0; i < options.length; i++) {
+            if (options[i].value === partNo) {
+                partId = options[i].getAttribute('data-id');
+                break;
+            }
+        }
+
+        if (!partId) {
+            alert('SCM에 등록되지 않은 품목입니다: ' + partNo);
+            return;
+        }
+
+        document.getElementById('inputPart').value = partNo;
+        document.getElementById('selectedPartId').value = partId;
+        document.getElementById('selectedPartName').value = partName;
+        document.getElementById('partNameDisplay').innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> ${partName}`;
+        document.getElementById('inputQty').value = qty;
+        if (lotNo) document.getElementById('inputLotNo').value = lotNo;
+
+        if (qrScanModal) qrScanModal.hide();
+    }
+
+    // === 품목 검색 및 매핑 ===
+    document.getElementById('inputPart').addEventListener('input', function() {
+        var val = this.value;
+        var options = document.getElementById('partOptions').options;
+        var found = false;
+        for (var i = 0; i < options.length; i++) {
+            if (options[i].value === val) {
+                document.getElementById('selectedPartId').value = options[i].getAttribute('data-id');
+                var fullText = options[i].innerText.trim();
+                document.getElementById('selectedPartName').value = fullText;
+                document.getElementById('partNameDisplay').innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> ${fullText}`;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            document.getElementById('selectedPartId').value = '';
+            document.getElementById('selectedPartName').value = '';
+            document.getElementById('partNameDisplay').innerText = '';
+        }
+    });
+
+    // === 리스트 추가/삭제 ===
+    function addItem() {
+        var partId = document.getElementById('selectedPartId').value;
+        var partNo = document.getElementById('inputPart').value;
+        var partName = document.getElementById('selectedPartName').value;
+        var lotNo = document.getElementById('inputLotNo').value;
+        var qty = document.getElementById('inputQty').value;
+        var remark = document.getElementById('inputRemark').value;
+
+        if (!partId || !partNo) {
+            alert("유효한 품목을 선택해주세요.");
+            document.getElementById('inputPart').focus();
+            return;
+        }
+        if (!qty || parseInt(qty) <= 0) {
+            alert("수량을 1개 이상 입력해주세요.");
+            document.getElementById('inputQty').focus();
+            return;
+        }
+
+        var emptyRow = document.getElementById('emptyRow');
+        if (emptyRow) emptyRow.remove();
+
+        var tbody = document.getElementById('listBody');
+        var newRow = document.createElement('tr');
+        var lotDisplay = lotNo ? lotNo : '-';
+
+        newRow.innerHTML = `
+            <td class="fw-bold text-danger">
+                ${partNo}
+                <input type="hidden" name="part_ids[]" value="${partId}">
+            </td>
+            <td class="text-start ps-3">${partName}</td>
+            <td class="text-center">
+                ${lotDisplay}
+                <input type="hidden" name="lot_nos[]" value="${lotNo}">
+            </td>
+            <td class="fw-bold fs-5 text-end pe-4">
+                ${parseInt(qty).toLocaleString()}
+                <input type="hidden" name="quantities[]" value="${qty}">
+            </td>
+            <td class="text-muted small">
+                ${remark}
+                <input type="hidden" name="remarks[]" value="${remark}">
+            </td>
+            <td>
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this)">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(newRow);
+
+        document.getElementById('inputPart').value = '';
+        document.getElementById('selectedPartId').value = '';
+        document.getElementById('selectedPartName').value = '';
+        document.getElementById('partNameDisplay').innerText = '';
+        setTodayAsDefault();
+        document.getElementById('inputQty').value = '';
+        document.getElementById('inputRemark').value = '';
+        document.getElementById('inputPart').focus();
+        updateCount();
+    }
+
+    function removeRow(btn) {
+        btn.closest('tr').remove();
+        var tbody = document.getElementById('listBody');
+        if (tbody.children.length === 0) {
+            tbody.innerHTML = `<tr id="emptyRow"><td colspan="6" class="text-muted py-5">상단에서 품목을 검색하거나 <strong>QR 스캔</strong>하여 <strong>[추가]</strong> 버튼을 눌러주세요.</td></tr>`;
+        }
+        updateCount();
+    }
+
+    function updateCount() {
+        var count = document.querySelectorAll('input[name="part_ids[]"]').length;
+        document.getElementById('itemCount').innerText = count + "건";
+    }
+
+    function validateForm() {
+        var count = document.querySelectorAll('input[name="part_ids[]"]').length;
+        if (count === 0) {
+            alert("출고할 품목을 최소 1개 이상 추가해주세요.");
+            return false;
+        }
+        var wh = document.querySelector('select[name="warehouse_id"]').value;
+        if (!wh) { alert("출고 창고를 선택해주세요."); return false; }
+        return confirm("총 " + count + "건의 자재를 출고 처리하시겠습니까?\n(재고가 차감됩니다)");
+    }
+
+    // === LOT 입력 ===
+    function setTodayAsDefault() {
+        const today = new Date();
+        const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+        document.getElementById('inputLotNo').value = todayStr;
+        document.getElementById('hiddenDatePicker').value = todayStr;
+    }
+
+    function formatLotInput(e) {
+        let value = e.target.value.replace(/[^\d-]/g, '');
+        if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
+        const digitsOnly = value.replace(/-/g, '');
+        if (digitsOnly.length === 8) {
+            const formatted = `${digitsOnly.substring(0,4)}-${digitsOnly.substring(4,6)}-${digitsOnly.substring(6,8)}`;
+            const testDate = new Date(formatted);
+            if (!isNaN(testDate.getTime())) {
+                e.target.value = formatted;
+                document.getElementById('hiddenDatePicker').value = formatted;
+            } else {
+                alert('올바른 날짜 형식이 아닙니다.');
+                e.target.value = '';
+            }
+        } else {
+            e.target.value = value;
+        }
+    }
+
+    function openDatePicker() {
+        const hiddenPicker = document.getElementById('hiddenDatePicker');
+        const currentValue = document.getElementById('inputLotNo').value;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(currentValue)) hiddenPicker.value = currentValue;
+        hiddenPicker.click();
+    }
+
+    // === 출고 내역 모달 ===
+    function openHistoryDetail(id, trxNo, date, partNo, partName, qty, lot, warehouse, vendor, actor, remark, canCancel) {
+        document.getElementById('detailTrxNo').textContent = trxNo;
+        document.getElementById('detailDate').textContent = date;
+        document.getElementById('detailPartNo').textContent = partNo;
+        document.getElementById('detailPartName').textContent = partName;
+        document.getElementById('detailQty').textContent = Math.abs(qty).toLocaleString();
+        document.getElementById('detailLot').textContent = lot;
+        document.getElementById('detailWarehouse').textContent = warehouse;
+        document.getElementById('detailVendor').textContent = vendor;
+        document.getElementById('detailActor').textContent = actor;
+        document.getElementById('detailRemark').textContent = remark;
+
+        var cancelBtn = document.getElementById('detailCancelBtn');
+        if (canCancel) {
+            cancelBtn.style.display = '';
+            cancelBtn.onclick = function() {
+                if (historyDetailModal) historyDetailModal.hide();
+                openCancelModal(id, trxNo, partNo, qty);
+            };
+        } else {
+            cancelBtn.style.display = 'none';
+        }
+        if (historyDetailModal) historyDetailModal.show();
+    }
+
+    function openCancelModal(trxId, trxNo, partNo, qty) {
+        document.getElementById('cancelTrxInfo').textContent = trxNo + ' / ' + partNo + ' / ' + Math.abs(qty) + '개';
+        document.getElementById('cancelForm').action = '/wms/outbound/manual/cancel/' + trxId + '/';
+        if (cancelConfirmModal) cancelConfirmModal.show();
+    }
+</script>
+{% endblock %}

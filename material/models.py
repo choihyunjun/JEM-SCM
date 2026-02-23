@@ -77,6 +77,7 @@ class MaterialTransaction(models.Model):
         ('RCV_ERP', 'ERP 생산입고'),    # ERP 생산입고 (완제품 입고)
         ('TRF_ERP', 'ERP 재고이동'),    # ERP 재고이동 (창고간 이동)
         ('OUT_ERP', 'ERP 출고'),       # ERP 고객출고 (물류 출고)
+        ('OUT_MANUAL', 'SCM 수기출고'), # SCM 수기 출고 처리
         ('OUT_RETURN', '반품 출고'),    # [신규 추가] 불량 반품 등
     ]
 

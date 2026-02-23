@@ -27,6 +27,9 @@ urlpatterns = [
 
     # 3. 출고 관리
     path('outbound/create/', views.outbound_create, name='outbound_create'),
+    path('outbound/manual/', views.manual_outgoing, name='manual_outgoing'),
+    path('outbound/manual/cancel/<int:trx_id>/', views.cancel_manual_outgoing, name='cancel_manual_outgoing'),
+    path('outbound/history/', views.outgoing_history, name='outgoing_history'),
 
     # 4. 현장 지원
     path('tag/create/', views.process_tag_form, name='process_tag_form'),

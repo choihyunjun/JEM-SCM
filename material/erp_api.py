@@ -2544,7 +2544,9 @@ def sync_erp_outgoing(date_from=None, date_to=None):
 
             # 거래처 매칭
             from orders.models import Vendor
-            vendor = Vendor.objects.filter(vendor_code=tr_cd).first() if tr_cd else None
+            vendor = Vendor.objects.filter(erp_code=tr_cd).first() if tr_cd else None
+            if not vendor and tr_cd:
+                vendor = Vendor.objects.filter(code=tr_cd).first()
 
             detail_synced = False
 
