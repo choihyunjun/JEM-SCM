@@ -1026,10 +1026,10 @@ def adjust_stock_to_erp():
         )
         result['adjusted'] += 1
 
-    # 동기화 시작일: 내일
+    # 동기화 시작일: 오늘 (오늘 오후 수불도 자동동기화 대상에 포함)
     from django.core.cache import cache
     import re
-    sync_start = (datetime.now() + timedelta(days=1)).strftime('%Y%m%d')
+    sync_start = datetime.now().strftime('%Y%m%d')
     cache.set('erp_stock_init_date', sync_start, timeout=None)
 
     try:

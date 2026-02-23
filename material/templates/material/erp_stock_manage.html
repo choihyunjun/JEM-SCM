@@ -106,7 +106,7 @@
                     <ul class="small text-muted mb-3">
                         <li>기존 재고 삭제 없이 <strong>차이분만 조정</strong></li>
                         <li>조정 이력(ADJ_ERP) 자동 생성</li>
-                        <li>오늘 수불은 현재고에 반영 → <strong>내일부터</strong> 자동동기화</li>
+                        <li>조정 시점 이후 수불은 <strong>자동동기화</strong>로 반영</li>
                     </ul>
                     <form id="adjustForm" method="post">
                         {% csrf_token %}
@@ -176,7 +176,7 @@
 
 <script>
 document.getElementById('adjustForm').addEventListener('submit', function(e) {
-    if (!confirm('SCM 재고를 ERP 현재고에 맞춰 조정합니다.\n\n→ 차이 나는 품목만 증감 처리\n→ 조정 이력(ADJ_ERP) 자동 생성\n→ 오늘 수불은 현재고에 이미 반영되어 있으므로,\n  내일부터 ERP 수불 자동동기화가 시작됩니다.\n\n실행하시겠습니까?')) {
+    if (!confirm('SCM 재고를 ERP 현재고에 맞춰 조정합니다.\n\n→ 차이 나는 품목만 증감 처리\n→ 조정 이력(ADJ_ERP) 자동 생성\n→ 조정 시점 이후 ERP 수불은 자동동기화로 반영됩니다.\n\n실행하시겠습니까?')) {
         e.preventDefault();
         return;
     }
