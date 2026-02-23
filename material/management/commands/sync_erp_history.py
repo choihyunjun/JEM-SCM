@@ -112,14 +112,17 @@ class Command(BaseCommand):
                 return
             self.stdout.write('')
 
+        # --reset 시 이력만 기록 (기초재고=현재고이므로 재고 가감 불필요)
+        skip = options['reset']
+
         # 동기화 대상 목록
         sync_tasks = [
-            ('구매입고 (IN_ERP)', lambda: sync_erp_incoming(date_from, date_to)),
-            ('생산출고 (ISU_ERP)', lambda: sync_erp_issue(date_from, date_to)),
-            ('생산입고 (RCV_ERP)', lambda: sync_erp_receipt(date_from, date_to)),
-            ('재고이동 (TRF_ERP)', lambda: sync_erp_stock_transfer(date_from, date_to)),
-            ('재고조정 (ADJ_ERP)', lambda: sync_erp_adjustments(date_from, date_to)),
-            ('고객출고 (OUT_ERP)', lambda: sync_erp_outgoing(date_from, date_to)),
+            ('구매입고 (IN_ERP)', lambda: sync_erp_incoming(date_from, date_to, skip_stock_update=skip)),
+            ('생산출고 (ISU_ERP)', lambda: sync_erp_issue(date_from, date_to, skip_stock_update=skip)),
+            ('생산입고 (RCV_ERP)', lambda: sync_erp_receipt(date_from, date_to, skip_stock_update=skip)),
+            ('재고이동 (TRF_ERP)', lambda: sync_erp_stock_transfer(date_from, date_to, skip_stock_update=skip)),
+            ('재고조정 (ADJ_ERP)', lambda: sync_erp_adjustments(date_from, date_to, skip_stock_update=skip)),
+            ('고객출고 (OUT_ERP)', lambda: sync_erp_outgoing(date_from, date_to, skip_stock_update=skip)),
         ]
 
         total_tasks = len(sync_tasks)
@@ -153,8 +156,8 @@ class Command(BaseCommand):
 
             self.stdout.write('')
 
-        # 재고조정
-        if not options['no_adjust']:
+        # 재고조정 (--reset 시 불필요: 기초재고=현재고 + 이력만 기록)
+        if not options['no_adjust'] and not options['reset']:
             self.stdout.write(self.style.WARNING('[마무리] ERP 기준 재고조정 실행 중...'))
             start = time.time()
 

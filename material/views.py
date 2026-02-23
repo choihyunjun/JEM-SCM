@@ -5125,6 +5125,47 @@ def erp_stock_manage(request):
 
         return redirect('material:erp_stock_manage')
 
+    # ── 과거변경 품목별 재고 보정 ──
+    if action == 'adjust_past_changes':
+        from material.erp_api import adjust_stock_for_parts
+        part_nos_str = request.POST.get('part_nos', '')
+        part_nos = [p.strip() for p in part_nos_str.split(',') if p.strip()]
+        if part_nos:
+            result = adjust_stock_for_parts(part_nos)
+            if result.get('error'):
+                messages.error(request, f'재고 보정 실패: {result["error"]}')
+            else:
+                messages.success(
+                    request,
+                    f'과거변경 재고 보정 완료: '
+                    f'조정 {result["adjusted"]}건 '
+                    f'(증가 {result["increased"]}, 감소 {result["decreased"]})'
+                )
+                # 보정 후 캐시 초기화
+                cache.delete('erp_past_changes')
+        else:
+            messages.warning(request, '보정 대상 품목이 없습니다')
+        return redirect('material:erp_stock_manage')
+
+    # ── 과거변경 감지 수동 실행 ──
+    if action == 'detect_past_changes':
+        from material.erp_api import detect_past_changes
+        result = detect_past_changes()
+        if result.get('error'):
+            messages.error(request, f'과거변경 감지 실패: {result["error"]}')
+        elif result['count'] > 0:
+            cache.set('erp_past_changes', result, timeout=86400)
+            messages.warning(request, f'과거 수불 변경 {result["count"]}건 감지 (영향 품목: {len(result["affected_parts"])}개)')
+        else:
+            cache.delete('erp_past_changes')
+            messages.success(request, f'과거 수불 변경 없음 (기간: {result["period"]})')
+        return redirect('material:erp_stock_manage')
+
+    # 과거변경 감지 결과 (캐시에서 로드)
+    past_changes = cache.get('erp_past_changes')
+    if past_changes and past_changes.get('count', 0) > 0:
+        context['past_changes'] = past_changes
+
     # ── ERP vs SCM 비교 ──
     if action == 'compare' or request.GET.get('compare'):
         from material.erp_api import compare_erp_stock

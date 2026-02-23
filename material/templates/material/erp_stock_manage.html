@@ -11,6 +11,79 @@
     <div class="alert alert-warning">ERP 연동이 비활성화 상태입니다. (settings.py: ERP_ENABLED = False)</div>
     {% endif %}
 
+    {% if past_changes %}
+    <div class="alert alert-warning border-warning shadow-sm mb-3">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div>
+                <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                <strong>과거 수불 변경 감지!</strong>
+                기초재고 셋팅 이전 기간({{ past_changes.period }})에 ERP 수불 변경이 <strong>{{ past_changes.count }}건</strong> 감지되었습니다.
+                <span class="text-muted">(영향 품목: {{ past_changes.affected_parts|length }}개)</span>
+            </div>
+            <form method="post" class="d-inline" onsubmit="return confirm('감지된 {{ past_changes.affected_parts|length }}개 품목의 재고를 ERP 현재고에 맞춰 보정합니다. 진행하시겠습니까?');">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="adjust_past_changes">
+                <input type="hidden" name="part_nos" value="{{ past_changes.affected_parts|join:',' }}">
+                <button type="submit" class="btn btn-warning btn-sm">
+                    <i class="bi bi-wrench me-1"></i>해당 품목 재고 보정
+                </button>
+            </form>
+        </div>
+        {% if past_changes.changes %}
+        <div class="mt-2">
+            <a class="small text-decoration-none" data-bs-toggle="collapse" href="#pastChangeDetail" role="button">
+                <i class="bi bi-chevron-down me-1"></i>변경 상세 보기
+            </a>
+            <div class="collapse mt-2" id="pastChangeDetail">
+                <table class="table table-sm table-bordered small mb-0" style="font-size: 0.8rem;">
+                    <thead class="table-light">
+                        <tr>
+                            <th>유형</th>
+                            <th>구분</th>
+                            <th>ERP번호</th>
+                            <th>품번</th>
+                            <th>ERP수량</th>
+                            <th>SCM수량</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in past_changes.changes %}
+                        <tr class="{% if c.type == 'added' %}table-success{% elif c.type == 'deleted' %}table-danger{% else %}table-warning{% endif %}">
+                            <td>{{ c.trx_type }}</td>
+                            <td>
+                                {% if c.type == 'added' %}
+                                <span class="badge bg-success">신규</span>
+                                {% elif c.type == 'deleted' %}
+                                <span class="badge bg-danger">삭제</span>
+                                {% else %}
+                                <span class="badge bg-warning text-dark">수정</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ c.erp_no }}</td>
+                            <td>{{ c.part_no }}</td>
+                            <td>{{ c.erp_qty|intcomma }}</td>
+                            <td>{{ c.scm_qty|intcomma }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- 과거변경 수동 감지 버튼 -->
+    <div class="mb-3 text-end">
+        <form method="post" class="d-inline">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="detect_past_changes">
+            <button type="submit" class="btn btn-outline-secondary btn-sm" {% if not erp_enabled %}disabled{% endif %}>
+                <i class="bi bi-search me-1"></i>과거 수불 변경 감지
+            </button>
+        </form>
+    </div>
+
     <div class="row g-3 mb-4">
         <!-- 기초재고 셋팅 카드 -->
         <div class="col-md-6">

@@ -482,7 +482,7 @@ def fetch_erp_incoming_detail(rcv_nb):
         return False, None, error
 
 
-def sync_erp_incoming(date_from=None, date_to=None):
+def sync_erp_incoming(date_from=None, date_to=None, skip_stock_update=False):
     """
     ERP 입고 내역을 WMS에 동기화 (역방향)
     - ERP에서 직접 처리된 입고건을 WMS에 IN_ERP로 생성
@@ -621,7 +621,9 @@ def sync_erp_incoming(date_from=None, date_to=None):
 
                 # MaterialStock 증가 (원자적)
                 result_stock = 0
-                if warehouse:
+                if skip_stock_update:
+                    pass  # 이력만 기록, 재고 미반영
+                elif warehouse:
                     stock, _ = MaterialStock.objects.get_or_create(
                         warehouse=warehouse,
                         part=part,
@@ -1096,6 +1098,470 @@ def adjust_stock_to_erp():
     return result
 
 
+def detect_past_changes():
+    """
+    기초재고 셋팅일 이전 기간의 ERP 수불 변경을 감지.
+    ERP 원본과 SCM 이력을 비교하여 추가/삭제/수량변경 건을 찾음.
+    Returns: {
+        'changes': [{'type': 'added'|'deleted'|'modified', 'trx_type': ..., 'erp_no': ..., 'part_no': ..., ...}],
+        'affected_parts': set of part_no,
+        'count': int,
+        'period': str,
+        'error': str or None,
+    }
+    """
+    from material.models import MaterialTransaction
+    from orders.models import Part
+    from django.core.cache import cache
+    from datetime import datetime, timedelta
+
+    result = {'changes': [], 'affected_parts': set(), 'count': 0, 'period': '', 'error': None}
+
+    # 기초재고 기준일 확인
+    cutoff = cache.get('erp_stock_init_date') or getattr(settings, 'ERP_STOCK_INIT_DATE', '')
+    if not cutoff:
+        result['error'] = '기초재고 기준일이 설정되지 않았습니다'
+        return result
+
+    # cutoff 이전 날짜로 조회 (20260101 ~ cutoff 전날)
+    try:
+        cutoff_dt = datetime.strptime(cutoff, '%Y%m%d')
+    except ValueError:
+        result['error'] = f'기초재고 기준일 형식 오류: {cutoff}'
+        return result
+
+    date_from = '20260101'
+    date_to = (cutoff_dt - timedelta(days=1)).strftime('%Y%m%d')
+    result['period'] = f'{date_from} ~ {date_to}'
+
+    if date_to < date_from:
+        return result  # 기준일이 1월1일이면 이전 기간 없음
+
+    part_map = {p.part_no: p for p in Part.objects.all()}
+
+    # ── 각 유형별 ERP 원본 vs SCM 이력 비교 ──
+    check_tasks = [
+        ('IN_ERP', _check_incoming_changes),
+        ('ISU_ERP', _check_issue_changes),
+        ('RCV_ERP', _check_receipt_changes),
+        ('TRF_ERP', _check_transfer_changes),
+        ('ADJ_ERP_IN', _check_adjustment_changes),
+        ('OUT_ERP', _check_outgoing_changes),
+    ]
+
+    for trx_type, check_func in check_tasks:
+        try:
+            changes = check_func(date_from, date_to, trx_type, part_map)
+            for c in changes:
+                result['changes'].append(c)
+                if c.get('part_no'):
+                    result['affected_parts'].add(c['part_no'])
+        except Exception as e:
+            logger.error(f'과거변경 감지 오류 ({trx_type}): {e}')
+
+    result['count'] = len(result['changes'])
+    result['affected_parts'] = list(result['affected_parts'])
+    return result
+
+
+def _check_incoming_changes(date_from, date_to, trx_type, part_map):
+    """구매입고 (IN_ERP) 과거변경 감지"""
+    from material.models import MaterialTransaction
+
+    changes = []
+    ok, headers, err = fetch_erp_incoming_headers(date_from, date_to)
+    if not ok or not headers:
+        return changes
+
+    # ERP 원본 키:수량 맵
+    erp_details = {}
+    for h in headers:
+        rcv_nb = h.get('rcvNb', '')
+        remark = h.get('remarkDc', '') or ''
+        if 'SCM' in remark:
+            continue
+        ok2, details, _ = fetch_erp_incoming_detail(rcv_nb)
+        if not ok2 or not details:
+            continue
+        for d in details:
+            rcv_sq = d.get('rcvSq', 1)
+            item_cd = d.get('itemCd', '')
+            qty = int(d.get('rcvQt', 0) or 0)
+            if item_cd and qty > 0:
+                key = f'{rcv_nb}-{rcv_sq}'
+                erp_details[key] = {'part_no': item_cd, 'qty': qty}
+
+    # SCM 이력
+    scm_trxs = MaterialTransaction.objects.filter(
+        transaction_type=trx_type,
+        erp_incoming_no__isnull=False,
+    ).values_list('erp_incoming_no', 'quantity', 'part__part_no')
+    scm_map = {}
+    for erp_no, qty, part_no in scm_trxs:
+        scm_map[erp_no] = {'qty': abs(int(qty)), 'part_no': part_no}
+
+    # 비교
+    for key, erp in erp_details.items():
+        scm = scm_map.get(key)
+        if not scm:
+            changes.append({'type': 'added', 'trx_type': trx_type, 'erp_no': key, 'part_no': erp['part_no'], 'erp_qty': erp['qty'], 'scm_qty': 0})
+        elif scm['qty'] != erp['qty']:
+            changes.append({'type': 'modified', 'trx_type': trx_type, 'erp_no': key, 'part_no': erp['part_no'], 'erp_qty': erp['qty'], 'scm_qty': scm['qty']})
+
+    for key, scm in scm_map.items():
+        if key.startswith('RV') and key not in erp_details:
+            changes.append({'type': 'deleted', 'trx_type': trx_type, 'erp_no': key, 'part_no': scm['part_no'], 'erp_qty': 0, 'scm_qty': scm['qty']})
+
+    return changes
+
+
+def _check_issue_changes(date_from, date_to, trx_type, part_map):
+    """생산출고 (ISU_ERP) 과거변경 감지"""
+    from material.models import MaterialTransaction
+
+    changes = []
+    ok, headers, err = fetch_erp_issue_headers(date_from, date_to)
+    if not ok or not headers:
+        return changes
+
+    erp_details = {}
+    for h in headers:
+        isu_nb = h.get('isuNb', '')
+        remark = h.get('remarkDc', '') or ''
+        if 'SCM' in remark:
+            continue
+        ok2, details, _ = fetch_erp_issue_details(isu_nb)
+        if not ok2 or not details:
+            continue
+        for d in details:
+            isu_sq = d.get('isuSq', 1)
+            item_cd = d.get('itemCd', '')
+            qty = int(d.get('isuQt', 0) or 0)
+            if item_cd and qty > 0:
+                key = f'{isu_nb}-{isu_sq}'
+                erp_details[key] = {'part_no': item_cd, 'qty': qty}
+
+    scm_trxs = MaterialTransaction.objects.filter(
+        transaction_type=trx_type,
+        erp_incoming_no__isnull=False,
+    ).values_list('erp_incoming_no', 'quantity', 'part__part_no')
+    scm_map = {}
+    for erp_no, qty, part_no in scm_trxs:
+        scm_map[erp_no] = {'qty': abs(int(qty)), 'part_no': part_no}
+
+    for key, erp in erp_details.items():
+        scm = scm_map.get(key)
+        if not scm:
+            changes.append({'type': 'added', 'trx_type': trx_type, 'erp_no': key, 'part_no': erp['part_no'], 'erp_qty': erp['qty'], 'scm_qty': 0})
+        elif scm['qty'] != erp['qty']:
+            changes.append({'type': 'modified', 'trx_type': trx_type, 'erp_no': key, 'part_no': erp['part_no'], 'erp_qty': erp['qty'], 'scm_qty': scm['qty']})
+
+    for key, scm in scm_map.items():
+        if key.startswith('MW') and key not in erp_details:
+            changes.append({'type': 'deleted', 'trx_type': trx_type, 'erp_no': key, 'part_no': scm['part_no'], 'erp_qty': 0, 'scm_qty': scm['qty']})
+
+    return changes
+
+
+def _check_receipt_changes(date_from, date_to, trx_type, part_map):
+    """생산입고 (RCV_ERP) 과거변경 감지"""
+    from material.models import MaterialTransaction
+
+    changes = []
+    ok, items, err = fetch_erp_receipt_list(date_from, date_to)
+    if not ok or not items:
+        return changes
+
+    erp_details = {}
+    for item in items:
+        rcv_nb = item.get('rcvNb', '')
+        remark = item.get('remarkDc', '') or ''
+        if 'SCM' in remark:
+            continue
+        item_cd = item.get('itemCd', '')
+        qty = int(item.get('rcvQt', 0) or 0)
+        if rcv_nb and item_cd and qty > 0:
+            erp_details[rcv_nb] = {'part_no': item_cd, 'qty': qty}
+
+    scm_trxs = MaterialTransaction.objects.filter(
+        transaction_type=trx_type,
+        erp_incoming_no__isnull=False,
+    ).values_list('erp_incoming_no', 'quantity', 'part__part_no')
+    scm_map = {}
+    for erp_no, qty, part_no in scm_trxs:
+        scm_map[erp_no] = {'qty': abs(int(qty)), 'part_no': part_no}
+
+    for key, erp in erp_details.items():
+        scm = scm_map.get(key)
+        if not scm:
+            changes.append({'type': 'added', 'trx_type': trx_type, 'erp_no': key, 'part_no': erp['part_no'], 'erp_qty': erp['qty'], 'scm_qty': 0})
+        elif scm['qty'] != erp['qty']:
+            changes.append({'type': 'modified', 'trx_type': trx_type, 'erp_no': key, 'part_no': erp['part_no'], 'erp_qty': erp['qty'], 'scm_qty': scm['qty']})
+
+    for key, scm in scm_map.items():
+        if key.startswith('PR') and key not in erp_details:
+            changes.append({'type': 'deleted', 'trx_type': trx_type, 'erp_no': key, 'part_no': scm['part_no'], 'erp_qty': 0, 'scm_qty': scm['qty']})
+
+    return changes
+
+
+def _check_transfer_changes(date_from, date_to, trx_type, part_map):
+    """재고이동 (TRF_ERP) 과거변경 감지"""
+    from material.models import MaterialTransaction
+
+    changes = []
+    ok, headers, err = fetch_erp_transfer_headers(date_from, date_to)
+    if not ok or not headers:
+        return changes
+
+    erp_details = {}
+    for h in headers:
+        move_nb = h.get('moveNb', '')
+        remark = h.get('remarkDc', '') or ''
+        if 'SCM' in remark:
+            continue
+        ok2, details, _ = fetch_erp_transfer_details(move_nb)
+        if not ok2 or not details:
+            continue
+        for d in details:
+            move_sq = d.get('moveSq', 1)
+            item_cd = d.get('itemCd', '')
+            qty = int(d.get('moveQt', 0) or 0)
+            if item_cd and qty > 0:
+                key = f'{move_nb}-{move_sq}'
+                erp_details[key] = {'part_no': item_cd, 'qty': qty}
+
+    scm_trxs = MaterialTransaction.objects.filter(
+        transaction_type=trx_type,
+        erp_incoming_no__isnull=False,
+    ).values_list('erp_incoming_no', 'quantity', 'part__part_no')
+    scm_map = {}
+    for erp_no, qty, part_no in scm_trxs:
+        scm_map[erp_no] = {'qty': abs(int(qty)), 'part_no': part_no}
+
+    for key, erp in erp_details.items():
+        scm = scm_map.get(key)
+        if not scm:
+            changes.append({'type': 'added', 'trx_type': trx_type, 'erp_no': key, 'part_no': erp['part_no'], 'erp_qty': erp['qty'], 'scm_qty': 0})
+        elif scm['qty'] != erp['qty']:
+            changes.append({'type': 'modified', 'trx_type': trx_type, 'erp_no': key, 'part_no': erp['part_no'], 'erp_qty': erp['qty'], 'scm_qty': scm['qty']})
+
+    for key, scm in scm_map.items():
+        if key.startswith('MV') and key not in erp_details:
+            changes.append({'type': 'deleted', 'trx_type': trx_type, 'erp_no': key, 'part_no': scm['part_no'], 'erp_qty': 0, 'scm_qty': scm['qty']})
+
+    return changes
+
+
+def _check_adjustment_changes(date_from, date_to, trx_type, part_map):
+    """재고조정 (ADJ_ERP_IN/OUT) 과거변경 감지"""
+    from material.models import MaterialTransaction
+
+    changes = []
+    for adjust_fg in ['1', '2']:
+        ok, headers, err = fetch_erp_adjustment_headers(date_from, date_to, adjust_fg=adjust_fg)
+        if not ok or not headers:
+            continue
+
+        erp_details = {}
+        for h in headers:
+            adjust_nb = h.get('adjustNb', '')
+            remark = h.get('remarkDc', '') or ''
+            if 'SCM' in remark:
+                continue
+            ok2, details, _ = fetch_erp_adjustment_detail(adjust_nb, adjust_fg)
+            if not ok2 or not details:
+                continue
+            for d in details:
+                adjust_sq = d.get('adjustSq', 1)
+                item_cd = d.get('itemCd', '')
+                qty = int(d.get('rcvQt' if adjust_fg == '1' else 'isuQt', 0) or 0)
+                if item_cd and qty > 0:
+                    key = f'{adjust_nb}-{adjust_sq}'
+                    erp_details[key] = {'part_no': item_cd, 'qty': qty}
+
+        cur_type = 'ADJ_ERP_IN' if adjust_fg == '1' else 'ADJ_ERP_OUT'
+        scm_trxs = MaterialTransaction.objects.filter(
+            transaction_type=cur_type,
+            erp_incoming_no__isnull=False,
+        ).values_list('erp_incoming_no', 'quantity', 'part__part_no')
+        scm_map = {}
+        for erp_no, qty, part_no in scm_trxs:
+            scm_map[erp_no] = {'qty': abs(int(qty)), 'part_no': part_no}
+
+        for key, erp in erp_details.items():
+            scm = scm_map.get(key)
+            if not scm:
+                changes.append({'type': 'added', 'trx_type': cur_type, 'erp_no': key, 'part_no': erp['part_no'], 'erp_qty': erp['qty'], 'scm_qty': 0})
+            elif scm['qty'] != erp['qty']:
+                changes.append({'type': 'modified', 'trx_type': cur_type, 'erp_no': key, 'part_no': erp['part_no'], 'erp_qty': erp['qty'], 'scm_qty': scm['qty']})
+
+        for key, scm in scm_map.items():
+            if key.startswith('AD') and key not in erp_details:
+                changes.append({'type': 'deleted', 'trx_type': cur_type, 'erp_no': key, 'part_no': scm['part_no'], 'erp_qty': 0, 'scm_qty': scm['qty']})
+
+    return changes
+
+
+def _check_outgoing_changes(date_from, date_to, trx_type, part_map):
+    """고객출고 (OUT_ERP) 과거변경 감지"""
+    from material.models import MaterialTransaction
+
+    changes = []
+    ok, headers, err = fetch_erp_outgoing_headers(date_from, date_to)
+    if not ok or not headers:
+        return changes
+
+    erp_details = {}
+    for h in headers:
+        isu_nb = h.get('isuNb', '')
+        remark = h.get('remarkDc', '') or ''
+        if 'SCM' in remark:
+            continue
+        ok2, details, _ = fetch_erp_outgoing_details(isu_nb)
+        if not ok2 or not details:
+            continue
+        for d in details:
+            isu_sq = d.get('isuSq', 1)
+            item_cd = d.get('itemCd', '')
+            qty = int(d.get('isuQt', 0) or 0)
+            if item_cd and qty > 0:
+                key = f'{isu_nb}-{isu_sq}'
+                erp_details[key] = {'part_no': item_cd, 'qty': qty}
+
+    scm_trxs = MaterialTransaction.objects.filter(
+        transaction_type=trx_type,
+        erp_incoming_no__isnull=False,
+    ).values_list('erp_incoming_no', 'quantity', 'part__part_no')
+    scm_map = {}
+    for erp_no, qty, part_no in scm_trxs:
+        scm_map[erp_no] = {'qty': abs(int(qty)), 'part_no': part_no}
+
+    for key, erp in erp_details.items():
+        scm = scm_map.get(key)
+        if not scm:
+            changes.append({'type': 'added', 'trx_type': trx_type, 'erp_no': key, 'part_no': erp['part_no'], 'erp_qty': erp['qty'], 'scm_qty': 0})
+        elif scm['qty'] != erp['qty']:
+            changes.append({'type': 'modified', 'trx_type': trx_type, 'erp_no': key, 'part_no': erp['part_no'], 'erp_qty': erp['qty'], 'scm_qty': scm['qty']})
+
+    for key, scm in scm_map.items():
+        if key not in erp_details and not key.startswith('AD') and not key.startswith('RV') and not key.startswith('MW') and not key.startswith('MV') and not key.startswith('PR'):
+            changes.append({'type': 'deleted', 'trx_type': trx_type, 'erp_no': key, 'part_no': scm['part_no'], 'erp_qty': 0, 'scm_qty': scm['qty']})
+
+    return changes
+
+
+def adjust_stock_for_parts(part_nos):
+    """
+    특정 품목들만 ERP 현재고에 맞춰 재고 보정.
+    adjust_stock_to_erp와 동일 로직이지만 대상 품목 제한.
+    Args:
+        part_nos: 보정할 품목번호 리스트
+    Returns: dict {adjusted, increased, decreased, error}
+    """
+    from material.models import MaterialStock, MaterialTransaction, Warehouse
+    from orders.models import Part
+    from django.db.models import Sum
+    from django.utils import timezone
+    from datetime import datetime
+
+    result = {'adjusted': 0, 'increased': 0, 'decreased': 0, 'error': None, 'details': []}
+
+    if not part_nos:
+        return result
+
+    ok, items, err = fetch_erp_stock(year=str(datetime.now().year), month=None, total_fg='0')
+    if not ok:
+        result['error'] = err or 'ERP 조회 실패'
+        return result
+
+    part_nos_set = set(part_nos)
+
+    # ERP 재고 맵 (해당 품목만)
+    erp_map = {}
+    for item in items:
+        item_cd = item.get('itemCd', '')
+        if item_cd not in part_nos_set:
+            continue
+        qty = int(item.get('invQt1', 0) or 0)
+        key = (item.get('whCd', ''), item_cd)
+        erp_map[key] = erp_map.get(key, 0) + qty
+
+    # SCM 재고 맵 (해당 품목만)
+    scm_agg = MaterialStock.objects.filter(
+        part__part_no__in=part_nos_set
+    ).values(
+        'warehouse__code', 'part__part_no'
+    ).annotate(total=Sum('quantity'))
+    scm_map = {}
+    for row in scm_agg:
+        key = (row['warehouse__code'], row['part__part_no'])
+        scm_map[key] = int(row['total'] or 0)
+
+    part_map = {p.part_no: p for p in Part.objects.filter(part_no__in=part_nos_set)}
+    wh_map = {w.code: w for w in Warehouse.objects.filter(is_active=True)}
+
+    all_keys = set(erp_map.keys()) | set(scm_map.keys())
+    now = timezone.now()
+
+    for (wh_cd, item_cd) in all_keys:
+        erp_qty = erp_map.get((wh_cd, item_cd), 0)
+        scm_qty = scm_map.get((wh_cd, item_cd), 0)
+        diff = erp_qty - scm_qty
+
+        if diff == 0:
+            continue
+
+        part = part_map.get(item_cd)
+        warehouse = wh_map.get(wh_cd)
+        if not part or not warehouse:
+            continue
+
+        stock = MaterialStock.objects.filter(
+            warehouse=warehouse, part=part, lot_no=None
+        ).first()
+
+        if diff > 0:
+            if stock:
+                stock.quantity += diff
+                stock.save()
+            else:
+                MaterialStock.objects.create(
+                    warehouse=warehouse, part=part, lot_no=None, quantity=diff
+                )
+            trx_type = 'ADJ_ERP_IN'
+            result['increased'] += 1
+        else:
+            abs_diff = abs(diff)
+            if stock:
+                stock.quantity = max(0, stock.quantity - abs_diff)
+                stock.save()
+            trx_type = 'ADJ_ERP_OUT'
+            result['decreased'] += 1
+
+        _create_trx(
+            transaction_type=trx_type,
+            part=part,
+            warehouse_to=warehouse if trx_type == 'ADJ_ERP_IN' else None,
+            warehouse_from=warehouse if trx_type == 'ADJ_ERP_OUT' else None,
+            quantity=abs(diff) if trx_type == 'ADJ_ERP_IN' else -abs(diff),
+            lot_no=None,
+            date=now,
+            remark=f'과거변경 재고보정 (ERP={erp_qty}, SCM={scm_qty}, diff={diff:+d})',
+        )
+        result['adjusted'] += 1
+        result['details'].append({
+            'part_no': item_cd,
+            'warehouse': wh_cd,
+            'erp_qty': erp_qty,
+            'scm_qty': scm_qty,
+            'diff': diff,
+        })
+
+    logger.info(f'품목별 재고보정 완료: {result["adjusted"]}건 (대상 {len(part_nos)}품목)')
+    return result
+
+
 # =============================================================================
 # ERP 거래처 동기화
 # =============================================================================
@@ -1522,7 +1988,7 @@ def fetch_erp_adjustment_detail(adjust_nb, adjust_fg='1'):
         return False, None, error
 
 
-def sync_erp_adjustments(date_from=None, date_to=None):
+def sync_erp_adjustments(date_from=None, date_to=None, skip_stock_update=False):
     """
     ERP 재고조정 내역을 SCM에 동기화
     - 입고조정(adjustFg=1): SCM 재고 증가 (ADJ_ERP_IN)
@@ -1659,7 +2125,9 @@ def sync_erp_adjustments(date_from=None, date_to=None):
 
                 # MaterialStock 갱신 (원자적)
                 result_stock = 0
-                if warehouse:
+                if skip_stock_update:
+                    pass  # 이력만 기록, 재고 미반영
+                elif warehouse:
                     stock, _ = MaterialStock.objects.get_or_create(
                         warehouse=warehouse,
                         part=part,
@@ -1792,7 +2260,7 @@ def fetch_erp_issue_details(isu_nb):
     return False, None, error
 
 
-def sync_erp_issue(date_from=None, date_to=None):
+def sync_erp_issue(date_from=None, date_to=None, skip_stock_update=False):
     """
     ERP 생산출고 내역을 WMS에 동기화
     - 원자재가 생산라인으로 출고된 건 → 재고 차감
@@ -1903,7 +2371,9 @@ def sync_erp_issue(date_from=None, date_to=None):
 
                 # MaterialStock 차감 (원자적)
                 result_stock = 0
-                if warehouse:
+                if skip_stock_update:
+                    pass  # 이력만 기록, 재고 미반영
+                elif warehouse:
                     stock, _ = MaterialStock.objects.get_or_create(
                         warehouse=warehouse,
                         part=part,
@@ -1969,7 +2439,7 @@ def fetch_erp_receipt_list(date_from, date_to):
     return False, None, error
 
 
-def sync_erp_receipt(date_from=None, date_to=None):
+def sync_erp_receipt(date_from=None, date_to=None, skip_stock_update=False):
     """
     ERP 생산입고 내역을 WMS에 동기화
     - 생산 완료된 품목이 창고에 입고 → 재고 증가
@@ -2063,7 +2533,9 @@ def sync_erp_receipt(date_from=None, date_to=None):
 
             # MaterialStock 증가 (원자적)
             result_stock = 0
-            if warehouse:
+            if skip_stock_update:
+                pass  # 이력만 기록, 재고 미반영
+            elif warehouse:
                 stock, _ = MaterialStock.objects.get_or_create(
                     warehouse=warehouse,
                     part=part,
@@ -2237,7 +2709,7 @@ def fetch_erp_transfer_details(move_nb):
     return False, None, error
 
 
-def sync_erp_stock_transfer(date_from=None, date_to=None):
+def sync_erp_stock_transfer(date_from=None, date_to=None, skip_stock_update=False):
     """
     ERP 재고이동 내역을 SCM에 동기화
     - 출고창고 재고 차감, 입고창고 재고 증가
@@ -2357,35 +2829,38 @@ def sync_erp_stock_transfer(date_from=None, date_to=None):
 
                 # 출고창고 재고 차감
                 from_result = 0
-                if from_wh:
-                    from_stock = MaterialStock.objects.filter(
-                        warehouse=from_wh, part=part, lot_no=None
-                    ).first()
-                    if not from_stock:
-                        from_stock = MaterialStock.objects.create(
-                            warehouse=from_wh, part=part, lot_no=None, quantity=0
-                        )
-                    MaterialStock.objects.filter(id=from_stock.id).update(
-                        quantity=Greatest(models.F('quantity') - qty, models.Value(0))
-                    )
-                    from_stock.refresh_from_db()
-                    from_result = from_stock.quantity
-
-                # 입고창고 재고 증가
                 to_result = 0
-                if to_wh:
-                    to_stock = MaterialStock.objects.filter(
-                        warehouse=to_wh, part=part, lot_no=None
-                    ).first()
-                    if not to_stock:
-                        to_stock = MaterialStock.objects.create(
-                            warehouse=to_wh, part=part, lot_no=None, quantity=0
+                if skip_stock_update:
+                    pass  # 이력만 기록, 재고 미반영
+                else:
+                    if from_wh:
+                        from_stock = MaterialStock.objects.filter(
+                            warehouse=from_wh, part=part, lot_no=None
+                        ).first()
+                        if not from_stock:
+                            from_stock = MaterialStock.objects.create(
+                                warehouse=from_wh, part=part, lot_no=None, quantity=0
+                            )
+                        MaterialStock.objects.filter(id=from_stock.id).update(
+                            quantity=Greatest(models.F('quantity') - qty, models.Value(0))
                         )
-                    MaterialStock.objects.filter(id=to_stock.id).update(
-                        quantity=models.F('quantity') + qty
-                    )
-                    to_stock.refresh_from_db()
-                    to_result = to_stock.quantity
+                        from_stock.refresh_from_db()
+                        from_result = from_stock.quantity
+
+                    # 입고창고 재고 증가
+                    if to_wh:
+                        to_stock = MaterialStock.objects.filter(
+                            warehouse=to_wh, part=part, lot_no=None
+                        ).first()
+                        if not to_stock:
+                            to_stock = MaterialStock.objects.create(
+                                warehouse=to_wh, part=part, lot_no=None, quantity=0
+                            )
+                        MaterialStock.objects.filter(id=to_stock.id).update(
+                            quantity=models.F('quantity') + qty
+                        )
+                        to_stock.refresh_from_db()
+                        to_result = to_stock.quantity
 
                 fwh_nm = detail.get('fwhNm', '') or fwh_cd
                 twh_nm = detail.get('twhNm', '') or twh_cd
@@ -2457,7 +2932,7 @@ def fetch_erp_outgoing_details(isu_nb):
     return False, None, error
 
 
-def sync_erp_outgoing(date_from=None, date_to=None):
+def sync_erp_outgoing(date_from=None, date_to=None, skip_stock_update=False):
     """
     ERP 고객출고(물류출고) 내역을 WMS에 동기화
     - 고객에게 출고된 건 → 재고 차감
@@ -2576,7 +3051,9 @@ def sync_erp_outgoing(date_from=None, date_to=None):
 
                 # MaterialStock 차감 (원자적)
                 result_stock = 0
-                if from_wh:
+                if skip_stock_update:
+                    pass  # 이력만 기록, 재고 미반영
+                elif from_wh:
                     stock, _ = MaterialStock.objects.get_or_create(
                         warehouse=from_wh,
                         part=part,
