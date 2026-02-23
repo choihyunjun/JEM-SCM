@@ -5,7 +5,7 @@
 {% block content %}
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 
-<div class="container-fluid p-0" style="max-width: 1920px;">
+<div class="container-fluid p-0">
 <div class="mb-4">
     <h3 class="fw-bold">입고 처리 및 이력 조회</h3>
 </div>
@@ -133,7 +133,7 @@
 </div>
 
 <div class="card shadow-sm border-0">
-    <div class="card-header bg-dark text-white fw-bold d-flex justify-content-between align-items-center">
+    <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
         <span><i class="bi bi-clock-history"></i> 입고 완료 내역</span>
         <span class="badge bg-secondary">{{ incomings.count|default:"0" }}건</span>
     </div>

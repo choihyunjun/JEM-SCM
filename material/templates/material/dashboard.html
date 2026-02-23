@@ -2,7 +2,7 @@
 {% load humanize %}
 
 {% block material_content %}
-<div class="container-fluid p-0" style="max-width: 1800px;">
+<div class="container-fluid p-0">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h3 class="fw-bold">WMS 대시보드</h3>
         <div>
@@ -227,7 +227,7 @@
         <!-- 중앙: 최근 입출고 이력 -->
         <div class="col-lg-5">
             <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
                     <span><i class="bi bi-clock-history me-2"></i>최근 입출고 이력</span>
                     <a href="{% url 'material:transaction_history' %}" class="btn btn-sm btn-outline-light">전체보기</a>
                 </div>
@@ -370,7 +370,7 @@
 
             <!-- 마감 현황 -->
             <div class="card border-0 shadow-sm">
-                <div class="card-header bg-dark text-white">
+                <div class="card-header bg-white">
                     <i class="bi bi-lock me-2"></i>재고 마감 현황
                 </div>
                 <div class="card-body">
