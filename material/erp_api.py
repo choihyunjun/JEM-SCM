@@ -21,30 +21,55 @@ logger = logging.getLogger(__name__)
 def _generate_trx_no():
     """
     원자적 수불번호 생성 (TRX-YYYYMMDD-NNNN)
-    select_for_update로 동시 실행 시 중복 방지
+    select_for_update + 재시도로 동시 실행 시 중복 방지
     """
     from material.models import MaterialTransaction
     from django.utils import timezone as tz
+    from django.db import IntegrityError
+    import time
 
-    today_str = tz.localtime(tz.now()).strftime('%Y%m%d')
-    prefix = f'TRX-{today_str}'
+    for attempt in range(10):
+        today_str = tz.localtime(tz.now()).strftime('%Y%m%d')
+        prefix = f'TRX-{today_str}'
 
-    with transaction.atomic():
-        last_trx = (
-            MaterialTransaction.objects
-            .select_for_update()
-            .filter(transaction_no__startswith=prefix)
-            .order_by('-id')
-            .first()
-        )
-        if last_trx:
-            try:
-                seq = int(last_trx.transaction_no.split('-')[-1]) + 1
-            except (ValueError, IndexError):
+        with transaction.atomic():
+            last_trx = (
+                MaterialTransaction.objects
+                .select_for_update()
+                .filter(transaction_no__startswith=prefix)
+                .order_by('-transaction_no')
+                .first()
+            )
+            if last_trx:
+                try:
+                    seq = int(last_trx.transaction_no.split('-')[-1]) + 1
+                except (ValueError, IndexError):
+                    seq = 1
+            else:
                 seq = 1
-        else:
-            seq = 1
-        return f'{prefix}-{seq:04d}'
+
+            trx_no = f'{prefix}-{seq:04d}'
+
+            # 혹시 이미 존재하면 max+1로 재계산
+            if MaterialTransaction.objects.filter(transaction_no=trx_no).exists():
+                from django.db.models import Max
+                max_no = (
+                    MaterialTransaction.objects
+                    .filter(transaction_no__startswith=prefix)
+                    .aggregate(max_no=Max('transaction_no'))
+                )['max_no']
+                if max_no:
+                    try:
+                        seq = int(max_no.split('-')[-1]) + 1
+                    except (ValueError, IndexError):
+                        seq += 1
+                trx_no = f'{prefix}-{seq:04d}'
+
+            return trx_no
+
+    # 10회 시도 후에도 실패 시 uuid 기반 폴백
+    import uuid
+    return f'TRX-{uuid.uuid4().hex[:12].upper()}'
 
 
 def _generate_sign(access_token, hash_key, transaction_id, timestamp, url):

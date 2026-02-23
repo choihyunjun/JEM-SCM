@@ -63,6 +63,7 @@ class Command(BaseCommand):
             sync_erp_receipt,
             sync_erp_stock_transfer,
             sync_erp_adjustments,
+            sync_erp_outgoing,
             adjust_stock_to_erp,
             init_stock_from_erp,
         )
@@ -83,7 +84,7 @@ class Command(BaseCommand):
         # --reset: 기존 데이터 삭제 + 기초재고 셋팅
         if options['reset']:
             self.stdout.write(self.style.WARNING('[리셋 1/2] 기존 ERP 동기화 트랜잭션 삭제 중...'))
-            erp_types = ['IN_ERP', 'ISU_ERP', 'RCV_ERP', 'TRF_ERP', 'ADJ_ERP_IN', 'ADJ_ERP_OUT']
+            erp_types = ['IN_ERP', 'ISU_ERP', 'RCV_ERP', 'TRF_ERP', 'ADJ_ERP_IN', 'ADJ_ERP_OUT', 'OUT_ERP']
             for t in erp_types:
                 cnt = MaterialTransaction.objects.filter(transaction_type=t).count()
                 if cnt > 0:
@@ -118,10 +119,12 @@ class Command(BaseCommand):
             ('생산입고 (RCV_ERP)', lambda: sync_erp_receipt(date_from, date_to)),
             ('재고이동 (TRF_ERP)', lambda: sync_erp_stock_transfer(date_from, date_to)),
             ('재고조정 (ADJ_ERP)', lambda: sync_erp_adjustments(date_from, date_to)),
+            ('고객출고 (OUT_ERP)', lambda: sync_erp_outgoing(date_from, date_to)),
         ]
 
+        total_tasks = len(sync_tasks)
         for idx, (name, func) in enumerate(sync_tasks, 1):
-            self.stdout.write(f'[{idx}/5] {name} 동기화 중...')
+            self.stdout.write(f'[{idx}/{total_tasks}] {name} 동기화 중...')
             start = time.time()
 
             try:
