@@ -843,15 +843,15 @@ def init_stock_from_erp(year=None, cutoff_date=None):
     }, timeout=300)
 
     # 동기화 시작일 저장 → sync 함수들이 이 날짜 이후 건만 처리
-    # 실시간 현재고에는 오늘까지 수불이 모두 반영되어 있으므로, 내일부터 동기화
+    # 실시간 현재고는 "조회 시점"의 스냅샷이므로, 당일부터 동기화해야
+    # 셋팅 이후 같은 날 발생하는 수불도 반영됨
     import re
-    from datetime import timedelta
 
     if cutoff_date:
         base = datetime.strptime(cutoff_date, '%Y-%m-%d')
     else:
         base = datetime.now()
-    sync_start = (base + timedelta(days=1)).strftime('%Y%m%d')
+    sync_start = base.strftime('%Y%m%d')
     cache.set('erp_stock_init_date', sync_start, timeout=None)
 
     # settings.py에도 영구 저장 (서버 재시작 대비)
