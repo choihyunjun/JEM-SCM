@@ -5373,9 +5373,10 @@ def manual_outgoing(request):
     history_paginator = Paginator(history_qs, 15)
     history_page = history_paginator.get_page(request.GET.get('hpage'))
 
-    # 삭제 가능 여부
+    # 삭제 가능 여부 + 수량 절대값
     for item in history_page:
         item.can_cancel = (item.transaction_type == 'OUT_MANUAL')
+        item.display_quantity = abs(item.quantity)
 
     warehouses_qs = Warehouse.objects.filter(is_active=True).order_by('code')
 
@@ -5482,8 +5483,9 @@ def outgoing_history(request):
     paginator = Paginator(qs, 20)
     page_obj = paginator.get_page(request.GET.get('page'))
 
-    # 표시용 구분/비고
+    # 표시용 구분/비고/수량(절대값)
     for item in page_obj:
+        item.display_quantity = abs(item.quantity)
         if item.transaction_type == 'OUT_MANUAL':
             item.display_type = "수기출고"
             item.display_remark = item.remark or ""

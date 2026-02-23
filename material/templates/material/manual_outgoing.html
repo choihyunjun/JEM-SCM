@@ -1,4 +1,5 @@
 {% extends 'material/material_base.html' %}
+{% load humanize %}
 
 {% block material_content %}
 <style>
@@ -213,12 +214,12 @@
                     <tbody>
                         {% for item in history_page %}
                         <tr style="cursor:pointer;"
-                            onclick="openHistoryDetail({{ item.id }}, '{{ item.transaction_no }}', '{{ item.date|date:"Y-m-d H:i" }}', '{{ item.part.part_no }}', '{{ item.part.part_name|escapejs }}', {{ item.quantity }}, '{{ item.lot_no|date:"Y-m-d"|default:"-" }}', '{{ item.warehouse_from.name|default:"-"|escapejs }}', '{{ item.vendor.name|default:"-"|escapejs }}', '{{ item.actor.username|default:"-" }}', '{{ item.remark|default:""|escapejs }}', {{ item.can_cancel|yesno:"true,false" }})">
+                            onclick="openHistoryDetail({{ item.id }}, '{{ item.transaction_no }}', '{{ item.date|date:"Y-m-d H:i" }}', '{{ item.part.part_no }}', '{{ item.part.part_name|escapejs }}', {{ item.display_quantity }}, '{{ item.lot_no|date:"Y-m-d"|default:"-" }}', '{{ item.warehouse_from.name|default:"-"|escapejs }}', '{{ item.vendor.name|default:"-"|escapejs }}', '{{ item.actor.username|default:"-" }}', '{{ item.remark|default:""|escapejs }}', {{ item.can_cancel|yesno:"true,false" }})">
                             <td class="small text-nowrap">{{ item.date|date:"Y-m-d H:i" }}</td>
                             <td class="small fw-bold text-danger text-nowrap">{{ item.transaction_no }}</td>
                             <td class="small">{{ item.part.part_no }}</td>
                             <td class="text-start small text-truncate" style="max-width:200px;">{{ item.part.part_name }}</td>
-                            <td class="fw-bold text-end pe-3">{{ item.quantity }}</td>
+                            <td class="fw-bold text-end pe-3">{{ item.display_quantity|intcomma }}</td>
                             <td class="small">{{ item.lot_no|date:"Y-m-d"|default:"-" }}</td>
                             <td class="small">{{ item.warehouse_from.name|default:"-" }}</td>
                             <td>
@@ -235,7 +236,7 @@
                             <td>
                                 {% if item.can_cancel %}
                                 <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1"
-                                        onclick="event.stopPropagation(); openCancelModal({{ item.id }}, '{{ item.transaction_no }}', '{{ item.part.part_no }}', {{ item.quantity }})"
+                                        onclick="event.stopPropagation(); openCancelModal({{ item.id }}, '{{ item.transaction_no }}', '{{ item.part.part_no }}', {{ item.display_quantity }})"
                                         title="출고 삭제">
                                     <i class="bi bi-trash"></i>
                                 </button>

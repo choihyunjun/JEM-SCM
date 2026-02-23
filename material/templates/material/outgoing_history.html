@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load humanize %}
 
 {% block content %}
 <div class="container-fluid">
@@ -95,7 +96,7 @@
                             <td>{{ item.transaction_no }}</td>
                             <td>{{ item.part.part_no }}</td>
                             <td>{{ item.part.part_name }}</td>
-                            <td class="text-end fw-bold">{{ item.quantity }}</td>
+                            <td class="text-end fw-bold">{{ item.display_quantity|intcomma }}</td>
                             <td class="text-center">
                                 {% if item.lot_no %}
                                     {{ item.lot_no|date:"Y-m-d" }}
