@@ -604,8 +604,8 @@
                                  id="collapseOutboundWMS"
                                  data-bs-parent="#sidenavAccordion">
                                 <nav class="sb-sidenav-menu-nested nav">
-                                    <a class="nav-link {% if request.resolver_match.url_name == 'manual_outgoing' %}active{% endif %}" href="{% url 'material:manual_outgoing' %}">자재 수기 출고</a>
-                                    <a class="nav-link {% if request.resolver_match.url_name == 'outgoing_history' %}active{% endif %}" href="{% url 'material:outgoing_history' %}">출고 이력 조회</a>
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'manual_outgoing' %}active{% endif %}" href="{% url 'material:manual_outgoing' %}">출고 처리</a>
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'outgoing_history' %}active{% endif %}" href="{% url 'material:outgoing_history' %}">출고 내역 조회</a>
                                     <a class="nav-link {% if request.resolver_match.url_name == 'outbound_create' %}active{% endif %}" href="{% url 'material:outbound_create' %}">생산 자재 불출</a>
                                     <a class="nav-link {% if request.resolver_match.url_name == 'stock_return' %}active{% endif %}" href="{% url 'material:stock_return' %}">불량 반품 처리</a>
                                 </nav>

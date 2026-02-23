@@ -66,8 +66,8 @@
         <i class="bi bi-box-arrow-up me-2"></i> 출고 관리
     </a>
     <div class="collapse" id="outboundSubmenu">
-        <a href="{% url 'material:manual_outgoing' %}" class="submenu-item {% if request.resolver_match.url_name == 'manual_outgoing' %}active{% endif %}">- 자재 수기 출고</a>
-        <a href="{% url 'material:outgoing_history' %}" class="submenu-item {% if request.resolver_match.url_name == 'outgoing_history' %}active{% endif %}">- 출고 이력 조회</a>
+        <a href="{% url 'material:manual_outgoing' %}" class="submenu-item {% if request.resolver_match.url_name == 'manual_outgoing' %}active{% endif %}">- 출고 처리</a>
+        <a href="{% url 'material:outgoing_history' %}" class="submenu-item {% if request.resolver_match.url_name == 'outgoing_history' %}active{% endif %}">- 출고 내역 조회</a>
         <a href="{% url 'material:outbound_create' %}" class="submenu-item {% if request.resolver_match.url_name == 'outbound_create' %}active{% endif %}">- 생산 자재 불출</a>
         <a href="{% url 'material:stock_return' %}" class="submenu-item {% if request.resolver_match.url_name == 'stock_return' %}active{% endif %}">
             - 불량 반품 처리
