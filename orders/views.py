@@ -181,6 +181,7 @@ def menu_permission_required(permission_field):
         return _wrapped_view
     return decorator
 
+@login_required
 def login_success(request):
     """로그인 후 권한에 따라 적절한 페이지로 redirect"""
     user = request.user
@@ -1367,6 +1368,7 @@ def label_list(request):
     })
 
 @login_required
+@menu_permission_required('can_scm_label_edit')
 @require_POST
 def delete_delivery_order(request, order_id):
     resp = require_action_perm(request, 'delivery.delete')
@@ -1410,6 +1412,7 @@ def label_print_action(request):
     return redirect('label_list')
 
 @login_required
+@menu_permission_required('can_scm_label_edit')
 @require_POST
 def create_delivery_order(request):
     resp = require_action_perm(request, 'delivery.register')
@@ -1783,6 +1786,7 @@ def scm_admin_main(request):
 # ==========================================
 
 @login_required
+@menu_permission_required('can_scm_incoming_edit')
 @require_POST
 def receive_delivery_order_confirm(request):
     from django.db import transaction as db_transaction
@@ -3633,6 +3637,7 @@ def user_delete(request):
 # 협력사 관리
 # ============================================
 
+@login_required
 @menu_permission_required('can_access_scm_admin')
 def vendor_manage(request):
     """협력사 관리 메인 페이지"""
@@ -3673,6 +3678,7 @@ def vendor_manage(request):
     return render(request, 'vendor_manage.html', context)
 
 
+@login_required
 @menu_permission_required('can_access_scm_admin')
 def vendor_detail(request, vendor_id):
     """협력사 상세 정보 (JSON)"""
@@ -3694,6 +3700,7 @@ def vendor_detail(request, vendor_id):
         return JsonResponse({'error': 'Not found'}, status=404)
 
 
+@login_required
 @menu_permission_required('can_access_scm_admin')
 def vendor_create(request):
     """협력사 신규 등록"""
@@ -3729,6 +3736,7 @@ def vendor_create(request):
     return redirect('vendor_manage')
 
 
+@login_required
 @menu_permission_required('can_access_scm_admin')
 def vendor_update(request):
     """협력사 수정"""
@@ -3760,6 +3768,7 @@ def vendor_update(request):
     return redirect('vendor_manage')
 
 
+@login_required
 @menu_permission_required('can_access_scm_admin')
 def vendor_delete(request):
     """협력사 삭제"""
@@ -3790,6 +3799,7 @@ def vendor_delete(request):
     return redirect('vendor_manage')
 
 
+@login_required
 @menu_permission_required('can_access_scm_admin')
 def vendor_export(request):
     """협력사 전체 엑셀 다운로드"""
@@ -3840,6 +3850,7 @@ def vendor_export(request):
     return response
 
 
+@login_required
 @menu_permission_required('can_access_scm_admin')
 def vendor_link_user(request):
     """협력사에 사용자 연결 (Vendor.user OneToOneField 사용)"""
@@ -3870,6 +3881,7 @@ def vendor_link_user(request):
     return redirect('vendor_manage')
 
 
+@login_required
 @menu_permission_required('can_access_scm_admin')
 def vendor_unlink_user(request):
     """협력사 사용자 연결 해제"""
@@ -3893,6 +3905,7 @@ def vendor_unlink_user(request):
     return redirect('vendor_manage')
 
 
+@login_required
 @menu_permission_required('can_access_scm_admin')
 def vendor_search_users(request):
     """협력사에 연결 가능한 사용자 검색 API"""
@@ -3929,12 +3942,14 @@ def vendor_search_users(request):
 # 협력사 일괄 업로드
 # ============================================
 
+@login_required
 @menu_permission_required('can_access_scm_admin')
 def vendor_upload(request):
     """협력사 일괄 업로드 페이지"""
     return render(request, 'vendor_upload.html')
 
 
+@login_required
 @menu_permission_required('can_access_scm_admin')
 def vendor_upload_preview(request):
     """협력사 업로드 미리보기 (심플/ERP 양식 지원)"""
@@ -4074,6 +4089,7 @@ def vendor_upload_preview(request):
     return render(request, 'vendor_upload.html', context)
 
 
+@login_required
 @menu_permission_required('can_access_scm_admin')
 def vendor_upload_confirm(request):
     """협력사 업로드 최종 확정"""

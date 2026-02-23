@@ -57,7 +57,7 @@ class MaterialConfig(AppConfig):
                     logger.debug('ERP 자동 동기화 건너뜀: 다른 동기화 진행 중')
                 else:
                     try:
-                        from material.erp_api import sync_erp_incoming, sync_erp_issue, sync_erp_receipt, sync_erp_stock_transfer, sync_erp_adjustments
+                        from material.erp_api import sync_erp_incoming, sync_erp_issue, sync_erp_receipt, sync_erp_stock_transfer, sync_erp_adjustments, sync_erp_outgoing
                         from django.utils import timezone
 
                         # 구매입고 동기화
@@ -129,6 +129,20 @@ class MaterialConfig(AppConfig):
 
                         if adj_synced > 0:
                             logger.info(f'ERP 재고조정 자동 동기화: 신규 {adj_synced}건, 건너뜀 {adj_skipped}건, 오류 {adj_errors}건')
+
+                        # 고객출고 동기화
+                        out_synced, out_skipped, out_errors, out_err_list = sync_erp_outgoing()
+                        cache.set('erp_outgoing_sync_result', {
+                            'synced': out_synced,
+                            'skipped': out_skipped,
+                            'errors': out_errors,
+                            'error_list': out_err_list[:5],
+                            'finished_at': timezone.now().strftime('%Y-%m-%d %H:%M'),
+                            'auto': True,
+                        }, timeout=86400)
+
+                        if out_synced > 0:
+                            logger.info(f'ERP 고객출고 자동 동기화: 신규 {out_synced}건, 건너뜀 {out_skipped}건, 오류 {out_errors}건')
 
                     except Exception as e:
                         logger.error(f'ERP 자동 동기화 오류: {e}')

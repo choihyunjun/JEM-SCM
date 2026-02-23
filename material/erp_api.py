@@ -2414,3 +2414,206 @@ def sync_erp_stock_transfer(date_from=None, date_to=None):
 
     logger.info(f'ERP 재고이동 동기화 완료: 신규 {synced}, 건너뜀 {skipped}, 오류 {errors}')
     return synced, skipped, errors, error_list
+
+
+# ─────────────────────────────────────────────
+# 고객출고 동기화 (ERP → SCM)
+# ─────────────────────────────────────────────
+
+def fetch_erp_outgoing_headers(date_from, date_to):
+    """
+    ERP 출고 헤더 조회 (api20A01S00201)
+    date_from, date_to: 'YYYYMMDD' 형식
+    Returns: (success, list, error)
+    """
+    body = {
+        'coCd': settings.ERP_COMPANY_CODE,
+        'isuDtFrom': date_from,
+        'isuDtTo': date_to,
+    }
+    success, data, error = call_erp_api('/apiproxy/api20A01S00201', body)
+    if success and data:
+        return True, data.get('resultData', []) or [], None
+    return False, None, error
+
+
+def fetch_erp_outgoing_details(isu_nb):
+    """
+    ERP 출고 디테일 조회 (api20A01S00202)
+    isu_nb: 출고번호
+    Returns: (success, list, error)
+    """
+    body = {
+        'coCd': settings.ERP_COMPANY_CODE,
+        'isuNb': isu_nb,
+    }
+    success, data, error = call_erp_api('/apiproxy/api20A01S00202', body)
+    if success and data:
+        return True, data.get('resultData', []) or [], None
+    return False, None, error
+
+
+def sync_erp_outgoing(date_from=None, date_to=None):
+    """
+    ERP 고객출고(물류출고) 내역을 WMS에 동기화
+    - 고객에게 출고된 건 → 재고 차감
+    - 이미 동기화된 건(erp_incoming_no 매칭)은 건너뜀
+    - API: api20A01S00201(헤더) / api20A01S00202(디테일)
+    Returns: (synced_count, skipped_count, error_count, error_list)
+    """
+    from material.models import MaterialTransaction, MaterialStock, Warehouse
+    from orders.models import Part
+    from django.db import models
+    from django.db.models.functions import Greatest
+    from django.utils import timezone as tz
+    from django.core.cache import cache
+    from datetime import datetime, timedelta
+
+    if date_from is None:
+        cutoff = cache.get('erp_stock_init_date') or getattr(settings, 'ERP_STOCK_INIT_DATE', '')
+        if cutoff:
+            date_from = cutoff
+        else:
+            date_from = (datetime.now() - timedelta(days=1)).strftime('%Y%m%d')
+    if date_to is None:
+        date_to = datetime.now().strftime('%Y%m%d')
+
+    logger.info(f'ERP 고객출고 동기화 시작: {date_from} ~ {date_to}')
+
+    # 1) 헤더 조회
+    ok, headers, err = fetch_erp_outgoing_headers(date_from, date_to)
+    if not ok:
+        logger.error(f'ERP 고객출고 헤더 조회 실패: {err}')
+        return 0, 0, 1, [f'헤더 조회 실패: {err}']
+    if not headers:
+        logger.info('ERP 고객출고 내역 없음')
+        return 0, 0, 0, []
+
+    # 2) 이미 동기화된 출고번호 목록
+    existing_nbs = set(
+        MaterialTransaction.objects.filter(
+            transaction_type='OUT_ERP',
+            erp_incoming_no__isnull=False
+        ).values_list('erp_incoming_no', flat=True)
+    )
+
+    synced = 0
+    skipped = 0
+    errors = 0
+    error_list = []
+
+    for header in headers:
+        isu_nb = header.get('isuNb', '')
+        if not isu_nb:
+            continue
+
+        # SCM에서 올린 건 제외
+        remark = header.get('remarkDc', '') or ''
+        if 'SCM' in remark:
+            skipped += 1
+            continue
+
+        # 헤더 단위 중복 체크
+        if isu_nb in existing_nbs:
+            skipped += 1
+            continue
+
+        try:
+            # 3) 디테일 조회
+            ok2, details, err2 = fetch_erp_outgoing_details(isu_nb)
+            if not ok2 or not details:
+                skipped += 1
+                continue
+
+            isu_dt = header.get('isuDt', '')  # 'YYYYMMDD'
+            wh_cd = header.get('whCd', '')    # 출고창고코드
+            tr_cd = header.get('trCd', '')    # 거래처코드
+
+            # 출고일 파싱
+            try:
+                erp_date = datetime.strptime(isu_dt, '%Y%m%d').date()
+                now = tz.localtime(tz.now())
+                isu_date = now.replace(year=erp_date.year, month=erp_date.month, day=erp_date.day)
+            except (ValueError, TypeError):
+                isu_date = tz.now()
+
+            # 출고창고 매칭
+            from_wh = Warehouse.objects.filter(code=wh_cd).first() if wh_cd else None
+            if not from_wh:
+                from_wh = Warehouse.objects.filter(code='2000').first()
+
+            # 거래처 매칭
+            from orders.models import Vendor
+            vendor = Vendor.objects.filter(vendor_code=tr_cd).first() if tr_cd else None
+
+            detail_synced = False
+
+            # 4) 디테일별 트랜잭션 생성
+            for detail in details:
+                item_cd = detail.get('itemCd', '')
+                if not item_cd:
+                    continue
+
+                isu_sq = detail.get('isuSq', 1)
+                trx_key = f'{isu_nb}-{isu_sq}'
+                if trx_key in existing_nbs:
+                    continue
+
+                # Part 매칭
+                part = Part.objects.filter(part_no=item_cd).first()
+                if not part:
+                    continue
+
+                qty = int(detail.get('isuQt', 0) or 0)
+                if qty <= 0:
+                    continue
+
+                # MaterialStock 차감 (원자적)
+                result_stock = 0
+                if from_wh:
+                    stock, _ = MaterialStock.objects.get_or_create(
+                        warehouse=from_wh,
+                        part=part,
+                        lot_no=None,
+                        defaults={'quantity': 0}
+                    )
+                    MaterialStock.objects.filter(id=stock.id).update(
+                        quantity=Greatest(models.F('quantity') - qty, models.Value(0))
+                    )
+                    stock.refresh_from_db()
+                    result_stock = stock.quantity
+
+                trx_no = _generate_trx_no()
+
+                detail_remark = detail.get('remarkDc', '') or ''
+                wh_nm = header.get('whNm', '') or wh_cd
+                tr_nm = header.get('attrNm', '') or tr_cd
+
+                MaterialTransaction.objects.create(
+                    transaction_no=trx_no,
+                    transaction_type='OUT_ERP',
+                    date=isu_date,
+                    part=part,
+                    lot_no=None,
+                    quantity=-qty,
+                    warehouse_from=from_wh,
+                    result_stock=result_stock,
+                    vendor=vendor,
+                    remark=f'ERP출고({wh_nm}→{tr_nm}) {detail_remark}'.strip(),
+                    erp_incoming_no=trx_key,
+                    erp_sync_status='SUCCESS',
+                    erp_sync_message=f'ERP 고객출고 동기화 ({isu_nb})',
+                )
+                existing_nbs.add(trx_key)
+                detail_synced = True
+
+            if detail_synced:
+                synced += 1
+
+        except Exception as e:
+            errors += 1
+            error_list.append(f'{isu_nb}: {str(e)}')
+            logger.error(f'ERP 고객출고 동기화 오류 ({isu_nb}): {e}')
+
+    logger.info(f'ERP 고객출고 동기화 완료: 신규 {synced}, 건너뜀 {skipped}, 오류 {errors}')
+    return synced, skipped, errors, error_list

@@ -387,7 +387,7 @@ def m4_create(request):
     return render(request, "qms/m4_form.html", {"form": form, "mode": "create"})
 
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 def m4_submit(request, pk):
     if request.method == "POST":
         item = get_object_or_404(M4Request, pk=pk)
@@ -408,7 +408,7 @@ def m4_submit(request, pk):
     return redirect("qms:m4_detail", pk=pk)
 
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 def m4_update(request, pk):
     actor = get_actor(request.user)
     item = get_object_or_404(M4Request, pk=pk)
@@ -447,7 +447,7 @@ def m4_update(request, pk):
     return render(request, "qms/m4_form.html", {"form": form, "item": item, "mode": "update"})
 
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 def m4_approve(request, pk):
     if request.method == "POST":
         item = get_object_or_404(M4Request, pk=pk)
@@ -569,7 +569,7 @@ def _formal4m_next_status_on_submit(formal: Formal4MRequest) -> str:
     return "PENDING_APPROVE"
 
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 def formal4m_workflow_set(request, formal_id: int):
     actor = get_actor(request.user)
     formal = get_object_or_404(Formal4MRequest, pk=formal_id)
@@ -592,7 +592,7 @@ def formal4m_workflow_set(request, formal_id: int):
     return redirect("qms:formal4m_detail_by_id", formal_id=formal_id)
 
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 def formal4m_workflow_submit(request, formal_id: int):
     actor = get_actor(request.user)
     formal = get_object_or_404(Formal4MRequest, pk=formal_id)
@@ -636,7 +636,7 @@ def formal4m_workflow_submit(request, formal_id: int):
     return redirect("qms:formal4m_detail_by_id", formal_id=formal_id)
 
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 def formal4m_workflow_approve(request, formal_id: int):
     actor = get_actor(request.user)
     formal = get_object_or_404(Formal4MRequest, pk=formal_id)
@@ -683,7 +683,7 @@ def formal4m_workflow_approve(request, formal_id: int):
     return redirect("qms:formal4m_detail_by_id", formal_id=formal_id)
 
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 def formal4m_workflow_reject(request, formal_id: int):
     actor = get_actor(request.user)
     formal = get_object_or_404(Formal4MRequest, pk=formal_id)
@@ -715,7 +715,7 @@ def formal4m_workflow_reject(request, formal_id: int):
     return redirect("qms:formal4m_detail_by_id", formal_id=formal_id)
 
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 def formal4m_workflow_resubmit(request, formal_id: int):
     actor = get_actor(request.user)
     formal = get_object_or_404(Formal4MRequest, pk=formal_id)
@@ -755,7 +755,7 @@ def formal4m_workflow_resubmit(request, formal_id: int):
     return redirect("qms:formal4m_detail_by_id", formal_id=formal_id)
 
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 def formal4m_workflow_cancel(request, formal_id: int):
     actor = get_actor(request.user)
     formal = get_object_or_404(Formal4MRequest, pk=formal_id)
@@ -818,7 +818,7 @@ def formal4m_workflow_cancel(request, formal_id: int):
 
 
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 def formal4m_set_validity_start(request, formal_id: int):
     actor = get_actor(request.user)
     formal = get_object_or_404(Formal4MRequest, pk=formal_id)
@@ -864,7 +864,7 @@ FORMAL_4M_INSPECTION_TEMPLATE = [
 ]
 
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 def formal4m_upgrade_to_full(request, formal_id: int):
     actor = get_actor(request.user)
     formal = get_object_or_404(
@@ -913,7 +913,7 @@ def formal4m_upgrade_to_full(request, formal_id: int):
     return redirect("qms:formal4m_detail_by_id", formal_id=formal_id)
 
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 def formal4m_inspection_update(request, formal_id: int, row_id: int):
     actor = get_actor(request.user)
     formal = get_object_or_404(Formal4MRequest, pk=formal_id)
@@ -937,7 +937,7 @@ def formal4m_inspection_update(request, formal_id: int, row_id: int):
     return redirect("qms:formal4m_detail_by_id", formal_id=formal.id)
 
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 def formal4m_schedule_update(request, formal_id: int, row_id: int):
     actor = get_actor(request.user)
     formal = get_object_or_404(Formal4MRequest, pk=formal_id)
@@ -961,7 +961,7 @@ def formal4m_schedule_update(request, formal_id: int, row_id: int):
     return redirect("qms:formal4m_detail_by_id", formal_id=formal.id)
 
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 def formal4m_stage_update(request, formal_id: int, row_id: int):
     actor = get_actor(request.user)
     formal = get_object_or_404(Formal4MRequest, pk=formal_id)
@@ -983,7 +983,7 @@ def formal4m_stage_update(request, formal_id: int, row_id: int):
     return redirect("qms:formal4m_detail_by_id", formal_id=formal.id)
 
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 def formal4m_approval_update(request, formal_id: int):
     actor = get_actor(request.user)
     formal = get_object_or_404(Formal4MRequest, pk=formal_id)
@@ -1003,7 +1003,7 @@ def formal4m_approval_update(request, formal_id: int):
     return redirect("qms:formal4m_detail_by_id", formal_id=formal.id)
 
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 def formal4m_inspection_add(request, formal_id: int):
     actor = get_actor(request.user)
     formal = get_object_or_404(Formal4MRequest, pk=formal_id)
@@ -1022,7 +1022,7 @@ def formal4m_inspection_add(request, formal_id: int):
     return redirect("qms:formal4m_detail_by_id", formal_id=formal.id)
 
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 def formal4m_schedule_add(request, formal_id: int):
     actor = get_actor(request.user)
     formal = get_object_or_404(Formal4MRequest, pk=formal_id)
@@ -1041,7 +1041,7 @@ def formal4m_schedule_add(request, formal_id: int):
     return redirect("qms:formal4m_detail_by_id", formal_id=formal.id)
 
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 def formal4m_upload(request, formal_id, item_id):
     actor = get_actor(request.user)
     formal = get_object_or_404(Formal4MRequest, pk=formal_id)
@@ -1059,7 +1059,7 @@ def formal4m_upload(request, formal_id, item_id):
     return redirect("qms:formal4m_detail_by_id", formal_id=formal.id)
 
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 def formal4m_review_update(request, formal_id, item_id):
     actor = get_actor(request.user)
     if not actor.is_internal: return HttpResponseForbidden("내부 전용.")
@@ -1076,7 +1076,7 @@ def formal4m_review_update(request, formal_id, item_id):
     return redirect("qms:formal4m_detail_by_id", formal_id=formal.id)
 
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 def add_m4_review(request, pk):
     actor = get_actor(request.user)
     if request.method == "POST":
@@ -1087,7 +1087,7 @@ def add_m4_review(request, pk):
         messages.success(request, "검토 요청 등록됨.")
     return redirect("qms:m4_detail", pk=pk)
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 def edit_m4_review(request, review_id):
     review = get_object_or_404(M4Review, id=review_id); actor = get_actor(request.user)
     can_post = actor.is_internal and ((review.reviewer_id == request.user.id) or request.user.is_staff)
@@ -1095,13 +1095,13 @@ def edit_m4_review(request, review_id):
         review.content = request.POST.get("review_content"); review.received_at = timezone.now(); review.save(); messages.success(request, "의견 저장됨.")
     return redirect("qms:m4_detail", pk=review.request.pk)
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 def delete_m4_review(request, review_id):
     review = get_object_or_404(M4Review, id=review_id); actor = get_actor(request.user); pk = review.request.pk
     if actor.is_internal and (review.reviewer_id == request.user.id or request.user.is_staff): review.delete(); messages.success(request, "삭제됨.")
     return redirect("qms:m4_detail", pk=pk)
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 def m4_vendor_response(request, pk):
     actor = get_actor(request.user); item = get_object_or_404(M4Request, pk=pk)
     if not can_vendor_respond(actor, item): return HttpResponseForbidden("권한 없음.")
@@ -1111,7 +1111,7 @@ def m4_vendor_response(request, pk):
         if form.is_valid(): updated = form.save(commit=False); updated.reviewer, updated.received_at = request.user, timezone.now(); updated.save(); messages.success(request, "답변 등록됨.")
     return redirect("qms:m4_detail", pk=pk)
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 def m4_reject(request, pk):
     if request.method == "POST":
         item = get_object_or_404(M4Request, pk=pk)
@@ -1122,7 +1122,7 @@ def m4_reject(request, pk):
             messages.warning(request, "반려됨.")
     return redirect("qms:m4_detail", pk=pk)
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 def m4_resubmit(request, pk):
     if request.method == "POST":
         item = get_object_or_404(M4Request, pk=pk)
@@ -1131,7 +1131,7 @@ def m4_resubmit(request, pk):
             item.is_submitted, item.submitted_at = True, timezone.now(); item.is_reviewed = False; item.is_approved = False; item.save(); messages.success(request, "재상신됨.")
     return redirect("qms:m4_detail", pk=pk)
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 def m4_cancel_approval(request, pk):
     if request.method == "POST":
         item = get_object_or_404(M4Request, pk=pk)
@@ -1142,7 +1142,7 @@ def m4_cancel_approval(request, pk):
         item.save(); messages.info(request, "취소됨.")
     return redirect("qms:m4_detail", pk=pk)
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 def m4_delete(request, pk):
     item = get_object_or_404(M4Request, pk=pk)
     if item.user == request.user and item.status == "DRAFT" and request.method == "POST": item.delete(); messages.success(request, "삭제됨."); return redirect("qms:m4_list")
@@ -1500,7 +1500,7 @@ def _log_change(change_request, action, description, user, field_name='', old_va
     )
 
 
-@login_required
+@qms_permission_required('can_qms_4m_view')
 def change_request_list(request):
     """4M 변경 신청 목록"""
     user = request.user
@@ -1544,7 +1544,7 @@ def change_request_list(request):
     })
 
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 def change_request_create(request):
     """4M 변경 신청 작성"""
     user = request.user
@@ -1662,7 +1662,7 @@ def change_request_create(request):
     })
 
 
-@login_required
+@qms_permission_required('can_qms_4m_view')
 def change_request_detail(request, pk):
     """4M 변경 신청 상세"""
     user = request.user
@@ -1703,7 +1703,7 @@ def change_request_detail(request, pk):
     })
 
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 def change_request_edit(request, pk):
     """4M 변경 신청 수정"""
     user = request.user
@@ -1808,7 +1808,7 @@ def change_request_edit(request, pk):
     })
 
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 @require_POST
 def change_request_submit(request, pk):
     """4M 변경 신청 상신"""
@@ -1841,7 +1841,7 @@ def change_request_submit(request, pk):
     return redirect('qms:change_request_detail', pk=pk)
 
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 @require_POST
 def approval_step_process(request, pk):
     """결재 처리 (승인/반려)"""
@@ -1877,7 +1877,7 @@ def approval_step_process(request, pk):
     return redirect('qms:change_request_detail', pk=cr.pk)
 
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 @require_POST
 def change_request_phase_change(request, pk):
     """단계 전환 (APPROVED → FORMAL → VALIDATION → CLOSED)"""
@@ -1924,7 +1924,7 @@ def change_request_phase_change(request, pk):
     return redirect('qms:change_request_detail', pk=pk)
 
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 @require_POST
 def vendor_response_create(request, pk):
     """협력사 회신 요청 생성 (내부 → 협력사)"""
@@ -1955,7 +1955,7 @@ def vendor_response_create(request, pk):
     return redirect('qms:change_request_detail', pk=pk)
 
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 @require_POST
 def vendor_response_submit(request, pk):
     """협력사 회신 제출"""
@@ -1994,7 +1994,7 @@ def vendor_response_submit(request, pk):
     return redirect('qms:change_request_detail', pk=cr.pk)
 
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 @require_POST
 def document_upload(request, pk):
     """제출 서류 업로드"""
@@ -2024,7 +2024,7 @@ def document_upload(request, pk):
     return redirect('qms:change_request_detail', pk=cr.pk)
 
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 @require_POST
 def document_review(request, pk):
     """제출 서류 검토 (내부)"""
@@ -2055,7 +2055,7 @@ def document_review(request, pk):
     return redirect('qms:change_request_detail', pk=cr.pk)
 
 
-@login_required
+@qms_permission_required('can_qms_4m_edit')
 @require_POST
 def validity_evaluation(request, pk):
     """유효성 평가 결과 입력"""
@@ -2093,7 +2093,7 @@ def validity_evaluation(request, pk):
 
 from .models import OutgoingInspection, NonConformance, CorrectiveAction, VendorClaim, VendorRating, ISIR, ISIRItem
 
-@login_required
+@qms_permission_required('can_qms_inspection_view')
 def outgoing_inspection_list(request):
     """출하검사 목록"""
     qs = OutgoingInspection.objects.all()
@@ -2133,7 +2133,7 @@ def outgoing_inspection_list(request):
     })
 
 
-@login_required
+@qms_permission_required('can_qms_inspection_edit')
 def outgoing_inspection_create(request):
     """출하검사 등록"""
     if request.method == 'POST':
@@ -2157,7 +2157,7 @@ def outgoing_inspection_create(request):
     })
 
 
-@login_required
+@qms_permission_required('can_qms_inspection_view')
 def outgoing_inspection_detail(request, pk):
     """출하검사 상세"""
     oi = get_object_or_404(OutgoingInspection, pk=pk)
@@ -2193,7 +2193,7 @@ def outgoing_inspection_detail(request, pk):
 # 부적합품 관리 (Non-conformance)
 # ============================================================================
 
-@login_required
+@qms_permission_required('can_qms_nc_view')
 def nc_list(request):
     """부적합품 목록"""
     qs = NonConformance.objects.select_related('vendor', 'reported_by', 'assigned_to').all()
@@ -2243,7 +2243,7 @@ def nc_list(request):
     })
 
 
-@login_required
+@qms_permission_required('can_qms_nc_edit')
 def nc_create(request):
     """부적합품 등록"""
     if request.method == 'POST':
@@ -2274,7 +2274,7 @@ def nc_create(request):
     })
 
 
-@login_required
+@qms_permission_required('can_qms_nc_view')
 def nc_detail(request, pk):
     """부적합품 상세"""
     nc = get_object_or_404(NonConformance.objects.select_related('vendor', 'reported_by', 'assigned_to'), pk=pk)
@@ -2333,7 +2333,7 @@ def nc_detail(request, pk):
 # 시정조치 (CAPA)
 # ============================================================================
 
-@login_required
+@qms_permission_required('can_qms_nc_view')
 def capa_list(request):
     """시정조치 목록"""
     qs = CorrectiveAction.objects.select_related('vendor', 'requested_by', 'non_conformance').all()
@@ -2377,7 +2377,7 @@ def capa_list(request):
     })
 
 
-@login_required
+@qms_permission_required('can_qms_nc_edit')
 def capa_create(request):
     """시정조치 등록"""
     if request.method == 'POST':
@@ -2404,7 +2404,7 @@ def capa_create(request):
     })
 
 
-@login_required
+@qms_permission_required('can_qms_nc_view')
 def capa_detail(request, pk):
     """시정조치 상세"""
     capa = get_object_or_404(CorrectiveAction.objects.select_related('vendor', 'requested_by', 'non_conformance'), pk=pk)
@@ -2455,7 +2455,7 @@ def capa_detail(request, pk):
 # 협력사 클레임 (Vendor Claim)
 # ============================================================================
 
-@login_required
+@qms_permission_required('can_qms_claim_view')
 def claim_list(request):
     """클레임 목록"""
     qs = VendorClaim.objects.select_related('vendor', 'issued_by', 'non_conformance').all()
@@ -2502,7 +2502,7 @@ def claim_list(request):
     })
 
 
-@login_required
+@qms_permission_required('can_qms_claim_edit')
 def claim_create(request):
     """클레임 등록"""
     if request.method == 'POST':
@@ -2532,7 +2532,7 @@ def claim_create(request):
     })
 
 
-@login_required
+@qms_permission_required('can_qms_claim_view')
 def claim_detail(request, pk):
     """클레임 상세"""
     claim = get_object_or_404(VendorClaim.objects.select_related('vendor', 'issued_by', 'non_conformance'), pk=pk)
@@ -2579,7 +2579,7 @@ def claim_detail(request, pk):
 # 협력사 평가 (Vendor Rating)
 # ============================================================================
 
-@login_required
+@qms_permission_required('can_qms_rating_view')
 def vendor_rating_list(request):
     """협력사 평가 목록"""
     qs = VendorRating.objects.select_related('vendor', 'evaluated_by').all()
@@ -2620,7 +2620,7 @@ def vendor_rating_list(request):
     })
 
 
-@login_required
+@qms_permission_required('can_qms_rating_edit')
 def vendor_rating_create(request):
     """협력사 평가 등록/계산"""
     if request.method == 'POST':
@@ -2761,7 +2761,7 @@ def vendor_rating_create(request):
     })
 
 
-@login_required
+@qms_permission_required('can_qms_rating_view')
 def vendor_rating_detail(request, pk):
     """협력사 평가 상세"""
     rating = get_object_or_404(VendorRating.objects.select_related('vendor', 'evaluated_by'), pk=pk)
@@ -2986,7 +2986,7 @@ def qms_dashboard(request):
 # ISIR (Initial Sample Inspection Report) - 초도품 검사
 # ============================================================================
 
-@login_required
+@qms_permission_required('can_qms_isir_view')
 def isir_list(request):
     """ISIR 목록"""
     qs = ISIR.objects.select_related('vendor', 'inspector', 'approved_by').all()
@@ -3032,7 +3032,7 @@ def isir_list(request):
     })
 
 
-@login_required
+@qms_permission_required('can_qms_isir_edit')
 def isir_create(request):
     """ISIR 등록"""
     if request.method == 'POST':
@@ -3101,7 +3101,7 @@ def isir_create(request):
     })
 
 
-@login_required
+@qms_permission_required('can_qms_isir_view')
 def isir_detail(request, pk):
     """ISIR 상세"""
     isir = get_object_or_404(
@@ -3273,7 +3273,7 @@ def isir_detail(request, pk):
     })
 
 
-@login_required
+@qms_permission_required('can_qms_isir_view')
 def isir_pdf(request, pk):
     """ISIR PDF 출력"""
     from django.http import HttpResponse
@@ -3329,7 +3329,7 @@ def isir_pdf(request, pk):
 # VOC 관리 (Voice of Customer)
 # ============================================================================
 
-@login_required
+@qms_permission_required('can_qms_inspection_view')
 def voc_list(request):
     """VOC 목록"""
     qs = VOC.objects.select_related('linked_vendor', 'received_by', 'assigned_to').all()
@@ -3387,7 +3387,7 @@ def voc_list(request):
     })
 
 
-@login_required
+@qms_permission_required('can_qms_inspection_edit')
 def voc_create(request):
     """VOC 등록"""
     if request.method == 'POST':
@@ -3434,7 +3434,7 @@ def voc_create(request):
     })
 
 
-@login_required
+@qms_permission_required('can_qms_inspection_view')
 def voc_detail(request, pk):
     """VOC 상세"""
     voc = get_object_or_404(
@@ -3521,7 +3521,7 @@ def voc_detail(request, pk):
 # 계측기 관리 (Gauge Management)
 # ============================================================================
 
-@login_required
+@qms_permission_required('can_qms_inspection_view')
 def gauge_list(request):
     """계측기 목록"""
     qs = Gauge.objects.select_related('manager').all()
@@ -3587,7 +3587,7 @@ def gauge_list(request):
     })
 
 
-@login_required
+@qms_permission_required('can_qms_inspection_edit')
 def gauge_create(request):
     """계측기 등록"""
     if request.method == 'POST':
@@ -3642,7 +3642,7 @@ def gauge_create(request):
     })
 
 
-@login_required
+@qms_permission_required('can_qms_inspection_view')
 def gauge_detail(request, pk):
     """계측기 상세"""
     gauge = get_object_or_404(Gauge.objects.select_related('manager'), pk=pk)
@@ -3715,7 +3715,7 @@ def gauge_detail(request, pk):
 # 품질문서 관리 (Quality Document Management)
 # ============================================================================
 
-@login_required
+@qms_permission_required('can_qms_inspection_view')
 def qdoc_list(request):
     """품질문서 목록"""
     qs = QualityDocument.objects.select_related('created_by', 'approved_by').all()
@@ -3758,7 +3758,7 @@ def qdoc_list(request):
     })
 
 
-@login_required
+@qms_permission_required('can_qms_inspection_edit')
 def qdoc_create(request):
     """품질문서 등록"""
     if request.method == 'POST':
@@ -3794,7 +3794,7 @@ def qdoc_create(request):
     })
 
 
-@login_required
+@qms_permission_required('can_qms_inspection_view')
 def qdoc_detail(request, pk):
     """품질문서 상세"""
     doc = get_object_or_404(
@@ -3875,7 +3875,7 @@ def qdoc_detail(request, pk):
 
 # ── 출하검사 ──
 
-@login_required
+@qms_permission_required('can_qms_inspection_edit')
 def outgoing_inspection_edit(request, pk):
     """출하검사 수정"""
     oi = get_object_or_404(OutgoingInspection, pk=pk)
@@ -3895,7 +3895,7 @@ def outgoing_inspection_edit(request, pk):
         'mode': 'edit', 'oi': oi,
     })
 
-@login_required
+@qms_permission_required('can_qms_inspection_edit')
 @require_POST
 def outgoing_inspection_delete(request, pk):
     """출하검사 삭제"""
@@ -3907,7 +3907,7 @@ def outgoing_inspection_delete(request, pk):
 
 # ── 부적합품 ──
 
-@login_required
+@qms_permission_required('can_qms_nc_edit')
 def nc_edit(request, pk):
     """부적합품 수정"""
     nc = get_object_or_404(NonConformance, pk=pk)
@@ -3934,7 +3934,7 @@ def nc_edit(request, pk):
         'vendors': vendors,
     })
 
-@login_required
+@qms_permission_required('can_qms_nc_edit')
 @require_POST
 def nc_delete(request, pk):
     """부적합품 삭제"""
@@ -3946,7 +3946,7 @@ def nc_delete(request, pk):
 
 # ── 시정조치 (CAPA) ──
 
-@login_required
+@qms_permission_required('can_qms_nc_edit')
 def capa_edit(request, pk):
     """시정조치 수정"""
     capa = get_object_or_404(CorrectiveAction, pk=pk)
@@ -3971,7 +3971,7 @@ def capa_edit(request, pk):
         'vendors': vendors,
     })
 
-@login_required
+@qms_permission_required('can_qms_nc_edit')
 @require_POST
 def capa_delete(request, pk):
     """시정조치 삭제"""
@@ -3983,7 +3983,7 @@ def capa_delete(request, pk):
 
 # ── 협력사 클레임 ──
 
-@login_required
+@qms_permission_required('can_qms_claim_edit')
 def claim_edit(request, pk):
     """클레임 수정"""
     claim = get_object_or_404(VendorClaim, pk=pk)
@@ -4011,7 +4011,7 @@ def claim_edit(request, pk):
         'vendors': vendors,
     })
 
-@login_required
+@qms_permission_required('can_qms_claim_edit')
 @require_POST
 def claim_delete(request, pk):
     """클레임 삭제"""
@@ -4023,7 +4023,7 @@ def claim_delete(request, pk):
 
 # ── 협력사 평가 ──
 
-@login_required
+@qms_permission_required('can_qms_rating_edit')
 @require_POST
 def vendor_rating_delete(request, pk):
     """협력사 평가 삭제"""
@@ -4035,7 +4035,7 @@ def vendor_rating_delete(request, pk):
 
 # ── ISIR (초도품검사) ──
 
-@login_required
+@qms_permission_required('can_qms_isir_edit')
 def isir_edit(request, pk):
     """ISIR 수정"""
     isir = get_object_or_404(ISIR, pk=pk)
@@ -4087,7 +4087,7 @@ def isir_edit(request, pk):
         'vendors': vendors,
     })
 
-@login_required
+@qms_permission_required('can_qms_isir_edit')
 @require_POST
 def isir_delete(request, pk):
     """ISIR 삭제"""
@@ -4099,7 +4099,7 @@ def isir_delete(request, pk):
 
 # ── VOC (고객의 소리) ──
 
-@login_required
+@qms_permission_required('can_qms_inspection_edit')
 def voc_edit(request, pk):
     """VOC 수정"""
     voc = get_object_or_404(VOC, pk=pk)
@@ -4137,7 +4137,7 @@ def voc_edit(request, pk):
         'today': timezone.localdate(),
     })
 
-@login_required
+@qms_permission_required('can_qms_inspection_edit')
 @require_POST
 def voc_delete(request, pk):
     """VOC 삭제"""
@@ -4149,7 +4149,7 @@ def voc_delete(request, pk):
 
 # ── 계측기 ──
 
-@login_required
+@qms_permission_required('can_qms_inspection_edit')
 def gauge_edit(request, pk):
     """계측기 수정"""
     gauge = get_object_or_404(Gauge, pk=pk)
@@ -4192,7 +4192,7 @@ def gauge_edit(request, pk):
         'users': users,
     })
 
-@login_required
+@qms_permission_required('can_qms_inspection_edit')
 @require_POST
 def gauge_delete(request, pk):
     """계측기 삭제"""
@@ -4204,7 +4204,7 @@ def gauge_delete(request, pk):
 
 # ── 품질문서 ──
 
-@login_required
+@qms_permission_required('can_qms_inspection_edit')
 def qdoc_edit(request, pk):
     """품질문서 수정"""
     doc = get_object_or_404(QualityDocument, pk=pk)
@@ -4234,7 +4234,7 @@ def qdoc_edit(request, pk):
         'today': timezone.localdate(),
     })
 
-@login_required
+@qms_permission_required('can_qms_inspection_edit')
 @require_POST
 def qdoc_delete(request, pk):
     """품질문서 삭제"""

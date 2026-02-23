@@ -139,6 +139,34 @@
                         </div>
                         <small class="text-muted mt-1 d-block progress-detail"></small>
                     </div>
+
+                    <hr class="my-3">
+                    <p class="text-muted small mb-2">
+                        ERP 수불 내역을 수동으로 즉시 동기화합니다.
+                    </p>
+                    <ul class="small text-muted mb-2" style="padding-left: 1.2rem;">
+                        <li>구매입고 / 고객출고 / 생산출고</li>
+                        <li>생산입고 / 재고이동</li>
+                    </ul>
+                    <form id="syncTxForm" method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="sync_transactions">
+                        <button type="submit" class="btn btn-outline-success btn-sm" id="btnSyncTx" {% if not erp_enabled %}disabled{% endif %}>
+                            <i class="bi bi-arrow-repeat me-1"></i>수불 동기화 실행
+                        </button>
+                    </form>
+                    <!-- 수불동기화 진행률 -->
+                    <div id="syncTxProgress" class="mt-3" style="display:none;">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <small class="fw-bold text-success progress-stage">준비 중...</small>
+                            <small class="fw-bold progress-pct">0%</small>
+                        </div>
+                        <div class="progress" style="height: 16px;">
+                            <div class="progress-bar bg-success progress-bar-striped progress-bar-animated"
+                                 role="progressbar" style="width: 0%"></div>
+                        </div>
+                        <small class="text-muted mt-1 d-block progress-detail"></small>
+                    </div>
                 </div>
             </div>
         </div>
@@ -248,6 +276,12 @@ function startSyncProgress(formId, btnId, progressAreaId, progressUrl, confirmMs
 startSyncProgress('adjustForm', 'btnAdjust', 'adjustProgress',
     '{% url "material:erp_sync_progress" %}',
     'SCM 재고를 ERP 현재고에 맞춰 조정합니다.\n\n→ 차이 나는 품목만 증감 처리\n→ 조정 이력(ADJ_ERP) 자동 생성\n→ 조정 시점 이후 ERP 수불은 자동동기화로 반영됩니다.\n\n실행하시겠습니까?'
+);
+
+// 수불 동기화
+startSyncProgress('syncTxForm', 'btnSyncTx', 'syncTxProgress',
+    '{% url "material:erp_sync_progress" %}',
+    '구매입고 / 고객출고 / 생산출고 / 생산입고 / 재고이동\n5가지 수불 내역을 ERP에서 즉시 동기화합니다.\n\n실행하시겠습니까?'
 );
 
 // 재고 비교

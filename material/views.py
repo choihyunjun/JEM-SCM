@@ -978,7 +978,7 @@ from django.views.decorators.http import require_http_methods
 import json
 
 @require_http_methods(["POST"])
-@login_required
+@wms_permission_required('can_wms_stock_view')
 def api_process_tag_scan(request):
     """
     현품표 QR 스캔 시 호출되는 API
@@ -1094,7 +1094,7 @@ def api_process_tag_scan(request):
 
 
 @require_http_methods(["GET"])
-@login_required
+@wms_permission_required('can_wms_stock_view')
 def api_process_tag_info(request, tag_id):
     """
     현품표 정보 조회 API (GET)
@@ -3385,7 +3385,7 @@ def bom_register_demand(request):
 from .models import InventoryCheckSession, InventoryCheckSessionItem, ProcessTag
 
 
-@login_required
+@wms_permission_required('can_wms_stock_view')
 def inventory_check_list(request):
     """재고조사 목록"""
     qs = InventoryCheckSession.objects.select_related('warehouse', 'created_by').all()
@@ -3411,7 +3411,7 @@ def inventory_check_list(request):
     })
 
 
-@login_required
+@wms_permission_required('can_wms_stock_edit')
 def inventory_check_create(request):
     """재고조사 세션 생성"""
     if request.method == 'POST':
@@ -3436,7 +3436,7 @@ def inventory_check_create(request):
     })
 
 
-@login_required
+@wms_permission_required('can_wms_stock_edit')
 def inventory_check_scan(request, pk):
     """재고조사 QR 스캔 페이지"""
     check = get_object_or_404(InventoryCheckSession.objects.select_related('warehouse'), pk=pk)
@@ -3455,6 +3455,7 @@ def inventory_check_scan(request, pk):
 
 from django.views.decorators.http import require_POST
 
+@wms_permission_required('can_wms_stock_edit')
 @require_POST
 def inventory_check_scan_api(request, pk):
     """재고조사 QR 스캔 API (AJAX)"""
@@ -3565,7 +3566,7 @@ def inventory_check_scan_api(request, pk):
         }, status=500)
 
 
-@login_required
+@wms_permission_required('can_wms_stock_edit')
 def inventory_check_complete(request, pk):
     """재고조사 완료"""
     check = get_object_or_404(InventoryCheckSession, pk=pk)
@@ -3582,7 +3583,7 @@ def inventory_check_complete(request, pk):
     return redirect('material:inventory_check_scan', pk=check.pk)
 
 
-@login_required
+@wms_permission_required('can_wms_stock_view')
 def inventory_check_result(request, pk):
     """재고조사 결과 - 품목별 집계"""
     from django.db.models import Sum, Count
@@ -3645,7 +3646,7 @@ def inventory_check_result(request, pk):
 # 재고 종합 조회 (피벗 테이블)
 # =============================================================================
 
-@login_required
+@wms_permission_required('can_wms_stock_view')
 def inventory_summary(request):
     """재고조사 종합 집계표 - 창고별 피벗 테이블 (스캔 데이터 기반)"""
     from collections import defaultdict
@@ -3722,7 +3723,7 @@ def inventory_summary(request):
     })
 
 
-@login_required
+@wms_permission_required('can_wms_stock_view')
 def inventory_summary_excel(request):
     """재고조사 종합 집계표 - 엑셀 다운로드 (창고별 피벗)"""
     from collections import defaultdict
@@ -5069,6 +5070,60 @@ def erp_stock_manage(request):
             )
         return redirect('material:erp_stock_manage')
 
+    # ── 수불 동기화 (입고/출고/생산출고/생산입고/재고이동) ──
+    if action == 'sync_transactions':
+        from material.erp_api import (
+            sync_erp_incoming, sync_erp_issue, sync_erp_receipt,
+            sync_erp_stock_transfer, sync_erp_outgoing
+        )
+
+        sync_jobs = [
+            ('구매입고', sync_erp_incoming),
+            ('고객출고', sync_erp_outgoing),
+            ('생산출고', sync_erp_issue),
+            ('생산입고', sync_erp_receipt),
+            ('재고이동', sync_erp_stock_transfer),
+        ]
+
+        total_synced = 0
+        total_skipped = 0
+        total_errors = 0
+        details = []
+
+        for idx, (label, func) in enumerate(sync_jobs):
+            cache.set('erp_sync_progress', {
+                'stage': f'{label} 동기화 중...',
+                'percent': int((idx / len(sync_jobs)) * 100),
+                'detail': f'{idx}/{len(sync_jobs)} 완료',
+            }, timeout=300)
+
+            try:
+                synced, skipped, errs, err_list = func()
+                total_synced += synced
+                total_skipped += skipped
+                total_errors += errs
+                if synced > 0 or errs > 0:
+                    details.append(f'{label}: 반영 {synced}건')
+                for e in err_list[:2]:
+                    messages.warning(request, f'[{label}] {e}')
+            except Exception as e:
+                total_errors += 1
+                messages.warning(request, f'[{label}] 오류: {str(e)[:100]}')
+
+        cache.set('erp_sync_progress', {
+            'stage': '완료',
+            'percent': 100,
+            'detail': f'총 반영 {total_synced}건',
+        }, timeout=300)
+
+        if total_synced > 0:
+            detail_str = ' / '.join(details) if details else ''
+            messages.success(request, f'수불 동기화 완료: 반영 {total_synced}건, 건너뜀 {total_skipped}건 ({detail_str})')
+        else:
+            messages.info(request, f'수불 동기화: 신규 건 없음 (건너뜀 {total_skipped}건)')
+
+        return redirect('material:erp_stock_manage')
+
     # ── ERP vs SCM 비교 ──
     if action == 'compare' or request.GET.get('compare'):
         from material.erp_api import compare_erp_stock
@@ -5089,7 +5144,7 @@ def erp_stock_manage(request):
     return render(request, 'material/erp_stock_manage.html', context)
 
 
-@login_required
+@wms_permission_required('can_wms_stock_view')
 def erp_stock_init_progress(request):
     """기초재고 셋팅 진행률 조회 API (AJAX 폴링용)"""
     from django.core.cache import cache
@@ -5100,7 +5155,7 @@ def erp_stock_init_progress(request):
     return JsonResponse({'stage': '', 'percent': 0})
 
 
-@login_required
+@wms_permission_required('can_wms_stock_view')
 def erp_sync_progress(request):
     """범용 ERP 동기화 진행률 조회 API (AJAX 폴링용)"""
     from django.core.cache import cache
