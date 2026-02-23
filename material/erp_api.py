@@ -1337,6 +1337,8 @@ def link_vendor_by_incoming(months=6):
     result = {
         'total_headers': 0, 'matched': 0, 'updated': 0,
         'skipped_no_vendor': 0, 'errors': [],
+        'updated_list': [],       # 연결 성공 목록
+        'skipped_list': [],       # 거래처없음 목록
     }
 
     # 날짜 범위 계산
@@ -1402,14 +1404,26 @@ def link_vendor_by_incoming(months=6):
     for idx, part in enumerate(no_vendor_parts):
         mapping = item_vendor_map.get(part.part_no)
         if mapping:
-            tr_cd, _ = mapping
+            tr_cd, vendor_nm = mapping
             vendor = vendor_cache.get(tr_cd)
             if vendor:
                 part.vendor = vendor
                 part.save(update_fields=['vendor'])
                 updated += 1
+                result['updated_list'].append({
+                    'part_no': part.part_no,
+                    'part_name': part.part_name,
+                    'vendor_name': vendor.name,
+                    'vendor_code': tr_cd,
+                })
             else:
                 result['skipped_no_vendor'] += 1
+                result['skipped_list'].append({
+                    'part_no': part.part_no,
+                    'part_name': part.part_name,
+                    'erp_vendor_code': tr_cd,
+                    'erp_vendor_name': vendor_nm,
+                })
 
         if (idx + 1) % 200 == 0 or idx == total_parts - 1:
             pct = 75 + int((idx + 1) / max(total_parts, 1) * 20)

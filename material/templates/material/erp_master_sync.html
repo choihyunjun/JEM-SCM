@@ -179,9 +179,17 @@
                         <div class="d-flex gap-2 flex-wrap">
                             <span class="badge bg-secondary">입고 {{ link_result.total_headers }}건 분석</span>
                             <span class="badge bg-info">매핑 {{ link_result.matched }}건</span>
-                            <span class="badge bg-success">연결 {{ link_result.updated }}건</span>
+                            {% if link_result.updated > 0 %}
+                            <span class="badge bg-success" role="button" data-bs-toggle="modal" data-bs-target="#updatedModal" style="cursor:pointer;">
+                                연결 {{ link_result.updated }}건 <i class="bi bi-box-arrow-up-right"></i>
+                            </span>
+                            {% else %}
+                            <span class="badge bg-success">연결 0건</span>
+                            {% endif %}
                             {% if link_result.skipped_no_vendor > 0 %}
-                            <span class="badge bg-warning text-dark">거래처없음 {{ link_result.skipped_no_vendor }}건</span>
+                            <span class="badge bg-warning text-dark" role="button" data-bs-toggle="modal" data-bs-target="#skippedModal" style="cursor:pointer;">
+                                거래처없음 {{ link_result.skipped_no_vendor }}건 <i class="bi bi-box-arrow-up-right"></i>
+                            </span>
                             {% endif %}
                         </div>
                     </div>
@@ -204,6 +212,72 @@
         </div>
     </div>
 </div>
+
+<!-- 연결 성공 모달 -->
+{% if link_result and link_result.updated_list %}
+<div class="modal fade" id="updatedModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white py-2">
+                <h6 class="modal-title"><i class="bi bi-check-circle me-1"></i>업체 연결 완료 ({{ link_result.updated }}건)</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light sticky-top">
+                        <tr><th>품번</th><th>품명</th><th>연결 업체</th><th>거래처코드</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for item in link_result.updated_list %}
+                        <tr>
+                            <td class="small fw-bold">{{ item.part_no }}</td>
+                            <td class="small">{{ item.part_name }}</td>
+                            <td class="small text-success">{{ item.vendor_name }}</td>
+                            <td class="small text-muted">{{ item.vendor_code }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- 거래처없음 모달 -->
+{% if link_result and link_result.skipped_list %}
+<div class="modal fade" id="skippedModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-warning py-2">
+                <h6 class="modal-title"><i class="bi bi-exclamation-triangle me-1"></i>SCM 미등록 거래처 ({{ link_result.skipped_no_vendor }}건)</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="alert alert-warning small mb-0 rounded-0">
+                    ERP 입고이력에 거래처가 있지만 SCM에 해당 거래처가 등록되어 있지 않습니다.
+                    <strong>거래처 동기화</strong>를 먼저 실행한 뒤 다시 시도하세요.
+                </div>
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light sticky-top">
+                        <tr><th>품번</th><th>품명</th><th>ERP 거래처코드</th><th>ERP 거래처명</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for item in link_result.skipped_list %}
+                        <tr>
+                            <td class="small fw-bold">{{ item.part_no }}</td>
+                            <td class="small">{{ item.part_name }}</td>
+                            <td class="small text-warning">{{ item.erp_vendor_code }}</td>
+                            <td class="small">{{ item.erp_vendor_name }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <script>
 function startProgress(formId, btnId, progressAreaId) {
