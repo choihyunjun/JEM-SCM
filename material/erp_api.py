@@ -525,8 +525,8 @@ def sync_erp_incoming(date_from=None, date_to=None):
             skipped += 1
             continue
 
-        # 이미 동기화된 건 제외
-        if rcv_nb in existing_rcv_nbs:
+        # 이미 동기화된 건 제외 (existing_nbs에는 'RV...-순번' 형태이므로 prefix로 체크)
+        if any(nb.startswith(rcv_nb) for nb in existing_rcv_nbs):
             skipped += 1
             continue
 
@@ -1838,8 +1838,8 @@ def sync_erp_issue(date_from=None, date_to=None):
             skipped += 1
             continue
 
-        # 헤더 단위 중복 체크
-        if isu_nb in existing_nbs:
+        # 헤더 단위 중복 체크 (existing_nbs에는 '번호-순번' 형태이므로 prefix로 체크)
+        if any(nb.startswith(isu_nb) for nb in existing_nbs):
             skipped += 1
             continue
 
@@ -2290,8 +2290,8 @@ def sync_erp_stock_transfer(date_from=None, date_to=None):
             skipped += 1
             continue
 
-        # 헤더 단위 중복 체크
-        if move_nb in existing_nbs:
+        # 헤더 단위 중복 체크 (existing_nbs에는 '번호-순번' 형태이므로 prefix로 체크)
+        if any(nb.startswith(move_nb) for nb in existing_nbs):
             skipped += 1
             continue
 
@@ -2513,8 +2513,8 @@ def sync_erp_outgoing(date_from=None, date_to=None):
             skipped += 1
             continue
 
-        # 헤더 단위 중복 체크
-        if isu_nb in existing_nbs:
+        # 헤더 단위 중복 체크 (existing_nbs에는 'IS...-순번' 형태이므로 prefix로 체크)
+        if any(nb.startswith(isu_nb) for nb in existing_nbs):
             skipped += 1
             continue
 
