@@ -812,7 +812,7 @@ def init_stock_from_erp(year=None, cutoff_date=None):
 
     for idx, item in enumerate(items):
         qty = int(item.get('invQt1', 0) or 0)
-        if qty <= 0:
+        if qty == 0:
             result['skipped_zero'] += 1
             continue
         part = part_map.get(item.get('itemCd', ''))
@@ -903,11 +903,11 @@ def compare_erp_stock(year=None):
     erp_map = {}
     erp_info = {}
     for item in (items or []):
-        qty = item.get('invQt1', 0) or 0
-        if qty <= 0:
+        qty = int(item.get('invQt1', 0) or 0)
+        if qty == 0:
             continue
         key = (item.get('whCd', ''), item.get('itemCd', ''))
-        erp_map[key] = int(qty)
+        erp_map[key] = qty
         erp_info[item.get('itemCd', '')] = item.get('itemNm', '')
 
     scm_agg = MaterialStock.objects.values(
