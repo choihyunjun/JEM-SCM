@@ -5,14 +5,19 @@ ERP 전체 수불 이력 동기화 + 재고조정 통합 커맨드
   python manage.py sync_erp_history                    # 1월1일~오늘 전체 동기화
   python manage.py sync_erp_history --from 20260201    # 2월1일부터
   python manage.py sync_erp_history --no-adjust        # 재고조정 생략 (이력만)
+  python manage.py sync_erp_history --reset            # 기존 데이터 삭제 후 처음부터
 
 동작 순서:
-  1) ERP 구매입고 (IN_ERP) 동기화
-  2) ERP 생산출고 (ISU_ERP) 동기화
-  3) ERP 생산입고 (RCV_ERP) 동기화
-  4) ERP 재고이동 (TRF_ERP) 동기화
-  5) ERP 재고조정 (ADJ_ERP) 동기화
-  6) SCM 재고를 ERP 현재고에 맞춤 (adjust_stock_to_erp)
+  --reset 시:
+    0-1) 기존 ERP 동기화 트랜잭션 전체 삭제
+    0-2) 기초재고 셋팅 (ERP 실시간 현재고)
+  공통:
+    1) ERP 구매입고 (IN_ERP) 동기화
+    2) ERP 생산출고 (ISU_ERP) 동기화
+    3) ERP 생산입고 (RCV_ERP) 동기화
+    4) ERP 재고이동 (TRF_ERP) 동기화
+    5) ERP 재고조정 (ADJ_ERP) 동기화
+    6) SCM 재고를 ERP 현재고에 맞춤 (adjust_stock_to_erp)
 """
 
 import time
@@ -44,6 +49,12 @@ class Command(BaseCommand):
             dest='no_adjust',
             help='마지막 재고조정(adjust_stock_to_erp) 생략',
         )
+        parser.add_argument(
+            '--reset',
+            action='store_true',
+            dest='reset',
+            help='기존 ERP 동기화 데이터 삭제 + 기초재고 셋팅 후 동기화',
+        )
 
     def handle(self, *args, **options):
         from material.erp_api import (
@@ -53,7 +64,9 @@ class Command(BaseCommand):
             sync_erp_stock_transfer,
             sync_erp_adjustments,
             adjust_stock_to_erp,
+            init_stock_from_erp,
         )
+        from material.models import MaterialTransaction
 
         date_from = options['date_from']
         date_to = options['date_to'] or datetime.now().strftime('%Y%m%d')
@@ -61,10 +74,42 @@ class Command(BaseCommand):
         self.stdout.write(self.style.WARNING(
             f'\n=== ERP 전체 수불 이력 동기화 ===\n'
             f'기간: {date_from} ~ {date_to}\n'
+            f'리셋: {"YES" if options["reset"] else "NO"}\n'
         ))
 
         total_start = time.time()
         grand_total = {'synced': 0, 'skipped': 0, 'errors': 0}
+
+        # --reset: 기존 데이터 삭제 + 기초재고 셋팅
+        if options['reset']:
+            self.stdout.write(self.style.WARNING('[리셋 1/2] 기존 ERP 동기화 트랜잭션 삭제 중...'))
+            erp_types = ['IN_ERP', 'ISU_ERP', 'RCV_ERP', 'TRF_ERP', 'ADJ_ERP_IN', 'ADJ_ERP_OUT']
+            for t in erp_types:
+                cnt = MaterialTransaction.objects.filter(transaction_type=t).count()
+                if cnt > 0:
+                    MaterialTransaction.objects.filter(transaction_type=t).delete()
+                    self.stdout.write(f'  {t}: {cnt}건 삭제')
+            self.stdout.write('')
+
+            self.stdout.write(self.style.WARNING('[리셋 2/2] ERP 기초재고 셋팅 (실시간 현재고)...'))
+            start = time.time()
+            try:
+                result = init_stock_from_erp(cutoff_date=datetime.now().strftime('%Y-%m-%d'))
+                elapsed = time.time() - start
+                if result.get('error'):
+                    self.stderr.write(self.style.ERROR(f'  -> 실패: {result["error"]}'))
+                    return
+                self.stdout.write(
+                    f'  -> 생성: {result["created"]}건, '
+                    f'건너뜀(재고0): {result["skipped_zero"]}건, '
+                    f'건너뜀(Part없음): {result["skipped_no_part"]}건, '
+                    f'건너뜀(창고없음): {result["skipped_no_wh"]}건 '
+                    f'({elapsed:.1f}초)'
+                )
+            except Exception as e:
+                self.stderr.write(self.style.ERROR(f'  -> 실패: {e}'))
+                return
+            self.stdout.write('')
 
         # 동기화 대상 목록
         sync_tasks = [
@@ -75,8 +120,8 @@ class Command(BaseCommand):
             ('재고조정 (ADJ_ERP)', lambda: sync_erp_adjustments(date_from, date_to)),
         ]
 
-        for name, func in sync_tasks:
-            self.stdout.write(f'[{len(grand_total)+1}/5] {name} 동기화 중...')
+        for idx, (name, func) in enumerate(sync_tasks, 1):
+            self.stdout.write(f'[{idx}/5] {name} 동기화 중...')
             start = time.time()
 
             try:
