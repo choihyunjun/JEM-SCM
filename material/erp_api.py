@@ -20,56 +20,52 @@ logger = logging.getLogger(__name__)
 
 def _generate_trx_no():
     """
-    원자적 수불번호 생성 (TRX-YYYYMMDD-NNNN)
-    select_for_update + 재시도로 동시 실행 시 중복 방지
+    수불번호 생성 (TRX-YYYYMMDD-NNNN)
     """
     from material.models import MaterialTransaction
     from django.utils import timezone as tz
+    from django.db.models import Max
+
+    today_str = tz.localtime(tz.now()).strftime('%Y%m%d')
+    prefix = f'TRX-{today_str}'
+
+    max_no = (
+        MaterialTransaction.objects
+        .filter(transaction_no__startswith=prefix)
+        .aggregate(m=Max('transaction_no'))
+    )['m']
+
+    if max_no:
+        try:
+            seq = int(max_no.split('-')[-1]) + 1
+        except (ValueError, IndexError):
+            seq = 1
+    else:
+        seq = 1
+
+    return f'{prefix}-{seq:04d}'
+
+
+def _create_trx(**kwargs):
+    """
+    MaterialTransaction 생성 (채번 충돌 시 자동 재시도)
+    transaction_no를 자동 생성하므로 kwargs에 포함하지 않아도 됨
+    """
+    from material.models import MaterialTransaction
     from django.db import IntegrityError
-    import time
 
     for attempt in range(10):
-        today_str = tz.localtime(tz.now()).strftime('%Y%m%d')
-        prefix = f'TRX-{today_str}'
+        kwargs['transaction_no'] = _generate_trx_no()
+        try:
+            with transaction.atomic():
+                return MaterialTransaction.objects.create(**kwargs)
+        except IntegrityError:
+            continue
 
-        with transaction.atomic():
-            last_trx = (
-                MaterialTransaction.objects
-                .select_for_update()
-                .filter(transaction_no__startswith=prefix)
-                .order_by('-transaction_no')
-                .first()
-            )
-            if last_trx:
-                try:
-                    seq = int(last_trx.transaction_no.split('-')[-1]) + 1
-                except (ValueError, IndexError):
-                    seq = 1
-            else:
-                seq = 1
-
-            trx_no = f'{prefix}-{seq:04d}'
-
-            # 혹시 이미 존재하면 max+1로 재계산
-            if MaterialTransaction.objects.filter(transaction_no=trx_no).exists():
-                from django.db.models import Max
-                max_no = (
-                    MaterialTransaction.objects
-                    .filter(transaction_no__startswith=prefix)
-                    .aggregate(max_no=Max('transaction_no'))
-                )['max_no']
-                if max_no:
-                    try:
-                        seq = int(max_no.split('-')[-1]) + 1
-                    except (ValueError, IndexError):
-                        seq += 1
-                trx_no = f'{prefix}-{seq:04d}'
-
-            return trx_no
-
-    # 10회 시도 후에도 실패 시 uuid 기반 폴백
+    # 최종 폴백: uuid 기반 번호
     import uuid
-    return f'TRX-{uuid.uuid4().hex[:12].upper()}'
+    kwargs['transaction_no'] = f'TRX-{uuid.uuid4().hex[:12].upper()}'
+    return MaterialTransaction.objects.create(**kwargs)
 
 
 def _generate_sign(access_token, hash_key, transaction_id, timestamp, url):
@@ -641,11 +637,8 @@ def sync_erp_incoming(date_from=None, date_to=None):
                     logger.warning(f'창고 매칭 실패 - 재고 미반영: part={item_cd}')
                     result_stock = qty
 
-                trx_no = _generate_trx_no()
-
                 # MaterialTransaction 생성
-                MaterialTransaction.objects.create(
-                    transaction_no=trx_no,
+                _create_trx(
                     transaction_type='IN_ERP',
                     date=rcv_date,
                     part=part,
@@ -1058,9 +1051,7 @@ def adjust_stock_to_erp():
             result['decreased'] += 1
 
         # 이력 생성
-        trx_no = _generate_trx_no()
-        MaterialTransaction.objects.create(
-            transaction_no=trx_no,
+        _create_trx(
             transaction_type=trx_type,
             part=part,
             warehouse_to=warehouse if trx_type == 'ADJ_ERP_IN' else None,
@@ -1690,11 +1681,8 @@ def sync_erp_adjustments(date_from=None, date_to=None):
                     logger.warning(f'창고 매칭 실패 - 재고 미반영: part={item_cd}')
                     result_stock = qty
 
-                trx_no = _generate_trx_no()
-
                 # 입고조정 → warehouse_to, 출고조정 → warehouse_from
                 trx_kwargs = {
-                    'transaction_no': trx_no,
                     'transaction_type': trx_type,
                     'date': adj_date,
                     'part': part,
@@ -1711,7 +1699,7 @@ def sync_erp_adjustments(date_from=None, date_to=None):
                 else:
                     trx_kwargs['warehouse_from'] = warehouse
 
-                MaterialTransaction.objects.create(**trx_kwargs)
+                _create_trx(**trx_kwargs)
                 existing_nbs.add(trx_key)
 
             synced += 1
@@ -1928,13 +1916,10 @@ def sync_erp_issue(date_from=None, date_to=None):
                     stock.refresh_from_db()
                     result_stock = stock.quantity
 
-                trx_no = _generate_trx_no()
-
                 detail_remark = detail.get('remarkDc', '') or ''
                 fwh_nm = detail.get('fwhNm', '') or ''
 
-                MaterialTransaction.objects.create(
-                    transaction_no=trx_no,
+                _create_trx(
                     transaction_type='ISU_ERP',
                     date=isu_date,
                     part=part,
@@ -2093,12 +2078,9 @@ def sync_erp_receipt(date_from=None, date_to=None):
             else:
                 logger.warning(f'창고 매칭 실패 - 재고 미반영: part={item_cd}')
 
-            trx_no = _generate_trx_no()
-
             twh_nm = item.get('twhNm', '') or ''
 
-            MaterialTransaction.objects.create(
-                transaction_no=trx_no,
+            _create_trx(
                 transaction_type='RCV_ERP',
                 date=rcv_date,
                 part=part,
@@ -2405,14 +2387,11 @@ def sync_erp_stock_transfer(date_from=None, date_to=None):
                     to_stock.refresh_from_db()
                     to_result = to_stock.quantity
 
-                trx_no = _generate_trx_no()
-
                 fwh_nm = detail.get('fwhNm', '') or fwh_cd
                 twh_nm = detail.get('twhNm', '') or twh_cd
                 detail_remark = detail.get('remarkDc', '') or ''
 
-                MaterialTransaction.objects.create(
-                    transaction_no=trx_no,
+                _create_trx(
                     transaction_type='TRF_ERP',
                     date=trf_date,
                     part=part,
@@ -2610,14 +2589,11 @@ def sync_erp_outgoing(date_from=None, date_to=None):
                     stock.refresh_from_db()
                     result_stock = stock.quantity
 
-                trx_no = _generate_trx_no()
-
                 detail_remark = detail.get('remarkDc', '') or ''
                 wh_nm = header.get('whNm', '') or wh_cd
                 tr_nm = header.get('attrNm', '') or tr_cd
 
-                MaterialTransaction.objects.create(
-                    transaction_no=trx_no,
+                _create_trx(
                     transaction_type='OUT_ERP',
                     date=isu_date,
                     part=part,
