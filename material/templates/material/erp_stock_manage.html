@@ -1,0 +1,225 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}ERP 재고 관리{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+    <h3 class="fw-bold">ERP 재고 관리</h3>
+
+    {% if not erp_enabled %}
+    <div class="alert alert-warning">ERP 연동이 비활성화 상태입니다. (settings.py: ERP_ENABLED = False)</div>
+    {% endif %}
+
+    <div class="row g-3 mb-4">
+        <!-- 기초재고 셋팅 카드 -->
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white fw-bold">
+                    <i class="bi bi-arrow-down-circle me-1 text-primary"></i> ERP 기초재고 셋팅
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-2">
+                        ERP 실시간 현재고를 SCM 기초재고로 초기화합니다.<br>
+                        <strong class="text-danger">기존 SCM 재고가 모두 삭제</strong>되고 ERP 현재고로 대체됩니다. (LOT=없음)
+                    </p>
+                    <ul class="small text-muted mb-3">
+                        <li>SCM에 등록된 품목(Part)만 대상</li>
+                        <li>ERP 재고 > 0인 품목만 생성</li>
+                        <li><strong class="text-info">ERP 실시간 현재고</strong>를 그대로 가져옵니다</li>
+                        <li><strong class="text-primary">기준일(오늘) 이후</strong> ERP 수불만 자동동기화 대상</li>
+                    </ul>
+                    <form id="initStockForm" method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="init_stock">
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">자동동기화 시작일</label>
+                            <input type="date" name="cutoff_date" class="form-control form-control-sm"
+                                   value="{{ today }}" required
+                                   style="max-width: 200px;">
+                            <div class="form-text">ERP 실시간 현재고를 가져오고, 이 날짜 <strong>다음 날</strong>부터 ERP 수불을 자동동기화합니다.</div>
+                        </div>
+                        <button type="submit" class="btn btn-danger btn-sm" id="btnInitStock" {% if not erp_enabled %}disabled{% endif %}>
+                            <i class="bi bi-exclamation-triangle me-1"></i>기초재고 셋팅 실행
+                        </button>
+                        {% if current_cutoff %}
+                        <span class="ms-2 badge bg-info">현재 기준일: {{ current_cutoff }}</span>
+                        {% endif %}
+                    </form>
+
+                    <!-- 프로그레스바 영역 (숨겨져 있다가 실행 시 표시) -->
+                    <div id="progressArea" class="mt-3" style="display:none;">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <small class="fw-bold text-primary" id="progressStage">준비 중...</small>
+                            <small class="fw-bold" id="progressPct">0%</small>
+                        </div>
+                        <div class="progress" style="height: 20px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                 id="progressBar" role="progressbar"
+                                 style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                            </div>
+                        </div>
+                        <small class="text-muted mt-1 d-block" id="progressDetail"></small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ERP vs SCM 비교 카드 -->
+        <div class="col-md-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white fw-bold">
+                    <i class="bi bi-arrow-left-right me-1 text-info"></i> ERP vs SCM 비교
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-2">
+                        ERP 현재고와 SCM 재고를 비교합니다.
+                    </p>
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="compare">
+                        <div class="form-check form-check-inline mb-2">
+                            <input class="form-check-input" type="checkbox" name="diff_only" value="1" id="diffOnly"
+                                   {% if diff_only %}checked{% endif %}>
+                            <label class="form-check-label small" for="diffOnly">차이 있는 것만</label>
+                        </div>
+                        <br>
+                        <button type="submit" class="btn btn-info btn-sm text-white" {% if not erp_enabled %}disabled{% endif %}>
+                            <i class="bi bi-arrow-left-right me-1"></i>재고 비교
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- ERP 기준 재고조정 카드 -->
+        <div class="col-md-3">
+            <div class="card shadow-sm h-100 border-warning">
+                <div class="card-header bg-white fw-bold">
+                    <i class="bi bi-sliders me-1 text-warning"></i> ERP 기준 재고조정
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-2">
+                        SCM 재고를 ERP 현재고에 <strong>즉시</strong> 맞춥니다.<br>
+                        차이 나는 품목만 증감 처리합니다.
+                    </p>
+                    <ul class="small text-muted mb-3">
+                        <li>기존 재고 삭제 없이 <strong>차이분만 조정</strong></li>
+                        <li>조정 이력(ADJ_ERP) 자동 생성</li>
+                        <li>동기화 시작일 자동 갱신</li>
+                    </ul>
+                    <form id="adjustForm" method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="adjust_to_erp">
+                        <button type="submit" class="btn btn-warning btn-sm" id="btnAdjust" {% if not erp_enabled %}disabled{% endif %}>
+                            <i class="bi bi-sliders me-1"></i>재고조정 실행
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 비교 결과 -->
+    {% if summary %}
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-clipboard-data me-1"></i> 비교 결과</span>
+            <div class="d-flex gap-2">
+                <span class="badge bg-secondary">전체 {{ summary.total }}건</span>
+                <span class="badge bg-success">일치 {{ summary.match }}건</span>
+                {% if summary.over > 0 %}<span class="badge bg-primary">SCM 초과 {{ summary.over }}건</span>{% endif %}
+                {% if summary.under > 0 %}<span class="badge bg-danger">SCM 부족 {{ summary.under }}건</span>{% endif %}
+                {% if summary.erp_only > 0 %}<span class="badge bg-warning text-dark">ERP만 {{ summary.erp_only }}건</span>{% endif %}
+                {% if summary.scm_only > 0 %}<span class="badge bg-info">SCM만 {{ summary.scm_only }}건</span>{% endif %}
+            </div>
+        </div>
+        <div class="card-body p-0">
+            {% if comparison %}
+            <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                <table class="table table-sm table-hover mb-0 align-middle">
+                    <thead class="table-light sticky-top">
+                        <tr>
+                            <th>창고</th>
+                            <th>품번</th>
+                            <th>품명</th>
+                            <th class="text-end">ERP 재고</th>
+                            <th class="text-end">SCM 재고</th>
+                            <th class="text-end">차이</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in comparison %}
+                        <tr class="{% if item.diff > 0 %}table-primary{% elif item.diff < 0 %}table-danger{% endif %}">
+                            <td class="small">{{ item.wh_code }} {{ item.wh_name }}</td>
+                            <td class="small fw-bold">{{ item.part_no }}</td>
+                            <td class="small">{{ item.part_name }}</td>
+                            <td class="text-end">{{ item.erp_qty|intcomma }}</td>
+                            <td class="text-end">{{ item.scm_qty|intcomma }}</td>
+                            <td class="text-end fw-bold {% if item.diff > 0 %}text-primary{% elif item.diff < 0 %}text-danger{% endif %}">
+                                {% if item.diff > 0 %}+{% endif %}{{ item.diff|intcomma }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center text-muted py-4">
+                {% if diff_only %}차이 나는 품목이 없습니다. (ERP = SCM){% else %}비교 데이터 없음{% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+document.getElementById('adjustForm').addEventListener('submit', function(e) {
+    if (!confirm('SCM 재고를 ERP 현재고에 맞춰 조정합니다.\n\n→ 차이 나는 품목만 증감 처리\n→ 조정 이력(ADJ_ERP) 자동 생성\n→ 동기화 시작일 자동 갱신 (내일~)\n\n실행하시겠습니까?')) {
+        e.preventDefault();
+        return;
+    }
+    const btn = document.getElementById('btnAdjust');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>조정 중...';
+});
+
+document.getElementById('initStockForm').addEventListener('submit', function(e) {
+    const cutoffDate = this.cutoff_date.value;
+    if (!confirm('SCM 재고를 ERP 실시간 현재고로 초기화합니다.\n\n⚠ 기존 SCM 재고 데이터가 모두 삭제됩니다.\n\n→ ERP 실시간 현재고를 그대로 가져옵니다.\n→ ' + cutoffDate + ' 다음 날부터 ERP 수불을 자동동기화합니다.\n  (당일 수불은 이미 현재고에 반영되어 있음)\n\n정말 계속하시겠습니까?')) {
+        e.preventDefault();
+        return;
+    }
+
+    // 버튼 비활성화 + 프로그레스바 표시
+    const btn = document.getElementById('btnInitStock');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>처리 중...';
+
+    document.getElementById('progressArea').style.display = 'block';
+
+    // 1초 간격으로 진행률 폴링
+    const pollInterval = setInterval(function() {
+        fetch('{% url "material:erp_stock_init_progress" %}')
+            .then(r => r.json())
+            .then(data => {
+                if (data.percent > 0) {
+                    document.getElementById('progressBar').style.width = data.percent + '%';
+                    document.getElementById('progressPct').textContent = data.percent + '%';
+                    document.getElementById('progressStage').textContent = data.stage || '';
+                    if (data.created !== undefined) {
+                        document.getElementById('progressDetail').textContent = '생성: ' + data.created + '건';
+                    }
+                }
+                if (data.percent >= 100) {
+                    clearInterval(pollInterval);
+                    document.getElementById('progressBar').classList.remove('progress-bar-animated');
+                    document.getElementById('progressBar').classList.add('bg-success');
+                }
+            })
+            .catch(() => {});
+    }, 1000);
+});
+</script>
+{% endblock %}

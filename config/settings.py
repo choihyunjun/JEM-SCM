@@ -178,5 +178,24 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 50000  # BOM 대량 데이터 처리용
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# -----------------------------------------------------------------------------
+# 더존 아마란스10 ERP API 연동
+# -----------------------------------------------------------------------------
+ERP_ENABLED = True  # False로 하면 ERP 연동 비활성화
+ERP_API_BASE_URL = "https://gwa.jem-techno.co.kr"
+ERP_API_CALLER_NAME = "API_gcmsAmaranth40364"
+ERP_API_ACCESS_TOKEN = "dwmUifGLhb7QJRT1zZd6CKg8h5hajv"
+ERP_API_HASH_KEY = "69737611755212349465016565657986137804435180"
+ERP_API_GROUP_SEQ = "gcmsAmaranth40364"
+ERP_COMPANY_CODE = "1000"
+ERP_DIVISION_CODE = "1000"
+ERP_DEFAULT_DEPT_CODE = "0630"
+ERP_DEFAULT_EMP_CODE = "20240601"
 
+# ERP 입고 자동 동기화
+ERP_AUTO_SYNC_ENABLED = True          # 자동 동기화 on/off
+ERP_AUTO_SYNC_INTERVAL_MINUTES = 10   # 동기화 주기 (분)
 
+# 기초재고 동기화 기준일 (이 날짜 이후 ERP 입고건만 자동동기화 대상)
+# init_stock_from_erp() 실행 시 자동 갱신됨. 비어있으면 어제 기준.
+ERP_STOCK_INIT_DATE = '20260224'

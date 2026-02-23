@@ -6,9 +6,21 @@
 {% block material_content %}
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h4 class="mb-0"><i class="bi bi-diagram-3 me-2"></i>BOM 조회</h4>
+        <h3 class="fw-bold">BOM 조회</h3>
         <div>
             {% if user|has_perm:'can_wms_bom_edit' %}
+            <form method="post" action="{% url 'material:bom_sync' %}" class="d-inline" id="syncForm">
+                {% csrf_token %}
+                {% if sync_running %}
+                <button type="button" class="btn btn-secondary btn-sm" disabled>
+                    <span class="spinner-border spinner-border-sm me-1"></span>동기화 진행 중...
+                </button>
+                {% else %}
+                <button type="submit" class="btn btn-warning btn-sm" id="syncBtn">
+                    <i class="bi bi-arrow-repeat me-1"></i>ERP 동기화
+                </button>
+                {% endif %}
+            </form>
             <a href="{% url 'material:bom_upload' %}" class="btn btn-success btn-sm">
                 <i class="bi bi-upload me-1"></i>BOM 업로드
             </a>
@@ -139,5 +151,23 @@
         </ul>
     </nav>
     {% endif %}
+
+    {% if last_sync %}
+    <div class="text-muted small mt-2 text-end">
+        <i class="bi bi-clock me-1"></i>마지막 동기화: {{ last_sync }}
+    </div>
+    {% endif %}
 </div>
+
+<script>
+document.getElementById('syncForm')?.addEventListener('submit', function(e) {
+    if (!confirm('ERP에서 BOM 데이터를 동기화합니다.\n모품이 많으면 시간이 걸릴 수 있습니다.\n\n계속하시겠습니까?')) {
+        e.preventDefault();
+        return;
+    }
+    var btn = document.getElementById('syncBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>동기화 중...';
+});
+</script>
 {% endblock %}

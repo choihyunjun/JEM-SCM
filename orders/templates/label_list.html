@@ -6,8 +6,7 @@
 <div class="container-fluid p-0" style="max-width: 1920px;">
 <div class="mb-4 d-flex align-items-center flex-wrap gap-3">
     <div>
-        <span class="badge bg-success me-2">협력사 전용</span>
-        <span class="fw-bold text-secondary">납품서 등록 및 라벨 발행</span>
+        <h3 class="fw-bold">납품서 등록 및 라벨 발행</h3>
     </div>
 
     {% if user.is_superuser or user|has_perm:'can_scm_label_view' %}

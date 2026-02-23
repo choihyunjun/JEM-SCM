@@ -5,7 +5,7 @@
 <div class="container-fluid p-0" style="max-width: 1920px;">
 
     <div class="mb-4">
-        <h3 class="fw-bold text-secondary"><i class="bi bi-cloud-upload me-2"></i>발주 일괄 등록</h3>
+        <h3 class="fw-bold">발주 일괄 등록</h3>
     </div>
 
     <div class="card shadow-sm border-0 mb-4">
@@ -32,10 +32,9 @@
                     <i class="bi bi-info-circle-fill me-1"></i> <strong>엑셀 양식 순서 (헤더 포함, 2행부터 데이터):</strong><br>
                     <span class="text-primary fw-bold">A열: 품번</span> /
                     <span class="text-dark">B열: 수량</span> /
-                    <span class="text-dark">C열: 납기일(YYYY-MM-DD)</span> /
-                    <strong class="text-secondary">D열: ERP 발주번호(선택)</strong> /
-                    <strong class="text-secondary">E열: ERP 발주순번(선택)</strong><br>
+                    <span class="text-dark">C열: 납기일(YYYY-MM-DD)</span><br>
                     <span class="text-muted ms-3">※ 협력사, 품명, 품목군은 '품번'을 기준으로 품목마스터에서 자동 조회합니다.</span>
+                    <span class="text-muted ms-3">※ ERP 발주 연동은 <a href="{% url 'erp_po_sync' %}">ERP 발주 연동</a> 메뉴를 이용하세요.</span>
                 </small>
             </div>
         </div>
@@ -66,8 +65,6 @@
                                 <th style="width: 90px;">품목군</th>
                                 <th style="width: 100px;">수량</th>
                                 <th style="width: 120px;">납기일</th>
-                                <th style="width: 140px; background-color: #f8f9fa;">ERP 번호</th>
-                                <th style="width: 70px; background-color: #f8f9fa;">순번</th>
                                 <th style="width: 180px;">상태</th>
                             </tr>
                         </thead>
@@ -81,8 +78,6 @@
                                 <td>{{ row.part_group|default:"-" }}</td>
                                 <td class="fw-bold text-end pe-3">{{ row.quantity|intcomma }}</td>
                                 <td>{{ row.due_date }}</td>
-                                <td class="text-secondary fw-bold">{{ row.erp_order_no|default:"-" }}</td>
-                                <td class="text-muted">{{ row.erp_order_seq|default:"-" }}</td>
                                 <td>
                                     {% if row.is_valid %}
                                         <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>정상</span>
@@ -99,8 +94,6 @@
                                     <input type="hidden" name="part_no_list[]" value="{{ row.part_no }}">
                                     <input type="hidden" name="quantity_list[]" value="{{ row.quantity }}">
                                     <input type="hidden" name="due_date_list[]" value="{{ row.due_date }}">
-                                    <input type="hidden" name="erp_order_no_list[]" value="{{ row.erp_order_no }}">
-                                    <input type="hidden" name="erp_order_seq_list[]" value="{{ row.erp_order_seq }}">
                                 {% endif %}
                             </tr>
                             {% endfor %}
@@ -143,8 +136,6 @@
                                 <th style="width: 150px;">협력사 <small class="text-muted">(자동)</small></th>
                                 <th style="width: 100px;">수량 <span class="text-danger">*</span></th>
                                 <th style="width: 140px;">납기일 <span class="text-danger">*</span></th>
-                                <th style="width: 140px;">ERP 번호</th>
-                                <th style="width: 80px;">ERP 순번</th>
                                 <th style="width: 60px;"></th>
                             </tr>
                         </thead>
@@ -201,8 +192,6 @@ function addManualRow() {
         <td><input type="text" class="form-control form-control-sm vendor-display" readonly placeholder="-"></td>
         <td><input type="number" name="quantity_list[]" class="form-control form-control-sm" min="1" required placeholder="수량"></td>
         <td><input type="date" name="due_date_list[]" class="form-control form-control-sm" value="${defaultDate}" required></td>
-        <td><input type="text" name="erp_order_no_list[]" class="form-control form-control-sm" placeholder="선택"></td>
-        <td><input type="text" name="erp_order_seq_list[]" class="form-control form-control-sm" placeholder="선택"></td>
         <td class="text-center">
             <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeManualRow(${rowIndex})">
                 <i class="bi bi-trash"></i>

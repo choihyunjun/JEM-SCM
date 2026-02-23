@@ -1,4 +1,5 @@
 {% extends "material/material_base.html" %}
+{% load auth_extras %}
 
 {% block title %}BOM 상세 - {{ product.part_no }} - WMS{% endblock %}
 
@@ -106,9 +107,27 @@
         <a href="{% url 'material:bom_list' %}" class="btn btn-secondary">
             <i class="bi bi-arrow-left me-1"></i>목록으로
         </a>
-        <a href="{% url 'material:bom_calculate' %}?part_no={{ product.part_no }}" class="btn btn-primary">
-            <i class="bi bi-calculator me-1"></i>소요량 계산
-        </a>
+        <div>
+            {% if user|has_perm:'can_wms_bom_edit' %}
+            <form method="post" action="{% url 'material:bom_sync_single' product.part_no %}" class="d-inline" id="syncSingleForm">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-warning" id="syncSingleBtn">
+                    <i class="bi bi-arrow-repeat me-1"></i>ERP 동기화
+                </button>
+            </form>
+            {% endif %}
+            <a href="{% url 'material:bom_calculate' %}?part_no={{ product.part_no }}" class="btn btn-primary">
+                <i class="bi bi-calculator me-1"></i>소요량 계산
+            </a>
+        </div>
     </div>
 </div>
+
+<script>
+document.getElementById('syncSingleForm')?.addEventListener('submit', function() {
+    var btn = document.getElementById('syncSingleBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>동기화 중...';
+});
+</script>
 {% endblock %}

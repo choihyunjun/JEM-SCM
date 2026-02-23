@@ -6,12 +6,11 @@
 <div class="container-fluid p-0">
 
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-3 top-control">
-        <h2 class="header-title mb-0">
-            <i class="bi bi-calendar3 me-2"></i>일자별 소요 현황 (D+14)
+        <h3 class="fw-bold">일자별 소요 현황 (D+14)
             {% if not show_all %}
                 <span class="badge bg-info ms-2" style="font-size: 0.7rem; vertical-align: middle;">소요 품목만 표시 중</span>
             {% endif %}
-        </h2>
+        </h3>
 
         <div class="top-actions">
             {% if user.is_superuser or user|has_perm:'can_scm_inventory_view' %}

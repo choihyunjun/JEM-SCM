@@ -7,8 +7,7 @@
 
 <div class="container-fluid p-0" style="max-width: 1920px;">
 <div class="mb-4">
-    <span class="badge bg-primary me-2">입고 관리</span>
-    <span class="fw-bold text-secondary">입고 처리 및 이력 조회</span>
+    <h3 class="fw-bold">입고 처리 및 이력 조회</h3>
 </div>
 
 {% if user.is_superuser or user|has_perm:'can_scm_incoming_edit' %}

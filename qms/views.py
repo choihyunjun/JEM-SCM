@@ -1,3 +1,4 @@
+import logging
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -6,6 +7,8 @@ from django.utils import timezone
 from django.http import HttpResponseForbidden
 from django.views.decorators.http import require_POST
 from functools import wraps
+
+logger = logging.getLogger(__name__)
 
 # ✅ [새 기능 필수] 검색/정렬(Case, When, Q) 및 페이징(Paginator)용
 from django.db.models import F, Q, Case, When, Value, IntegerField
@@ -1317,7 +1320,7 @@ def import_inspection_detail(request, pk):
                     stock_good.save()
                     stock_good.refresh_from_db()
 
-                    MaterialTransaction.objects.create(
+                    trx_ok = MaterialTransaction.objects.create(
                         transaction_no=f"TRX-OK-{timezone.now().strftime('%y%m%d%H%M%S')}",
                         transaction_type="TRANSFER",
                         date=timezone.now(),
@@ -1332,6 +1335,17 @@ def import_inspection_detail(request, pk):
                         remark="[수입검사] 양품 입고",
                         ref_delivery_order=origin_trx.ref_delivery_order,
                     )
+
+                    # ERP 입고등록 (양품수량)
+                    try:
+                        from material.erp_api import register_erp_incoming
+                        erp_ok, erp_no, erp_err = register_erp_incoming(trx_ok, qty_good, target_code)
+                        if erp_ok:
+                            messages.info(request, f'ERP 입고등록 완료: {erp_no}')
+                        elif erp_err:
+                            messages.warning(request, f'ERP 연동 실패: {erp_err}')
+                    except Exception as e:
+                        logger.error(f'ERP 입고등록 예외: {e}')
 
                 # (C) 불량 -> 8200(부적합창고)
                 if qty_bad > 0:

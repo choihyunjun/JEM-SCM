@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}ERP 마스터 동기화{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+    <h4 class="mb-3"><i class="bi bi-arrow-repeat me-2"></i>ERP 마스터 동기화</h4>
+
+    {% if not erp_enabled %}
+    <div class="alert alert-warning">ERP 연동이 비활성화 상태입니다. (settings.py: ERP_ENABLED = False)</div>
+    {% endif %}
+
+    <!-- 현재 현황 -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 bg-light text-center py-2">
+                <div class="small text-muted">SCM 거래처</div>
+                <div class="fs-4 fw-bold text-primary">{{ vendor_count|intcomma }}건</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 bg-light text-center py-2">
+                <div class="small text-muted">SCM 품목</div>
+                <div class="fs-4 fw-bold text-success">{{ part_count|intcomma }}건</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <!-- 거래처 동기화 카드 -->
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white fw-bold">
+                    <i class="bi bi-building me-1 text-primary"></i> 거래처 동기화
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-2">
+                        ERP 일반거래처(사용중)를 SCM 거래처로 동기화합니다.
+                    </p>
+                    <ul class="small text-muted mb-3">
+                        <li>ERP 거래처코드(trCd) 기준 매칭</li>
+                        <li>기존 거래처: 이름/사업자번호 등 업데이트</li>
+                        <li>신규 거래처: 자동 생성</li>
+                        <li>기존 SCM 데이터 삭제 없음 (안전)</li>
+                    </ul>
+                    <form method="post" onsubmit="
+                        this.querySelector('button[type=submit]').disabled = true;
+                        this.querySelector('button[type=submit]').innerHTML = '<span class=\'spinner-border spinner-border-sm me-1\'></span>동기화 중...';
+                    ">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="sync_vendors">
+                        <button type="submit" class="btn btn-primary btn-sm" {% if not erp_enabled %}disabled{% endif %}>
+                            <i class="bi bi-arrow-repeat me-1"></i>거래처 동기화 실행
+                        </button>
+                    </form>
+                    {% if vendor_result %}
+                    <div class="mt-3">
+                        <div class="d-flex gap-2 flex-wrap">
+                            <span class="badge bg-secondary">전체 {{ vendor_result.total }}건</span>
+                            <span class="badge bg-success">신규 {{ vendor_result.created }}건</span>
+                            <span class="badge bg-info">갱신 {{ vendor_result.updated }}건</span>
+                            {% if vendor_result.skipped > 0 %}
+                            <span class="badge bg-warning text-dark">건너뜀 {{ vendor_result.skipped }}건</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 품목 동기화 카드 -->
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white fw-bold">
+                    <i class="bi bi-box me-1 text-success"></i> 품목 동기화
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-2">
+                        ERP 품목정보(사용중)를 SCM 품목 마스터로 동기화합니다.
+                    </p>
+                    <ul class="small text-muted mb-3">
+                        <li>ERP 품번(itemCd) 기준 매칭</li>
+                        <li>계정구분 자동 매핑 (원재료/제품/상품)</li>
+                        <li>주거래처(trmainCd) → SCM 거래처 자동 연결</li>
+                        <li><strong class="text-info">거래처 동기화를 먼저 실행하세요</strong></li>
+                    </ul>
+                    <form method="post" onsubmit="
+                        this.querySelector('button[type=submit]').disabled = true;
+                        this.querySelector('button[type=submit]').innerHTML = '<span class=\'spinner-border spinner-border-sm me-1\'></span>동기화 중...';
+                    ">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="sync_items">
+                        <button type="submit" class="btn btn-success btn-sm" {% if not erp_enabled %}disabled{% endif %}>
+                            <i class="bi bi-arrow-repeat me-1"></i>품목 동기화 실행
+                        </button>
+                    </form>
+                    {% if item_result %}
+                    <div class="mt-3">
+                        <div class="d-flex gap-2 flex-wrap">
+                            <span class="badge bg-secondary">전체 {{ item_result.total }}건</span>
+                            <span class="badge bg-success">신규 {{ item_result.created }}건</span>
+                            <span class="badge bg-info">갱신 {{ item_result.updated }}건</span>
+                            {% if item_result.skipped > 0 %}
+                            <span class="badge bg-warning text-dark">건너뜀 {{ item_result.skipped }}건</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 안내사항 -->
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <h6 class="fw-bold mb-2"><i class="bi bi-info-circle me-1 text-muted"></i> 동기화 순서 안내</h6>
+            <ol class="small text-muted mb-0">
+                <li><strong>거래처 동기화</strong> 먼저 실행 → ERP 거래처코드가 SCM에 등록됩니다</li>
+                <li><strong>품목 동기화</strong> 실행 → 품목의 주거래처(trmainCd)가 위에서 등록된 거래처와 자동 연결됩니다</li>
+                <li>필요 시 <strong>ERP 재고 관리</strong>에서 기초재고 셋팅 또는 재고 비교를 진행합니다</li>
+            </ol>
+        </div>
+    </div>
+</div>
+{% endblock %}

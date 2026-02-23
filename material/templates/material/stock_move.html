@@ -3,9 +3,7 @@
 {% block material_content %}
 <div class="container-fluid" style="max-width: 1800px;">
     <div class="d-flex justify-content-between align-items-center mb-4 pt-3">
-        <h3 class="fw-bold text-dark">
-            <i class="bi bi-arrow-left-right text-success me-2"></i>재고 이동 처리
-        </h3>
+        <h3 class="fw-bold">재고 이동 처리</h3>
         <span class="text-muted small">창고 간 재고를 이동하고 수불 이력을 생성합니다.</span>
     </div>
 
@@ -177,15 +175,16 @@
             <table class="table table-hover mb-0 align-middle text-center">
                 <thead class="table-light">
                     <tr>
-                        <th style="width:11%;">일시</th>
-                        <th style="width:15%;">수불번호</th>
+                        <th style="width:10%;">일시</th>
+                        <th style="width:5%;">구분</th>
+                        <th style="width:13%;">수불번호</th>
                         <th style="width:9%;">품번</th>
                         <th>품명</th>
-                        <th style="width:7%;">수량</th>
-                        <th style="width:8%;">LOT</th>
-                        <th style="width:12%;">From</th>
+                        <th style="width:6%;">수량</th>
+                        <th style="width:7%;">LOT</th>
+                        <th style="width:11%;">From</th>
                         <th style="width:3%;">→</th>
-                        <th style="width:12%;">To</th>
+                        <th style="width:11%;">To</th>
                         <th style="width:5%;">라벨</th>
                     </tr>
                 </thead>
@@ -193,6 +192,13 @@
                     {% for trx in history %}
                     <tr style="cursor:pointer;" onclick="openTransferDetail({{ trx.pk }})">
                         <td class="small">{{ trx.date|date:"Y-m-d H:i" }}</td>
+                        <td>
+                            {% if trx.transaction_type == 'TRF_ERP' %}
+                            <span class="badge bg-info">ERP</span>
+                            {% else %}
+                            <span class="badge bg-success">SCM</span>
+                            {% endif %}
+                        </td>
                         <td>
                             <a href="javascript:void(0)" class="fw-bold text-primary text-decoration-none">{{ trx.transaction_no }}</a>
                         </td>
@@ -213,7 +219,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="10" class="text-muted py-4">이동 처리 내역이 없습니다.</td>
+                        <td colspan="11" class="text-muted py-4">이동 처리 내역이 없습니다.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -355,6 +361,10 @@
                             <th class="bg-light">처리자</th>
                             <td id="detailActor"></td>
                         </tr>
+                        <tr>
+                            <th class="bg-light">ERP 연동</th>
+                            <td id="detailErp">-</td>
+                        </tr>
                     </tbody>
                 </table>
 
@@ -378,7 +388,10 @@
                     </table>
                 </div>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer justify-content-between">
+                <button type="button" class="btn btn-danger" id="cancelTransferBtn" onclick="cancelTransfer()">
+                    <i class="bi bi-x-circle me-1"></i>이동 취소
+                </button>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
             </div>
         </div>
@@ -388,6 +401,7 @@
 <script>
     let currentLotData = null;
     let qrScannedQty = null;
+    let currentDetailTrxId = null;
 
     // ============================================
     // QR 코드 스캔 처리
@@ -840,6 +854,7 @@
                 return;
             }
 
+            currentDetailTrxId = trxId;
             const t = data.trx;
             document.getElementById('detailTrxNo').textContent = t.transaction_no;
             document.getElementById('detailDate').textContent = t.date;
@@ -850,6 +865,24 @@
             document.getElementById('detailFromWh').textContent = t.from_wh;
             document.getElementById('detailToWh').textContent = t.to_wh;
             document.getElementById('detailActor').textContent = t.actor;
+
+            // ERP 연동 상태
+            const erpEl = document.getElementById('detailErp');
+            if (t.erp_status === 'SUCCESS') {
+                erpEl.innerHTML = `<span class="badge bg-success">연동완료</span> <small class="text-muted">${t.erp_no}</small>`;
+            } else if (t.erp_status === 'FAILED') {
+                erpEl.innerHTML = `<span class="badge bg-danger">실패</span> <small class="text-muted">${t.erp_message}</small>`;
+            } else {
+                erpEl.innerHTML = `<span class="badge bg-secondary">미연동</span>`;
+            }
+
+            // ERP에서 동기화된 건은 취소 불가
+            const cancelBtn = document.getElementById('cancelTransferBtn');
+            if (t.transaction_type === 'TRF_ERP') {
+                cancelBtn.style.display = 'none';
+            } else {
+                cancelBtn.style.display = '';
+            }
 
             // 연결된 라벨
             const labelsSection = document.getElementById('detailLabelsSection');
@@ -891,6 +924,39 @@
         } catch (e) {
             console.error(e);
             alert('이동 내역 조회 중 오류가 발생했습니다.');
+        }
+    }
+
+    // 재고이동 취소
+    async function cancelTransfer() {
+        if (!currentDetailTrxId) return;
+        if (!confirm('이 재고이동 건을 취소하시겠습니까?\n재고가 원복되고 ERP 연동도 삭제됩니다.')) return;
+
+        const btn = document.getElementById('cancelTransferBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>처리 중...';
+
+        try {
+            const res = await fetch(`/material/api/cancel-stock-move/${currentDetailTrxId}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'Content-Type': 'application/json',
+                },
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert(data.message);
+                bootstrap.Modal.getInstance(document.getElementById('transferDetailModal')).hide();
+                location.reload();
+            } else {
+                alert('취소 실패: ' + data.error);
+            }
+        } catch (e) {
+            alert('취소 처리 중 오류가 발생했습니다.');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-x-circle me-1"></i>이동 취소';
         }
     }
 

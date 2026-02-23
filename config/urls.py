@@ -44,6 +44,9 @@ urlpatterns = [
     path('approve/<int:order_id>/', views.order_approve, name='order_approve'),
     path('approve-all/', views.order_approve_all, name='order_approve_all'),
 
+    # ERP 발주 연동
+    path('erp-po-sync/', views.erp_po_sync, name='erp_po_sync'),
+
     # ------------------------------------------------------------------
     # 3. 재고 및 소요량 관리 (SCM)
     # ------------------------------------------------------------------

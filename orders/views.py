@@ -469,8 +469,8 @@ def order_upload_template(request):
     )
 
     # 헤더 (협력사명 제거 - 품목마스터에서 자동 조회)
-    headers = ['품번', '수량', '납기일', 'ERP발주번호(선택)', 'ERP순번(선택)']
-    col_widths = [25, 12, 15, 18, 12]
+    headers = ['품번', '수량', '납기일']
+    col_widths = [25, 12, 15]
 
     for col, (header, width) in enumerate(zip(headers, col_widths), 1):
         cell = ws.cell(row=1, column=col, value=header)
@@ -483,8 +483,8 @@ def order_upload_template(request):
     # 예시 데이터 추가 (납기일은 실제 날짜 객체로)
     import datetime as dt
     example_data = [
-        ['P9R-12323', 100, dt.date(2026, 2, 1), '4500012345', '001'],
-        ['ABC-12345', 200, dt.date(2026, 2, 5), '4500012346', ''],
+        ['P9R-12323', 100, dt.date(2026, 2, 1)],
+        ['ABC-12345', 200, dt.date(2026, 2, 5)],
     ]
     for row_idx, row_data in enumerate(example_data, start=2):
         for col_idx, value in enumerate(row_data, 1):
@@ -566,8 +566,6 @@ def order_upload_preview(request):
                 'error_type': error_type,
                 'quantity': quantity,
                 'due_date': fmt_date,
-                'erp_order_no': str(row[3]).strip() if len(row) > 3 and row[3] else '',
-                'erp_order_seq': str(row[4]).strip() if len(row) > 4 and row[4] else ''
             }
             preview_data.append(item)
 
@@ -605,8 +603,6 @@ def order_create_confirm(request):
     part_nos = request.POST.getlist('part_no_list[]')
     quantities = request.POST.getlist('quantity_list[]')
     due_dates = request.POST.getlist('due_date_list[]')
-    erp_orders = request.POST.getlist('erp_order_no_list[]')
-    erp_seqs = request.POST.getlist('erp_order_seq_list[]')
 
     success_count = 0
     skip_count = 0
@@ -626,8 +622,6 @@ def order_create_confirm(request):
                     part_name=part_obj.part_name or '',
                     quantity=int(quantities[i]),
                     due_date=due_dates[i],
-                    erp_order_no=erp_orders[i] if erp_orders[i] and erp_orders[i] != 'None' else '',
-                    erp_order_seq=erp_seqs[i] if erp_seqs[i] and erp_seqs[i] != 'None' else ''
                 )
                 success_count += 1
 
@@ -1302,7 +1296,7 @@ def label_list(request):
         
         # 반출 확인 수량 (ERP 번호 매칭)
         returned = ReturnLog.objects.filter(
-            part=o.part, 
+            part__part_no=o.part_no,
             is_confirmed=True,
             delivery_order__items__erp_order_no=o.erp_order_no
         ).distinct().aggregate(Sum('quantity'))['quantity__sum'] or 0
@@ -1937,6 +1931,18 @@ def receive_delivery_order_confirm(request):
                         erp_order_seq=item.erp_order_seq
                     )
 
+                    # ERP 입고등록 (무검사 직납 - 전체수량)
+                    try:
+                        from material.erp_api import register_erp_incoming
+                        erp_ok, erp_no, erp_err = register_erp_incoming(trx, item.total_qty, target_wh.code)
+                        if erp_ok:
+                            messages.info(request, f'ERP 입고등록 완료: {erp_no} ({item.part_no})')
+                        elif erp_err:
+                            messages.warning(request, f'ERP 연동 실패: {erp_err} ({item.part_no})')
+                    except Exception as e:
+                        import logging
+                        logging.getLogger(__name__).error(f'ERP 입고등록 예외(SCM): {e}')
+
             msg = f"{'수입검사 요청' if inspection_needed == 'yes' else '직납 입고'} 완료 (입고창고: {target_wh.name})"
             messages.success(request, f"납품서 처리 완료: {msg}")
 
@@ -2228,7 +2234,7 @@ def vendor_delivery_report(request):
     elif vendor_search:
         # 검색어가 있으면 검색 결과 중 납품 이력 있는 업체만
         target_vendors = Vendor.objects.filter(
-            models.Q(name__icontains=vendor_search) | models.Q(code__icontains=vendor_search),
+            Q(name__icontains=vendor_search) | Q(code__icontains=vendor_search),
             part__incoming__isnull=False
         ).distinct().order_by('name')
     else:
@@ -4247,3 +4253,242 @@ def api_employee_search(request):
         })
 
     return JsonResponse({'results': results})
+
+
+# =============================================================================
+# ERP 발주 연동 → SCM 발주 등록
+# =============================================================================
+
+@login_required
+@menu_permission_required('can_scm_order_edit')
+def erp_po_sync(request):
+    """
+    ERP 발주 조회 → 선택 → SCM Order 등록
+    - GET: 조회 폼
+    - POST action=search: ERP API로 발주 조회
+    - POST action=apply: 선택 항목을 SCM Order로 등록
+    """
+    from material.erp_api import fetch_erp_po_headers, fetch_erp_po_details
+    from django.conf import settings as conf_settings
+
+    erp_enabled = getattr(conf_settings, 'ERP_ENABLED', False)
+    vendors_qs = Vendor.objects.exclude(
+        erp_code__isnull=True
+    ).exclude(erp_code='').order_by('name')
+    today = timezone.now().date()
+
+    # 거래처 표시명 조회
+    sel_vendor_code = request.POST.get('vendor_erp_code', '')
+    sel_vendor_display = ''
+    if sel_vendor_code:
+        v_obj = vendors_qs.filter(erp_code=sel_vendor_code).first()
+        if v_obj:
+            sel_vendor_display = f'[{v_obj.erp_code}] {v_obj.name}'
+
+    context = {
+        'erp_enabled': erp_enabled,
+        'vendors': vendors_qs,
+        'date_from': request.POST.get('date_from', (today - timedelta(days=30)).strftime('%Y-%m-%d')),
+        'date_to': request.POST.get('date_to', today.strftime('%Y-%m-%d')),
+        'selected_vendor': sel_vendor_code,
+        'selected_vendor_display': sel_vendor_display,
+        'item_search': request.POST.get('item_search', ''),
+        'po_items': [],
+        'summary': None,
+    }
+
+    if request.method != 'POST':
+        return render(request, 'erp_po_sync.html', context)
+
+    action = request.POST.get('action', '')
+
+    # ── 조회 ──
+    if action == 'search':
+        date_from = request.POST.get('date_from', '')
+        date_to = request.POST.get('date_to', '')
+        vendor_erp_code = request.POST.get('vendor_erp_code', '')
+        item_search = (request.POST.get('item_search', '') or '').strip().upper()
+
+        if not date_from or not date_to:
+            messages.warning(request, '발주일 시작/종료를 입력해주세요.')
+            return render(request, 'erp_po_sync.html', context)
+
+        # 날짜 포맷 변환 (YYYY-MM-DD → YYYYMMDD)
+        dt_from = date_from.replace('-', '')
+        dt_to = date_to.replace('-', '')
+
+        context['date_from'] = date_from
+        context['date_to'] = date_to
+        context['selected_vendor'] = vendor_erp_code
+        context['item_search'] = item_search
+
+        # 1) 헤더 조회
+        headers = fetch_erp_po_headers(dt_from, dt_to, tr_cd=vendor_erp_code or None)
+        if not headers:
+            messages.info(request, '해당 기간에 ERP 발주 내역이 없습니다.')
+            return render(request, 'erp_po_sync.html', context)
+
+        # 2) 이미 SCM에 등록된 건 조회
+        existing = set(
+            Order.objects.filter(erp_order_no__isnull=False)
+            .exclude(erp_order_no='')
+            .values_list('erp_order_no', 'erp_order_seq')
+        )
+
+        # 3) SCM Part 목록 (매칭용)
+        part_map = {p.part_no: p for p in Part.objects.select_related('vendor').all()}
+
+        # 4) 각 헤더의 디테일 조회 → 품목 리스트 구성
+        po_items = []
+        for header in headers:
+            po_nb = header.get('poNb', '')
+            po_dt = header.get('poDt', '')
+            tr_cd_val = header.get('trCd', '')
+            vendor_name = header.get('attrNm', '')
+
+            details = fetch_erp_po_details(po_nb)
+            for detail in details:
+                item_cd = detail.get('itemCd', '')
+                po_sq = str(detail.get('poSq', ''))
+                po_qt = int(detail.get('poQt', 0) or 0)
+                rcv_qt = int(detail.get('rcvQt', 0) or 0)
+                due_dt = detail.get('dueDt', '')
+                item_nm = detail.get('itemNm', '')
+
+                # 품번/품명 필터
+                if item_search:
+                    if item_search not in item_cd.upper() and item_search not in (item_nm or '').upper():
+                        continue
+
+                # 이미 적용 여부
+                is_applied = (po_nb, po_sq) in existing
+
+                # Part 매칭
+                part_obj = part_map.get(item_cd)
+                part_matched = part_obj is not None
+
+                # 날짜 포맷
+                po_display = ''
+                if po_dt and len(po_dt) == 8:
+                    po_display = f'{po_dt[:4]}-{po_dt[4:6]}-{po_dt[6:8]}'
+                due_display = ''
+                if due_dt and len(due_dt) == 8:
+                    due_display = f'{due_dt[:4]}-{due_dt[4:6]}-{due_dt[6:8]}'
+
+                po_items.append({
+                    'po_nb': po_nb,
+                    'po_dt': po_display,
+                    'po_sq': po_sq,
+                    'tr_cd': tr_cd_val,
+                    'vendor_name': vendor_name,
+                    'item_cd': item_cd,
+                    'item_nm': item_nm,
+                    'po_qt': po_qt,
+                    'rcv_qt': rcv_qt,
+                    'remain_qt': po_qt - rcv_qt,
+                    'due_dt': due_display,
+                    'due_dt_raw': due_dt,
+                    'is_applied': is_applied,
+                    'part_matched': part_matched,
+                })
+
+        context['po_items'] = po_items
+        context['summary'] = {
+            'total': len(po_items),
+            'applied': sum(1 for i in po_items if i['is_applied']),
+            'new': sum(1 for i in po_items if not i['is_applied']),
+            'unmatched': sum(1 for i in po_items if not i['part_matched']),
+        }
+        return render(request, 'erp_po_sync.html', context)
+
+    # ── SCM 적용 ──
+    elif action == 'apply':
+        selected = request.POST.getlist('selected_items')
+        if not selected:
+            messages.warning(request, '적용할 항목을 선택해주세요.')
+            return redirect('erp_po_sync')
+
+        # 이미 등록된 건
+        existing = set(
+            Order.objects.filter(erp_order_no__isnull=False)
+            .exclude(erp_order_no='')
+            .values_list('erp_order_no', 'erp_order_seq')
+        )
+
+        part_map = {p.part_no: p for p in Part.objects.select_related('vendor').all()}
+        vendor_map = {v.erp_code: v for v in Vendor.objects.exclude(erp_code__isnull=True).exclude(erp_code='')}
+
+        created_count = 0
+        skipped_count = 0
+        error_list = []
+
+        for item_data in selected:
+            # 포맷: "poNb|poSq|itemCd|poQt|dueDt|trCd"
+            try:
+                fields = item_data.split('|')
+                po_nb = fields[0]
+                po_sq = fields[1]
+                item_cd = fields[2]
+                po_qt = int(fields[3])
+                due_dt_raw = fields[4]
+                tr_cd_val = fields[5] if len(fields) > 5 else ''
+            except (IndexError, ValueError):
+                error_list.append(f'데이터 파싱 오류: {item_data}')
+                continue
+
+            # 중복 체크
+            if (po_nb, po_sq) in existing:
+                skipped_count += 1
+                continue
+
+            # Part 매칭
+            part_obj = part_map.get(item_cd)
+            if not part_obj:
+                error_list.append(f'품번 미매칭: {item_cd}')
+                continue
+
+            # Vendor: Part에 할당된 vendor 우선, 없으면 ERP 거래처코드로 매칭
+            vendor = part_obj.vendor
+            if not vendor and tr_cd_val:
+                vendor = vendor_map.get(tr_cd_val)
+            if not vendor:
+                error_list.append(f'거래처 미매칭: {item_cd} (trCd={tr_cd_val})')
+                continue
+
+            # 납기일 파싱
+            due_date_val = None
+            if due_dt_raw and len(due_dt_raw) == 8:
+                try:
+                    due_date_val = date(int(due_dt_raw[:4]), int(due_dt_raw[4:6]), int(due_dt_raw[6:8]))
+                except ValueError:
+                    due_date_val = today
+            if not due_date_val:
+                due_date_val = today
+
+            # Order 생성 (협력사 승인 대기)
+            Order.objects.create(
+                vendor=vendor,
+                part_group=part_obj.part_group or '',
+                part_no=part_obj.part_no,
+                part_name=part_obj.part_name or '',
+                quantity=po_qt,
+                due_date=due_date_val,
+                erp_order_no=po_nb,
+                erp_order_seq=po_sq,
+            )
+            existing.add((po_nb, po_sq))
+            created_count += 1
+
+        # 결과 메시지
+        msg = f'SCM 발주 {created_count}건 등록 완료 (협력사 승인 대기)'
+        if skipped_count:
+            msg += f', 중복 건너뜀 {skipped_count}건'
+        if error_list:
+            msg += f', 오류 {len(error_list)}건'
+            for err in error_list[:5]:
+                messages.warning(request, err)
+
+        messages.success(request, msg)
+        return redirect('erp_po_sync')
+
+    return render(request, 'erp_po_sync.html', context)

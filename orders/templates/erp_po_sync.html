@@ -1,0 +1,313 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}ERP 발주 적용{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <h3 class="fw-bold">ERP 발주 적용</h3>
+
+    {% if messages %}
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    {% if not erp_enabled %}
+    <div class="alert alert-warning">
+        <i class="bi bi-exclamation-triangle me-1"></i>ERP 연동이 비활성화 상태입니다.
+    </div>
+    {% endif %}
+
+    <!-- 조회 조건 -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white fw-bold">
+            <i class="bi bi-search me-1 text-primary"></i> 조회 조건
+        </div>
+        <div class="card-body">
+            <form method="post" id="searchForm">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="search">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold">발주일 시작</label>
+                        <input type="date" name="date_from" class="form-control form-control-sm"
+                               value="{{ date_from }}" required>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold">발주일 종료</label>
+                        <input type="date" name="date_to" class="form-control form-control-sm"
+                               value="{{ date_to }}" required>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold">거래처 (선택)</label>
+                        <input type="text" id="vendorSearchInput" class="form-control form-control-sm"
+                               placeholder="거래처명 검색" value="{{ selected_vendor_display|default:'' }}"
+                               autocomplete="off">
+                        <input type="hidden" name="vendor_erp_code" id="vendorErpCode"
+                               value="{{ selected_vendor|default:'' }}">
+                        <div id="vendorDropdown" class="position-absolute bg-white border rounded shadow-sm"
+                             style="display:none; z-index:1050; max-height:250px; overflow-y:auto; width:280px;">
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold">품번/품명 검색</label>
+                        <input type="text" name="item_search" class="form-control form-control-sm"
+                               placeholder="품번 또는 품명" value="{{ item_search|default:'' }}">
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary btn-sm w-100" id="btnSearch"
+                                {% if not erp_enabled %}disabled{% endif %}>
+                            <i class="bi bi-search me-1"></i>ERP 발주 조회
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 조회 결과 -->
+    {% if po_items is not None and summary %}
+    <form method="post" id="applyForm">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="apply">
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-list-check me-1"></i> 조회 결과</span>
+                <div class="d-flex gap-2 align-items-center">
+                    <span class="badge bg-secondary filter-badge active" data-filter="all" style="cursor:pointer;">전체 {{ summary.total }}건</span>
+                    <span class="badge bg-success filter-badge" data-filter="applied" style="cursor:pointer;">적용됨 {{ summary.applied }}건</span>
+                    <span class="badge bg-primary filter-badge" data-filter="new" style="cursor:pointer;">미적용 {{ summary.new }}건</span>
+                    {% if summary.unmatched > 0 %}
+                    <span class="badge bg-danger filter-badge" data-filter="unmatched" style="cursor:pointer;">품번 미매칭 {{ summary.unmatched }}건</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-body p-0">
+                {% if po_items %}
+                <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+                    <table class="table table-sm table-hover mb-0 align-middle">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th class="text-center" style="width:3%;">
+                                    <input type="checkbox" class="form-check-input" id="checkAll"
+                                           onchange="toggleAll(this)">
+                                </th>
+                                <th style="width:10%;">발주번호</th>
+                                <th style="width:8%;">발주일</th>
+                                <th>거래처</th>
+                                <th style="width:10%;">품번</th>
+                                <th>품명</th>
+                                <th class="text-end" style="width:7%;">발주수량</th>
+                                <th class="text-end" style="width:7%;">입고수량</th>
+                                <th class="text-end" style="width:7%;">잔량</th>
+                                <th style="width:8%;">납기일</th>
+                                <th class="text-center" style="width:7%;">상태</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in po_items %}
+                            <tr class="po-row {% if item.is_applied %}table-light text-muted{% elif not item.part_matched %}table-warning{% endif %}"
+                                data-status="{% if item.is_applied %}applied{% elif not item.part_matched %}unmatched{% else %}new{% endif %}">
+                                <td class="text-center">
+                                    {% if item.is_applied %}
+                                        <i class="bi bi-check-circle-fill text-success"></i>
+                                    {% elif not item.part_matched %}
+                                        <i class="bi bi-exclamation-triangle text-warning" title="SCM 품번 미등록"></i>
+                                    {% else %}
+                                        <input type="checkbox" class="form-check-input item-check"
+                                               name="selected_items"
+                                               value="{{ item.po_nb }}|{{ item.po_sq }}|{{ item.item_cd }}|{{ item.po_qt }}|{{ item.due_dt_raw }}|{{ item.tr_cd }}">
+                                    {% endif %}
+                                </td>
+                                <td class="small fw-bold text-nowrap">{{ item.po_nb }}</td>
+                                <td class="small text-nowrap">{{ item.po_dt }}</td>
+                                <td class="small">{{ item.vendor_name }}</td>
+                                <td class="small fw-bold">{{ item.item_cd }}</td>
+                                <td class="small text-truncate" style="max-width:200px;">{{ item.item_nm }}</td>
+                                <td class="text-end">{{ item.po_qt|intcomma }}</td>
+                                <td class="text-end">{{ item.rcv_qt|intcomma }}</td>
+                                <td class="text-end fw-bold {% if item.remain_qt > 0 %}text-primary{% elif item.remain_qt == 0 %}text-muted{% endif %}">
+                                    {{ item.remain_qt|intcomma }}
+                                </td>
+                                <td class="small text-nowrap">{{ item.due_dt }}</td>
+                                <td class="text-center">
+                                    {% if item.is_applied %}
+                                        <span class="badge bg-success">적용됨</span>
+                                    {% elif not item.part_matched %}
+                                        <span class="badge bg-warning text-dark">미매칭</span>
+                                    {% else %}
+                                        <span class="badge bg-outline-secondary border text-dark">미적용</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 적용 버튼 -->
+                {% if summary.new > 0 %}
+                <div class="card-footer bg-white d-flex justify-content-between align-items-center py-3">
+                    <div>
+                        <span class="text-muted small" id="selectedCount">0건 선택됨</span>
+                    </div>
+                    <button type="submit" class="btn btn-success px-4 fw-bold" id="btnApply"
+                            onclick="return confirmApply()">
+                        <i class="bi bi-check2-square me-1"></i>SCM 발주 적용
+                    </button>
+                </div>
+                {% endif %}
+
+                {% else %}
+                <div class="text-center text-muted py-5">
+                    조회 결과가 없습니다.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </form>
+    {% endif %}
+</div>
+
+<script>
+// 검색 버튼 로딩
+document.getElementById('searchForm').addEventListener('submit', function() {
+    var btn = document.getElementById('btnSearch');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>조회 중...';
+});
+
+// 전체 선택
+function toggleAll(source) {
+    var checks = document.querySelectorAll('.item-check');
+    checks.forEach(function(cb) { cb.checked = source.checked; });
+    updateSelectedCount();
+}
+
+// 개별 체크 시 카운트 업데이트
+document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('item-check')) {
+        updateSelectedCount();
+    }
+});
+
+function updateSelectedCount() {
+    var checked = document.querySelectorAll('.item-check:checked').length;
+    var el = document.getElementById('selectedCount');
+    if (el) el.textContent = checked + '건 선택됨';
+}
+
+// 적용 확인
+function confirmApply() {
+    var checked = document.querySelectorAll('.item-check:checked').length;
+    if (checked === 0) {
+        alert('적용할 항목을 선택해주세요.');
+        return false;
+    }
+    return confirm('선택한 ' + checked + '건을 SCM 발주에 등록합니다.\n(협력사 승인 후 라벨 발행 가능)\n\n계속하시겠습니까?');
+}
+
+// 상태 필터
+document.querySelectorAll('.filter-badge').forEach(function(badge) {
+    badge.addEventListener('click', function() {
+        document.querySelectorAll('.filter-badge').forEach(function(b) {
+            b.classList.remove('active');
+            b.style.opacity = '0.5';
+        });
+        this.classList.add('active');
+        this.style.opacity = '1';
+
+        var filter = this.dataset.filter;
+        document.querySelectorAll('.po-row').forEach(function(row) {
+            if (filter === 'all' || row.dataset.status === filter) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+    });
+});
+// 초기 상태: 전체 활성
+document.querySelectorAll('.filter-badge').forEach(function(b) {
+    if (!b.classList.contains('active')) b.style.opacity = '0.5';
+});
+
+// 거래처 검색
+(function() {
+    var vendors = [
+        {% for v in vendors %}
+        {code: "{{ v.erp_code }}", name: "{{ v.name|escapejs }}"},
+        {% endfor %}
+    ];
+    var input = document.getElementById('vendorSearchInput');
+    var hidden = document.getElementById('vendorErpCode');
+    var dropdown = document.getElementById('vendorDropdown');
+    if (!input || !dropdown) return;
+
+    var debounceTimer;
+
+    input.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(function() {
+            var q = input.value.trim().toUpperCase();
+            if (!q) {
+                hidden.value = '';
+                dropdown.style.display = 'none';
+                return;
+            }
+            var filtered = vendors.filter(function(v) {
+                return v.name.toUpperCase().indexOf(q) > -1 || v.code.toUpperCase().indexOf(q) > -1;
+            }).slice(0, 20);
+
+            if (filtered.length === 0) {
+                dropdown.style.display = 'none';
+                return;
+            }
+            var html = '';
+            filtered.forEach(function(v) {
+                html += '<div class="px-3 py-2 small border-bottom vendor-item" style="cursor:pointer;" '
+                      + 'data-code="' + v.code + '" data-name="' + v.name + '">'
+                      + '<span class="text-muted">[' + v.code + ']</span> ' + v.name + '</div>';
+            });
+            dropdown.innerHTML = html;
+            dropdown.style.display = 'block';
+
+            dropdown.querySelectorAll('.vendor-item').forEach(function(el) {
+                el.addEventListener('click', function() {
+                    hidden.value = this.dataset.code;
+                    input.value = '[' + this.dataset.code + '] ' + this.dataset.name;
+                    dropdown.style.display = 'none';
+                });
+                el.addEventListener('mouseenter', function() { this.style.backgroundColor = '#f0f7ff'; });
+                el.addEventListener('mouseleave', function() { this.style.backgroundColor = ''; });
+            });
+        }, 150);
+    });
+
+    input.addEventListener('focus', function() {
+        if (input.value && dropdown.innerHTML) dropdown.style.display = 'block';
+    });
+
+    // 전체 선택 해제 (입력값 지우면 필터 해제)
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            dropdown.style.display = 'none';
+        }
+        if (e.key === 'Backspace' && input.value.length <= 1) {
+            hidden.value = '';
+        }
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+            dropdown.style.display = 'none';
+        }
+    });
+})();
+</script>
+{% endblock %}

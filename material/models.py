@@ -67,9 +67,15 @@ class MaterialTransaction(models.Model):
     TYPE_CHOICES = [
         ('IN_SCM', 'SCM 납품입고'),     # 납품서 QR 스캔 입고
         ('IN_MANUAL', '수기 입고'),     # 담당자 수동 입력
+        ('IN_ERP', 'ERP 입고'),        # ERP에서 동기화된 입고
         ('OUT_PROD', '생산 불출'),      # 생산 불출 (재고 감소)
         ('TRANSFER', '창고 이동'),      # A창고 -> B창고
         ('ADJUST', '재고 조정'),        # 실사 후 수량 강제 조정
+        ('ADJ_ERP_IN', 'ERP 조정입고'),   # ERP 재고조정 입고
+        ('ADJ_ERP_OUT', 'ERP 조정출고'),  # ERP 재고조정 출고
+        ('ISU_ERP', 'ERP 생산출고'),    # ERP 생산출고 (원자재 투입)
+        ('RCV_ERP', 'ERP 생산입고'),    # ERP 생산입고 (완제품 입고)
+        ('TRF_ERP', 'ERP 재고이동'),    # ERP 재고이동 (창고간 이동)
         ('OUT_RETURN', '반품 출고'),    # [신규 추가] 불량 반품 등
     ]
 
@@ -101,6 +107,17 @@ class MaterialTransaction(models.Model):
     
     # SCM 연동용 (어떤 납품서로 들어왔는지)
     ref_delivery_order = models.CharField("참조 납품서번호", max_length=50, blank=True, null=True)
+
+    # ERP 연동
+    erp_incoming_no = models.CharField("ERP입고번호", max_length=30, blank=True, null=True)
+    ERP_SYNC_CHOICES = [
+        ('NONE', '미대상'),
+        ('PENDING', '대기'),
+        ('SUCCESS', '성공'),
+        ('FAILED', '실패'),
+    ]
+    erp_sync_status = models.CharField("ERP연동상태", max_length=10, choices=ERP_SYNC_CHOICES, default='NONE')
+    erp_sync_message = models.CharField("ERP연동메시지", max_length=200, blank=True, null=True)
 
     class Meta:
         verbose_name = "수불(입출고) 이력"
@@ -423,8 +440,15 @@ class ProcessTag(models.Model):
         """
         스캔 기록
         Returns: (success: bool, is_first_scan: bool, error_message: str or None)
-        - 이미 사용된 태그는 차단됨
+        - 취소된 태그 → 사용 불가
+        - 이미 사용된 태그 → 중복 스캔 차단
         """
+        if self.status == 'CANCELLED':
+            # 취소된 태그 - 사용 불가
+            self.scan_count += 1
+            self.save()
+            return False, False, f"[사용 불가] 이 현품표({self.tag_id})는 취소된 라벨입니다. 사용할 수 없습니다."
+
         if self.status == 'PRINTED':
             # 최초 스캔 - 성공
             self.scan_count += 1
@@ -664,6 +688,7 @@ class RawMaterialLabel(models.Model):
         ('PRINTED', '발행'),
         ('INSTOCK', '재고'),
         ('USED', '사용완료'),
+        ('CANCELLED', '취소'),
         ('EXPIRED', '유효기간만료'),
         ('DISPOSED', '폐기'),
     ]

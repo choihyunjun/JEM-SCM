@@ -6,8 +6,7 @@
 {% block qms_content %}
 <div class="container-fluid p-0" style="max-width: 1200px;">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="fw-bold">
-            <i class="bi bi-star me-2"></i>{{ rating.vendor.name }} - {{ rating.year }}년 {{ rating.month }}월 평가
+        <h3 class="fw-bold">{{ rating.vendor.name }} - {{ rating.year }}년 {{ rating.month }}월 평가
             <span class="badge fs-5 bg-{% if rating.grade == 'A' %}success{% elif rating.grade == 'B' %}primary{% elif rating.grade == 'C' %}warning{% else %}danger{% endif %} ms-2">
                 {{ rating.grade }}등급
             </span>

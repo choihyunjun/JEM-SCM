@@ -6,8 +6,7 @@
 {% block qms_content %}
 <div class="container-fluid p-0" style="max-width: 1200px;">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="fw-bold">
-            <i class="bi bi-truck me-2"></i>{{ oi.inspection_no }}
+        <h3 class="fw-bold">{{ oi.inspection_no }}
             <span class="badge bg-{% if oi.status == 'PASS' %}success{% elif oi.status == 'FAIL' %}danger{% elif oi.status == 'PENDING' %}warning{% elif oi.status == 'CONDITIONAL' %}info{% else %}secondary{% endif %} ms-2">
                 {{ oi.get_status_display }}
             </span>

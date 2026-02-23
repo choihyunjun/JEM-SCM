@@ -20,6 +20,7 @@ urlpatterns = [
     # 2. 입고 관리
     path('inbound/manual/', views.manual_incoming, name='manual_incoming'),
     path('inbound/manual/cancel/<int:trx_id>/', views.cancel_manual_incoming, name='cancel_manual_incoming'),
+    path('inbound/erp-sync/', views.erp_incoming_sync, name='erp_incoming_sync'),
 
     # [핵심] views.incoming_history 함수와 연결하고, name도 'incoming_history'로 설정
     path('inbound/history/', views.incoming_history, name='incoming_history'),
@@ -63,6 +64,9 @@ urlpatterns = [
     # ERP 동기화
     path('erp-sync/', views.erp_sync, name='erp_sync'),
     path('erp-sync/export/', views.erp_sync_export, name='erp_sync_export'),
+    path('erp-stock/', views.erp_stock_manage, name='erp_stock_manage'),
+    path('erp-stock/init-progress/', views.erp_stock_init_progress, name='erp_stock_init_progress'),
+    path('erp-master-sync/', views.erp_master_sync, name='erp_master_sync'),
 
     # BOM 관리
     path('bom/', views.bom_list, name='bom_list'),
@@ -75,6 +79,8 @@ urlpatterns = [
     path('bom/detail/<str:part_no>/', views.bom_detail, name='bom_detail'),
     path('api/bom/calculate/', views.api_bom_calculate, name='api_bom_calculate'),
     path('bom/register-demand/', views.bom_register_demand, name='bom_register_demand'),
+    path('bom/sync/', views.bom_sync, name='bom_sync'),
+    path('bom/sync/<str:part_no>/', views.bom_sync_single, name='bom_sync_single'),
 
     # 원재료 관리
     path('raw-material/', views.raw_material_layout, name='raw_material_layout'),
@@ -87,4 +93,5 @@ urlpatterns = [
     path('api/part-search/', views.api_part_search, name='api_part_search'),
     path('api/labels-for-lot/', views.api_labels_for_lot, name='api_labels_for_lot'),
     path('api/transfer-detail/<int:trx_id>/', views.api_transfer_detail, name='api_transfer_detail'),
+    path('api/cancel-stock-move/<int:trx_id>/', views.cancel_stock_move, name='cancel_stock_move'),
 ]

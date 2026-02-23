@@ -5,7 +5,7 @@
 {% block qms_content %}
 <div class="container-fluid p-0" style="max-width: 1200px;">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="fw-bold"><i class="bi bi-speedometer2 me-2"></i>계측기 {% if mode == 'edit' %}수정{% else %}등록{% endif %}</h3>
+        <h3 class="fw-bold">계측기 {% if mode == 'edit' %}수정{% else %}등록{% endif %}</h3>
         <a href="{% url 'qms:gauge_list' %}" class="btn btn-outline-secondary">
             <i class="bi bi-arrow-left me-1"></i>목록
         </a>

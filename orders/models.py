@@ -27,8 +27,12 @@ class Vendor(models.Model):
         super().save(*args, **kwargs)
         # 연결된 Organization이 없으면 자동 생성
         if not hasattr(self, 'organization') or self.organization is None:
+            # 동명 거래처 대비: 이름 중복 시 코드 붙여서 생성
+            org_name = self.name
+            if Organization.objects.filter(name=org_name).exists():
+                org_name = f"{self.name} ({self.code})"
             Organization.objects.create(
-                name=self.name,
+                name=org_name,
                 org_type="VENDOR",
                 linked_vendor=self
             )
@@ -148,9 +152,6 @@ class Incoming(models.Model):
     erp_order_seq = models.CharField(max_length=20, blank=True, null=True, verbose_name="ERP 발주순번")
     confirmed_qty = models.IntegerField("확정(양품)수량", default=0, null=True, blank=True)
     
-    def __str__(self):
-        return f"{self.part.part_name} ({self.quantity})"
-
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -176,6 +177,9 @@ class LabelPrintLog(models.Model):
     class Meta:
         verbose_name = "라벨 발행 이력"
         verbose_name_plural = "3. 라벨 발행 이력"
+
+    def __str__(self):
+        return f"{self.part_no} x{self.printed_qty} ({self.printed_at:%Y-%m-%d})"
 
 # 7. 납품서 (DeliveryOrder)
 class DeliveryOrder(models.Model):
@@ -217,6 +221,9 @@ class DeliveryOrderItem(models.Model):
     class Meta:
         verbose_name = "납품서 상세 품목"
         verbose_name_plural = "납품서 상세 품목"
+
+    def __str__(self):
+        return f"{self.part_no} x{self.total_qty}"
 
 # 9. 유저 프로필 확장
 class UserProfile(models.Model):

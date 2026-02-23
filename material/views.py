@@ -1,4 +1,5 @@
 # material/views.py
+import logging
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
@@ -8,6 +9,8 @@ from django.db import transaction
 from django.db.models import F, Sum, Q
 from django.utils import timezone
 from functools import wraps
+
+logger = logging.getLogger(__name__)
 
 # SCM(Orders) 앱 모델
 from orders.models import Part, Vendor, Inventory as OldInventory, Demand, InventoryUploadLog
@@ -486,6 +489,20 @@ def manual_incoming(request):
                             remark='무검사 수기입고 (수입검사 생략)',
                         )
 
+                        # ERP 입고등록 (무검사 - 전체수량)
+                        try:
+                            from material.erp_api import register_erp_incoming
+                            erp_ok, erp_no, erp_err = register_erp_incoming(trx_obj, qty, warehouse.code)
+                            if erp_ok:
+                                messages.info(request, f'ERP 입고등록 완료: {erp_no}')
+                            elif erp_err:
+                                messages.warning(request, f'ERP 연동 실패: {erp_err}')
+                            else:
+                                messages.info(request, 'ERP 연동 건너뜀 (거래처 ERP코드 없음)')
+                        except Exception as e:
+                            logger.error(f'ERP 입고등록 예외: {e}')
+                            messages.warning(request, f'ERP 연동 오류: {e}')
+
                     success_count += 1
 
             if success_count > 0:
@@ -501,7 +518,7 @@ def manual_incoming(request):
 
     # === 입고처리 내역 (History) ===
     history_qs = MaterialTransaction.objects.filter(
-        transaction_type='IN_MANUAL'
+        transaction_type__in=['IN_MANUAL', 'IN_SCM', 'IN_ERP']
     ).select_related(
         'part', 'warehouse_to', 'vendor', 'actor'
     ).order_by('-date', '-id')
@@ -532,7 +549,7 @@ def manual_incoming(request):
     for item in history_page:
         item.label_count = RawMaterialLabel.objects.filter(
             incoming_transaction=item
-        ).count()
+        ).exclude(status='CANCELLED').count()
         try:
             item.inspection_status = item.inspection.status
         except Exception:
@@ -540,6 +557,13 @@ def manual_incoming(request):
         item.can_cancel = (item.label_count == 0)
 
     warehouses_qs = Warehouse.objects.filter(is_active=True).order_by('code')
+
+    # ERP 자동동기화 결과
+    from django.core.cache import cache
+    from django.conf import settings as django_settings
+    erp_sync_result = cache.get('erp_incoming_sync_result')
+    erp_auto_sync_enabled = getattr(django_settings, 'ERP_AUTO_SYNC_ENABLED', False)
+    erp_auto_sync_interval = getattr(django_settings, 'ERP_AUTO_SYNC_INTERVAL_MINUTES', 10)
 
     context = {
         'warehouses': warehouses_qs,
@@ -551,6 +575,9 @@ def manual_incoming(request):
         'history_wh': history_wh,
         'history_start': history_start,
         'history_end': history_end,
+        'erp_sync_result': erp_sync_result,
+        'erp_auto_sync_enabled': erp_auto_sync_enabled,
+        'erp_auto_sync_interval': erp_auto_sync_interval,
     }
     return render(request, 'material/manual_incoming.html', context)
 
@@ -561,10 +588,14 @@ def cancel_manual_incoming(request, trx_id):
     if request.method != 'POST':
         return redirect('material:manual_incoming')
 
-    trx = get_object_or_404(MaterialTransaction, pk=trx_id, transaction_type='IN_MANUAL')
+    trx = get_object_or_404(MaterialTransaction, pk=trx_id, transaction_type__in=['IN_MANUAL', 'IN_SCM', 'IN_ERP'])
+
+    if trx.transaction_type == 'IN_ERP':
+        messages.error(request, "ERP에서 동기화된 입고 건은 WMS에서 삭제할 수 없습니다. ERP(아마란스)에서 삭제해주세요.")
+        return redirect('material:manual_incoming')
 
     from .models import RawMaterialLabel
-    label_count = RawMaterialLabel.objects.filter(incoming_transaction=trx).count()
+    label_count = RawMaterialLabel.objects.filter(incoming_transaction=trx).exclude(status='CANCELLED').count()
     if label_count > 0:
         messages.error(request, f"라벨이 {label_count}장 발행된 입고 건은 삭제할 수 없습니다. 라벨을 먼저 취소하세요.")
         return redirect('material:manual_incoming')
@@ -599,6 +630,20 @@ def cancel_manual_incoming(request, trx_id):
                 quantity=F('quantity') - trx.quantity
             )
 
+            # ERP 입고 삭제
+            erp_no = getattr(trx, 'erp_incoming_no', None)
+            if erp_no:
+                try:
+                    from material.erp_api import delete_erp_incoming
+                    erp_ok, erp_err = delete_erp_incoming(erp_no)
+                    if erp_ok:
+                        messages.info(request, f'ERP 입고 삭제 완료: {erp_no}')
+                    else:
+                        messages.warning(request, f'ERP 입고 삭제 실패: {erp_err}')
+                except Exception as e:
+                    logger.error(f'ERP 입고삭제 예외: {e}')
+                    messages.warning(request, f'ERP 삭제 오류: {e}')
+
             # ImportInspection 삭제
             if ImportInspection:
                 try:
@@ -614,6 +659,48 @@ def cancel_manual_incoming(request, trx_id):
     except Exception as e:
         messages.error(request, f"취소 처리 중 오류 발생: {str(e)}")
 
+    return redirect('material:manual_incoming')
+
+
+@login_required
+@wms_permission_required('can_wms_inout_edit')
+def erp_incoming_sync(request):
+    """[WMS] ERP 입고 내역 역방향 동기화 - 백그라운드 스레드"""
+    if request.method != 'POST':
+        return redirect('material:manual_incoming')
+
+    from django.core.cache import cache
+
+    if cache.get('erp_incoming_sync_running'):
+        messages.warning(request, '이미 ERP 입고 동기화가 진행 중입니다.')
+        return redirect('material:manual_incoming')
+
+    import threading
+
+    def _run_sync():
+        try:
+            from material.erp_api import sync_erp_incoming
+            cache.set('erp_incoming_sync_running', True, timeout=600)
+            synced, skipped, errors, error_list = sync_erp_incoming()
+            cache.set('erp_incoming_sync_result', {
+                'synced': synced, 'skipped': skipped,
+                'errors': errors, 'error_list': error_list[:5],
+                'finished_at': timezone.now().strftime('%Y-%m-%d %H:%M'),
+            }, timeout=86400)
+        except Exception as e:
+            logger.error(f'ERP 입고 동기화 예외: {e}')
+            cache.set('erp_incoming_sync_result', {
+                'synced': 0, 'skipped': 0, 'errors': 1,
+                'error_list': [str(e)],
+                'finished_at': timezone.now().strftime('%Y-%m-%d %H:%M'),
+            }, timeout=86400)
+        finally:
+            cache.delete('erp_incoming_sync_running')
+
+    thread = threading.Thread(target=_run_sync, daemon=True)
+    thread.start()
+
+    messages.info(request, 'ERP 입고 동기화를 시작했습니다. 잠시 후 새로고침하여 결과를 확인하세요.')
     return redirect('material:manual_incoming')
 
 
@@ -641,6 +728,9 @@ def incoming_history(request):
     #   검사 완료 후 정상 창고로 이동된 TRANSFER(8100 -> 정상창고)는 'SCM입고'로 표시
     qs = MaterialTransaction.objects.filter(
         Q(transaction_type='IN_MANUAL')
+        | Q(transaction_type='IN_ERP')
+        | Q(transaction_type='ISU_ERP')
+        | Q(transaction_type='RCV_ERP')
         |
         (
             Q(transaction_type='IN_SCM')
@@ -664,6 +754,9 @@ def incoming_history(request):
         # (B) TRANSFER는 "검사대기창고 -> 다른창고"로 이동된 것만 '입고확정'으로 취급
         qs = qs.filter(
             Q(transaction_type='IN_MANUAL') |
+            Q(transaction_type='IN_ERP') |
+            Q(transaction_type='ISU_ERP') |
+            Q(transaction_type='RCV_ERP') |
             Q(transaction_type='IN_SCM') |
             (Q(transaction_type='TRANSFER') & Q(warehouse_from=waiting_wh))
         )
@@ -682,6 +775,14 @@ def incoming_history(request):
             Q(part__part_no__icontains=q) |
             Q(part__part_name__icontains=q)
         )
+
+    q_group = (request.GET.get('q_group') or '').strip()
+    if q_group:
+        qs = qs.filter(part__part_group__icontains=q_group)
+
+    q_vendor = (request.GET.get('q_vendor') or '').strip()
+    if q_vendor:
+        qs = qs.filter(vendor__name__icontains=q_vendor)
 
     # 3) 날짜 필터 ('None' 방어)
     start_date = (request.GET.get('start_date') or '').strip()
@@ -707,6 +808,20 @@ def incoming_history(request):
         if item.transaction_type == 'IN_MANUAL':
             item.display_type = "수기입고"
             item.display_remark = item.remark or ""
+        elif item.transaction_type == 'IN_ERP':
+            item.display_type = "ERP입고"
+            # 비고에서 'ERP입고(업체명)' 부분 제거 (입고처 칼럼으로 분리)
+            remark = item.remark or ""
+            import re
+            item.display_remark = re.sub(r'^ERP입고\([^)]*\)\s*', '', remark)
+        elif item.transaction_type == 'ISU_ERP':
+            item.display_type = "ERP생산출고"
+            remark = item.remark or ""
+            item.display_remark = re.sub(r'^ERP생산출고\([^)]*\)\s*', '', remark)
+        elif item.transaction_type == 'RCV_ERP':
+            item.display_type = "ERP생산입고"
+            remark = item.remark or ""
+            item.display_remark = re.sub(r'^ERP생산입고\([^)]*\)\s*', '', remark)
         else:
             # IN_SCM 또는 (검사완료 후) TRANSFER를 모두 "SCM입고"로 표시
             item.display_type = "SCM입고"
@@ -716,11 +831,25 @@ def incoming_history(request):
             #        여기서는 ref_delivery_order가 있는 경우만 표시 가능 (없으면 빈값)
             item.display_remark = item.ref_delivery_order or ""
 
+    # 모달 선택용 목록
+    part_groups = list(
+        Part.objects.values_list('part_group', flat=True)
+        .distinct().order_by('part_group')
+    )
+    vendors = list(
+        Vendor.objects.values_list('name', flat=True)
+        .order_by('name')
+    )
+
     context = {
         'page_obj': page_obj,
         'q': q,
+        'q_group': q_group,
+        'q_vendor': q_vendor,
         'start_date': start_date,
         'end_date': end_date,
+        'part_groups': part_groups,
+        'vendors': vendors,
     }
     return render(request, 'material/incoming_history.html', context)
 
@@ -901,13 +1030,20 @@ def api_process_tag_scan(request):
         if client_ip and ',' in client_ip:
             client_ip = client_ip.split(',')[0].strip()
 
+        if not success and tag.status == 'CANCELLED':
+            scan_remark = '취소된 라벨 스캔 시도 (사용 불가)'
+        elif not success:
+            scan_remark = '중복 스캔 시도 (차단됨)'
+        else:
+            scan_remark = ''
+
         ProcessTagScanLog.objects.create(
             tag=tag,
             scanned_by=request.user,
             warehouse=warehouse,
             is_first_scan=is_first_scan,
             ip_address=client_ip if client_ip else None,
-            remark='중복 스캔 시도 (차단됨)' if not success else ''
+            remark=scan_remark
         )
 
         # 중복 스캔 차단
@@ -1264,7 +1400,7 @@ def stock_adjustment(request):
     - 월 마감 처리
     - 마감 해제
     """
-    from .models import InventoryClosing, InventoryCheck
+    from .models import InventoryClosing
     from datetime import date
     from calendar import monthrange
 
@@ -1965,7 +2101,7 @@ def stock_move(request):
         hq = request.GET.get('hq', '')
 
         history_qs = MaterialTransaction.objects.filter(
-            transaction_type='TRANSFER'
+            transaction_type__in=['TRANSFER', 'TRF_ERP']
         ).select_related('part', 'warehouse_from', 'warehouse_to', 'actor').annotate(
             rm_label_count=Count('used_labels', distinct=True),
             tag_count=Count('used_tags', distinct=True),
@@ -2028,6 +2164,7 @@ def stock_move(request):
             transfer_datetime = timezone.now()
 
         success_count = 0
+        erp_pending = []  # ERP 연동 대기 목록 (atomic 밖에서 처리)
 
         try:
             with transaction.atomic():
@@ -2057,8 +2194,14 @@ def stock_move(request):
                     except Part.DoesNotExist:
                         raise ValueError(f"존재하지 않는 품번입니다: [{p_no}]")
 
-                    from_wh = Warehouse.objects.get(code=f_loc_val)
-                    to_wh = Warehouse.objects.get(code=t_loc_val)
+                    try:
+                        from_wh = Warehouse.objects.get(code=f_loc_val)
+                    except Warehouse.DoesNotExist:
+                        raise ValueError(f"출발 창고를 찾을 수 없습니다: [{f_loc_val}]")
+                    try:
+                        to_wh = Warehouse.objects.get(code=t_loc_val)
+                    except Warehouse.DoesNotExist:
+                        raise ValueError(f"도착 창고를 찾을 수 없습니다: [{t_loc_val}]")
 
                     # 2-1. LOT별 재고(source_stock) 조회 및 차감
                     try:
@@ -2180,7 +2323,36 @@ def stock_move(request):
                                     used_transaction=trx_obj,
                                 )
 
+                    # ERP 연동 대기 목록에 추가
+                    erp_pending.append({
+                        'trx': trx_obj,
+                        'qty': qty,
+                        'from_code': from_wh.code,
+                        'to_code': to_wh.code,
+                    })
+
                     success_count += 1
+
+            # ERP 재고이동 등록 (atomic 밖 - ERP 실패가 SCM 롤백하지 않도록)
+            if erp_pending:
+                from .erp_api import register_erp_stock_move
+                erp_ok = 0
+                erp_fail = 0
+                for item in erp_pending:
+                    try:
+                        ok, erp_no, err = register_erp_stock_move(
+                            item['trx'], item['qty'], item['from_code'], item['to_code']
+                        )
+                        if ok:
+                            erp_ok += 1
+                        else:
+                            erp_fail += 1
+                    except Exception as e:
+                        logger.warning(f"ERP 재고이동 등록 예외: {e}")
+                        erp_fail += 1
+
+                if erp_fail > 0:
+                    messages.warning(request, f"ERP 연동: {erp_ok}건 성공, {erp_fail}건 실패 (SCM 재고이동은 정상 처리됨)")
 
             if success_count > 0:
                 messages.success(request, f"총 {success_count}건 이동 완료되었습니다.")
@@ -2354,12 +2526,73 @@ def bom_list(request):
     for product in page_obj:
         product.bom_count = product.bom_items.filter(is_active=True).count()
 
+    # 동기화 상태 확인
+    from django.core.cache import cache
+    last_sync = cache.get('bom_last_sync', '')
+    sync_running = cache.get('bom_sync_running', False)
+    sync_result = cache.get('bom_sync_result')
+
+    # 완료 결과가 있으면 메시지로 표시 후 삭제
+    if sync_result and not sync_running:
+        r = sync_result
+        if r['synced'] > 0:
+            messages.success(request, f"BOM 동기화 완료 ({r['finished_at']}): {r['synced']}건 동기화, {r['skipped']}건 건너뜀")
+        if r['errors'] > 0:
+            messages.warning(request, f"동기화 오류 {r['errors']}건: {', '.join(r['error_list'][:3])}")
+        cache.delete('bom_sync_result')
+
     context = {
         'page_obj': page_obj,
         'q': q,
         'account_type': account_type,
+        'last_sync': last_sync,
+        'sync_running': sync_running,
     }
     return render(request, 'material/bom_list.html', context)
+
+
+@login_required
+@wms_permission_required('can_wms_bom_edit')
+def bom_sync(request):
+    """[WMS] ERP BOM 동기화 - 백그라운드 스레드로 실행"""
+    if request.method != 'POST':
+        return redirect('material:bom_list')
+
+    from django.core.cache import cache
+
+    # 이미 동기화 중이면 중복 실행 방지
+    if cache.get('bom_sync_running'):
+        messages.warning(request, '이미 BOM 동기화가 진행 중입니다. 완료될 때까지 기다려주세요.')
+        return redirect('material:bom_list')
+
+    import threading
+
+    def _run_sync():
+        try:
+            from material.erp_api import sync_all_bom
+            cache.set('bom_sync_running', True, timeout=7200)  # 2시간 타임아웃
+            synced, skipped, errors, error_list = sync_all_bom()
+            cache.set('bom_last_sync', timezone.now().strftime('%Y-%m-%d %H:%M'), timeout=None)
+            cache.set('bom_sync_result', {
+                'synced': synced, 'skipped': skipped,
+                'errors': errors, 'error_list': error_list[:5],
+                'finished_at': timezone.now().strftime('%Y-%m-%d %H:%M'),
+            }, timeout=86400)
+        except Exception as e:
+            logger.error(f'BOM 동기화 예외: {e}')
+            cache.set('bom_sync_result', {
+                'synced': 0, 'skipped': 0, 'errors': 1,
+                'error_list': [str(e)],
+                'finished_at': timezone.now().strftime('%Y-%m-%d %H:%M'),
+            }, timeout=86400)
+        finally:
+            cache.delete('bom_sync_running')
+
+    thread = threading.Thread(target=_run_sync, daemon=True)
+    thread.start()
+
+    messages.info(request, 'BOM 동기화를 백그라운드에서 시작했습니다. 모품 8,000건+ 처리에 약 2~4시간 소요됩니다. 완료 시 이 페이지에서 결과를 확인할 수 있습니다.')
+    return redirect('material:bom_list')
 
 
 @wms_permission_required('can_wms_bom_view')
@@ -2375,6 +2608,27 @@ def bom_detail(request, part_no):
         'bom_items': bom_items,
     }
     return render(request, 'material/bom_detail.html', context)
+
+
+@login_required
+@wms_permission_required('can_wms_bom_edit')
+def bom_sync_single(request, part_no):
+    """[WMS] 단일 모품 ERP BOM 동기화"""
+    if request.method != 'POST':
+        return redirect('material:bom_detail', part_no=part_no)
+
+    try:
+        from material.erp_api import sync_single_bom
+        ok, count, err = sync_single_bom(part_no)
+        if ok:
+            messages.success(request, f'[{part_no}] ERP 동기화 완료: 자품 {count}개')
+        else:
+            messages.error(request, f'[{part_no}] 동기화 실패: {err}')
+    except Exception as e:
+        logger.error(f'단일 BOM 동기화 예외: {e}')
+        messages.error(request, f'동기화 오류: {e}')
+
+    return redirect('material:bom_detail', part_no=part_no)
 
 
 @wms_permission_required('can_wms_bom_edit')
@@ -2508,7 +2762,7 @@ def bom_upload(request):
                         except ValueError:
                             continue
                     return None
-                except:
+                except (TypeError, AttributeError):
                     return None
 
             product_count = 0
@@ -2725,7 +2979,7 @@ def bom_calculate(request):
 
                             try:
                                 qty = int(float(str(qty).replace(',', '')))
-                            except:
+                            except (ValueError, TypeError):
                                 qty = 0
 
                             if qty <= 0:
@@ -3049,7 +3303,7 @@ def bom_register_demand(request):
             if isinstance(need_date, str):
                 try:
                     need_date = datetime.strptime(need_date, '%Y-%m-%d').date()
-                except:
+                except (ValueError, TypeError):
                     need_date = None
             elif hasattr(need_date, 'date'):
                 need_date = need_date.date()
@@ -3243,7 +3497,14 @@ def inventory_check_scan_api(request, pk):
     try:
         tag = ProcessTag.objects.select_related('part').get(tag_id=tag_id)
     except ProcessTag.DoesNotExist:
+        # RM 라벨인지 확인
+        rm_label = RawMaterialLabel.objects.filter(label_id=tag_id).first()
+        if rm_label and rm_label.status == 'CANCELLED':
+            return JsonResponse({'success': False, 'error': f'취소된 라벨입니다. 사용할 수 없습니다: {tag_id}'})
         return JsonResponse({'success': False, 'error': f'현품표를 찾을 수 없습니다: {tag_id}'})
+
+    if tag.status == 'CANCELLED':
+        return JsonResponse({'success': False, 'error': f'취소된 현품표입니다. 사용할 수 없습니다: {tag_id}'})
 
     try:
         # 품목 마스터 조회
@@ -3955,9 +4216,10 @@ def raw_material_layout(request):
 @wms_permission_required('can_wms_stock_view')
 def raw_material_expiry(request):
     """
-    유효기간 관리 - 임박/경과 품목 모니터링
+    유효기간 관리 - 임박/경과 품목 모니터링 (품번+LOT 합산)
     """
     from datetime import timedelta
+    from django.db.models import Count
 
     today = timezone.now().date()
     filter_status = request.GET.get('status', 'all')
@@ -3967,7 +4229,7 @@ def raw_material_expiry(request):
     base_qs = RawMaterialLabel.objects.filter(
         expiry_date__isnull=False,
         status__in=['INSTOCK', 'PRINTED']
-    ).select_related('part', 'vendor').order_by('expiry_date')
+    )
 
     if stock_search:
         from django.db.models import Q as _Q
@@ -3975,36 +4237,49 @@ def raw_material_expiry(request):
             _Q(part_no__icontains=stock_search) | _Q(part_name__icontains=stock_search)
         )
 
+    # 품번 + LOT + 유효기간 기준 합산
+    def _aggregate(qs):
+        return qs.values(
+            'part_no', 'part_name', 'lot_no', 'expiry_date', 'unit'
+        ).annotate(
+            total_qty=Sum('quantity'),
+            label_count=Count('id'),
+        ).order_by('expiry_date')
+
     # 상태별 필터링
     if filter_status == 'expired':
-        labels = base_qs.filter(expiry_date__lt=today)
+        labels = _aggregate(base_qs.filter(expiry_date__lt=today))
     elif filter_status == 'imminent':
-        labels = base_qs.filter(expiry_date__gte=today, expiry_date__lte=today + timedelta(days=30))
+        labels = _aggregate(base_qs.filter(expiry_date__gte=today, expiry_date__lte=today + timedelta(days=30)))
     elif filter_status == 'warning':
-        labels = base_qs.filter(expiry_date__gt=today + timedelta(days=30), expiry_date__lte=today + timedelta(days=90))
+        labels = _aggregate(base_qs.filter(expiry_date__gt=today + timedelta(days=30), expiry_date__lte=today + timedelta(days=90)))
     elif filter_status == 'safe':
-        labels = base_qs.filter(expiry_date__gt=today + timedelta(days=90))
+        labels = _aggregate(base_qs.filter(expiry_date__gt=today + timedelta(days=90)))
     else:
-        labels = base_qs
+        labels = _aggregate(base_qs)
 
-    # D-day 계산
-    for label in labels:
-        delta = (label.expiry_date - today).days
-        label.d_day = delta
+    # D-day, 상태 계산
+    labels = list(labels)
+    for item in labels:
+        delta = (item['expiry_date'] - today).days
+        item['d_day'] = delta
         if delta < 0:
-            label.expiry_status = 'expired'
+            item['expiry_status'] = 'expired'
         elif delta <= 30:
-            label.expiry_status = 'imminent'
+            item['expiry_status'] = 'imminent'
         elif delta <= 90:
-            label.expiry_status = 'warning'
+            item['expiry_status'] = 'warning'
         else:
-            label.expiry_status = 'safe'
+            item['expiry_status'] = 'safe'
+        # 단위 표시
+        unit_map = dict(RawMaterialLabel.UNIT_CHOICES) if hasattr(RawMaterialLabel, 'UNIT_CHOICES') else {}
+        item['unit_display'] = unit_map.get(item['unit'], item['unit'] or '')
 
-    # 요약 카운트
-    count_expired = base_qs.filter(expiry_date__lt=today).count()
-    count_imminent = base_qs.filter(expiry_date__gte=today, expiry_date__lte=today + timedelta(days=30)).count()
-    count_warning = base_qs.filter(expiry_date__gt=today + timedelta(days=30), expiry_date__lte=today + timedelta(days=90)).count()
-    count_safe = base_qs.filter(expiry_date__gt=today + timedelta(days=90)).count()
+    # 요약 카운트 (합산 그룹 수)
+    count_expired = _aggregate(base_qs.filter(expiry_date__lt=today)).count()
+    count_imminent = _aggregate(base_qs.filter(expiry_date__gte=today, expiry_date__lte=today + timedelta(days=30))).count()
+    count_warning = _aggregate(base_qs.filter(expiry_date__gt=today + timedelta(days=30), expiry_date__lte=today + timedelta(days=90))).count()
+    count_safe = _aggregate(base_qs.filter(expiry_date__gt=today + timedelta(days=90))).count()
 
     # 현장 투입 이력 (USED 라벨)
     from django.db.models import Q
@@ -4067,21 +4342,25 @@ def raw_material_incoming(request):
     if request.method == 'POST':
         action = request.POST.get('action')
 
-        # 라벨 취소 (삭제)
+        # 라벨 취소 (소프트삭제 - CANCELLED 상태로 변경)
         if action == 'cancel_labels':
             inspection_id = request.POST.get('inspection_id')
             try:
                 insp = ImportInspection.objects.get(id=inspection_id)
                 trx = insp.inbound_transaction
-                deleted_count = RawMaterialLabel.objects.filter(incoming_transaction=trx).delete()[0]
-                if deleted_count > 0:
+                cancelled_count = RawMaterialLabel.objects.filter(
+                    incoming_transaction=trx
+                ).exclude(status='CANCELLED').update(
+                    status='CANCELLED',
+                )
+                if cancelled_count > 0:
                     # 트랜잭션 remark에서 라벨 발행 기록 제거
                     remark = trx.remark or ''
                     import re
                     remark = re.sub(r'\s*\[라벨 \d+장 발행.*?\]', '', remark).strip()
                     trx.remark = remark
                     trx.save(update_fields=['remark'])
-                    messages.success(request, f'{trx.part.part_no} - 라벨 {deleted_count}장 취소 완료')
+                    messages.success(request, f'{trx.part.part_no} - 라벨 {cancelled_count}장 취소 완료')
                 else:
                     messages.info(request, '취소할 라벨이 없습니다.')
             except ImportInspection.DoesNotExist:
@@ -4262,7 +4541,11 @@ def raw_material_rack_manage(request):
             rack_id = request.POST.get('rack_id')
             part_id = request.POST.get('part_id')
 
-            rack = RawMaterialRack.objects.get(id=rack_id)
+            try:
+                rack = RawMaterialRack.objects.get(id=rack_id)
+            except RawMaterialRack.DoesNotExist:
+                messages.error(request, '해당 랙을 찾을 수 없습니다.')
+                return redirect(f'/wms/raw-material/rack-manage/?section={section}')
             rack.part_id = part_id if part_id else None
             rack.save()
             messages.success(request, f'{rack.position_code} 품목 배치 완료')
@@ -4272,8 +4555,12 @@ def raw_material_rack_manage(request):
             source_rack_id = request.POST.get('source_rack_id')
             target_rack_id = request.POST.get('target_rack_id')
 
-            source_rack = RawMaterialRack.objects.get(id=source_rack_id)
-            target_rack = RawMaterialRack.objects.get(id=target_rack_id)
+            try:
+                source_rack = RawMaterialRack.objects.get(id=source_rack_id)
+                target_rack = RawMaterialRack.objects.get(id=target_rack_id)
+            except RawMaterialRack.DoesNotExist:
+                messages.error(request, '해당 랙을 찾을 수 없습니다.')
+                return redirect(f'/wms/raw-material/rack-manage/?section={section}')
 
             # 두 랙의 품목을 교환
             source_part = source_rack.part
@@ -4289,7 +4576,11 @@ def raw_material_rack_manage(request):
 
         elif action == 'delete_rack':
             rack_id = request.POST.get('rack_id')
-            rack = RawMaterialRack.objects.get(id=rack_id)
+            try:
+                rack = RawMaterialRack.objects.get(id=rack_id)
+            except RawMaterialRack.DoesNotExist:
+                messages.error(request, '해당 랙을 찾을 수 없습니다.')
+                return redirect(f'/wms/raw-material/rack-manage/?section={section}')
             position = rack.position_code
             rack.delete()
             messages.success(request, f'랙 위치 {position} 삭제 완료')
@@ -4357,7 +4648,11 @@ def raw_material_setting(request):
         shelf_life_days = request.POST.get('shelf_life_days', 365)
         unit_weight = request.POST.get('unit_weight', 25)
 
-        part = Part.objects.get(id=part_id)
+        try:
+            part = Part.objects.get(id=part_id)
+        except Part.DoesNotExist:
+            messages.error(request, '해당 품목을 찾을 수 없습니다.')
+            return redirect('/wms/raw-material/setting/')
         setting, created = RawMaterialSetting.objects.update_or_create(
             part=part,
             defaults={
@@ -4400,7 +4695,9 @@ def api_raw_material_labels(request):
     try:
         inspection = ImportInspection.objects.get(id=inspection_id)
         trx = inspection.inbound_transaction
-        labels = RawMaterialLabel.objects.filter(incoming_transaction=trx).order_by('id')
+        labels = RawMaterialLabel.objects.filter(
+            incoming_transaction=trx
+        ).exclude(status='CANCELLED').order_by('id')
 
         result = []
         for label in labels:
@@ -4545,6 +4842,99 @@ def api_labels_for_lot(request):
     return JsonResponse({'success': True, 'labels': result, 'count': len(result)})
 
 
+@login_required
+@wms_permission_required('can_wms_stock_edit')
+def cancel_stock_move(request, trx_id):
+    """[WMS] 재고이동 취소 - 재고 원복 + ERP 삭제 + 라벨 원복 + 트랜잭션 삭제"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST만 허용'})
+
+    trx = get_object_or_404(MaterialTransaction, pk=trx_id, transaction_type__in=['TRANSFER', 'TRF_ERP'])
+
+    if trx.transaction_type == 'TRF_ERP':
+        return JsonResponse({'success': False, 'error': 'ERP에서 동기화된 재고이동 건은 SCM에서 취소할 수 없습니다. ERP(아마란스)에서 삭제해주세요.'})
+
+    # 마감 체크
+    is_closed, warning_msg, _ = check_closing_date(
+        trx.date.date() if hasattr(trx.date, 'date') and callable(trx.date.date) else trx.date
+    )
+    if is_closed:
+        return JsonResponse({'success': False, 'error': f'마감된 기간의 이동 건은 취소할 수 없습니다. ({warning_msg})'})
+
+    trx_no = trx.transaction_no
+
+    try:
+        with transaction.atomic():
+            from .models import RawMaterialLabel, ProcessTag
+
+            # 1. 받는 창고 재고 차감
+            target_stock = MaterialStock.objects.filter(
+                warehouse=trx.warehouse_to,
+                part=trx.part,
+                lot_no=trx.lot_no
+            ).first()
+
+            if not target_stock or target_stock.quantity < trx.quantity:
+                current = target_stock.quantity if target_stock else 0
+                return JsonResponse({
+                    'success': False,
+                    'error': f'받는 창고 재고({current})가 이동 수량({int(trx.quantity)})보다 적어 취소할 수 없습니다.'
+                })
+
+            MaterialStock.objects.filter(pk=target_stock.pk).update(
+                quantity=F('quantity') - trx.quantity
+            )
+
+            # 2. 보내는 창고 재고 복구
+            source_stock, _ = MaterialStock.objects.get_or_create(
+                warehouse=trx.warehouse_from,
+                part=trx.part,
+                lot_no=trx.lot_no,
+                defaults={'quantity': 0}
+            )
+            MaterialStock.objects.filter(pk=source_stock.pk).update(
+                quantity=F('quantity') + trx.quantity
+            )
+
+            # 3. 연결된 라벨 원복 (USED → INSTOCK / PRINTED)
+            RawMaterialLabel.objects.filter(
+                used_transaction=trx, status='USED'
+            ).update(
+                status='INSTOCK', used_at=None, used_by=None, used_transaction=None
+            )
+            ProcessTag.objects.filter(
+                used_transaction=trx, status='USED'
+            ).update(
+                status='PRINTED', used_at=None, used_by=None, used_warehouse=None, used_transaction=None
+            )
+
+            # 4. ERP 재고이동 삭제
+            erp_no = trx.erp_incoming_no
+            erp_msg = ''
+            if erp_no:
+                try:
+                    from .erp_api import delete_erp_stock_move
+                    erp_ok, erp_err = delete_erp_stock_move(erp_no)
+                    if erp_ok:
+                        erp_msg = f' (ERP 삭제 완료: {erp_no})'
+                    else:
+                        erp_msg = f' (ERP 삭제 실패: {erp_err})'
+                except Exception as e:
+                    logger.error(f'ERP 재고이동 삭제 예외: {e}')
+                    erp_msg = f' (ERP 삭제 오류: {e})'
+
+            # 5. 트랜잭션 삭제
+            trx.delete()
+
+        return JsonResponse({
+            'success': True,
+            'message': f'재고이동 [{trx_no}] 취소 완료{erp_msg}'
+        })
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f'취소 처리 중 오류: {str(e)}'})
+
+
 @wms_permission_required('can_wms_stock_view')
 def api_transfer_detail(request, trx_id):
     """
@@ -4553,7 +4943,7 @@ def api_transfer_detail(request, trx_id):
     try:
         trx = MaterialTransaction.objects.select_related(
             'part', 'warehouse_from', 'warehouse_to', 'actor'
-        ).get(pk=trx_id, transaction_type='TRANSFER')
+        ).get(pk=trx_id, transaction_type__in=['TRANSFER', 'TRF_ERP'])
     except MaterialTransaction.DoesNotExist:
         return JsonResponse({'success': False, 'error': '이동 내역을 찾을 수 없습니다.'})
 
@@ -4586,6 +4976,7 @@ def api_transfer_detail(request, trx_id):
         'success': True,
         'trx': {
             'transaction_no': trx.transaction_no,
+            'transaction_type': trx.transaction_type,
             'date': trx.date.strftime('%Y-%m-%d %H:%M'),
             'part_no': trx.part.part_no,
             'part_name': trx.part.part_name,
@@ -4595,7 +4986,168 @@ def api_transfer_detail(request, trx_id):
             'to_wh': f"({trx.warehouse_to.code}) {trx.warehouse_to.name}" if trx.warehouse_to else '-',
             'actor': trx.actor.username if trx.actor else '-',
             'remark': trx.remark or '',
+            'erp_no': trx.erp_incoming_no or '',
+            'erp_status': trx.erp_sync_status or 'NONE',
+            'erp_message': trx.erp_sync_message or '',
         },
         'labels': labels_data,
         'label_count': len(labels_data),
     })
+
+
+# =============================================================================
+# ERP 재고 관리 (관리자)
+# =============================================================================
+
+@login_required
+@wms_permission_required('can_wms_stock_edit')
+def erp_stock_manage(request):
+    """[WMS] ERP 재고 관리 - 기초재고 셋팅 / ERP vs SCM 비교"""
+    from django.conf import settings as django_settings
+    from django.core.cache import cache
+    from datetime import date
+
+    current_cutoff = cache.get('erp_stock_init_date') or getattr(django_settings, 'ERP_STOCK_INIT_DATE', '')
+
+    context = {
+        'erp_enabled': getattr(django_settings, 'ERP_ENABLED', False),
+        'today': date.today().isoformat(),
+        'current_cutoff': current_cutoff,
+    }
+
+    action = request.POST.get('action', '') if request.method == 'POST' else ''
+
+    # ── 기초재고 셋팅 ──
+    if action == 'init_stock':
+        from material.erp_api import init_stock_from_erp
+        cutoff_date = request.POST.get('cutoff_date', '')
+        result = init_stock_from_erp(cutoff_date=cutoff_date)
+        if result.get('error'):
+            messages.error(request, f'기초재고 셋팅 실패: {result["error"]}')
+        else:
+            query_period = result.get('query_period', '')
+            period_info = f' [{query_period}]' if query_period else ''
+            messages.success(
+                request,
+                f'ERP 기초재고 셋팅 완료{period_info}: '
+                f'생성 {result["created"]}건, '
+                f'건너뜀(재고0) {result["skipped_zero"]}건, '
+                f'건너뜀(Part없음) {result["skipped_no_part"]}건, '
+                f'건너뜀(창고없음) {result["skipped_no_wh"]}건 '
+                f'(기준일: {result.get("cutoff_date", "")})'
+            )
+        return redirect('material:erp_stock_manage')
+
+    # ── ERP 재고조정 동기화 ──
+    if action == 'sync_adjustment':
+        from material.erp_api import sync_erp_adjustments
+        synced, skip, errs, err_list = sync_erp_adjustments()
+        if errs > 0:
+            for e in err_list[:3]:
+                messages.warning(request, e)
+        if synced > 0:
+            messages.success(request, f'ERP 재고조정 동기화 완료: 반영 {synced}건, 건너뜀 {skip}건')
+        else:
+            messages.info(request, f'ERP 재고조정: 신규 건 없음 (건너뜀 {skip}건)')
+        return redirect('material:erp_stock_manage')
+
+    # ── ERP 기준 재고조정 (SCM → ERP 맞춤) ──
+    if action == 'adjust_to_erp':
+        from material.erp_api import adjust_stock_to_erp
+        result = adjust_stock_to_erp()
+        if result.get('error'):
+            messages.error(request, f'재고조정 실패: {result["error"]}')
+        else:
+            messages.success(
+                request,
+                f'ERP 기준 재고조정 완료: '
+                f'조정 {result["adjusted"]}건 '
+                f'(증가 {result["increased"]}, 감소 {result["decreased"]}), '
+                f'건너뜀(Part없음) {result["skipped_no_part"]}건, '
+                f'건너뜀(창고없음) {result["skipped_no_wh"]}건, '
+                f'동기화 시작일: {result.get("sync_start", "")}'
+            )
+        return redirect('material:erp_stock_manage')
+
+    # ── ERP vs SCM 비교 ──
+    if action == 'compare' or request.GET.get('compare'):
+        from material.erp_api import compare_erp_stock
+        ok, comparison, summary, err = compare_erp_stock()
+        if ok:
+            # 차이 있는 것만 필터
+            diff_only = request.GET.get('diff_only', request.POST.get('diff_only', ''))
+            if diff_only:
+                comparison = [c for c in comparison if c['diff'] != 0]
+            context['comparison'] = comparison
+            context['summary'] = summary
+            context['diff_only'] = diff_only
+        else:
+            messages.error(request, f'ERP 재고 비교 실패: {err}')
+        if request.method == 'POST':
+            return redirect(f'{request.path}?compare=1&diff_only={diff_only}')
+
+    return render(request, 'material/erp_stock_manage.html', context)
+
+
+@login_required
+def erp_stock_init_progress(request):
+    """기초재고 셋팅 진행률 조회 API (AJAX 폴링용)"""
+    from django.core.cache import cache
+    from django.http import JsonResponse
+    progress = cache.get('erp_stock_init_progress')
+    if progress:
+        return JsonResponse(progress)
+    return JsonResponse({'stage': '', 'percent': 0})
+
+
+# =============================================================================
+# ERP 마스터 동기화 (거래처/품목)
+# =============================================================================
+@login_required
+@wms_permission_required('can_wms_stock_edit')
+def erp_master_sync(request):
+    """ERP 마스터 데이터 동기화 (거래처, 품목)"""
+    from django.conf import settings as django_settings
+
+    context = {
+        'erp_enabled': getattr(django_settings, 'ERP_ENABLED', False),
+        'vendor_count': Vendor.objects.count(),
+        'part_count': Part.objects.count(),
+    }
+
+    if request.method == 'POST':
+        action = request.POST.get('action', '')
+
+        if action == 'sync_vendors':
+            from material.erp_api import sync_erp_vendors
+            result = sync_erp_vendors()
+            if result['errors']:
+                for err in result['errors'][:5]:
+                    messages.warning(request, err)
+            messages.success(
+                request,
+                f"거래처 동기화 완료: 전체 {result['total']}건 "
+                f"(신규 {result['created']}, 갱신 {result['updated']}, "
+                f"건너뜀 {result['skipped']})"
+            )
+            context['vendor_result'] = result
+
+        elif action == 'sync_items':
+            from material.erp_api import sync_erp_items
+            result = sync_erp_items()
+            if result['errors']:
+                for err in result['errors'][:5]:
+                    messages.warning(request, err)
+            messages.success(
+                request,
+                f"품목 동기화 완료: 전체 {result['total']}건 "
+                f"(신규 {result['created']}, 갱신 {result['updated']}, "
+                f"건너뜀 {result['skipped']})"
+            )
+            context['item_result'] = result
+
+        # 동기화 후 카운트 갱신
+        context['vendor_count'] = Vendor.objects.count()
+        context['part_count'] = Part.objects.count()
+
+    return render(request, 'material/erp_master_sync.html', context)

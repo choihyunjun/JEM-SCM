@@ -6,8 +6,7 @@
 {% block qms_content %}
 <div class="container-fluid p-0" style="max-width: 1200px;">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="fw-bold">
-            <i class="bi bi-file-earmark-x me-2"></i>{{ claim.claim_no }}
+        <h3 class="fw-bold">{{ claim.claim_no }}
             <span class="badge bg-{% if claim.claim_type == 'QUALITY' %}danger{% elif claim.claim_type == 'DELIVERY' %}warning{% else %}secondary{% endif %} ms-2">
                 {{ claim.get_claim_type_display }}
             </span>
