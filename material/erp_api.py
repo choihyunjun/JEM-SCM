@@ -863,10 +863,16 @@ def compare_erp_stock(year=None):
     from material.models import MaterialStock, Warehouse
     from orders.models import Part
     from django.db.models import Sum
+    from django.core.cache import cache
+
+    cache.set('erp_sync_progress', {'stage': 'ERP 재고 조회 중...', 'percent': 10}, timeout=300)
 
     ok, items, err = fetch_erp_stock(year=year, total_fg='0')
     if not ok:
+        cache.delete('erp_sync_progress')
         return False, None, None, err or 'ERP 조회 실패'
+
+    cache.set('erp_sync_progress', {'stage': '데이터 비교 중...', 'percent': 50}, timeout=300)
 
     erp_map = {}
     erp_info = {}
@@ -917,6 +923,7 @@ def compare_erp_stock(year=None):
         else:
             summary['under'] += 1
 
+    cache.set('erp_sync_progress', {'stage': '완료!', 'percent': 100, 'detail': f'전체 {summary["total"]}, 일치 {summary["match"]}'}, timeout=30)
     return True, comparison, summary, None
 
 
@@ -925,7 +932,7 @@ def adjust_stock_to_erp():
     SCM 재고를 ERP 실시간 현재고에 맞춰 조정
     - 차이 나는 품목만 증감 처리 (전체 삭제 X)
     - ADJ_ERP_IN / ADJ_ERP_OUT 트랜잭션 생성 (이력 추적)
-    - 동기화 시작일을 내일로 설정
+    - 동기화 시작일을 오늘로 설정
     Returns: dict {adjusted, increased, decreased, skipped_no_part, skipped_no_wh, error}
     """
     from material.models import MaterialStock, MaterialTransaction, Warehouse
@@ -933,19 +940,26 @@ def adjust_stock_to_erp():
     from django.db.models import Sum
     from django.utils import timezone
     from datetime import datetime, timedelta
+    from django.core.cache import cache as _cache
 
     result = {
         'adjusted': 0, 'increased': 0, 'decreased': 0,
         'skipped_no_part': 0, 'skipped_no_wh': 0, 'error': None,
     }
 
+    _cache.set('erp_sync_progress', {'stage': 'ERP 현재고 조회 중...', 'percent': 5}, timeout=300)
+
     ok, items, err = fetch_erp_stock(year=str(datetime.now().year), month=None, total_fg='0')
     if not ok:
         result['error'] = err or 'ERP 조회 실패'
+        _cache.delete('erp_sync_progress')
         return result
     if not items:
         result['error'] = 'ERP 재고 데이터 없음'
+        _cache.delete('erp_sync_progress')
         return result
+
+    _cache.set('erp_sync_progress', {'stage': 'SCM 재고 비교 중...', 'percent': 15}, timeout=300)
 
     # ERP 재고 맵: (whCd, itemCd) → qty
     erp_map = {}
@@ -966,10 +980,11 @@ def adjust_stock_to_erp():
     part_map = {p.part_no: p for p in Part.objects.all()}
     wh_map = {w.code: w for w in Warehouse.objects.filter(is_active=True)}
 
-    all_keys = set(erp_map.keys()) | set(scm_map.keys())
+    all_keys = list(set(erp_map.keys()) | set(scm_map.keys()))
+    total_keys = len(all_keys)
     now = timezone.now()
 
-    for wh_cd, item_cd in all_keys:
+    for idx, (wh_cd, item_cd) in enumerate(all_keys):
         erp_qty = erp_map.get((wh_cd, item_cd), 0)
         scm_qty = scm_map.get((wh_cd, item_cd), 0)
         diff = erp_qty - scm_qty  # 양수면 SCM 부족, 음수면 SCM 초과
@@ -1026,11 +1041,18 @@ def adjust_stock_to_erp():
         )
         result['adjusted'] += 1
 
+        if (idx + 1) % 100 == 0 or idx == total_keys - 1:
+            pct = 20 + int((idx + 1) / total_keys * 70)
+            _cache.set('erp_sync_progress', {
+                'stage': f'재고 조정 중... ({idx + 1}/{total_keys})',
+                'percent': pct,
+                'detail': f'조정 {result["adjusted"]}건 (증가 {result["increased"]}, 감소 {result["decreased"]})',
+            }, timeout=300)
+
     # 동기화 시작일: 오늘 (오늘 오후 수불도 자동동기화 대상에 포함)
-    from django.core.cache import cache
     import re
     sync_start = datetime.now().strftime('%Y%m%d')
-    cache.set('erp_stock_init_date', sync_start, timeout=None)
+    _cache.set('erp_stock_init_date', sync_start, timeout=None)
 
     try:
         settings_path = settings.BASE_DIR / 'config' / 'settings.py'
@@ -1047,6 +1069,7 @@ def adjust_stock_to_erp():
         logger.warning(f'settings.py 동기화 시작일 저장 실패: {e}')
 
     result['sync_start'] = sync_start
+    _cache.set('erp_sync_progress', {'stage': '완료!', 'percent': 100, 'detail': f'조정 {result["adjusted"]}건'}, timeout=30)
     logger.info(f'ERP 재고조정 완료: 조정 {result["adjusted"]}건 (증가 {result["increased"]}, 감소 {result["decreased"]}), 동기화시작일={sync_start}')
     return result
 
@@ -1100,17 +1123,22 @@ def sync_erp_vendors():
     Returns: dict with created, updated, skipped, errors, total
     """
     from orders.models import Vendor
+    from django.core.cache import cache
 
     result = {'created': 0, 'updated': 0, 'skipped': 0, 'errors': [], 'total': 0}
+
+    cache.set('erp_sync_progress', {'stage': 'ERP 거래처 조회 중...', 'percent': 5}, timeout=300)
 
     success, items, error = fetch_erp_vendors()
     if not success:
         result['errors'].append(f'ERP 거래처 조회 실패: {error}')
+        cache.delete('erp_sync_progress')
         return result
 
     result['total'] = len(items)
+    cache.set('erp_sync_progress', {'stage': f'거래처 {len(items)}건 처리 중...', 'percent': 10}, timeout=300)
 
-    for item in items:
+    for idx, item in enumerate(items):
         tr_cd = (item.get('trCd') or '').strip()
         tr_nm = (item.get('trNm') or '').strip()
 
@@ -1161,6 +1189,15 @@ def sync_erp_vendors():
             result['errors'].append(f'{tr_cd} {tr_nm}: {str(e)}')
             logger.error(f'거래처 동기화 오류: {tr_cd} -> {e}')
 
+        if (idx + 1) % 50 == 0 or idx == len(items) - 1:
+            pct = 10 + int((idx + 1) / len(items) * 85)
+            cache.set('erp_sync_progress', {
+                'stage': f'거래처 처리 중... ({idx + 1}/{len(items)})',
+                'percent': pct,
+                'detail': f'신규 {result["created"]}, 갱신 {result["updated"]}',
+            }, timeout=300)
+
+    cache.set('erp_sync_progress', {'stage': '완료!', 'percent': 100, 'detail': f'신규 {result["created"]}, 갱신 {result["updated"]}'}, timeout=30)
     logger.info(f'ERP 거래처 동기화 완료: {result}')
     return result
 
@@ -1198,6 +1235,7 @@ def sync_erp_items():
     Returns: dict with created, updated, skipped, errors, total
     """
     from orders.models import Part, Vendor
+    from django.core.cache import cache
 
     ACCT_MAP = {
         '0': 'RAW',       # 원재료
@@ -1210,19 +1248,23 @@ def sync_erp_items():
 
     result = {'created': 0, 'updated': 0, 'skipped': 0, 'errors': [], 'total': 0}
 
+    cache.set('erp_sync_progress', {'stage': 'ERP 품목 조회 중...', 'percent': 5}, timeout=300)
+
     success, items, error = fetch_erp_items()
     if not success:
         result['errors'].append(f'ERP 품목 조회 실패: {error}')
+        cache.delete('erp_sync_progress')
         return result
 
     result['total'] = len(items)
+    cache.set('erp_sync_progress', {'stage': f'품목 {len(items)}건 처리 중...', 'percent': 10}, timeout=300)
 
     # 거래처 캐시 (erp_code → Vendor)
     vendor_cache = {}
     for v in Vendor.objects.filter(erp_code__isnull=False).exclude(erp_code=''):
         vendor_cache[v.erp_code] = v
 
-    for item in items:
+    for idx, item in enumerate(items):
         item_cd = (item.get('itemCd') or '').strip()
         item_nm = (item.get('itemNm') or '').strip()
 
@@ -1265,7 +1307,126 @@ def sync_erp_items():
             result['errors'].append(f'{item_cd} {item_nm}: {str(e)}')
             logger.error(f'품목 동기화 오류: {item_cd} -> {e}')
 
+        if (idx + 1) % 100 == 0 or idx == len(items) - 1:
+            pct = 10 + int((idx + 1) / len(items) * 85)
+            cache.set('erp_sync_progress', {
+                'stage': f'품목 처리 중... ({idx + 1}/{len(items)})',
+                'percent': pct,
+                'detail': f'신규 {result["created"]}, 갱신 {result["updated"]}',
+            }, timeout=300)
+
+    cache.set('erp_sync_progress', {'stage': '완료!', 'percent': 100, 'detail': f'신규 {result["created"]}, 갱신 {result["updated"]}'}, timeout=30)
     logger.info(f'ERP 품목 동기화 완료: {result}')
+    return result
+
+
+# =============================================================================
+# ERP 입고이력 기반 업체 자동 연결
+# =============================================================================
+
+def link_vendor_by_incoming(months=6):
+    """
+    ERP 입고이력에서 품번↔거래처 매핑을 추출하여
+    SCM Part.vendor가 null인 품목에 자동 연결
+    Returns: dict {total_headers, matched, updated, skipped_no_vendor, errors}
+    """
+    from orders.models import Part, Vendor
+    from django.core.cache import cache
+    from datetime import datetime, timedelta
+
+    result = {
+        'total_headers': 0, 'matched': 0, 'updated': 0,
+        'skipped_no_vendor': 0, 'errors': [],
+    }
+
+    # 날짜 범위 계산
+    date_to = datetime.now().strftime('%Y%m%d')
+    date_from = (datetime.now() - timedelta(days=months * 30)).strftime('%Y%m%d')
+
+    cache.set('erp_sync_progress', {'stage': f'ERP 입고 헤더 조회 중... ({months}개월)', 'percent': 5}, timeout=600)
+
+    ok, headers, err = fetch_erp_incoming_headers(date_from, date_to)
+    if not ok:
+        result['errors'].append(f'ERP 입고 조회 실패: {err}')
+        cache.delete('erp_sync_progress')
+        return result
+
+    result['total_headers'] = len(headers)
+    cache.set('erp_sync_progress', {
+        'stage': f'입고 {len(headers)}건 디테일 조회 중...',
+        'percent': 10,
+    }, timeout=600)
+
+    # 품번 → 거래처코드 매핑 수집
+    item_vendor_map = {}  # itemCd -> (trCd, vendorName)
+    for idx, h in enumerate(headers):
+        rcv_nb = h.get('rcvNb', '')
+        tr_cd = (h.get('trCd', '') or '').strip()
+        vendor_nm = h.get('attrNm', '')
+        if not rcv_nb or not tr_cd:
+            continue
+
+        ok2, details, _ = fetch_erp_incoming_detail(rcv_nb)
+        if ok2 and details:
+            for d in details:
+                item_cd = (d.get('itemCd', '') or '').strip()
+                if item_cd:
+                    item_vendor_map[item_cd] = (tr_cd, vendor_nm)
+
+        if (idx + 1) % 50 == 0 or idx == len(headers) - 1:
+            pct = 10 + int((idx + 1) / len(headers) * 60)
+            cache.set('erp_sync_progress', {
+                'stage': f'입고 디테일 조회 중... ({idx + 1}/{len(headers)})',
+                'percent': pct,
+                'detail': f'품번-거래처 매핑: {len(item_vendor_map)}건',
+            }, timeout=600)
+
+    result['matched'] = len(item_vendor_map)
+
+    cache.set('erp_sync_progress', {
+        'stage': '업체 미연결 품목 업데이트 중...',
+        'percent': 75,
+        'detail': f'매핑 {len(item_vendor_map)}건',
+    }, timeout=600)
+
+    # Vendor 캐시
+    vendor_cache = {}
+    for v in Vendor.objects.filter(erp_code__isnull=False).exclude(erp_code=''):
+        vendor_cache[v.erp_code] = v
+
+    # 미연결 Part 업데이트
+    no_vendor_parts = Part.objects.filter(vendor__isnull=True)
+    total_parts = no_vendor_parts.count()
+    updated = 0
+
+    for idx, part in enumerate(no_vendor_parts):
+        mapping = item_vendor_map.get(part.part_no)
+        if mapping:
+            tr_cd, _ = mapping
+            vendor = vendor_cache.get(tr_cd)
+            if vendor:
+                part.vendor = vendor
+                part.save(update_fields=['vendor'])
+                updated += 1
+            else:
+                result['skipped_no_vendor'] += 1
+
+        if (idx + 1) % 200 == 0 or idx == total_parts - 1:
+            pct = 75 + int((idx + 1) / max(total_parts, 1) * 20)
+            cache.set('erp_sync_progress', {
+                'stage': f'업체 연결 중... ({idx + 1}/{total_parts})',
+                'percent': pct,
+                'detail': f'연결: {updated}건',
+            }, timeout=600)
+
+    result['updated'] = updated
+    cache.set('erp_sync_progress', {
+        'stage': '완료!',
+        'percent': 100,
+        'detail': f'연결: {updated}건 (매핑 {len(item_vendor_map)}건 중)',
+    }, timeout=30)
+
+    logger.info(f'입고이력 기반 업체 연결 완료: 매핑 {len(item_vendor_map)}건, 연결 {updated}건')
     return result
 
 

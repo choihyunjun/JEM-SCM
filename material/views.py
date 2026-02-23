@@ -5100,6 +5100,17 @@ def erp_stock_init_progress(request):
     return JsonResponse({'stage': '', 'percent': 0})
 
 
+@login_required
+def erp_sync_progress(request):
+    """범용 ERP 동기화 진행률 조회 API (AJAX 폴링용)"""
+    from django.core.cache import cache
+    from django.http import JsonResponse
+    progress = cache.get('erp_sync_progress')
+    if progress:
+        return JsonResponse(progress)
+    return JsonResponse({'stage': '', 'percent': 0})
+
+
 # =============================================================================
 # ERP 마스터 동기화 (거래처/품목)
 # =============================================================================
@@ -5113,6 +5124,7 @@ def erp_master_sync(request):
         'erp_enabled': getattr(django_settings, 'ERP_ENABLED', False),
         'vendor_count': Vendor.objects.count(),
         'part_count': Part.objects.count(),
+        'no_vendor_count': Part.objects.filter(vendor__isnull=True).count(),
     }
 
     if request.method == 'POST':
@@ -5146,8 +5158,25 @@ def erp_master_sync(request):
             )
             context['item_result'] = result
 
+        elif action == 'link_vendors':
+            from material.erp_api import link_vendor_by_incoming
+            months = int(request.POST.get('months', 6))
+            result = link_vendor_by_incoming(months=months)
+            if result['errors']:
+                for err in result['errors'][:5]:
+                    messages.warning(request, err)
+            messages.success(
+                request,
+                f"입고이력 기반 업체 연결 완료: "
+                f"입고 {result['total_headers']}건 분석, "
+                f"매핑 {result['matched']}건, "
+                f"연결 {result['updated']}건"
+            )
+            context['link_result'] = result
+
         # 동기화 후 카운트 갱신
         context['vendor_count'] = Vendor.objects.count()
         context['part_count'] = Part.objects.count()
+        context['no_vendor_count'] = Part.objects.filter(vendor__isnull=True).count()
 
     return render(request, 'material/erp_master_sync.html', context)

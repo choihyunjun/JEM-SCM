@@ -66,6 +66,7 @@ urlpatterns = [
     path('erp-sync/export/', views.erp_sync_export, name='erp_sync_export'),
     path('erp-stock/', views.erp_stock_manage, name='erp_stock_manage'),
     path('erp-stock/init-progress/', views.erp_stock_init_progress, name='erp_stock_init_progress'),
+    path('erp-sync/progress/', views.erp_sync_progress, name='erp_sync_progress'),
     path('erp-master-sync/', views.erp_master_sync, name='erp_master_sync'),
 
     # BOM 관리
