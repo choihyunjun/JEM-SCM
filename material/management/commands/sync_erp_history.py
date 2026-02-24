@@ -156,8 +156,8 @@ class Command(BaseCommand):
 
             self.stdout.write('')
 
-        # 재고조정 (--reset 시 불필요: 기초재고=현재고 + 이력만 기록)
-        if not options['no_adjust'] and not options['reset']:
+        # 재고조정 (ERP 현재고와 SCM 재고 차이 보정 - 리셋 시에도 실행)
+        if not options['no_adjust']:
             self.stdout.write(self.style.WARNING('[마무리] ERP 기준 재고조정 실행 중...'))
             start = time.time()
 
