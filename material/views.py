@@ -5075,7 +5075,7 @@ def erp_stock_manage(request):
     if action == 'sync_transactions':
         from material.erp_api import (
             sync_erp_incoming, sync_erp_issue, sync_erp_receipt,
-            sync_erp_stock_transfer, sync_erp_outgoing
+            sync_erp_stock_transfer, sync_erp_adjustments, sync_erp_outgoing
         )
 
         sync_jobs = [
@@ -5084,6 +5084,7 @@ def erp_stock_manage(request):
             ('생산출고', sync_erp_issue),
             ('생산입고', sync_erp_receipt),
             ('재고이동', sync_erp_stock_transfer),
+            ('재고조정', sync_erp_adjustments),
         ]
 
         total_synced = 0

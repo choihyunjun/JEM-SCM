@@ -497,15 +497,16 @@ def sync_erp_incoming(date_from=None, date_to=None, skip_stock_update=False):
     from django.core.cache import cache
     from datetime import datetime, timedelta
 
+    # _stock_cutoff: 이 날짜 이전 트랜잭션은 이력만 기록 (재고 미반영)
+    _stock_cutoff = None
     if date_from is None:
-        # 기초재고 기준일이 있으면 그 날짜부터, 없으면 어제부터
         cutoff = cache.get('erp_stock_init_date') or getattr(settings, 'ERP_STOCK_INIT_DATE', '')
         if cutoff:
-            date_from = cutoff
-            logger.info(f'기초재고 기준일 적용: {cutoff} 이후 건만 동기화')
+            _stock_cutoff = cutoff  # 원래 기준일 보관
+            cutoff_dt = datetime.strptime(cutoff, '%Y%m%d') - timedelta(days=3)
+            date_from = cutoff_dt.strftime('%Y%m%d')
         else:
-            yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y%m%d')
-            date_from = yesterday
+            date_from = (datetime.now() - timedelta(days=1)).strftime('%Y%m%d')
     if date_to is None:
         date_to = datetime.now().strftime('%Y%m%d')
 
@@ -621,7 +622,9 @@ def sync_erp_incoming(date_from=None, date_to=None, skip_stock_update=False):
 
                 # MaterialStock 증가 (원자적)
                 result_stock = 0
-                if skip_stock_update:
+                # 백데이트 건(기준일 이전)은 이력만 기록
+                _skip = skip_stock_update or (_stock_cutoff and rcv_dt < _stock_cutoff)
+                if _skip:
                     pass  # 이력만 기록, 재고 미반영
                 elif warehouse:
                     stock, _ = MaterialStock.objects.get_or_create(
@@ -2005,10 +2008,13 @@ def sync_erp_adjustments(date_from=None, date_to=None, skip_stock_update=False):
     from django.core.cache import cache
     from datetime import datetime, timedelta
 
+    _stock_cutoff = None
     if date_from is None:
         cutoff = cache.get('erp_stock_init_date') or getattr(settings, 'ERP_STOCK_INIT_DATE', '')
         if cutoff:
-            date_from = cutoff
+            _stock_cutoff = cutoff
+            cutoff_dt = datetime.strptime(cutoff, '%Y%m%d') - timedelta(days=3)
+            date_from = cutoff_dt.strftime('%Y%m%d')
         else:
             date_from = (datetime.now() - timedelta(days=30)).strftime('%Y%m%d')
     if date_to is None:
@@ -2125,7 +2131,8 @@ def sync_erp_adjustments(date_from=None, date_to=None, skip_stock_update=False):
 
                 # MaterialStock 갱신 (원자적)
                 result_stock = 0
-                if skip_stock_update:
+                _skip = skip_stock_update or (_stock_cutoff and adjust_dt < _stock_cutoff)
+                if _skip:
                     pass  # 이력만 기록, 재고 미반영
                 elif warehouse:
                     stock, _ = MaterialStock.objects.get_or_create(
@@ -2275,10 +2282,13 @@ def sync_erp_issue(date_from=None, date_to=None, skip_stock_update=False):
     from django.core.cache import cache
     from datetime import datetime, timedelta
 
+    _stock_cutoff = None
     if date_from is None:
         cutoff = cache.get('erp_stock_init_date') or getattr(settings, 'ERP_STOCK_INIT_DATE', '')
         if cutoff:
-            date_from = cutoff
+            _stock_cutoff = cutoff
+            cutoff_dt = datetime.strptime(cutoff, '%Y%m%d') - timedelta(days=3)
+            date_from = cutoff_dt.strftime('%Y%m%d')
         else:
             date_from = (datetime.now() - timedelta(days=1)).strftime('%Y%m%d')
     if date_to is None:
@@ -2371,7 +2381,8 @@ def sync_erp_issue(date_from=None, date_to=None, skip_stock_update=False):
 
                 # MaterialStock 차감 (원자적)
                 result_stock = 0
-                if skip_stock_update:
+                _skip = skip_stock_update or (_stock_cutoff and isu_dt < _stock_cutoff)
+                if _skip:
                     pass  # 이력만 기록, 재고 미반영
                 elif warehouse:
                     stock, _ = MaterialStock.objects.get_or_create(
@@ -2453,10 +2464,13 @@ def sync_erp_receipt(date_from=None, date_to=None, skip_stock_update=False):
     from django.core.cache import cache
     from datetime import datetime, timedelta
 
+    _stock_cutoff = None
     if date_from is None:
         cutoff = cache.get('erp_stock_init_date') or getattr(settings, 'ERP_STOCK_INIT_DATE', '')
         if cutoff:
-            date_from = cutoff
+            _stock_cutoff = cutoff
+            cutoff_dt = datetime.strptime(cutoff, '%Y%m%d') - timedelta(days=3)
+            date_from = cutoff_dt.strftime('%Y%m%d')
         else:
             date_from = (datetime.now() - timedelta(days=1)).strftime('%Y%m%d')
     if date_to is None:
@@ -2533,7 +2547,8 @@ def sync_erp_receipt(date_from=None, date_to=None, skip_stock_update=False):
 
             # MaterialStock 증가 (원자적)
             result_stock = 0
-            if skip_stock_update:
+            _skip = skip_stock_update or (_stock_cutoff and rcv_dt < _stock_cutoff)
+            if _skip:
                 pass  # 이력만 기록, 재고 미반영
             elif warehouse:
                 stock, _ = MaterialStock.objects.get_or_create(
@@ -2725,10 +2740,13 @@ def sync_erp_stock_transfer(date_from=None, date_to=None, skip_stock_update=Fals
     from django.core.cache import cache
     from datetime import datetime, timedelta
 
+    _stock_cutoff = None
     if date_from is None:
         cutoff = cache.get('erp_stock_init_date') or getattr(settings, 'ERP_STOCK_INIT_DATE', '')
         if cutoff:
-            date_from = cutoff
+            _stock_cutoff = cutoff
+            cutoff_dt = datetime.strptime(cutoff, '%Y%m%d') - timedelta(days=3)
+            date_from = cutoff_dt.strftime('%Y%m%d')
         else:
             date_from = (datetime.now() - timedelta(days=1)).strftime('%Y%m%d')
     if date_to is None:
@@ -2830,7 +2848,8 @@ def sync_erp_stock_transfer(date_from=None, date_to=None, skip_stock_update=Fals
                 # 출고창고 재고 차감
                 from_result = 0
                 to_result = 0
-                if skip_stock_update:
+                _skip = skip_stock_update or (_stock_cutoff and move_dt < _stock_cutoff)
+                if _skip:
                     pass  # 이력만 기록, 재고 미반영
                 else:
                     if from_wh:
@@ -2948,10 +2967,13 @@ def sync_erp_outgoing(date_from=None, date_to=None, skip_stock_update=False):
     from django.core.cache import cache
     from datetime import datetime, timedelta
 
+    _stock_cutoff = None
     if date_from is None:
         cutoff = cache.get('erp_stock_init_date') or getattr(settings, 'ERP_STOCK_INIT_DATE', '')
         if cutoff:
-            date_from = cutoff
+            _stock_cutoff = cutoff
+            cutoff_dt = datetime.strptime(cutoff, '%Y%m%d') - timedelta(days=3)
+            date_from = cutoff_dt.strftime('%Y%m%d')
         else:
             date_from = (datetime.now() - timedelta(days=1)).strftime('%Y%m%d')
     if date_to is None:
@@ -3051,7 +3073,8 @@ def sync_erp_outgoing(date_from=None, date_to=None, skip_stock_update=False):
 
                 # MaterialStock 차감 (원자적)
                 result_stock = 0
-                if skip_stock_update:
+                _skip = skip_stock_update or (_stock_cutoff and isu_dt < _stock_cutoff)
+                if _skip:
                     pass  # 이력만 기록, 재고 미반영
                 elif from_wh:
                     stock, _ = MaterialStock.objects.get_or_create(
