@@ -606,23 +606,6 @@
             </div>
         </div>
 
-        <!-- 바코드 스캔 -->
-        <div class="sidebar-card">
-            <div class="sidebar-header">
-                <i class="bi bi-upc-scan me-2"></i>현품표 스캔
-            </div>
-            <div class="sidebar-body">
-                <div class="input-group input-group-sm mb-2">
-                    <input type="text" id="scanInput" class="form-control" placeholder="바코드 스캔..." autofocus>
-                    <button class="btn btn-primary" onclick="doScan()">
-                        <i class="bi bi-check-lg"></i>
-                    </button>
-                </div>
-                <div id="scanResult" style="display:none; font-size:0.8rem; padding:8px; border-radius:6px; margin-top:4px;"></div>
-                <div id="scanHistory" style="font-size:0.75rem; margin-top:8px; max-height:200px; overflow-y:auto;"></div>
-            </div>
-        </div>
-
         <!-- 자동 새로고침 안내 -->
         <div class="sidebar-card">
             <div class="sidebar-body text-center text-muted" style="font-size: 0.8rem;">
@@ -632,43 +615,66 @@
     </div>
 </div>
 
-<!-- 투입 이력 모달 -->
+<!-- 투입 이력 + 바코드 스캔 모달 -->
 <div class="modal fade" id="scanHistoryModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content" style="border-radius:12px; border:none; box-shadow:0 12px 40px rgba(0,0,0,0.15);">
             <div class="modal-header" style="background:linear-gradient(135deg,#1e40af,#3b82f6); color:#fff; border-radius:12px 12px 0 0; padding:16px 20px;">
                 <h6 class="modal-title mb-0"><i class="bi bi-clock-history me-2"></i><span id="modalPartTitle"></span></h6>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body" style="padding:20px; max-height:400px; overflow-y:auto;">
-                <div id="modalScanList"></div>
+            <div class="modal-body" style="padding:20px;">
+                <!-- 바코드 스캔 입력 -->
+                <div class="mb-3">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-upc-scan"></i></span>
+                        <input type="text" id="scanInput" class="form-control" placeholder="바코드를 스캔하세요...">
+                        <button class="btn btn-primary" onclick="doScan()">
+                            <i class="bi bi-check-lg me-1"></i>투입
+                        </button>
+                    </div>
+                    <div id="scanResult" style="display:none; font-size:0.85rem; padding:8px 12px; border-radius:6px; margin-top:8px;"></div>
+                </div>
+                <!-- 투입 이력 테이블 -->
+                <div id="modalScanList" style="max-height:320px; overflow-y:auto;"></div>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-// 자동 새로고침 (스캔 입력 중에는 멈춤)
+// 자동 새로고침 (모달 열려있으면 멈춤)
 let refreshTimer = setTimeout(function() { location.reload(); }, 30000);
 function resetRefreshTimer() {
     clearTimeout(refreshTimer);
     refreshTimer = setTimeout(function() { location.reload(); }, 30000);
 }
 
-// 바코드 스캔
-const scanInput = document.getElementById('scanInput');
-const scanResult = document.getElementById('scanResult');
-const scanHistory = document.getElementById('scanHistory');
+// 모달 열릴 때 새로고침 멈춤, 닫힐 때 재시작
+const scanModal = document.getElementById('scanHistoryModal');
+scanModal.addEventListener('shown.bs.modal', function() {
+    clearTimeout(refreshTimer);
+    document.getElementById('scanInput').focus();
+});
+scanModal.addEventListener('hidden.bs.modal', function() {
+    document.getElementById('scanResult').style.display = 'none';
+    refreshTimer = setTimeout(function() { location.reload(); }, 30000);
+});
 
-scanInput.addEventListener('keydown', function(e) {
+// 현재 모달에 열린 품번 저장
+let currentModalPartNo = '';
+
+// 바코드 스캔 (Enter 키)
+document.getElementById('scanInput').addEventListener('keydown', function(e) {
     if (e.key === 'Enter') {
         e.preventDefault();
         doScan();
     }
-    resetRefreshTimer();
 });
 
 function doScan() {
+    const scanInput = document.getElementById('scanInput');
+    const scanResult = document.getElementById('scanResult');
     const tagId = scanInput.value.trim();
     if (!tagId) return;
 
@@ -693,19 +699,11 @@ function doScan() {
             const info = data.tag_info;
             scanResult.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i><b>${info.part_no}</b> LOT:${info.lot_no || '-'} ${info.quantity}개 투입 완료`;
 
-            // 스캔 이력 추가
-            const now = new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
-            scanHistory.insertAdjacentHTML('afterbegin',
-                `<div class="d-flex justify-content-between" style="padding:2px 0; border-bottom:1px solid #f1f5f9;">
-                    <span>${info.part_no} (${info.quantity})</span>
-                    <span class="text-muted">${now}</span>
-                </div>`
-            );
-
-            // 1.5초 후 페이지 새로고침 (재고 갱신)
-            setTimeout(function() { location.reload(); }, 1500);
+            // 이력 테이블 새로고침
+            if (currentModalPartNo) {
+                loadScanHistory(currentModalPartNo);
+            }
         } else {
-            // FIFO 위반 or 중복 스캔
             const isFifo = data.error && data.error.includes('FIFO');
             scanResult.style.background = isFifo ? '#fef3c7' : '#fef2f2';
             scanResult.style.color = isFifo ? '#92400e' : '#991b1b';
@@ -714,7 +712,7 @@ function doScan() {
         scanInput.value = '';
         scanInput.focus();
     })
-    .catch(err => {
+    .catch(() => {
         scanResult.style.background = '#fef2f2';
         scanResult.style.color = '#991b1b';
         scanResult.innerHTML = '<i class="bi bi-x-circle-fill me-1"></i>네트워크 오류';
@@ -723,28 +721,35 @@ function doScan() {
     });
 }
 
-// 랙 셀 클릭 → 투입 이력 모달
+// 랙 셀 클릭 → 모달
 function showScanHistory(el) {
     const partNo = el.dataset.partNo;
     const partName = el.dataset.partName;
     if (!partNo) return;
 
-    resetRefreshTimer();
-    document.getElementById('modalPartTitle').textContent = `${partNo} ${partName} - 투입 이력`;
-    document.getElementById('modalScanList').innerHTML = '<div class="text-center text-muted py-3"><i class="bi bi-hourglass-split"></i> 조회 중...</div>';
+    currentModalPartNo = partNo;
+    document.getElementById('modalPartTitle').textContent = `${partNo} ${partName}`;
+    document.getElementById('scanResult').style.display = 'none';
+    document.getElementById('scanInput').value = '';
 
-    const modal = new bootstrap.Modal(document.getElementById('scanHistoryModal'));
+    const modal = new bootstrap.Modal(scanModal);
     modal.show();
+    loadScanHistory(partNo);
+}
+
+function loadScanHistory(partNo) {
+    const list = document.getElementById('modalScanList');
+    list.innerHTML = '<div class="text-center text-muted py-3"><i class="bi bi-hourglass-split"></i> 조회 중...</div>';
 
     fetch(`{% url "material:api_scan_history_by_part" %}?part_no=${encodeURIComponent(partNo)}`)
     .then(r => r.json())
     .then(data => {
-        const list = document.getElementById('modalScanList');
         if (!data.success || !data.items.length) {
             list.innerHTML = '<div class="text-center text-muted py-3"><i class="bi bi-inbox me-1"></i>투입 이력이 없습니다.</div>';
             return;
         }
-        let html = '<table class="table table-sm table-hover mb-0" style="font-size:0.85rem;"><thead><tr><th>태그ID</th><th>LOT</th><th class="text-end">수량</th><th>투입일시</th><th>상태</th></tr></thead><tbody>';
+        let html = '<table class="table table-sm table-hover mb-0" style="font-size:0.85rem;">'
+            + '<thead><tr><th>태그ID</th><th>LOT</th><th class="text-end">수량</th><th>투입일시</th><th>상태</th></tr></thead><tbody>';
         data.items.forEach(item => {
             const badge = item.stock_reflected
                 ? '<span class="badge bg-secondary">출고완료</span>'
@@ -761,7 +766,7 @@ function showScanHistory(el) {
         list.innerHTML = html;
     })
     .catch(() => {
-        document.getElementById('modalScanList').innerHTML = '<div class="text-center text-danger py-3">조회 오류</div>';
+        list.innerHTML = '<div class="text-center text-danger py-3">조회 오류</div>';
     });
 }
 </script>
