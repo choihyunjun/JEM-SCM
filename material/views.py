@@ -2395,19 +2395,26 @@ def get_lot_details(request, part_no):
         if warehouse_code:
             lot_stocks = lot_stocks.filter(warehouse__code=warehouse_code)
 
-        lot_stocks = lot_stocks.order_by('lot_no')
+        # 우선순위: lot_no=NULL(ERP 재고) 먼저 → 오래된 LOT 순 (FIFO)
+        from django.db.models import F as _F
+        lot_stocks = lot_stocks.order_by(_F('lot_no').asc(nulls_first=True))
 
         lot_data = []
         total_qty = 0
         oldest_lot = None
 
         for stock in lot_stocks:
+            if stock.lot_no:
+                days_old = (timezone.now().date() - stock.lot_no).days
+            else:
+                days_old = 99999  # NULL = 가장 오래된 재고 (우선 소진)
             lot_info = {
                 'warehouse': stock.warehouse.name,
                 'warehouse_code': stock.warehouse.code,
                 'lot_no': stock.lot_no.strftime('%Y-%m-%d') if stock.lot_no else '-',
                 'quantity': stock.quantity,
-                'days_old': (timezone.now().date() - stock.lot_no).days if stock.lot_no else 0
+                'days_old': days_old,
+                'is_null_lot': stock.lot_no is None,
             }
             lot_data.append(lot_info)
             total_qty += stock.quantity
@@ -2461,20 +2468,27 @@ def api_get_available_lots(request):
         if not warehouse:
             return JsonResponse({'error': '존재하지 않는 창고입니다.'}, status=404)
 
-        # 해당 창고의 해당 품목 LOT별 재고 조회 (FIFO 순서: 오래된 순)
+        # 해당 창고의 해당 품목 LOT별 재고 조회
+        # 우선순위: lot_no=NULL(ERP 재고) 먼저 → 오래된 LOT 순 (FIFO)
+        from django.db.models import F as _F
         lot_stocks = MaterialStock.objects.filter(
             warehouse=warehouse,
             part=part,
             quantity__gt=0
-        ).order_by('lot_no')  # 오래된 LOT가 먼저 나오도록
+        ).order_by(_F('lot_no').asc(nulls_first=True))
 
         lots = []
         for stock in lot_stocks:
+            if stock.lot_no:
+                days_old = (timezone.now().date() - stock.lot_no).days
+            else:
+                days_old = 99999  # NULL = 가장 오래된 재고 (우선 소진)
             lot_info = {
                 'stock_id': stock.id,
                 'lot_no': stock.lot_no.strftime('%Y-%m-%d') if stock.lot_no else None,
                 'quantity': stock.quantity,
-                'days_old': (timezone.now().date() - stock.lot_no).days if stock.lot_no else 0
+                'days_old': days_old,
+                'is_null_lot': stock.lot_no is None,
             }
             lots.append(lot_info)
 

@@ -522,14 +522,17 @@
                 const option = document.createElement('option');
                 option.value = lot.stock_id;
                 option.dataset.quantity = lot.quantity;
-                option.dataset.lotNo = lot.lot_no || 'NO LOT';
+                option.dataset.lotNo = lot.lot_no || '';
                 option.dataset.daysOld = lot.days_old;
 
-                let displayText = lot.lot_no ? lot.lot_no : 'LOT 없음';
-                displayText += ` (재고: ${lot.quantity.toLocaleString()} EA, ${lot.days_old}일 경과)`;
-
-                if (index === 0 && lot.lot_no) {
-                    displayText += ' ⚠️ FIFO 추천';
+                let displayText;
+                if (lot.is_null_lot) {
+                    displayText = `ERP 재고 (재고: ${lot.quantity.toLocaleString()} EA) ★ 우선 소진`;
+                } else {
+                    displayText = `${lot.lot_no} (재고: ${lot.quantity.toLocaleString()} EA, ${lot.days_old}일 경과)`;
+                    if (index === 0 || (index === 1 && data.lots[0].is_null_lot)) {
+                        displayText += ' ⚠️ FIFO 추천';
+                    }
                 }
 
                 option.textContent = displayText;
