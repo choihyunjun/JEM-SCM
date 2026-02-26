@@ -502,7 +502,7 @@ def sync_erp_incoming(date_from=None, date_to=None, skip_stock_update=False):
     if date_from is None:
         cutoff = cache.get('erp_stock_init_date') or getattr(settings, 'ERP_STOCK_INIT_DATE', '')
         if cutoff:
-            _stock_cutoff = cutoff  # 원래 기준일 보관
+            _stock_cutoff = (datetime.strptime(cutoff, '%Y%m%d') + timedelta(days=1)).strftime('%Y%m%d')  # 기준일 당일까지 skip
             cutoff_dt = datetime.strptime(cutoff, '%Y%m%d') - timedelta(days=3)
             date_from = cutoff_dt.strftime('%Y%m%d')
         else:
@@ -943,9 +943,9 @@ def compare_erp_stock(year=None):
         summary['total'] += 1
         if diff == 0:
             summary['match'] += 1
-        elif erp_qty == 0:
+        elif erp_qty == 0 and scm_qty > 0:
             summary['scm_only'] += 1
-        elif scm_qty == 0:
+        elif scm_qty == 0 and erp_qty > 0:
             summary['erp_only'] += 1
         elif diff > 0:
             summary['over'] += 1
@@ -2012,7 +2012,7 @@ def sync_erp_adjustments(date_from=None, date_to=None, skip_stock_update=False):
     if date_from is None:
         cutoff = cache.get('erp_stock_init_date') or getattr(settings, 'ERP_STOCK_INIT_DATE', '')
         if cutoff:
-            _stock_cutoff = cutoff
+            _stock_cutoff = (datetime.strptime(cutoff, '%Y%m%d') + timedelta(days=1)).strftime('%Y%m%d')  # 기준일 당일까지 skip
             cutoff_dt = datetime.strptime(cutoff, '%Y%m%d') - timedelta(days=3)
             date_from = cutoff_dt.strftime('%Y%m%d')
         else:
@@ -2286,7 +2286,7 @@ def sync_erp_issue(date_from=None, date_to=None, skip_stock_update=False):
     if date_from is None:
         cutoff = cache.get('erp_stock_init_date') or getattr(settings, 'ERP_STOCK_INIT_DATE', '')
         if cutoff:
-            _stock_cutoff = cutoff
+            _stock_cutoff = (datetime.strptime(cutoff, '%Y%m%d') + timedelta(days=1)).strftime('%Y%m%d')  # 기준일 당일까지 skip
             cutoff_dt = datetime.strptime(cutoff, '%Y%m%d') - timedelta(days=3)
             date_from = cutoff_dt.strftime('%Y%m%d')
         else:
@@ -2468,7 +2468,7 @@ def sync_erp_receipt(date_from=None, date_to=None, skip_stock_update=False):
     if date_from is None:
         cutoff = cache.get('erp_stock_init_date') or getattr(settings, 'ERP_STOCK_INIT_DATE', '')
         if cutoff:
-            _stock_cutoff = cutoff
+            _stock_cutoff = (datetime.strptime(cutoff, '%Y%m%d') + timedelta(days=1)).strftime('%Y%m%d')  # 기준일 당일까지 skip
             cutoff_dt = datetime.strptime(cutoff, '%Y%m%d') - timedelta(days=3)
             date_from = cutoff_dt.strftime('%Y%m%d')
         else:
@@ -2744,7 +2744,7 @@ def sync_erp_stock_transfer(date_from=None, date_to=None, skip_stock_update=Fals
     if date_from is None:
         cutoff = cache.get('erp_stock_init_date') or getattr(settings, 'ERP_STOCK_INIT_DATE', '')
         if cutoff:
-            _stock_cutoff = cutoff
+            _stock_cutoff = (datetime.strptime(cutoff, '%Y%m%d') + timedelta(days=1)).strftime('%Y%m%d')  # 기준일 당일까지 skip
             cutoff_dt = datetime.strptime(cutoff, '%Y%m%d') - timedelta(days=3)
             date_from = cutoff_dt.strftime('%Y%m%d')
         else:
@@ -2971,7 +2971,7 @@ def sync_erp_outgoing(date_from=None, date_to=None, skip_stock_update=False):
     if date_from is None:
         cutoff = cache.get('erp_stock_init_date') or getattr(settings, 'ERP_STOCK_INIT_DATE', '')
         if cutoff:
-            _stock_cutoff = cutoff
+            _stock_cutoff = (datetime.strptime(cutoff, '%Y%m%d') + timedelta(days=1)).strftime('%Y%m%d')  # 기준일 당일까지 skip
             cutoff_dt = datetime.strptime(cutoff, '%Y%m%d') - timedelta(days=3)
             date_from = cutoff_dt.strftime('%Y%m%d')
         else:

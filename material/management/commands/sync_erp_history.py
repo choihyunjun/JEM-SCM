@@ -23,6 +23,7 @@ ERP 전체 수불 이력 동기화 + 재고조정 통합 커맨드
 import time
 from datetime import datetime
 from django.core.management.base import BaseCommand
+from django.core.cache import cache
 
 
 class Command(BaseCommand):
@@ -83,6 +84,8 @@ class Command(BaseCommand):
 
         # --reset: 기존 데이터 삭제 + 기초재고 셋팅
         if options['reset']:
+            # 데몬 자동동기화가 리셋 중에 간섭하지 않도록 플래그 설정 (2시간)
+            cache.set('erp_reset_in_progress', True, timeout=7200)
             self.stdout.write(self.style.WARNING('[리셋 1/2] 기존 ERP 동기화 트랜잭션 삭제 중...'))
             erp_types = ['IN_ERP', 'ISU_ERP', 'RCV_ERP', 'TRF_ERP', 'ADJ_ERP_IN', 'ADJ_ERP_OUT', 'OUT_ERP']
             for t in erp_types:
@@ -175,6 +178,10 @@ class Command(BaseCommand):
                     )
             except Exception as e:
                 self.stderr.write(self.style.ERROR(f'  -> 실패: {e}'))
+
+        # --reset 완료: 데몬 간섭 방지 플래그 해제
+        if options['reset']:
+            cache.delete('erp_reset_in_progress')
 
         total_elapsed = time.time() - total_start
 

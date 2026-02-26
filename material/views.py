@@ -5170,10 +5170,10 @@ def erp_stock_manage(request):
     # ── ERP vs SCM 비교 ──
     if action == 'compare' or request.GET.get('compare'):
         from material.erp_api import compare_erp_stock
+        diff_only = request.GET.get('diff_only', request.POST.get('diff_only', ''))
         ok, comparison, summary, err = compare_erp_stock()
         if ok:
             # 차이 있는 것만 필터
-            diff_only = request.GET.get('diff_only', request.POST.get('diff_only', ''))
             if diff_only:
                 comparison = [c for c in comparison if c['diff'] != 0]
             context['comparison'] = comparison

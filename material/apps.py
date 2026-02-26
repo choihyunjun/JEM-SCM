@@ -51,6 +51,12 @@ class MaterialConfig(AppConfig):
                 from django import db
                 db.close_old_connections()
 
+                # --reset 진행 중이면 데몬 동기화 건너뜀
+                if cache.get('erp_reset_in_progress'):
+                    logger.info('ERP 자동 동기화 건너뜀: --reset 진행 중')
+                    time.sleep(interval)
+                    continue
+
                 # threading.Lock으로 수동 동기화와 충돌 방지
                 acquired = _sync_lock.acquire(blocking=False)
                 if not acquired:
