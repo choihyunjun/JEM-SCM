@@ -12,47 +12,8 @@
     {% endif %}
 
     <div class="row g-3 mb-4">
-        <!-- ERP 재고 동기화 카드 -->
-        <div class="col-md-4">
-            <div class="card shadow-sm h-100">
-                <div class="card-header bg-white fw-bold">
-                    <i class="bi bi-arrow-repeat me-1 text-primary"></i> ERP 재고 동기화
-                </div>
-                <div class="card-body">
-                    <p class="text-muted small mb-2">
-                        ERP 현재고와 SCM 재고 총량을 비교하여 차이를 조정합니다.
-                    </p>
-                    <ul class="small text-muted mb-3">
-                        <li>ERP 현재고 = 진실, SCM이 따라감</li>
-                        <li><strong>lot_no=NULL</strong> 레코드만 조정 (LOT 재고 보존)</li>
-                        <li>조정 이력(ADJ_ERP) 자동 생성</li>
-                        <li>여러 번 실행해도 동일 결과 (멱등성)</li>
-                    </ul>
-                    <form id="syncStockForm" method="post">
-                        {% csrf_token %}
-                        <input type="hidden" name="action" value="sync_stock">
-                        <button type="submit" class="btn btn-primary btn-sm" id="btnSyncStock" {% if not erp_enabled %}disabled{% endif %}>
-                            <i class="bi bi-arrow-repeat me-1"></i>재고 동기화 실행
-                        </button>
-                    </form>
-                    <!-- 진행률 -->
-                    <div id="syncStockProgress" class="mt-3" style="display:none;">
-                        <div class="d-flex justify-content-between align-items-center mb-1">
-                            <small class="fw-bold text-primary progress-stage">준비 중...</small>
-                            <small class="fw-bold progress-pct">0%</small>
-                        </div>
-                        <div class="progress" style="height: 16px;">
-                            <div class="progress-bar progress-bar-striped progress-bar-animated"
-                                 role="progressbar" style="width: 0%"></div>
-                        </div>
-                        <small class="text-muted mt-1 d-block progress-detail"></small>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- ERP vs SCM 비교 카드 -->
-        <div class="col-md-4">
+        <div class="col-md-6">
             <div class="card shadow-sm h-100">
                 <div class="card-header bg-white fw-bold">
                     <i class="bi bi-arrow-left-right me-1 text-info"></i> ERP vs SCM 비교
@@ -90,39 +51,21 @@
             </div>
         </div>
 
-        <!-- 수불 동기화 카드 -->
-        <div class="col-md-4">
+        <!-- 안내 카드 -->
+        <div class="col-md-6">
             <div class="card shadow-sm h-100">
                 <div class="card-header bg-white fw-bold">
-                    <i class="bi bi-journal-text me-1 text-success"></i> 수불 이력 동기화
+                    <i class="bi bi-info-circle me-1 text-secondary"></i> 자동 동기화 안내
                 </div>
                 <div class="card-body">
                     <p class="text-muted small mb-2">
-                        ERP 수불 내역을 수동으로 즉시 동기화합니다. (이력만 기록, 재고 미반영)
+                        재고 동기화 및 수불 이력 동기화는 <strong>데몬이 자동으로 처리</strong>합니다.
                     </p>
-                    <ul class="small text-muted mb-2" style="padding-left: 1.2rem;">
-                        <li>구매입고 / 고객출고 / 생산출고</li>
-                        <li>생산입고 / 재고이동 / 재고조정</li>
+                    <ul class="small text-muted mb-0">
+                        <li>재고 동기화: ERP 현재고 기준 SCM 자동 조정</li>
+                        <li>수불 동기화: 구매입고 / 고객출고 / 생산출고 등 이력 자동 기록</li>
+                        <li>수동 실행이 필요한 경우 서버 관리자에게 문의</li>
                     </ul>
-                    <form id="syncTxForm" method="post">
-                        {% csrf_token %}
-                        <input type="hidden" name="action" value="sync_transactions">
-                        <button type="submit" class="btn btn-outline-success btn-sm" id="btnSyncTx" {% if not erp_enabled %}disabled{% endif %}>
-                            <i class="bi bi-arrow-repeat me-1"></i>수불 동기화 실행
-                        </button>
-                    </form>
-                    <!-- 수불동기화 진행률 -->
-                    <div id="syncTxProgress" class="mt-3" style="display:none;">
-                        <div class="d-flex justify-content-between align-items-center mb-1">
-                            <small class="fw-bold text-success progress-stage">준비 중...</small>
-                            <small class="fw-bold progress-pct">0%</small>
-                        </div>
-                        <div class="progress" style="height: 16px;">
-                            <div class="progress-bar bg-success progress-bar-striped progress-bar-animated"
-                                 role="progressbar" style="width: 0%"></div>
-                        </div>
-                        <small class="text-muted mt-1 d-block progress-detail"></small>
-                    </div>
                 </div>
             </div>
         </div>
@@ -224,18 +167,6 @@ function startSyncProgress(formId, btnId, progressAreaId, progressUrl, confirmMs
         }, 1000);
     });
 }
-
-// 재고 동기화
-startSyncProgress('syncStockForm', 'btnSyncStock', 'syncStockProgress',
-    '{% url "material:erp_sync_progress" %}',
-    'ERP 현재고와 SCM 재고를 동기화합니다.\n\n→ lot_no=NULL 레코드만 조정 (LOT 재고 보존)\n→ 조정 이력(ADJ_ERP) 자동 생성\n→ 여러 번 실행해도 동일 결과\n\n실행하시겠습니까?'
-);
-
-// 수불 동기화
-startSyncProgress('syncTxForm', 'btnSyncTx', 'syncTxProgress',
-    '{% url "material:erp_sync_progress" %}',
-    '구매입고 / 고객출고 / 생산출고 / 생산입고 / 재고이동 / 재고조정\n6가지 수불 내역을 ERP에서 즉시 동기화합니다.\n(이력만 기록, 재고 미반영)\n\n실행하시겠습니까?'
-);
 
 // 재고 비교
 startSyncProgress('compareForm', 'btnCompare', 'compareProgress',
