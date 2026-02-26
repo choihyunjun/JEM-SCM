@@ -482,31 +482,21 @@ def fetch_erp_incoming_detail(rcv_nb):
         return False, None, error
 
 
-def sync_erp_incoming(date_from=None, date_to=None, skip_stock_update=False):
+def sync_erp_incoming(date_from=None, date_to=None):
     """
-    ERP 입고 내역을 WMS에 동기화 (역방향)
+    ERP 입고 내역을 WMS에 동기화 (이력만 기록, 재고 미반영)
     - ERP에서 직접 처리된 입고건을 WMS에 IN_ERP로 생성
     - WMS에서 올린 건(remarkDc에 "SCM" 포함)은 제외
     - 이미 동기화된 건(erp_incoming_no 매칭)은 건너뜀
     Returns: (synced_count, skipped_count, error_count, error_list)
     """
-    from material.models import MaterialTransaction, MaterialStock, Warehouse
+    from material.models import MaterialTransaction, Warehouse
     from orders.models import Part, Vendor
-    from django.db import models
     from django.utils import timezone as tz
-    from django.core.cache import cache
     from datetime import datetime, timedelta
 
-    # _stock_cutoff: 이 날짜 이전 트랜잭션은 이력만 기록 (재고 미반영)
-    _stock_cutoff = None
     if date_from is None:
-        cutoff = cache.get('erp_stock_init_date') or getattr(settings, 'ERP_STOCK_INIT_DATE', '')
-        if cutoff:
-            _stock_cutoff = (datetime.strptime(cutoff, '%Y%m%d') + timedelta(days=1)).strftime('%Y%m%d')  # 기준일 당일까지 skip
-            cutoff_dt = datetime.strptime(cutoff, '%Y%m%d') - timedelta(days=3)
-            date_from = cutoff_dt.strftime('%Y%m%d')
-        else:
-            date_from = (datetime.now() - timedelta(days=1)).strftime('%Y%m%d')
+        date_from = (datetime.now() - timedelta(days=7)).strftime('%Y%m%d')
     if date_to is None:
         date_to = datetime.now().strftime('%Y%m%d')
 
@@ -620,27 +610,7 @@ def sync_erp_incoming(date_from=None, date_to=None, skip_stock_update=False):
 
                 detail_remark = detail.get('remarkDc', '') or ''
 
-                # MaterialStock 증가 (원자적)
-                result_stock = 0
-                # 백데이트 건(기준일 이전)은 이력만 기록
-                _skip = skip_stock_update or (_stock_cutoff and rcv_dt < _stock_cutoff)
-                if _skip:
-                    pass  # 이력만 기록, 재고 미반영
-                elif warehouse:
-                    stock, _ = MaterialStock.objects.get_or_create(
-                        warehouse=warehouse,
-                        part=part,
-                        lot_no=lot_date,
-                        defaults={'quantity': 0}
-                    )
-                    MaterialStock.objects.filter(id=stock.id).update(
-                        quantity=models.F('quantity') + qty
-                    )
-                    stock.refresh_from_db()
-                    result_stock = stock.quantity
-                else:
-                    logger.warning(f'창고 매칭 실패 - 재고 미반영: part={item_cd}')
-                    result_stock = qty
+                result_stock = 0  # 재고 미반영 (sync_stock_from_erp에서 일괄 처리)
 
                 # MaterialTransaction 생성
                 _create_trx(
@@ -696,15 +666,8 @@ def sync_erp_incoming(date_from=None, date_to=None, skip_stock_update=False):
             # erp_incoming_no 형식: 'RV2602000222-1' → 입고번호는 앞부분
             rcv_nb_part = trx.erp_incoming_no.rsplit('-', 1)[0] if '-' in trx.erp_incoming_no else trx.erp_incoming_no
             if rcv_nb_part not in erp_rcv_nbs_in_period:
-                # ERP에서 삭제된 건 → 재고 차감 후 삭제
+                # ERP에서 삭제된 건 → 이력만 삭제 (재고는 sync_stock_from_erp가 처리)
                 try:
-                    if trx.warehouse_to and trx.part:
-                        stock = MaterialStock.objects.filter(
-                            warehouse=trx.warehouse_to, part=trx.part, lot_no=trx.lot_no
-                        ).first()
-                        if stock:
-                            stock.quantity = stock.quantity - trx.quantity
-                            stock.save()
                     logger.info(f'ERP 삭제 감지: {trx.transaction_no} (ERP:{trx.erp_incoming_no}) 삭제')
                     trx.delete()
                     deleted += 1
@@ -755,133 +718,6 @@ def fetch_erp_stock(year=None, month=None, total_fg='0', wh_cd=None):
         return True, items, None
     else:
         return False, None, error
-
-
-def init_stock_from_erp(year=None, cutoff_date=None):
-    """
-    ERP 현재고를 SCM 기초재고로 셋팅 (전체 초기화)
-    - ERP 실시간 현재고(invQt1)를 가져와 SCM 재고를 초기화
-    - cutoff_date: 동기화 기준일 (이 날짜 이후 ERP 수불만 동기화)
-    - 기존 MaterialStock 전체 삭제 후 ERP 데이터로 생성
-    - LOT=null (기초재고)
-    Returns: dict {created, skipped_zero, skipped_no_part, skipped_no_wh, error}
-    """
-    from material.models import MaterialStock, Warehouse
-    from orders.models import Part
-    from datetime import datetime
-
-    result = {
-        'created': 0, 'skipped_zero': 0,
-        'skipped_no_part': 0, 'skipped_no_wh': 0,
-        'error': None,
-    }
-
-    # ERP 실시간 현재고 조회 (month 미지정 = 현시점 재고)
-    query_year = year or str(datetime.now().year)
-    query_month = None
-    result['query_period'] = f'{query_year}년 실시간 현재고'
-    logger.info(f'기초재고 조회: ERP 실시간 현재고 사용 (기준일: {cutoff_date or "오늘"})')
-
-    # 진행률 캐시 초기화
-    from django.core.cache import cache
-    cache.set('erp_stock_init_progress', {'stage': 'ERP 재고 조회 중...', 'percent': 5}, timeout=300)
-
-    ok, items, err = fetch_erp_stock(year=query_year, month=query_month, total_fg='0')
-    if not ok:
-        result['error'] = err or 'ERP 조회 실패'
-        cache.delete('erp_stock_init_progress')
-        return result
-    if not items:
-        result['error'] = 'ERP 재고 데이터 없음'
-        cache.delete('erp_stock_init_progress')
-        return result
-
-    total_items = len(items)
-    cache.set('erp_stock_init_progress', {
-        'stage': f'ERP 데이터 {total_items}건 수신 완료, 기존 재고 삭제 중...',
-        'percent': 15,
-    }, timeout=300)
-
-    MaterialStock.objects.all().delete()
-    logger.info('기초재고 셋팅: 기존 MaterialStock 전체 삭제')
-
-    part_map = {p.part_no: p for p in Part.objects.all()}
-    wh_map = {w.code: w for w in Warehouse.objects.filter(is_active=True)}
-
-    cache.set('erp_stock_init_progress', {
-        'stage': f'재고 생성 중... (0/{total_items})',
-        'percent': 20,
-    }, timeout=300)
-
-    for idx, item in enumerate(items):
-        qty = int(item.get('invQt1', 0) or 0)
-        if qty == 0:
-            result['skipped_zero'] += 1
-            continue
-        part = part_map.get(item.get('itemCd', ''))
-        if not part:
-            result['skipped_no_part'] += 1
-            continue
-        warehouse = wh_map.get(item.get('whCd', ''))
-        if not warehouse:
-            result['skipped_no_wh'] += 1
-            continue
-        MaterialStock.objects.create(
-            warehouse=warehouse, part=part, lot_no=None, quantity=int(qty),
-        )
-        result['created'] += 1
-
-        # 50건마다 진행률 업데이트
-        if (idx + 1) % 50 == 0 or idx == total_items - 1:
-            pct = 20 + int((idx + 1) / total_items * 70)  # 20% ~ 90%
-            cache.set('erp_stock_init_progress', {
-                'stage': f'재고 생성 중... ({idx + 1}/{total_items})',
-                'percent': pct,
-                'created': result['created'],
-            }, timeout=300)
-
-    cache.set('erp_stock_init_progress', {
-        'stage': '기준일 저장 중...',
-        'percent': 95,
-    }, timeout=300)
-
-    # 동기화 시작일 저장 → sync 함수들이 이 날짜 이후 건만 처리
-    # 실시간 현재고는 "조회 시점"의 스냅샷이므로, 당일부터 동기화해야
-    # 셋팅 이후 같은 날 발생하는 수불도 반영됨
-    import re
-
-    if cutoff_date:
-        base = datetime.strptime(cutoff_date, '%Y-%m-%d')
-    else:
-        base = datetime.now()
-    sync_start = base.strftime('%Y%m%d')
-    cache.set('erp_stock_init_date', sync_start, timeout=None)
-
-    # settings.py에도 영구 저장 (서버 재시작 대비)
-    try:
-        settings_path = settings.BASE_DIR / 'config' / 'settings.py'
-        with open(settings_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        content = re.sub(
-            r"ERP_STOCK_INIT_DATE\s*=\s*'[^']*'",
-            f"ERP_STOCK_INIT_DATE = '{sync_start}'",
-            content
-        )
-        with open(settings_path, 'w', encoding='utf-8') as f:
-            f.write(content)
-    except Exception as e:
-        logger.warning(f'settings.py 기준일 저장 실패 (cache는 저장됨): {e}')
-
-    result['cutoff_date'] = sync_start
-
-    cache.set('erp_stock_init_progress', {
-        'stage': '완료!',
-        'percent': 100,
-        'created': result['created'],
-    }, timeout=30)
-
-    logger.info(f'기초재고 셋팅 완료: 생성 {result["created"]}건, 동기화시작일={sync_start}')
-    return result
 
 
 def compare_erp_stock(year=None):
@@ -956,28 +792,30 @@ def compare_erp_stock(year=None):
     return True, comparison, summary, None
 
 
-def adjust_stock_to_erp():
+def sync_stock_from_erp():
     """
-    SCM 재고를 ERP 실시간 현재고에 맞춰 조정
-    - 차이 나는 품목만 증감 처리 (전체 삭제 X)
-    - ADJ_ERP_IN / ADJ_ERP_OUT 트랜잭션 생성 (이력 추적)
-    - 동기화 시작일을 오늘로 설정
-    Returns: dict {adjusted, increased, decreased, skipped_no_part, skipped_no_wh, error}
+    ERP 현재고와 SCM 재고 총량을 비교하여 lot_no=NULL 레코드만 조정.
+    - LOT 레코드(수기 입고)는 절대 건드리지 않음
+    - lot_no=NULL 레코드 = "ERP 관리 버킷"
+    - 멱등성: 여러 번 실행해도 동일 결과
+    Returns: dict {adjusted, increased, decreased, created, skipped_no_part, skipped_no_wh, error}
     """
     from material.models import MaterialStock, MaterialTransaction, Warehouse
     from orders.models import Part
+    from django.db.models import F, Sum
     from django.db.models import Sum
     from django.utils import timezone
-    from datetime import datetime, timedelta
+    from datetime import datetime
     from django.core.cache import cache as _cache
 
     result = {
-        'adjusted': 0, 'increased': 0, 'decreased': 0,
+        'adjusted': 0, 'increased': 0, 'decreased': 0, 'created': 0,
         'skipped_no_part': 0, 'skipped_no_wh': 0, 'error': None,
     }
 
     _cache.set('erp_sync_progress', {'stage': 'ERP 현재고 조회 중...', 'percent': 5}, timeout=300)
 
+    # 1) ERP 현재고 조회
     ok, items, err = fetch_erp_stock(year=str(datetime.now().year), month=None, total_fg='0')
     if not ok:
         result['error'] = err or 'ERP 조회 실패'
@@ -990,14 +828,14 @@ def adjust_stock_to_erp():
 
     _cache.set('erp_sync_progress', {'stage': 'SCM 재고 비교 중...', 'percent': 15}, timeout=300)
 
-    # ERP 재고 맵: (whCd, itemCd) → qty
+    # 2) ERP 재고 맵: (whCd, itemCd) -> qty
     erp_map = {}
     for item in items:
         qty = int(item.get('invQt1', 0) or 0)
         key = (item.get('whCd', ''), item.get('itemCd', ''))
-        erp_map[key] = erp_map.get(key, 0) + qty  # 혹시 중복행이면 합산
+        erp_map[key] = erp_map.get(key, 0) + qty
 
-    # SCM 재고 맵: (warehouse_code, part_no) → total qty
+    # 3) SCM 재고 맵: (warehouse_code, part_no) -> SUM(quantity)
     scm_agg = MaterialStock.objects.values(
         'warehouse__code', 'part__part_no'
     ).annotate(total=Sum('quantity'))
@@ -1006,17 +844,19 @@ def adjust_stock_to_erp():
         key = (row['warehouse__code'], row['part__part_no'])
         scm_map[key] = int(row['total'] or 0)
 
+    # 4) 마스터 데이터
     part_map = {p.part_no: p for p in Part.objects.all()}
-    wh_map = {w.code: w for w in Warehouse.objects.filter(is_active=True)}
+    wh_map = {w.code: w for w in Warehouse.objects.all()}
 
-    all_keys = list(set(erp_map.keys()) | set(scm_map.keys()))
+    all_keys = sorted(set(erp_map.keys()) | set(scm_map.keys()))
     total_keys = len(all_keys)
     now = timezone.now()
 
+    # 5) 각 (wh, part)별로 차이 계산 & lot_no=NULL 레코드 조정
     for idx, (wh_cd, item_cd) in enumerate(all_keys):
         erp_qty = erp_map.get((wh_cd, item_cd), 0)
         scm_qty = scm_map.get((wh_cd, item_cd), 0)
-        diff = erp_qty - scm_qty  # 양수면 SCM 부족, 음수면 SCM 초과
+        diff = erp_qty - scm_qty  # 양수=SCM 부족, 음수=SCM 초과
 
         if diff == 0:
             continue
@@ -1030,538 +870,53 @@ def adjust_stock_to_erp():
             result['skipped_no_wh'] += 1
             continue
 
-        # MaterialStock 조정 (lot_no=None 기초재고 레코드)
+        # lot_no=NULL 레코드 (ERP 관리 버킷) 조정
         stock = MaterialStock.objects.filter(
             warehouse=warehouse, part=part, lot_no=None
         ).first()
 
+        if stock:
+            MaterialStock.objects.filter(pk=stock.pk).update(
+                quantity=F('quantity') + diff
+            )
+        else:
+            MaterialStock.objects.create(
+                warehouse=warehouse, part=part, lot_no=None, quantity=diff
+            )
+            result['created'] += 1
+
+        # 이력 트랜잭션 생성
         if diff > 0:
-            # SCM 부족 → 증가
-            if stock:
-                stock.quantity += diff
-                stock.save()
-            else:
-                MaterialStock.objects.create(
-                    warehouse=warehouse, part=part, lot_no=None, quantity=diff
-                )
             trx_type = 'ADJ_ERP_IN'
             result['increased'] += 1
         else:
-            # SCM 초과 → 감소
-            abs_diff = abs(diff)
-            if stock:
-                stock.quantity = stock.quantity - abs_diff
-                stock.save()
             trx_type = 'ADJ_ERP_OUT'
             result['decreased'] += 1
 
-        # 이력 생성
         _create_trx(
             transaction_type=trx_type,
             part=part,
-            warehouse_to=warehouse if trx_type == 'ADJ_ERP_IN' else None,
-            warehouse_from=warehouse if trx_type == 'ADJ_ERP_OUT' else None,
-            quantity=abs(diff) if trx_type == 'ADJ_ERP_IN' else -abs(diff),
+            warehouse_to=warehouse if diff > 0 else None,
+            warehouse_from=warehouse if diff < 0 else None,
+            quantity=abs(diff),
             lot_no=None,
             date=now,
-            remark=f'ERP 재고조정 (ERP={erp_qty}, SCM={scm_qty}, diff={diff:+d})',
+            remark=f'ERP 재고동기화 (ERP={erp_qty}, SCM={scm_qty}, diff={diff:+d})',
         )
         result['adjusted'] += 1
 
-        if (idx + 1) % 100 == 0 or idx == total_keys - 1:
+        if (idx + 1) % 200 == 0:
             pct = 20 + int((idx + 1) / total_keys * 70)
             _cache.set('erp_sync_progress', {
-                'stage': f'재고 조정 중... ({idx + 1}/{total_keys})',
+                'stage': f'재고 동기화 중... ({idx + 1}/{total_keys})',
                 'percent': pct,
-                'detail': f'조정 {result["adjusted"]}건 (증가 {result["increased"]}, 감소 {result["decreased"]})',
             }, timeout=300)
 
-    # 동기화 시작일: 오늘 (오늘 오후 수불도 자동동기화 대상에 포함)
-    import re
-    sync_start = datetime.now().strftime('%Y%m%d')
-    _cache.set('erp_stock_init_date', sync_start, timeout=None)
-
-    try:
-        settings_path = settings.BASE_DIR / 'config' / 'settings.py'
-        with open(settings_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        content = re.sub(
-            r"ERP_STOCK_INIT_DATE\s*=\s*'[^']*'",
-            f"ERP_STOCK_INIT_DATE = '{sync_start}'",
-            content
-        )
-        with open(settings_path, 'w', encoding='utf-8') as f:
-            f.write(content)
-    except Exception as e:
-        logger.warning(f'settings.py 동기화 시작일 저장 실패: {e}')
-
-    result['sync_start'] = sync_start
-    _cache.set('erp_sync_progress', {'stage': '완료!', 'percent': 100, 'detail': f'조정 {result["adjusted"]}건'}, timeout=30)
-    logger.info(f'ERP 재고조정 완료: 조정 {result["adjusted"]}건 (증가 {result["increased"]}, 감소 {result["decreased"]}), 동기화시작일={sync_start}')
-    return result
-
-
-def detect_past_changes():
-    """
-    기초재고 셋팅일 이전 기간의 ERP 수불 변경을 감지.
-    ERP 원본과 SCM 이력을 비교하여 추가/삭제/수량변경 건을 찾음.
-    Returns: {
-        'changes': [{'type': 'added'|'deleted'|'modified', 'trx_type': ..., 'erp_no': ..., 'part_no': ..., ...}],
-        'affected_parts': set of part_no,
-        'count': int,
-        'period': str,
-        'error': str or None,
-    }
-    """
-    from material.models import MaterialTransaction
-    from orders.models import Part
-    from django.core.cache import cache
-    from datetime import datetime, timedelta
-
-    result = {'changes': [], 'affected_parts': set(), 'count': 0, 'period': '', 'error': None}
-
-    # 기초재고 기준일 확인
-    cutoff = cache.get('erp_stock_init_date') or getattr(settings, 'ERP_STOCK_INIT_DATE', '')
-    if not cutoff:
-        result['error'] = '기초재고 기준일이 설정되지 않았습니다'
-        return result
-
-    # cutoff 이전 날짜로 조회 (20260101 ~ cutoff 전날)
-    try:
-        cutoff_dt = datetime.strptime(cutoff, '%Y%m%d')
-    except ValueError:
-        result['error'] = f'기초재고 기준일 형식 오류: {cutoff}'
-        return result
-
-    date_from = '20260101'
-    date_to = (cutoff_dt - timedelta(days=1)).strftime('%Y%m%d')
-    result['period'] = f'{date_from} ~ {date_to}'
-
-    if date_to < date_from:
-        return result  # 기준일이 1월1일이면 이전 기간 없음
-
-    part_map = {p.part_no: p for p in Part.objects.all()}
-
-    # ── 각 유형별 ERP 원본 vs SCM 이력 비교 ──
-    check_tasks = [
-        ('IN_ERP', _check_incoming_changes),
-        ('ISU_ERP', _check_issue_changes),
-        ('RCV_ERP', _check_receipt_changes),
-        ('TRF_ERP', _check_transfer_changes),
-        ('ADJ_ERP_IN', _check_adjustment_changes),
-        ('OUT_ERP', _check_outgoing_changes),
-    ]
-
-    for trx_type, check_func in check_tasks:
-        try:
-            changes = check_func(date_from, date_to, trx_type, part_map)
-            for c in changes:
-                result['changes'].append(c)
-                if c.get('part_no'):
-                    result['affected_parts'].add(c['part_no'])
-        except Exception as e:
-            logger.error(f'과거변경 감지 오류 ({trx_type}): {e}')
-
-    result['count'] = len(result['changes'])
-    result['affected_parts'] = list(result['affected_parts'])
-    return result
-
-
-def _check_incoming_changes(date_from, date_to, trx_type, part_map):
-    """구매입고 (IN_ERP) 과거변경 감지"""
-    from material.models import MaterialTransaction
-
-    changes = []
-    ok, headers, err = fetch_erp_incoming_headers(date_from, date_to)
-    if not ok or not headers:
-        return changes
-
-    # ERP 원본 키:수량 맵
-    erp_details = {}
-    for h in headers:
-        rcv_nb = h.get('rcvNb', '')
-        remark = h.get('remarkDc', '') or ''
-        if 'SCM' in remark:
-            continue
-        ok2, details, _ = fetch_erp_incoming_detail(rcv_nb)
-        if not ok2 or not details:
-            continue
-        for d in details:
-            rcv_sq = d.get('rcvSq', 1)
-            item_cd = d.get('itemCd', '')
-            qty = int(d.get('rcvQt', 0) or 0)
-            if item_cd and qty > 0:
-                key = f'{rcv_nb}-{rcv_sq}'
-                erp_details[key] = {'part_no': item_cd, 'qty': qty}
-
-    # SCM 이력
-    scm_trxs = MaterialTransaction.objects.filter(
-        transaction_type=trx_type,
-        erp_incoming_no__isnull=False,
-    ).values_list('erp_incoming_no', 'quantity', 'part__part_no')
-    scm_map = {}
-    for erp_no, qty, part_no in scm_trxs:
-        scm_map[erp_no] = {'qty': abs(int(qty)), 'part_no': part_no}
-
-    # 비교
-    for key, erp in erp_details.items():
-        scm = scm_map.get(key)
-        if not scm:
-            changes.append({'type': 'added', 'trx_type': trx_type, 'erp_no': key, 'part_no': erp['part_no'], 'erp_qty': erp['qty'], 'scm_qty': 0})
-        elif scm['qty'] != erp['qty']:
-            changes.append({'type': 'modified', 'trx_type': trx_type, 'erp_no': key, 'part_no': erp['part_no'], 'erp_qty': erp['qty'], 'scm_qty': scm['qty']})
-
-    for key, scm in scm_map.items():
-        if key.startswith('RV') and key not in erp_details:
-            changes.append({'type': 'deleted', 'trx_type': trx_type, 'erp_no': key, 'part_no': scm['part_no'], 'erp_qty': 0, 'scm_qty': scm['qty']})
-
-    return changes
-
-
-def _check_issue_changes(date_from, date_to, trx_type, part_map):
-    """생산출고 (ISU_ERP) 과거변경 감지"""
-    from material.models import MaterialTransaction
-
-    changes = []
-    ok, headers, err = fetch_erp_issue_headers(date_from, date_to)
-    if not ok or not headers:
-        return changes
-
-    erp_details = {}
-    for h in headers:
-        isu_nb = h.get('isuNb', '')
-        remark = h.get('remarkDc', '') or ''
-        if 'SCM' in remark:
-            continue
-        ok2, details, _ = fetch_erp_issue_details(isu_nb)
-        if not ok2 or not details:
-            continue
-        for d in details:
-            isu_sq = d.get('isuSq', 1)
-            item_cd = d.get('itemCd', '')
-            qty = int(d.get('isuQt', 0) or 0)
-            if item_cd and qty > 0:
-                key = f'{isu_nb}-{isu_sq}'
-                erp_details[key] = {'part_no': item_cd, 'qty': qty}
-
-    scm_trxs = MaterialTransaction.objects.filter(
-        transaction_type=trx_type,
-        erp_incoming_no__isnull=False,
-    ).values_list('erp_incoming_no', 'quantity', 'part__part_no')
-    scm_map = {}
-    for erp_no, qty, part_no in scm_trxs:
-        scm_map[erp_no] = {'qty': abs(int(qty)), 'part_no': part_no}
-
-    for key, erp in erp_details.items():
-        scm = scm_map.get(key)
-        if not scm:
-            changes.append({'type': 'added', 'trx_type': trx_type, 'erp_no': key, 'part_no': erp['part_no'], 'erp_qty': erp['qty'], 'scm_qty': 0})
-        elif scm['qty'] != erp['qty']:
-            changes.append({'type': 'modified', 'trx_type': trx_type, 'erp_no': key, 'part_no': erp['part_no'], 'erp_qty': erp['qty'], 'scm_qty': scm['qty']})
-
-    for key, scm in scm_map.items():
-        if key.startswith('MW') and key not in erp_details:
-            changes.append({'type': 'deleted', 'trx_type': trx_type, 'erp_no': key, 'part_no': scm['part_no'], 'erp_qty': 0, 'scm_qty': scm['qty']})
-
-    return changes
-
-
-def _check_receipt_changes(date_from, date_to, trx_type, part_map):
-    """생산입고 (RCV_ERP) 과거변경 감지"""
-    from material.models import MaterialTransaction
-
-    changes = []
-    ok, items, err = fetch_erp_receipt_list(date_from, date_to)
-    if not ok or not items:
-        return changes
-
-    erp_details = {}
-    for item in items:
-        rcv_nb = item.get('rcvNb', '')
-        remark = item.get('remarkDc', '') or ''
-        if 'SCM' in remark:
-            continue
-        item_cd = item.get('itemCd', '')
-        qty = int(item.get('rcvQt', 0) or 0)
-        if rcv_nb and item_cd and qty > 0:
-            erp_details[rcv_nb] = {'part_no': item_cd, 'qty': qty}
-
-    scm_trxs = MaterialTransaction.objects.filter(
-        transaction_type=trx_type,
-        erp_incoming_no__isnull=False,
-    ).values_list('erp_incoming_no', 'quantity', 'part__part_no')
-    scm_map = {}
-    for erp_no, qty, part_no in scm_trxs:
-        scm_map[erp_no] = {'qty': abs(int(qty)), 'part_no': part_no}
-
-    for key, erp in erp_details.items():
-        scm = scm_map.get(key)
-        if not scm:
-            changes.append({'type': 'added', 'trx_type': trx_type, 'erp_no': key, 'part_no': erp['part_no'], 'erp_qty': erp['qty'], 'scm_qty': 0})
-        elif scm['qty'] != erp['qty']:
-            changes.append({'type': 'modified', 'trx_type': trx_type, 'erp_no': key, 'part_no': erp['part_no'], 'erp_qty': erp['qty'], 'scm_qty': scm['qty']})
-
-    for key, scm in scm_map.items():
-        if key.startswith('PR') and key not in erp_details:
-            changes.append({'type': 'deleted', 'trx_type': trx_type, 'erp_no': key, 'part_no': scm['part_no'], 'erp_qty': 0, 'scm_qty': scm['qty']})
-
-    return changes
-
-
-def _check_transfer_changes(date_from, date_to, trx_type, part_map):
-    """재고이동 (TRF_ERP) 과거변경 감지"""
-    from material.models import MaterialTransaction
-
-    changes = []
-    ok, headers, err = fetch_erp_transfer_headers(date_from, date_to)
-    if not ok or not headers:
-        return changes
-
-    erp_details = {}
-    for h in headers:
-        move_nb = h.get('moveNb', '')
-        remark = h.get('remarkDc', '') or ''
-        if 'SCM' in remark:
-            continue
-        ok2, details, _ = fetch_erp_transfer_details(move_nb)
-        if not ok2 or not details:
-            continue
-        for d in details:
-            move_sq = d.get('moveSq', 1)
-            item_cd = d.get('itemCd', '')
-            qty = int(d.get('moveQt', 0) or 0)
-            if item_cd and qty > 0:
-                key = f'{move_nb}-{move_sq}'
-                erp_details[key] = {'part_no': item_cd, 'qty': qty}
-
-    scm_trxs = MaterialTransaction.objects.filter(
-        transaction_type=trx_type,
-        erp_incoming_no__isnull=False,
-    ).values_list('erp_incoming_no', 'quantity', 'part__part_no')
-    scm_map = {}
-    for erp_no, qty, part_no in scm_trxs:
-        scm_map[erp_no] = {'qty': abs(int(qty)), 'part_no': part_no}
-
-    for key, erp in erp_details.items():
-        scm = scm_map.get(key)
-        if not scm:
-            changes.append({'type': 'added', 'trx_type': trx_type, 'erp_no': key, 'part_no': erp['part_no'], 'erp_qty': erp['qty'], 'scm_qty': 0})
-        elif scm['qty'] != erp['qty']:
-            changes.append({'type': 'modified', 'trx_type': trx_type, 'erp_no': key, 'part_no': erp['part_no'], 'erp_qty': erp['qty'], 'scm_qty': scm['qty']})
-
-    for key, scm in scm_map.items():
-        if key.startswith('MV') and key not in erp_details:
-            changes.append({'type': 'deleted', 'trx_type': trx_type, 'erp_no': key, 'part_no': scm['part_no'], 'erp_qty': 0, 'scm_qty': scm['qty']})
-
-    return changes
-
-
-def _check_adjustment_changes(date_from, date_to, trx_type, part_map):
-    """재고조정 (ADJ_ERP_IN/OUT) 과거변경 감지"""
-    from material.models import MaterialTransaction
-
-    changes = []
-    for adjust_fg in ['1', '2']:
-        ok, headers, err = fetch_erp_adjustment_headers(date_from, date_to, adjust_fg=adjust_fg)
-        if not ok or not headers:
-            continue
-
-        erp_details = {}
-        for h in headers:
-            adjust_nb = h.get('adjustNb', '')
-            remark = h.get('remarkDc', '') or ''
-            if 'SCM' in remark:
-                continue
-            ok2, details, _ = fetch_erp_adjustment_detail(adjust_nb, adjust_fg)
-            if not ok2 or not details:
-                continue
-            for d in details:
-                adjust_sq = d.get('adjustSq', 1)
-                item_cd = d.get('itemCd', '')
-                qty = int(d.get('rcvQt' if adjust_fg == '1' else 'isuQt', 0) or 0)
-                if item_cd and qty > 0:
-                    key = f'{adjust_nb}-{adjust_sq}'
-                    erp_details[key] = {'part_no': item_cd, 'qty': qty}
-
-        cur_type = 'ADJ_ERP_IN' if adjust_fg == '1' else 'ADJ_ERP_OUT'
-        scm_trxs = MaterialTransaction.objects.filter(
-            transaction_type=cur_type,
-            erp_incoming_no__isnull=False,
-        ).values_list('erp_incoming_no', 'quantity', 'part__part_no')
-        scm_map = {}
-        for erp_no, qty, part_no in scm_trxs:
-            scm_map[erp_no] = {'qty': abs(int(qty)), 'part_no': part_no}
-
-        for key, erp in erp_details.items():
-            scm = scm_map.get(key)
-            if not scm:
-                changes.append({'type': 'added', 'trx_type': cur_type, 'erp_no': key, 'part_no': erp['part_no'], 'erp_qty': erp['qty'], 'scm_qty': 0})
-            elif scm['qty'] != erp['qty']:
-                changes.append({'type': 'modified', 'trx_type': cur_type, 'erp_no': key, 'part_no': erp['part_no'], 'erp_qty': erp['qty'], 'scm_qty': scm['qty']})
-
-        for key, scm in scm_map.items():
-            if key.startswith('AD') and key not in erp_details:
-                changes.append({'type': 'deleted', 'trx_type': cur_type, 'erp_no': key, 'part_no': scm['part_no'], 'erp_qty': 0, 'scm_qty': scm['qty']})
-
-    return changes
-
-
-def _check_outgoing_changes(date_from, date_to, trx_type, part_map):
-    """고객출고 (OUT_ERP) 과거변경 감지"""
-    from material.models import MaterialTransaction
-
-    changes = []
-    ok, headers, err = fetch_erp_outgoing_headers(date_from, date_to)
-    if not ok or not headers:
-        return changes
-
-    erp_details = {}
-    for h in headers:
-        isu_nb = h.get('isuNb', '')
-        remark = h.get('remarkDc', '') or ''
-        if 'SCM' in remark:
-            continue
-        ok2, details, _ = fetch_erp_outgoing_details(isu_nb)
-        if not ok2 or not details:
-            continue
-        for d in details:
-            isu_sq = d.get('isuSq', 1)
-            item_cd = d.get('itemCd', '')
-            qty = int(d.get('isuQt', 0) or 0)
-            if item_cd and qty > 0:
-                key = f'{isu_nb}-{isu_sq}'
-                erp_details[key] = {'part_no': item_cd, 'qty': qty}
-
-    scm_trxs = MaterialTransaction.objects.filter(
-        transaction_type=trx_type,
-        erp_incoming_no__isnull=False,
-    ).values_list('erp_incoming_no', 'quantity', 'part__part_no')
-    scm_map = {}
-    for erp_no, qty, part_no in scm_trxs:
-        scm_map[erp_no] = {'qty': abs(int(qty)), 'part_no': part_no}
-
-    for key, erp in erp_details.items():
-        scm = scm_map.get(key)
-        if not scm:
-            changes.append({'type': 'added', 'trx_type': trx_type, 'erp_no': key, 'part_no': erp['part_no'], 'erp_qty': erp['qty'], 'scm_qty': 0})
-        elif scm['qty'] != erp['qty']:
-            changes.append({'type': 'modified', 'trx_type': trx_type, 'erp_no': key, 'part_no': erp['part_no'], 'erp_qty': erp['qty'], 'scm_qty': scm['qty']})
-
-    for key, scm in scm_map.items():
-        if key not in erp_details and not key.startswith('AD') and not key.startswith('RV') and not key.startswith('MW') and not key.startswith('MV') and not key.startswith('PR'):
-            changes.append({'type': 'deleted', 'trx_type': trx_type, 'erp_no': key, 'part_no': scm['part_no'], 'erp_qty': 0, 'scm_qty': scm['qty']})
-
-    return changes
-
-
-def adjust_stock_for_parts(part_nos):
-    """
-    특정 품목들만 ERP 현재고에 맞춰 재고 보정.
-    adjust_stock_to_erp와 동일 로직이지만 대상 품목 제한.
-    Args:
-        part_nos: 보정할 품목번호 리스트
-    Returns: dict {adjusted, increased, decreased, error}
-    """
-    from material.models import MaterialStock, MaterialTransaction, Warehouse
-    from orders.models import Part
-    from django.db.models import Sum
-    from django.utils import timezone
-    from datetime import datetime
-
-    result = {'adjusted': 0, 'increased': 0, 'decreased': 0, 'error': None, 'details': []}
-
-    if not part_nos:
-        return result
-
-    ok, items, err = fetch_erp_stock(year=str(datetime.now().year), month=None, total_fg='0')
-    if not ok:
-        result['error'] = err or 'ERP 조회 실패'
-        return result
-
-    part_nos_set = set(part_nos)
-
-    # ERP 재고 맵 (해당 품목만)
-    erp_map = {}
-    for item in items:
-        item_cd = item.get('itemCd', '')
-        if item_cd not in part_nos_set:
-            continue
-        qty = int(item.get('invQt1', 0) or 0)
-        key = (item.get('whCd', ''), item_cd)
-        erp_map[key] = erp_map.get(key, 0) + qty
-
-    # SCM 재고 맵 (해당 품목만)
-    scm_agg = MaterialStock.objects.filter(
-        part__part_no__in=part_nos_set
-    ).values(
-        'warehouse__code', 'part__part_no'
-    ).annotate(total=Sum('quantity'))
-    scm_map = {}
-    for row in scm_agg:
-        key = (row['warehouse__code'], row['part__part_no'])
-        scm_map[key] = int(row['total'] or 0)
-
-    part_map = {p.part_no: p for p in Part.objects.filter(part_no__in=part_nos_set)}
-    wh_map = {w.code: w for w in Warehouse.objects.filter(is_active=True)}
-
-    all_keys = set(erp_map.keys()) | set(scm_map.keys())
-    now = timezone.now()
-
-    for (wh_cd, item_cd) in all_keys:
-        erp_qty = erp_map.get((wh_cd, item_cd), 0)
-        scm_qty = scm_map.get((wh_cd, item_cd), 0)
-        diff = erp_qty - scm_qty
-
-        if diff == 0:
-            continue
-
-        part = part_map.get(item_cd)
-        warehouse = wh_map.get(wh_cd)
-        if not part or not warehouse:
-            continue
-
-        stock = MaterialStock.objects.filter(
-            warehouse=warehouse, part=part, lot_no=None
-        ).first()
-
-        if diff > 0:
-            if stock:
-                stock.quantity += diff
-                stock.save()
-            else:
-                MaterialStock.objects.create(
-                    warehouse=warehouse, part=part, lot_no=None, quantity=diff
-                )
-            trx_type = 'ADJ_ERP_IN'
-            result['increased'] += 1
-        else:
-            abs_diff = abs(diff)
-            if stock:
-                stock.quantity = stock.quantity - abs_diff
-                stock.save()
-            trx_type = 'ADJ_ERP_OUT'
-            result['decreased'] += 1
-
-        _create_trx(
-            transaction_type=trx_type,
-            part=part,
-            warehouse_to=warehouse if trx_type == 'ADJ_ERP_IN' else None,
-            warehouse_from=warehouse if trx_type == 'ADJ_ERP_OUT' else None,
-            quantity=abs(diff) if trx_type == 'ADJ_ERP_IN' else -abs(diff),
-            lot_no=None,
-            date=now,
-            remark=f'과거변경 재고보정 (ERP={erp_qty}, SCM={scm_qty}, diff={diff:+d})',
-        )
-        result['adjusted'] += 1
-        result['details'].append({
-            'part_no': item_cd,
-            'warehouse': wh_cd,
-            'erp_qty': erp_qty,
-            'scm_qty': scm_qty,
-            'diff': diff,
-        })
-
-    logger.info(f'품목별 재고보정 완료: {result["adjusted"]}건 (대상 {len(part_nos)}품목)')
+    _cache.set('erp_sync_progress', {
+        'stage': '완료!', 'percent': 100,
+        'detail': f'조정 {result["adjusted"]}건 (증가 {result["increased"]}, 감소 {result["decreased"]})',
+    }, timeout=30)
+    logger.info(f'ERP 재고동기화: 조정 {result["adjusted"]}건 (증가 {result["increased"]}, 감소 {result["decreased"]})')
     return result
 
 
@@ -1991,32 +1346,21 @@ def fetch_erp_adjustment_detail(adjust_nb, adjust_fg='1'):
         return False, None, error
 
 
-def sync_erp_adjustments(date_from=None, date_to=None, skip_stock_update=False):
+def sync_erp_adjustments(date_from=None, date_to=None):
     """
-    ERP 재고조정 내역을 SCM에 동기화
-    - 입고조정(adjustFg=1): SCM 재고 증가 (ADJ_ERP_IN)
-    - 출고조정(adjustFg=2): SCM 재고 감소 (ADJ_ERP_OUT)
-    - 기초조정(adjustFg=0): 건너뜀 (기초재고 셋팅은 별도)
-    - SCM에서 등록한 건(remarkDc에 'SCM' 포함)은 제외
-    - 이미 동기화된 건(erp_incoming_no에 조정번호 매칭)은 건너뜀
+    ERP 재고조정 내역을 SCM에 동기화 (이력만 기록, 재고 미반영)
+    - 입고조정(adjustFg=1): ADJ_ERP_IN
+    - 출고조정(adjustFg=2): ADJ_ERP_OUT
+    - 기초조정(adjustFg=0): 건너뜀
     Returns: (synced_count, skipped_count, error_count, error_list)
     """
-    from material.models import MaterialTransaction, MaterialStock, Warehouse
+    from material.models import MaterialTransaction, Warehouse
     from orders.models import Part
-    from django.db import models
     from django.utils import timezone as tz
-    from django.core.cache import cache
     from datetime import datetime, timedelta
 
-    _stock_cutoff = None
     if date_from is None:
-        cutoff = cache.get('erp_stock_init_date') or getattr(settings, 'ERP_STOCK_INIT_DATE', '')
-        if cutoff:
-            _stock_cutoff = (datetime.strptime(cutoff, '%Y%m%d') + timedelta(days=1)).strftime('%Y%m%d')  # 기준일 당일까지 skip
-            cutoff_dt = datetime.strptime(cutoff, '%Y%m%d') - timedelta(days=3)
-            date_from = cutoff_dt.strftime('%Y%m%d')
-        else:
-            date_from = (datetime.now() - timedelta(days=30)).strftime('%Y%m%d')
+        date_from = (datetime.now() - timedelta(days=30)).strftime('%Y%m%d')
     if date_to is None:
         date_to = datetime.now().strftime('%Y%m%d')
 
@@ -2129,32 +1473,7 @@ def sync_erp_adjustments(date_from=None, date_to=None, skip_stock_update=False):
                 detail_remark = detail.get('remarkDc', '') or ''
                 adjust_fg_nm = header.get('adjustFgNm', '')
 
-                # MaterialStock 갱신 (원자적)
-                result_stock = 0
-                _skip = skip_stock_update or (_stock_cutoff and adjust_dt < _stock_cutoff)
-                if _skip:
-                    pass  # 이력만 기록, 재고 미반영
-                elif warehouse:
-                    stock, _ = MaterialStock.objects.get_or_create(
-                        warehouse=warehouse,
-                        part=part,
-                        lot_no=None,
-                        defaults={'quantity': 0}
-                    )
-                    if adjust_fg == '1':  # 입고 → 재고 증가
-                        MaterialStock.objects.filter(id=stock.id).update(
-                            quantity=models.F('quantity') + qty
-                        )
-                    else:  # 출고 → 재고 감소
-                        from django.db.models.functions import Greatest
-                        MaterialStock.objects.filter(id=stock.id).update(
-                            quantity=models.F('quantity') - qty
-                        )
-                    stock.refresh_from_db()
-                    result_stock = stock.quantity
-                else:
-                    logger.warning(f'창고 매칭 실패 - 재고 미반영: part={item_cd}')
-                    result_stock = qty
+                result_stock = 0  # 재고 미반영 (sync_stock_from_erp에서 일괄 처리)
 
                 # 입고조정 → warehouse_to, 출고조정 → warehouse_from
                 trx_kwargs = {
@@ -2267,30 +1586,18 @@ def fetch_erp_issue_details(isu_nb):
     return False, None, error
 
 
-def sync_erp_issue(date_from=None, date_to=None, skip_stock_update=False):
+def sync_erp_issue(date_from=None, date_to=None):
     """
-    ERP 생산출고 내역을 WMS에 동기화
-    - 원자재가 생산라인으로 출고된 건 → 재고 차감
-    - 이미 동기화된 건(erp_incoming_no 매칭)은 건너뜀
+    ERP 생산출고 내역을 WMS에 동기화 (이력만 기록, 재고 미반영)
     Returns: (synced_count, skipped_count, error_count, error_list)
     """
-    from material.models import MaterialTransaction, MaterialStock, Warehouse
+    from material.models import MaterialTransaction, Warehouse
     from orders.models import Part
-    from django.db import models
-    from django.db.models.functions import Greatest
     from django.utils import timezone as tz
-    from django.core.cache import cache
     from datetime import datetime, timedelta
 
-    _stock_cutoff = None
     if date_from is None:
-        cutoff = cache.get('erp_stock_init_date') or getattr(settings, 'ERP_STOCK_INIT_DATE', '')
-        if cutoff:
-            _stock_cutoff = (datetime.strptime(cutoff, '%Y%m%d') + timedelta(days=1)).strftime('%Y%m%d')  # 기준일 당일까지 skip
-            cutoff_dt = datetime.strptime(cutoff, '%Y%m%d') - timedelta(days=3)
-            date_from = cutoff_dt.strftime('%Y%m%d')
-        else:
-            date_from = (datetime.now() - timedelta(days=1)).strftime('%Y%m%d')
+        date_from = (datetime.now() - timedelta(days=7)).strftime('%Y%m%d')
     if date_to is None:
         date_to = datetime.now().strftime('%Y%m%d')
 
@@ -2379,23 +1686,7 @@ def sync_erp_issue(date_from=None, date_to=None, skip_stock_update=False):
                 if not warehouse:
                     warehouse = Warehouse.objects.filter(code='2000').first()
 
-                # MaterialStock 차감 (원자적)
-                result_stock = 0
-                _skip = skip_stock_update or (_stock_cutoff and isu_dt < _stock_cutoff)
-                if _skip:
-                    pass  # 이력만 기록, 재고 미반영
-                elif warehouse:
-                    stock, _ = MaterialStock.objects.get_or_create(
-                        warehouse=warehouse,
-                        part=part,
-                        lot_no=None,
-                        defaults={'quantity': 0}
-                    )
-                    MaterialStock.objects.filter(id=stock.id).update(
-                        quantity=models.F('quantity') - qty
-                    )
-                    stock.refresh_from_db()
-                    result_stock = stock.quantity
+                result_stock = 0  # 재고 미반영 (sync_stock_from_erp에서 일괄 처리)
 
                 detail_remark = detail.get('remarkDc', '') or ''
                 fwh_nm = detail.get('fwhNm', '') or ''
@@ -2450,29 +1741,18 @@ def fetch_erp_receipt_list(date_from, date_to):
     return False, None, error
 
 
-def sync_erp_receipt(date_from=None, date_to=None, skip_stock_update=False):
+def sync_erp_receipt(date_from=None, date_to=None):
     """
-    ERP 생산입고 내역을 WMS에 동기화
-    - 생산 완료된 품목이 창고에 입고 → 재고 증가
-    - 이미 동기화된 건(erp_incoming_no 매칭)은 건너뜀
+    ERP 생산입고 내역을 WMS에 동기화 (이력만 기록, 재고 미반영)
     Returns: (synced_count, skipped_count, error_count, error_list)
     """
-    from material.models import MaterialTransaction, MaterialStock, Warehouse
+    from material.models import MaterialTransaction, Warehouse
     from orders.models import Part
-    from django.db import models
     from django.utils import timezone as tz
-    from django.core.cache import cache
     from datetime import datetime, timedelta
 
-    _stock_cutoff = None
     if date_from is None:
-        cutoff = cache.get('erp_stock_init_date') or getattr(settings, 'ERP_STOCK_INIT_DATE', '')
-        if cutoff:
-            _stock_cutoff = (datetime.strptime(cutoff, '%Y%m%d') + timedelta(days=1)).strftime('%Y%m%d')  # 기준일 당일까지 skip
-            cutoff_dt = datetime.strptime(cutoff, '%Y%m%d') - timedelta(days=3)
-            date_from = cutoff_dt.strftime('%Y%m%d')
-        else:
-            date_from = (datetime.now() - timedelta(days=1)).strftime('%Y%m%d')
+        date_from = (datetime.now() - timedelta(days=7)).strftime('%Y%m%d')
     if date_to is None:
         date_to = datetime.now().strftime('%Y%m%d')
 
@@ -2545,25 +1825,7 @@ def sync_erp_receipt(date_from=None, date_to=None, skip_stock_update=False):
             if not warehouse:
                 warehouse = Warehouse.objects.filter(code='2000').first()
 
-            # MaterialStock 증가 (원자적)
-            result_stock = 0
-            _skip = skip_stock_update or (_stock_cutoff and rcv_dt < _stock_cutoff)
-            if _skip:
-                pass  # 이력만 기록, 재고 미반영
-            elif warehouse:
-                stock, _ = MaterialStock.objects.get_or_create(
-                    warehouse=warehouse,
-                    part=part,
-                    lot_no=None,
-                    defaults={'quantity': 0}
-                )
-                MaterialStock.objects.filter(id=stock.id).update(
-                    quantity=models.F('quantity') + qty
-                )
-                stock.refresh_from_db()
-                result_stock = stock.quantity
-            else:
-                logger.warning(f'창고 매칭 실패 - 재고 미반영: part={item_cd}')
+            result_stock = 0  # 재고 미반영 (sync_stock_from_erp에서 일괄 처리)
 
             twh_nm = item.get('twhNm', '') or ''
 
@@ -2724,31 +1986,18 @@ def fetch_erp_transfer_details(move_nb):
     return False, None, error
 
 
-def sync_erp_stock_transfer(date_from=None, date_to=None, skip_stock_update=False):
+def sync_erp_stock_transfer(date_from=None, date_to=None):
     """
-    ERP 재고이동 내역을 SCM에 동기화
-    - 출고창고 재고 차감, 입고창고 재고 증가
-    - SCM에서 올린 건('SCM' 포함)은 제외
-    - 이미 동기화된 건(erp_incoming_no 매칭)은 건너뜀
+    ERP 재고이동 내역을 SCM에 동기화 (이력만 기록, 재고 미반영)
     Returns: (synced_count, skipped_count, error_count, error_list)
     """
-    from material.models import MaterialTransaction, MaterialStock, Warehouse
+    from material.models import MaterialTransaction, Warehouse
     from orders.models import Part
-    from django.db import models
-    from django.db.models.functions import Greatest
     from django.utils import timezone as tz
-    from django.core.cache import cache
     from datetime import datetime, timedelta
 
-    _stock_cutoff = None
     if date_from is None:
-        cutoff = cache.get('erp_stock_init_date') or getattr(settings, 'ERP_STOCK_INIT_DATE', '')
-        if cutoff:
-            _stock_cutoff = (datetime.strptime(cutoff, '%Y%m%d') + timedelta(days=1)).strftime('%Y%m%d')  # 기준일 당일까지 skip
-            cutoff_dt = datetime.strptime(cutoff, '%Y%m%d') - timedelta(days=3)
-            date_from = cutoff_dt.strftime('%Y%m%d')
-        else:
-            date_from = (datetime.now() - timedelta(days=1)).strftime('%Y%m%d')
+        date_from = (datetime.now() - timedelta(days=7)).strftime('%Y%m%d')
     if date_to is None:
         date_to = datetime.now().strftime('%Y%m%d')
 
@@ -2845,41 +2094,8 @@ def sync_erp_stock_transfer(date_from=None, date_to=None, skip_stock_update=Fals
                 if not to_wh:
                     to_wh = Warehouse.objects.filter(code='2000').first()
 
-                # 출고창고 재고 차감
-                from_result = 0
+                from_result = 0  # 재고 미반영 (sync_stock_from_erp에서 일괄 처리)
                 to_result = 0
-                _skip = skip_stock_update or (_stock_cutoff and move_dt < _stock_cutoff)
-                if _skip:
-                    pass  # 이력만 기록, 재고 미반영
-                else:
-                    if from_wh:
-                        from_stock = MaterialStock.objects.filter(
-                            warehouse=from_wh, part=part, lot_no=None
-                        ).first()
-                        if not from_stock:
-                            from_stock = MaterialStock.objects.create(
-                                warehouse=from_wh, part=part, lot_no=None, quantity=0
-                            )
-                        MaterialStock.objects.filter(id=from_stock.id).update(
-                            quantity=models.F('quantity') - qty
-                        )
-                        from_stock.refresh_from_db()
-                        from_result = from_stock.quantity
-
-                    # 입고창고 재고 증가
-                    if to_wh:
-                        to_stock = MaterialStock.objects.filter(
-                            warehouse=to_wh, part=part, lot_no=None
-                        ).first()
-                        if not to_stock:
-                            to_stock = MaterialStock.objects.create(
-                                warehouse=to_wh, part=part, lot_no=None, quantity=0
-                            )
-                        MaterialStock.objects.filter(id=to_stock.id).update(
-                            quantity=models.F('quantity') + qty
-                        )
-                        to_stock.refresh_from_db()
-                        to_result = to_stock.quantity
 
                 fwh_nm = detail.get('fwhNm', '') or fwh_cd
                 twh_nm = detail.get('twhNm', '') or twh_cd
@@ -2951,31 +2167,18 @@ def fetch_erp_outgoing_details(isu_nb):
     return False, None, error
 
 
-def sync_erp_outgoing(date_from=None, date_to=None, skip_stock_update=False):
+def sync_erp_outgoing(date_from=None, date_to=None):
     """
-    ERP 고객출고(물류출고) 내역을 WMS에 동기화
-    - 고객에게 출고된 건 → 재고 차감
-    - 이미 동기화된 건(erp_incoming_no 매칭)은 건너뜀
-    - API: api20A01S00201(헤더) / api20A01S00202(디테일)
+    ERP 고객출고(물류출고) 내역을 WMS에 동기화 (이력만 기록, 재고 미반영)
     Returns: (synced_count, skipped_count, error_count, error_list)
     """
-    from material.models import MaterialTransaction, MaterialStock, Warehouse
+    from material.models import MaterialTransaction, Warehouse
     from orders.models import Part
-    from django.db import models
-    from django.db.models.functions import Greatest
     from django.utils import timezone as tz
-    from django.core.cache import cache
     from datetime import datetime, timedelta
 
-    _stock_cutoff = None
     if date_from is None:
-        cutoff = cache.get('erp_stock_init_date') or getattr(settings, 'ERP_STOCK_INIT_DATE', '')
-        if cutoff:
-            _stock_cutoff = (datetime.strptime(cutoff, '%Y%m%d') + timedelta(days=1)).strftime('%Y%m%d')  # 기준일 당일까지 skip
-            cutoff_dt = datetime.strptime(cutoff, '%Y%m%d') - timedelta(days=3)
-            date_from = cutoff_dt.strftime('%Y%m%d')
-        else:
-            date_from = (datetime.now() - timedelta(days=1)).strftime('%Y%m%d')
+        date_from = (datetime.now() - timedelta(days=7)).strftime('%Y%m%d')
     if date_to is None:
         date_to = datetime.now().strftime('%Y%m%d')
 
@@ -3071,23 +2274,7 @@ def sync_erp_outgoing(date_from=None, date_to=None, skip_stock_update=False):
                 if qty <= 0:
                     continue
 
-                # MaterialStock 차감 (원자적)
-                result_stock = 0
-                _skip = skip_stock_update or (_stock_cutoff and isu_dt < _stock_cutoff)
-                if _skip:
-                    pass  # 이력만 기록, 재고 미반영
-                elif from_wh:
-                    stock, _ = MaterialStock.objects.get_or_create(
-                        warehouse=from_wh,
-                        part=part,
-                        lot_no=None,
-                        defaults={'quantity': 0}
-                    )
-                    MaterialStock.objects.filter(id=stock.id).update(
-                        quantity=models.F('quantity') - qty
-                    )
-                    stock.refresh_from_db()
-                    result_stock = stock.quantity
+                result_stock = 0  # 재고 미반영 (sync_stock_from_erp에서 일괄 처리)
 
                 detail_remark = detail.get('remarkDc', '') or ''
                 wh_nm = header.get('whNm', '') or wh_cd

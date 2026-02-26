@@ -11,135 +11,48 @@
     <div class="alert alert-warning">ERP 연동이 비활성화 상태입니다. (settings.py: ERP_ENABLED = False)</div>
     {% endif %}
 
-    {% if past_changes %}
-    <div class="alert alert-warning border-warning shadow-sm mb-3">
-        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-            <div>
-                <i class="bi bi-exclamation-triangle-fill me-1"></i>
-                <strong>과거 수불 변경 감지!</strong>
-                기초재고 셋팅 이전 기간({{ past_changes.period }})에 ERP 수불 변경이 <strong>{{ past_changes.count }}건</strong> 감지되었습니다.
-                <span class="text-muted">(영향 품목: {{ past_changes.affected_parts|length }}개)</span>
-            </div>
-            <form method="post" class="d-inline" onsubmit="return confirm('감지된 {{ past_changes.affected_parts|length }}개 품목의 재고를 ERP 현재고에 맞춰 보정합니다. 진행하시겠습니까?');">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="adjust_past_changes">
-                <input type="hidden" name="part_nos" value="{{ past_changes.affected_parts|join:',' }}">
-                <button type="submit" class="btn btn-warning btn-sm">
-                    <i class="bi bi-wrench me-1"></i>해당 품목 재고 보정
-                </button>
-            </form>
-        </div>
-        {% if past_changes.changes %}
-        <div class="mt-2">
-            <a class="small text-decoration-none" data-bs-toggle="collapse" href="#pastChangeDetail" role="button">
-                <i class="bi bi-chevron-down me-1"></i>변경 상세 보기
-            </a>
-            <div class="collapse mt-2" id="pastChangeDetail">
-                <table class="table table-sm table-bordered small mb-0" style="font-size: 0.8rem;">
-                    <thead class="table-light">
-                        <tr>
-                            <th>유형</th>
-                            <th>구분</th>
-                            <th>ERP번호</th>
-                            <th>품번</th>
-                            <th>ERP수량</th>
-                            <th>SCM수량</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for c in past_changes.changes %}
-                        <tr class="{% if c.type == 'added' %}table-success{% elif c.type == 'deleted' %}table-danger{% else %}table-warning{% endif %}">
-                            <td>{{ c.trx_type }}</td>
-                            <td>
-                                {% if c.type == 'added' %}
-                                <span class="badge bg-success">신규</span>
-                                {% elif c.type == 'deleted' %}
-                                <span class="badge bg-danger">삭제</span>
-                                {% else %}
-                                <span class="badge bg-warning text-dark">수정</span>
-                                {% endif %}
-                            </td>
-                            <td>{{ c.erp_no }}</td>
-                            <td>{{ c.part_no }}</td>
-                            <td>{{ c.erp_qty|intcomma }}</td>
-                            <td>{{ c.scm_qty|intcomma }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        {% endif %}
-    </div>
-    {% endif %}
-
-    <!-- 과거변경 수동 감지 버튼 -->
-    <div class="mb-3 text-end">
-        <form method="post" class="d-inline">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="detect_past_changes">
-            <button type="submit" class="btn btn-outline-secondary btn-sm" {% if not erp_enabled %}disabled{% endif %}>
-                <i class="bi bi-search me-1"></i>과거 수불 변경 감지
-            </button>
-        </form>
-    </div>
-
     <div class="row g-3 mb-4">
-        <!-- 기초재고 셋팅 카드 -->
-        <div class="col-md-6">
+        <!-- ERP 재고 동기화 카드 -->
+        <div class="col-md-4">
             <div class="card shadow-sm h-100">
                 <div class="card-header bg-white fw-bold">
-                    <i class="bi bi-arrow-down-circle me-1 text-primary"></i> ERP 기초재고 셋팅
+                    <i class="bi bi-arrow-repeat me-1 text-primary"></i> ERP 재고 동기화
                 </div>
                 <div class="card-body">
                     <p class="text-muted small mb-2">
-                        ERP 실시간 현재고를 SCM 기초재고로 초기화합니다.<br>
-                        <strong class="text-danger">기존 SCM 재고가 모두 삭제</strong>되고 ERP 현재고로 대체됩니다. (LOT=없음)
+                        ERP 현재고와 SCM 재고 총량을 비교하여 차이를 조정합니다.
                     </p>
                     <ul class="small text-muted mb-3">
-                        <li>SCM에 등록된 품목(Part)만 대상</li>
-                        <li>ERP 재고 > 0인 품목만 생성</li>
-                        <li><strong class="text-info">ERP 실시간 현재고</strong>를 그대로 가져옵니다</li>
-                        <li><strong class="text-primary">기준일(오늘) 이후</strong> ERP 수불만 자동동기화 대상</li>
+                        <li>ERP 현재고 = 진실, SCM이 따라감</li>
+                        <li><strong>lot_no=NULL</strong> 레코드만 조정 (LOT 재고 보존)</li>
+                        <li>조정 이력(ADJ_ERP) 자동 생성</li>
+                        <li>여러 번 실행해도 동일 결과 (멱등성)</li>
                     </ul>
-                    <form id="initStockForm" method="post">
+                    <form id="syncStockForm" method="post">
                         {% csrf_token %}
-                        <input type="hidden" name="action" value="init_stock">
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold">자동동기화 시작일</label>
-                            <input type="date" name="cutoff_date" class="form-control form-control-sm"
-                                   value="{{ today }}" required
-                                   style="max-width: 200px;">
-                            <div class="form-text">ERP 실시간 현재고를 가져오고, 이 날짜 <strong>다음 날</strong>부터 ERP 수불을 자동동기화합니다.</div>
-                        </div>
-                        <button type="submit" class="btn btn-danger btn-sm" id="btnInitStock" {% if not erp_enabled %}disabled{% endif %}>
-                            <i class="bi bi-exclamation-triangle me-1"></i>기초재고 셋팅 실행
+                        <input type="hidden" name="action" value="sync_stock">
+                        <button type="submit" class="btn btn-primary btn-sm" id="btnSyncStock" {% if not erp_enabled %}disabled{% endif %}>
+                            <i class="bi bi-arrow-repeat me-1"></i>재고 동기화 실행
                         </button>
-                        {% if current_cutoff %}
-                        <span class="ms-2 badge bg-info">현재 기준일: {{ current_cutoff }}</span>
-                        {% endif %}
                     </form>
-
-                    <!-- 프로그레스바 영역 (숨겨져 있다가 실행 시 표시) -->
-                    <div id="progressArea" class="mt-3" style="display:none;">
+                    <!-- 진행률 -->
+                    <div id="syncStockProgress" class="mt-3" style="display:none;">
                         <div class="d-flex justify-content-between align-items-center mb-1">
-                            <small class="fw-bold text-primary" id="progressStage">준비 중...</small>
-                            <small class="fw-bold" id="progressPct">0%</small>
+                            <small class="fw-bold text-primary progress-stage">준비 중...</small>
+                            <small class="fw-bold progress-pct">0%</small>
                         </div>
-                        <div class="progress" style="height: 20px;">
+                        <div class="progress" style="height: 16px;">
                             <div class="progress-bar progress-bar-striped progress-bar-animated"
-                                 id="progressBar" role="progressbar"
-                                 style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
-                            </div>
+                                 role="progressbar" style="width: 0%"></div>
                         </div>
-                        <small class="text-muted mt-1 d-block" id="progressDetail"></small>
+                        <small class="text-muted mt-1 d-block progress-detail"></small>
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- ERP vs SCM 비교 카드 -->
-        <div class="col-md-3">
+        <div class="col-md-4">
             <div class="card shadow-sm h-100">
                 <div class="card-header bg-white fw-bold">
                     <i class="bi bi-arrow-left-right me-1 text-info"></i> ERP vs SCM 비교
@@ -177,49 +90,19 @@
             </div>
         </div>
 
-        <!-- ERP 기준 재고조정 카드 -->
-        <div class="col-md-3">
-            <div class="card shadow-sm h-100 border-warning">
+        <!-- 수불 동기화 카드 -->
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100">
                 <div class="card-header bg-white fw-bold">
-                    <i class="bi bi-sliders me-1 text-warning"></i> ERP 기준 재고조정
+                    <i class="bi bi-journal-text me-1 text-success"></i> 수불 이력 동기화
                 </div>
                 <div class="card-body">
                     <p class="text-muted small mb-2">
-                        SCM 재고를 ERP 현재고에 <strong>즉시</strong> 맞춥니다.<br>
-                        차이 나는 품목만 증감 처리합니다.
-                    </p>
-                    <ul class="small text-muted mb-3">
-                        <li>기존 재고 삭제 없이 <strong>차이분만 조정</strong></li>
-                        <li>조정 이력(ADJ_ERP) 자동 생성</li>
-                        <li>조정 시점 이후 수불은 <strong>자동동기화</strong>로 반영</li>
-                    </ul>
-                    <form id="adjustForm" method="post">
-                        {% csrf_token %}
-                        <input type="hidden" name="action" value="adjust_to_erp">
-                        <button type="submit" class="btn btn-warning btn-sm" id="btnAdjust" {% if not erp_enabled %}disabled{% endif %}>
-                            <i class="bi bi-sliders me-1"></i>재고조정 실행
-                        </button>
-                    </form>
-                    <!-- 진행률 -->
-                    <div id="adjustProgress" class="mt-3" style="display:none;">
-                        <div class="d-flex justify-content-between align-items-center mb-1">
-                            <small class="fw-bold text-warning progress-stage">준비 중...</small>
-                            <small class="fw-bold progress-pct">0%</small>
-                        </div>
-                        <div class="progress" style="height: 16px;">
-                            <div class="progress-bar bg-warning progress-bar-striped progress-bar-animated"
-                                 role="progressbar" style="width: 0%"></div>
-                        </div>
-                        <small class="text-muted mt-1 d-block progress-detail"></small>
-                    </div>
-
-                    <hr class="my-3">
-                    <p class="text-muted small mb-2">
-                        ERP 수불 내역을 수동으로 즉시 동기화합니다.
+                        ERP 수불 내역을 수동으로 즉시 동기화합니다. (이력만 기록, 재고 미반영)
                     </p>
                     <ul class="small text-muted mb-2" style="padding-left: 1.2rem;">
                         <li>구매입고 / 고객출고 / 생산출고</li>
-                        <li>생산입고 / 재고이동</li>
+                        <li>생산입고 / 재고이동 / 재고조정</li>
                     </ul>
                     <form id="syncTxForm" method="post">
                         {% csrf_token %}
@@ -331,9 +214,6 @@ function startSyncProgress(formId, btnId, progressAreaId, progressUrl, confirmMs
                         pct.textContent = data.percent + '%';
                         stage.textContent = data.stage || '';
                         if (data.detail) detail.textContent = data.detail;
-                        if (data.created !== undefined && !data.detail) {
-                            detail.textContent = '생성: ' + data.created + '건';
-                        }
                     }
                     if (data.percent >= 100) {
                         clearInterval(poll);
@@ -345,35 +225,21 @@ function startSyncProgress(formId, btnId, progressAreaId, progressUrl, confirmMs
     });
 }
 
-// 재고조정
-startSyncProgress('adjustForm', 'btnAdjust', 'adjustProgress',
+// 재고 동기화
+startSyncProgress('syncStockForm', 'btnSyncStock', 'syncStockProgress',
     '{% url "material:erp_sync_progress" %}',
-    'SCM 재고를 ERP 현재고에 맞춰 조정합니다.\n\n→ 차이 나는 품목만 증감 처리\n→ 조정 이력(ADJ_ERP) 자동 생성\n→ 조정 시점 이후 ERP 수불은 자동동기화로 반영됩니다.\n\n실행하시겠습니까?'
+    'ERP 현재고와 SCM 재고를 동기화합니다.\n\n→ lot_no=NULL 레코드만 조정 (LOT 재고 보존)\n→ 조정 이력(ADJ_ERP) 자동 생성\n→ 여러 번 실행해도 동일 결과\n\n실행하시겠습니까?'
 );
 
 // 수불 동기화
 startSyncProgress('syncTxForm', 'btnSyncTx', 'syncTxProgress',
     '{% url "material:erp_sync_progress" %}',
-    '구매입고 / 고객출고 / 생산출고 / 생산입고 / 재고이동\n5가지 수불 내역을 ERP에서 즉시 동기화합니다.\n\n실행하시겠습니까?'
+    '구매입고 / 고객출고 / 생산출고 / 생산입고 / 재고이동 / 재고조정\n6가지 수불 내역을 ERP에서 즉시 동기화합니다.\n(이력만 기록, 재고 미반영)\n\n실행하시겠습니까?'
 );
 
 // 재고 비교
 startSyncProgress('compareForm', 'btnCompare', 'compareProgress',
     '{% url "material:erp_sync_progress" %}', null
 );
-
-// 기초재고 셋팅
-startSyncProgress('initStockForm', 'btnInitStock', 'progressArea',
-    '{% url "material:erp_stock_init_progress" %}',
-    null  // confirm은 아래에서 별도 처리
-);
-
-// 기초재고 셋팅은 별도 confirm 필요
-document.getElementById('initStockForm').addEventListener('submit', function(e) {
-    const cutoffDate = this.cutoff_date.value;
-    if (!confirm('SCM 재고를 ERP 실시간 현재고로 초기화합니다.\n\n⚠ 기존 SCM 재고 데이터가 모두 삭제됩니다.\n\n→ ERP 실시간 현재고를 그대로 가져옵니다.\n→ ' + cutoffDate + ' 다음 날부터 ERP 수불을 자동동기화합니다.\n  (당일 수불은 이미 현재고에 반영되어 있음)\n\n정말 계속하시겠습니까?')) {
-        e.preventDefault();
-    }
-}, {capture: true});
 </script>
 {% endblock %}

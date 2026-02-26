@@ -8,7 +8,7 @@ from django.apps import AppConfig
 
 logger = logging.getLogger(__name__)
 
-# 모듈 레벨 락 (스레드 간 동기화 동기화)
+# 모듈 레벨 락 (스레드 간 동기화)
 _sync_lock = threading.Lock()
 
 
@@ -39,7 +39,7 @@ class MaterialConfig(AppConfig):
 
     @staticmethod
     def _run_scheduler(interval):
-        """백그라운드에서 주기적으로 ERP 입고 동기화 실행"""
+        """백그라운드에서 주기적으로 ERP 동기화 실행"""
         from django.core.cache import cache
 
         # 서버 시작 후 첫 실행까지 60초 대기 (DB 연결 안정화)
@@ -51,104 +51,57 @@ class MaterialConfig(AppConfig):
                 from django import db
                 db.close_old_connections()
 
-                # --reset 진행 중이면 데몬 동기화 건너뜀
-                if cache.get('erp_reset_in_progress'):
-                    logger.info('ERP 자동 동기화 건너뜀: --reset 진행 중')
-                    time.sleep(interval)
-                    continue
-
                 # threading.Lock으로 수동 동기화와 충돌 방지
                 acquired = _sync_lock.acquire(blocking=False)
                 if not acquired:
                     logger.debug('ERP 자동 동기화 건너뜀: 다른 동기화 진행 중')
                 else:
                     try:
-                        from material.erp_api import sync_erp_incoming, sync_erp_issue, sync_erp_receipt, sync_erp_stock_transfer, sync_erp_adjustments, sync_erp_outgoing
+                        from material.erp_api import (
+                            sync_erp_incoming, sync_erp_issue, sync_erp_receipt,
+                            sync_erp_stock_transfer, sync_erp_adjustments, sync_erp_outgoing,
+                            sync_stock_from_erp,
+                        )
                         from django.utils import timezone
 
-                        # 구매입고 동기화
-                        synced, skipped, errors, error_list = sync_erp_incoming()
-                        cache.set('erp_incoming_sync_result', {
-                            'synced': synced,
-                            'skipped': skipped,
-                            'errors': errors,
-                            'error_list': error_list[:5],
+                        # ── 1단계: 이력 동기화 (6개 트랜잭션, 재고 미반영) ──
+                        sync_jobs = [
+                            ('incoming', '입고', sync_erp_incoming),
+                            ('issue', '생산출고', sync_erp_issue),
+                            ('receipt', '생산입고', sync_erp_receipt),
+                            ('transfer', '재고이동', sync_erp_stock_transfer),
+                            ('adjust', '재고조정', sync_erp_adjustments),
+                            ('outgoing', '고객출고', sync_erp_outgoing),
+                        ]
+
+                        for key, label, func in sync_jobs:
+                            synced, skipped, errors, error_list = func()
+                            cache.set(f'erp_{key}_sync_result', {
+                                'synced': synced,
+                                'skipped': skipped,
+                                'errors': errors,
+                                'error_list': error_list[:5],
+                                'finished_at': timezone.now().strftime('%Y-%m-%d %H:%M'),
+                                'auto': True,
+                            }, timeout=86400)
+                            if synced > 0:
+                                logger.info(f'ERP {label} 자동 동기화: 신규 {synced}건, 건너뜀 {skipped}건, 오류 {errors}건')
+
+                        # ── 2단계: 재고 동기화 (ERP 현재고로 SCM 총량 보정) ──
+                        stock_result = sync_stock_from_erp()
+                        if stock_result.get('adjusted', 0) > 0:
+                            logger.info(
+                                f'ERP 재고동기화: 조정 {stock_result["adjusted"]}건 '
+                                f'(증가 {stock_result["increased"]}, 감소 {stock_result["decreased"]})'
+                            )
+                        cache.set('erp_stock_sync_result', {
+                            'adjusted': stock_result.get('adjusted', 0),
+                            'increased': stock_result.get('increased', 0),
+                            'decreased': stock_result.get('decreased', 0),
+                            'error': stock_result.get('error'),
                             'finished_at': timezone.now().strftime('%Y-%m-%d %H:%M'),
                             'auto': True,
                         }, timeout=86400)
-
-                        if synced > 0:
-                            logger.info(f'ERP 입고 자동 동기화: 신규 {synced}건, 건너뜀 {skipped}건, 오류 {errors}건')
-
-                        # 생산출고 동기화
-                        isu_synced, isu_skipped, isu_errors, isu_err_list = sync_erp_issue()
-                        cache.set('erp_issue_sync_result', {
-                            'synced': isu_synced,
-                            'skipped': isu_skipped,
-                            'errors': isu_errors,
-                            'error_list': isu_err_list[:5],
-                            'finished_at': timezone.now().strftime('%Y-%m-%d %H:%M'),
-                            'auto': True,
-                        }, timeout=86400)
-
-                        if isu_synced > 0:
-                            logger.info(f'ERP 생산출고 자동 동기화: 신규 {isu_synced}건, 건너뜀 {isu_skipped}건, 오류 {isu_errors}건')
-
-                        # 생산입고 동기화
-                        rcv_synced, rcv_skipped, rcv_errors, rcv_err_list = sync_erp_receipt()
-                        cache.set('erp_receipt_sync_result', {
-                            'synced': rcv_synced,
-                            'skipped': rcv_skipped,
-                            'errors': rcv_errors,
-                            'error_list': rcv_err_list[:5],
-                            'finished_at': timezone.now().strftime('%Y-%m-%d %H:%M'),
-                            'auto': True,
-                        }, timeout=86400)
-
-                        if rcv_synced > 0:
-                            logger.info(f'ERP 생산입고 자동 동기화: 신규 {rcv_synced}건, 건너뜀 {rcv_skipped}건, 오류 {rcv_errors}건')
-
-                        # 재고이동 동기화
-                        trf_synced, trf_skipped, trf_errors, trf_err_list = sync_erp_stock_transfer()
-                        cache.set('erp_transfer_sync_result', {
-                            'synced': trf_synced,
-                            'skipped': trf_skipped,
-                            'errors': trf_errors,
-                            'error_list': trf_err_list[:5],
-                            'finished_at': timezone.now().strftime('%Y-%m-%d %H:%M'),
-                            'auto': True,
-                        }, timeout=86400)
-
-                        if trf_synced > 0:
-                            logger.info(f'ERP 재고이동 자동 동기화: 신규 {trf_synced}건, 건너뜀 {trf_skipped}건, 오류 {trf_errors}건')
-
-                        # 재고조정 동기화
-                        adj_synced, adj_skipped, adj_errors, adj_err_list = sync_erp_adjustments()
-                        cache.set('erp_adjust_sync_result', {
-                            'synced': adj_synced,
-                            'skipped': adj_skipped,
-                            'errors': adj_errors,
-                            'error_list': adj_err_list[:5],
-                            'finished_at': timezone.now().strftime('%Y-%m-%d %H:%M'),
-                            'auto': True,
-                        }, timeout=86400)
-
-                        if adj_synced > 0:
-                            logger.info(f'ERP 재고조정 자동 동기화: 신규 {adj_synced}건, 건너뜀 {adj_skipped}건, 오류 {adj_errors}건')
-
-                        # 고객출고 동기화
-                        out_synced, out_skipped, out_errors, out_err_list = sync_erp_outgoing()
-                        cache.set('erp_outgoing_sync_result', {
-                            'synced': out_synced,
-                            'skipped': out_skipped,
-                            'errors': out_errors,
-                            'error_list': out_err_list[:5],
-                            'finished_at': timezone.now().strftime('%Y-%m-%d %H:%M'),
-                            'auto': True,
-                        }, timeout=86400)
-
-                        if out_synced > 0:
-                            logger.info(f'ERP 고객출고 자동 동기화: 신규 {out_synced}건, 건너뜀 {out_skipped}건, 오류 {out_errors}건')
 
                     except Exception as e:
                         logger.error(f'ERP 자동 동기화 오류: {e}')

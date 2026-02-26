@@ -206,6 +206,3 @@ ERP_DEFAULT_EMP_CODE = "20240601"
 ERP_AUTO_SYNC_ENABLED = True          # 자동 동기화 on/off
 ERP_AUTO_SYNC_INTERVAL_MINUTES = 10   # 동기화 주기 (분)
 
-# 기초재고 동기화 기준일 (이 날짜 이후 ERP 입고건만 자동동기화 대상)
-# init_stock_from_erp() 실행 시 자동 갱신됨. 비어있으면 어제 기준.
-ERP_STOCK_INIT_DATE = '20260225'

@@ -1,29 +1,29 @@
 """
-ERP 전체 수불 이력 동기화 + 재고조정 통합 커맨드
+ERP 전체 수불 이력 동기화 커맨드
 
 사용법:
   python manage.py sync_erp_history                    # 1월1일~오늘 전체 동기화
   python manage.py sync_erp_history --from 20260201    # 2월1일부터
-  python manage.py sync_erp_history --no-adjust        # 재고조정 생략 (이력만)
   python manage.py sync_erp_history --reset            # 기존 데이터 삭제 후 처음부터
 
 동작 순서:
   --reset 시:
     0-1) 기존 ERP 동기화 트랜잭션 전체 삭제
-    0-2) 기초재고 셋팅 (ERP 실시간 현재고)
+    0-2) lot_no=NULL 재고 삭제 (LOT 재고는 보존)
+    0-3) sync_stock_from_erp → ERP 현재고 기준 lot_no=NULL 재고 생성
   공통:
-    1) ERP 구매입고 (IN_ERP) 동기화
-    2) ERP 생산출고 (ISU_ERP) 동기화
-    3) ERP 생산입고 (RCV_ERP) 동기화
-    4) ERP 재고이동 (TRF_ERP) 동기화
-    5) ERP 재고조정 (ADJ_ERP) 동기화
-    6) SCM 재고를 ERP 현재고에 맞춤 (adjust_stock_to_erp)
+    1) ERP 구매입고 (IN_ERP) 동기화 (이력만)
+    2) ERP 생산출고 (ISU_ERP) 동기화 (이력만)
+    3) ERP 생산입고 (RCV_ERP) 동기화 (이력만)
+    4) ERP 재고이동 (TRF_ERP) 동기화 (이력만)
+    5) ERP 재고조정 (ADJ_ERP) 동기화 (이력만)
+    6) ERP 고객출고 (OUT_ERP) 동기화 (이력만)
+    7) sync_stock_from_erp → ERP 현재고와 최종 보정
 """
 
 import time
 from datetime import datetime
 from django.core.management.base import BaseCommand
-from django.core.cache import cache
 
 
 class Command(BaseCommand):
@@ -45,16 +45,10 @@ class Command(BaseCommand):
             help='종료일 (YYYYMMDD, 기본: 오늘)',
         )
         parser.add_argument(
-            '--no-adjust',
-            action='store_true',
-            dest='no_adjust',
-            help='마지막 재고조정(adjust_stock_to_erp) 생략',
-        )
-        parser.add_argument(
             '--reset',
             action='store_true',
             dest='reset',
-            help='기존 ERP 동기화 데이터 삭제 + 기초재고 셋팅 후 동기화',
+            help='기존 ERP 동기화 데이터 삭제 + ERP 현재고 기준 재시작',
         )
 
     def handle(self, *args, **options):
@@ -65,10 +59,9 @@ class Command(BaseCommand):
             sync_erp_stock_transfer,
             sync_erp_adjustments,
             sync_erp_outgoing,
-            adjust_stock_to_erp,
-            init_stock_from_erp,
+            sync_stock_from_erp,
         )
-        from material.models import MaterialTransaction
+        from material.models import MaterialTransaction, MaterialStock
 
         date_from = options['date_from']
         date_to = options['date_to'] or datetime.now().strftime('%Y%m%d')
@@ -82,11 +75,9 @@ class Command(BaseCommand):
         total_start = time.time()
         grand_total = {'synced': 0, 'skipped': 0, 'errors': 0}
 
-        # --reset: 기존 데이터 삭제 + 기초재고 셋팅
+        # --reset: 기존 데이터 삭제 + ERP 현재고 기준 재고 생성
         if options['reset']:
-            # 데몬 자동동기화가 리셋 중에 간섭하지 않도록 플래그 설정 (2시간)
-            cache.set('erp_reset_in_progress', True, timeout=7200)
-            self.stdout.write(self.style.WARNING('[리셋 1/2] 기존 ERP 동기화 트랜잭션 삭제 중...'))
+            self.stdout.write(self.style.WARNING('[리셋 1/3] 기존 ERP 동기화 트랜잭션 삭제 중...'))
             erp_types = ['IN_ERP', 'ISU_ERP', 'RCV_ERP', 'TRF_ERP', 'ADJ_ERP_IN', 'ADJ_ERP_OUT', 'OUT_ERP']
             for t in erp_types:
                 cnt = MaterialTransaction.objects.filter(transaction_type=t).count()
@@ -95,37 +86,39 @@ class Command(BaseCommand):
                     self.stdout.write(f'  {t}: {cnt}건 삭제')
             self.stdout.write('')
 
-            self.stdout.write(self.style.WARNING('[리셋 2/2] ERP 기초재고 셋팅 (실시간 현재고)...'))
+            self.stdout.write(self.style.WARNING('[리셋 2/3] lot_no=NULL 재고 삭제 (LOT 재고 보존)...'))
+            null_cnt = MaterialStock.objects.filter(lot_no__isnull=True).count()
+            MaterialStock.objects.filter(lot_no__isnull=True).delete()
+            lot_cnt = MaterialStock.objects.filter(lot_no__isnull=False).count()
+            self.stdout.write(f'  lot_no=NULL: {null_cnt}건 삭제, LOT 재고 보존: {lot_cnt}건')
+            self.stdout.write('')
+
+            self.stdout.write(self.style.WARNING('[리셋 3/3] ERP 현재고 기준 재고 동기화 (sync_stock_from_erp)...'))
             start = time.time()
             try:
-                result = init_stock_from_erp(cutoff_date=datetime.now().strftime('%Y-%m-%d'))
+                result = sync_stock_from_erp()
                 elapsed = time.time() - start
                 if result.get('error'):
                     self.stderr.write(self.style.ERROR(f'  -> 실패: {result["error"]}'))
                     return
                 self.stdout.write(
-                    f'  -> 생성: {result["created"]}건, '
-                    f'건너뜀(재고0): {result["skipped_zero"]}건, '
-                    f'건너뜀(Part없음): {result["skipped_no_part"]}건, '
-                    f'건너뜀(창고없음): {result["skipped_no_wh"]}건 '
-                    f'({elapsed:.1f}초)'
+                    f'  -> 조정: {result["adjusted"]}건 '
+                    f'(증가 {result["increased"]}, 감소 {result["decreased"]}, '
+                    f'생성 {result["created"]}건) ({elapsed:.1f}초)'
                 )
             except Exception as e:
                 self.stderr.write(self.style.ERROR(f'  -> 실패: {e}'))
                 return
             self.stdout.write('')
 
-        # --reset 시 이력만 기록 (기초재고=현재고이므로 재고 가감 불필요)
-        skip = options['reset']
-
-        # 동기화 대상 목록
+        # 동기화 대상 목록 (이력만 기록, 재고 가감 없음)
         sync_tasks = [
-            ('구매입고 (IN_ERP)', lambda: sync_erp_incoming(date_from, date_to, skip_stock_update=skip)),
-            ('생산출고 (ISU_ERP)', lambda: sync_erp_issue(date_from, date_to, skip_stock_update=skip)),
-            ('생산입고 (RCV_ERP)', lambda: sync_erp_receipt(date_from, date_to, skip_stock_update=skip)),
-            ('재고이동 (TRF_ERP)', lambda: sync_erp_stock_transfer(date_from, date_to, skip_stock_update=skip)),
-            ('재고조정 (ADJ_ERP)', lambda: sync_erp_adjustments(date_from, date_to, skip_stock_update=skip)),
-            ('고객출고 (OUT_ERP)', lambda: sync_erp_outgoing(date_from, date_to, skip_stock_update=skip)),
+            ('구매입고 (IN_ERP)', lambda: sync_erp_incoming(date_from, date_to)),
+            ('생산출고 (ISU_ERP)', lambda: sync_erp_issue(date_from, date_to)),
+            ('생산입고 (RCV_ERP)', lambda: sync_erp_receipt(date_from, date_to)),
+            ('재고이동 (TRF_ERP)', lambda: sync_erp_stock_transfer(date_from, date_to)),
+            ('재고조정 (ADJ_ERP)', lambda: sync_erp_adjustments(date_from, date_to)),
+            ('고객출고 (OUT_ERP)', lambda: sync_erp_outgoing(date_from, date_to)),
         ]
 
         total_tasks = len(sync_tasks)
@@ -159,29 +152,23 @@ class Command(BaseCommand):
 
             self.stdout.write('')
 
-        # 재고조정 (ERP 현재고와 SCM 재고 차이 보정 - 리셋 시에도 실행)
-        if not options['no_adjust']:
-            self.stdout.write(self.style.WARNING('[마무리] ERP 기준 재고조정 실행 중...'))
-            start = time.time()
+        # 최종 재고 보정 (ERP 현재고와 SCM 재고 동기화)
+        self.stdout.write(self.style.WARNING('[마무리] ERP 현재고 기준 재고 동기화 (sync_stock_from_erp)...'))
+        start = time.time()
 
-            try:
-                result = adjust_stock_to_erp()
-                elapsed = time.time() - start
+        try:
+            result = sync_stock_from_erp()
+            elapsed = time.time() - start
 
-                if result.get('error'):
-                    self.stderr.write(self.style.ERROR(f'  -> 실패: {result["error"]}'))
-                else:
-                    self.stdout.write(
-                        f'  -> 조정: {result["adjusted"]}건 '
-                        f'(증가 {result["increased"]}, 감소 {result["decreased"]}), '
-                        f'동기화 시작일: {result.get("sync_start", "")} ({elapsed:.1f}초)'
-                    )
-            except Exception as e:
-                self.stderr.write(self.style.ERROR(f'  -> 실패: {e}'))
-
-        # --reset 완료: 데몬 간섭 방지 플래그 해제
-        if options['reset']:
-            cache.delete('erp_reset_in_progress')
+            if result.get('error'):
+                self.stderr.write(self.style.ERROR(f'  -> 실패: {result["error"]}'))
+            else:
+                self.stdout.write(
+                    f'  -> 조정: {result["adjusted"]}건 '
+                    f'(증가 {result["increased"]}, 감소 {result["decreased"]}) ({elapsed:.1f}초)'
+                )
+        except Exception as e:
+            self.stderr.write(self.style.ERROR(f'  -> 실패: {e}'))
 
         total_elapsed = time.time() - total_start
 

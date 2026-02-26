@@ -5004,70 +5004,33 @@ def api_transfer_detail(request, trx_id):
 @login_required
 @wms_permission_required('can_wms_stock_edit')
 def erp_stock_manage(request):
-    """[WMS] ERP 재고 관리 - 기초재고 셋팅 / ERP vs SCM 비교"""
+    """[WMS] ERP 재고 관리 - 재고 동기화 / ERP vs SCM 비교"""
     from django.conf import settings as django_settings
     from django.core.cache import cache
     from datetime import date
 
-    current_cutoff = cache.get('erp_stock_init_date') or getattr(django_settings, 'ERP_STOCK_INIT_DATE', '')
-
     context = {
         'erp_enabled': getattr(django_settings, 'ERP_ENABLED', False),
         'today': date.today().isoformat(),
-        'current_cutoff': current_cutoff,
     }
 
     action = request.POST.get('action', '') if request.method == 'POST' else ''
 
-    # ── 기초재고 셋팅 ──
-    if action == 'init_stock':
-        from material.erp_api import init_stock_from_erp
-        cutoff_date = request.POST.get('cutoff_date', '')
-        result = init_stock_from_erp(cutoff_date=cutoff_date)
+    # ── ERP 재고 동기화 (ERP 현재고 → SCM lot_no=NULL 조정) ──
+    if action == 'sync_stock':
+        from material.erp_api import sync_stock_from_erp
+        result = sync_stock_from_erp()
         if result.get('error'):
-            messages.error(request, f'기초재고 셋팅 실패: {result["error"]}')
-        else:
-            query_period = result.get('query_period', '')
-            period_info = f' [{query_period}]' if query_period else ''
-            messages.success(
-                request,
-                f'ERP 기초재고 셋팅 완료{period_info}: '
-                f'생성 {result["created"]}건, '
-                f'건너뜀(재고0) {result["skipped_zero"]}건, '
-                f'건너뜀(Part없음) {result["skipped_no_part"]}건, '
-                f'건너뜀(창고없음) {result["skipped_no_wh"]}건 '
-                f'(기준일: {result.get("cutoff_date", "")})'
-            )
-        return redirect('material:erp_stock_manage')
-
-    # ── ERP 재고조정 동기화 ──
-    if action == 'sync_adjustment':
-        from material.erp_api import sync_erp_adjustments
-        synced, skip, errs, err_list = sync_erp_adjustments()
-        if errs > 0:
-            for e in err_list[:3]:
-                messages.warning(request, e)
-        if synced > 0:
-            messages.success(request, f'ERP 재고조정 동기화 완료: 반영 {synced}건, 건너뜀 {skip}건')
-        else:
-            messages.info(request, f'ERP 재고조정: 신규 건 없음 (건너뜀 {skip}건)')
-        return redirect('material:erp_stock_manage')
-
-    # ── ERP 기준 재고조정 (SCM → ERP 맞춤) ──
-    if action == 'adjust_to_erp':
-        from material.erp_api import adjust_stock_to_erp
-        result = adjust_stock_to_erp()
-        if result.get('error'):
-            messages.error(request, f'재고조정 실패: {result["error"]}')
+            messages.error(request, f'재고 동기화 실패: {result["error"]}')
         else:
             messages.success(
                 request,
-                f'ERP 기준 재고조정 완료: '
+                f'ERP 재고 동기화 완료: '
                 f'조정 {result["adjusted"]}건 '
                 f'(증가 {result["increased"]}, 감소 {result["decreased"]}), '
-                f'건너뜀(Part없음) {result["skipped_no_part"]}건, '
-                f'건너뜀(창고없음) {result["skipped_no_wh"]}건, '
-                f'동기화 시작일: {result.get("sync_start", "")}'
+                f'생성 {result.get("created", 0)}건, '
+                f'건너뜀(Part없음) {result.get("skipped_no_part", 0)}건, '
+                f'건너뜀(창고없음) {result.get("skipped_no_wh", 0)}건'
             )
         return redirect('material:erp_stock_manage')
 
@@ -5125,47 +5088,6 @@ def erp_stock_manage(request):
             messages.info(request, f'수불 동기화: 신규 건 없음 (건너뜀 {total_skipped}건)')
 
         return redirect('material:erp_stock_manage')
-
-    # ── 과거변경 품목별 재고 보정 ──
-    if action == 'adjust_past_changes':
-        from material.erp_api import adjust_stock_for_parts
-        part_nos_str = request.POST.get('part_nos', '')
-        part_nos = [p.strip() for p in part_nos_str.split(',') if p.strip()]
-        if part_nos:
-            result = adjust_stock_for_parts(part_nos)
-            if result.get('error'):
-                messages.error(request, f'재고 보정 실패: {result["error"]}')
-            else:
-                messages.success(
-                    request,
-                    f'과거변경 재고 보정 완료: '
-                    f'조정 {result["adjusted"]}건 '
-                    f'(증가 {result["increased"]}, 감소 {result["decreased"]})'
-                )
-                # 보정 후 캐시 초기화
-                cache.delete('erp_past_changes')
-        else:
-            messages.warning(request, '보정 대상 품목이 없습니다')
-        return redirect('material:erp_stock_manage')
-
-    # ── 과거변경 감지 수동 실행 ──
-    if action == 'detect_past_changes':
-        from material.erp_api import detect_past_changes
-        result = detect_past_changes()
-        if result.get('error'):
-            messages.error(request, f'과거변경 감지 실패: {result["error"]}')
-        elif result['count'] > 0:
-            cache.set('erp_past_changes', result, timeout=86400)
-            messages.warning(request, f'과거 수불 변경 {result["count"]}건 감지 (영향 품목: {len(result["affected_parts"])}개)')
-        else:
-            cache.delete('erp_past_changes')
-            messages.success(request, f'과거 수불 변경 없음 (기간: {result["period"]})')
-        return redirect('material:erp_stock_manage')
-
-    # 과거변경 감지 결과 (캐시에서 로드)
-    past_changes = cache.get('erp_past_changes')
-    if past_changes and past_changes.get('count', 0) > 0:
-        context['past_changes'] = past_changes
 
     # ── ERP vs SCM 비교 ──
     if action == 'compare' or request.GET.get('compare'):
