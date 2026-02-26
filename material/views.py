@@ -2517,92 +2517,98 @@ def lot_allocation(request):
     if request.method == 'POST':
         try:
             warehouse_id = request.POST.get('warehouse_id')
-            part_id = request.POST.get('part_id')
-            lot_nos = request.POST.getlist('lot_nos[]')
-            quantities = request.POST.getlist('quantities[]')
+            part_ids = request.POST.getlist('part_ids[]')
 
-            if not warehouse_id or not part_id:
+            if not warehouse_id or not part_ids:
                 messages.error(request, "창고와 품목을 선택해주세요.")
                 return redirect('material:lot_allocation')
 
-            if not lot_nos or not quantities:
-                messages.error(request, "배분할 LOT 정보를 입력해주세요.")
-                return redirect('material:lot_allocation')
-
             warehouse = Warehouse.objects.get(id=warehouse_id)
-            part = Part.objects.get(id=part_id)
-
-            # NULL 재고 조회
-            null_stock = MaterialStock.objects.filter(
-                warehouse=warehouse, part=part, lot_no__isnull=True
-            ).first()
-
-            if not null_stock or null_stock.quantity <= 0:
-                messages.error(request, f"배분 가능한 NULL 재고가 없습니다. (현재: {null_stock.quantity if null_stock else 0})")
-                return redirect('material:lot_allocation')
-
-            # 배분 수량 검증
             from datetime import datetime
-            alloc_items = []
-            total_alloc = 0
-            for i in range(len(lot_nos)):
-                lot_str = lot_nos[i].strip()
-                qty_str = quantities[i].strip()
-                if not lot_str or not qty_str:
-                    continue
-                qty = int(qty_str)
-                if qty <= 0:
-                    continue
-                try:
-                    lot_date = datetime.strptime(lot_str, '%Y-%m-%d').date()
-                except (ValueError, TypeError):
-                    messages.error(request, f"LOT 날짜 형식 오류: {lot_str} (YYYY-MM-DD)")
-                    return redirect('material:lot_allocation')
-                alloc_items.append((lot_date, qty))
-                total_alloc += qty
 
-            if total_alloc <= 0:
-                messages.error(request, "배분 수량을 입력해주세요.")
-                return redirect('material:lot_allocation')
+            total_parts = 0
+            total_lots = 0
+            total_ea = 0
 
-            if total_alloc > null_stock.quantity:
-                messages.error(request, f"배분 합계({total_alloc})가 NULL 재고({null_stock.quantity})를 초과합니다.")
-                return redirect('material:lot_allocation')
-
-            # 배분 실행
             with transaction.atomic():
-                for lot_date, qty in alloc_items:
-                    # LOT 재고 증가 (get_or_create)
-                    lot_stock, _ = MaterialStock.objects.get_or_create(
-                        warehouse=warehouse, part=part, lot_no=lot_date,
-                        defaults={'quantity': 0}
-                    )
-                    MaterialStock.objects.filter(pk=lot_stock.pk).update(
-                        quantity=F('quantity') + qty
-                    )
-                    lot_stock.refresh_from_db()
+                for pid in part_ids:
+                    part = Part.objects.get(id=pid)
+                    lot_nos = request.POST.getlist(f'lot_nos_{pid}[]')
+                    quantities = request.POST.getlist(f'qty_{pid}[]')
 
-                    # 트랜잭션 이력 생성
-                    trx_no = f"LOTA-{timezone.now().strftime('%y%m%d%H%M%S%f')}-{request.user.id}"
-                    MaterialTransaction.objects.create(
-                        transaction_no=trx_no,
-                        transaction_type='LOT_ASSIGN',
-                        date=timezone.now(),
-                        part=part,
-                        quantity=qty,
-                        lot_no=lot_date,
-                        warehouse_to=warehouse,
-                        result_stock=lot_stock.quantity,
-                        actor=request.user,
-                        remark=f"LOT 배분: NULL→{lot_date} ({qty}EA)"
+                    if not lot_nos or not quantities:
+                        continue
+
+                    # 배분 항목 파싱
+                    alloc_items = []
+                    part_alloc = 0
+                    for i in range(len(lot_nos)):
+                        lot_str = lot_nos[i].strip()
+                        qty_str = quantities[i].strip()
+                        if not lot_str or not qty_str:
+                            continue
+                        qty = int(qty_str)
+                        if qty <= 0:
+                            continue
+                        try:
+                            lot_date = datetime.strptime(lot_str, '%Y-%m-%d').date()
+                        except (ValueError, TypeError):
+                            messages.error(request, f"LOT 날짜 형식 오류: {part.part_no} - {lot_str}")
+                            return redirect('material:lot_allocation')
+                        alloc_items.append((lot_date, qty))
+                        part_alloc += qty
+
+                    if not alloc_items:
+                        continue
+
+                    # NULL 재고 검증
+                    null_stock = MaterialStock.objects.filter(
+                        warehouse=warehouse, part=part, lot_no__isnull=True
+                    ).first()
+                    null_qty = null_stock.quantity if null_stock else 0
+
+                    if part_alloc > null_qty:
+                        messages.error(request, f"{part.part_no}: 배분({part_alloc})이 NULL 재고({null_qty})를 초과합니다.")
+                        return redirect('material:lot_allocation')
+
+                    # 배분 실행
+                    for lot_date, qty in alloc_items:
+                        lot_stock, _ = MaterialStock.objects.get_or_create(
+                            warehouse=warehouse, part=part, lot_no=lot_date,
+                            defaults={'quantity': 0}
+                        )
+                        MaterialStock.objects.filter(pk=lot_stock.pk).update(
+                            quantity=F('quantity') + qty
+                        )
+                        lot_stock.refresh_from_db()
+
+                        trx_no = f"LOTA-{timezone.now().strftime('%y%m%d%H%M%S%f')}-{request.user.id}"
+                        MaterialTransaction.objects.create(
+                            transaction_no=trx_no,
+                            transaction_type='LOT_ASSIGN',
+                            date=timezone.now(),
+                            part=part,
+                            quantity=qty,
+                            lot_no=lot_date,
+                            warehouse_to=warehouse,
+                            result_stock=lot_stock.quantity,
+                            actor=request.user,
+                            remark=f"LOT 배분: NULL→{lot_date} ({qty}EA)"
+                        )
+
+                    # NULL 재고 차감
+                    MaterialStock.objects.filter(pk=null_stock.pk).update(
+                        quantity=F('quantity') - part_alloc
                     )
 
-                # NULL 재고 차감
-                MaterialStock.objects.filter(pk=null_stock.pk).update(
-                    quantity=F('quantity') - total_alloc
-                )
+                    total_parts += 1
+                    total_lots += len(alloc_items)
+                    total_ea += part_alloc
 
-            messages.success(request, f"LOT 배분 완료: {part.part_no} - {len(alloc_items)}건 총 {total_alloc}EA 배분")
+            if total_parts == 0:
+                messages.warning(request, "배분할 LOT 정보가 없습니다.")
+            else:
+                messages.success(request, f"LOT 배분 완료: {total_parts}개 품목, {total_lots}건 LOT, 총 {total_ea}EA")
             return redirect('material:lot_allocation')
 
         except Warehouse.DoesNotExist:
@@ -2634,32 +2640,67 @@ def lot_allocation(request):
 def api_null_stock_info(request):
     """
     [API] NULL 재고 정보 조회 (LOT 배분용)
-    GET ?warehouse_code=4200&part_no=SEAL-001
+    단일: GET ?warehouse_code=4200&part_no=SEAL-001
+    복수: GET ?warehouse_code=4200&part_nos=ZR-001,ZR-002,ZR-003
     """
     from django.http import JsonResponse
 
     warehouse_code = request.GET.get('warehouse_code', '').strip()
     part_no = request.GET.get('part_no', '').strip()
+    part_nos_str = request.GET.get('part_nos', '').strip()
 
-    if not warehouse_code or not part_no:
-        return JsonResponse({'success': False, 'error': '창고 코드와 품번이 필요합니다.'}, status=400)
+    if not warehouse_code:
+        return JsonResponse({'success': False, 'error': '창고 코드가 필요합니다.'}, status=400)
 
     try:
         warehouse = Warehouse.objects.filter(code=warehouse_code).first()
         if not warehouse:
             return JsonResponse({'success': False, 'error': f'창고 코드 {warehouse_code}를 찾을 수 없습니다.'})
 
+        # 복수 품번 조회
+        if part_nos_str:
+            part_no_list = [p.strip() for p in part_nos_str.split(',') if p.strip()]
+            parts = Part.objects.filter(part_no__in=part_no_list)
+            items = []
+            for part in parts:
+                null_stock = MaterialStock.objects.filter(
+                    warehouse=warehouse, part=part, lot_no__isnull=True
+                ).first()
+                null_qty = null_stock.quantity if null_stock else 0
+
+                lot_stocks = MaterialStock.objects.filter(
+                    warehouse=warehouse, part=part, lot_no__isnull=False
+                ).order_by('lot_no')
+                existing_lots = [
+                    {'lot_no': s.lot_no.strftime('%Y-%m-%d'), 'quantity': s.quantity}
+                    for s in lot_stocks
+                ]
+                total_qty = null_qty + sum(s.quantity for s in lot_stocks)
+
+                items.append({
+                    'part_no': part.part_no,
+                    'part_name': part.part_name or '',
+                    'part_id': part.id,
+                    'null_qty': null_qty,
+                    'existing_lots': existing_lots,
+                    'total_qty': total_qty,
+                })
+
+            return JsonResponse({'success': True, 'items': items})
+
+        # 단일 품번 조회 (기존 호환)
+        if not part_no:
+            return JsonResponse({'success': False, 'error': '품번이 필요합니다.'}, status=400)
+
         part = Part.objects.filter(part_no=part_no).first()
         if not part:
             return JsonResponse({'success': False, 'error': f'품번 {part_no}를 찾을 수 없습니다.'})
 
-        # NULL 재고
         null_stock = MaterialStock.objects.filter(
             warehouse=warehouse, part=part, lot_no__isnull=True
         ).first()
         null_qty = null_stock.quantity if null_stock else 0
 
-        # 기존 LOT 재고
         lot_stocks = MaterialStock.objects.filter(
             warehouse=warehouse, part=part, lot_no__isnull=False
         ).order_by('lot_no')
@@ -2667,8 +2708,6 @@ def api_null_stock_info(request):
             {'lot_no': s.lot_no.strftime('%Y-%m-%d'), 'quantity': s.quantity}
             for s in lot_stocks
         ]
-
-        # 전체 재고
         total_qty = null_qty + sum(s.quantity for s in lot_stocks)
 
         return JsonResponse({

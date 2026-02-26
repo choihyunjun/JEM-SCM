@@ -6,7 +6,18 @@
     .card { border: none; box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.05); border-radius: 0.5rem; }
     .card-header { background-color: #fff; border-bottom: 2px solid #f1f3f5; padding: 1.2rem 1.5rem; }
     .info-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 600; }
-    .alloc-row:hover { background-color: #f8f9fa; }
+    .part-badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px;
+                  background: #e8f4fd; border: 1px solid #b6d4fe; font-size: 0.85rem; margin: 2px; }
+    .part-badge .remove-btn { cursor: pointer; color: #6c757d; font-size: 1rem; line-height: 1; }
+    .part-badge .remove-btn:hover { color: #dc3545; }
+    .part-card { border: 1px solid #dee2e6; border-radius: 8px; margin-bottom: 12px; }
+    .part-card-header { background: #f8f9fa; padding: 10px 16px; border-bottom: 1px solid #dee2e6;
+                        border-radius: 8px 8px 0 0; cursor: pointer; }
+    .part-card-header:hover { background: #e9ecef; }
+    .part-card-body { padding: 12px 16px; }
+    .search-result-row { cursor: pointer; }
+    .search-result-row:hover { background-color: #f0f7ff; }
+    .search-result-row.selected { background-color: #e8f4fd; }
 </style>
 
 <div class="container-fluid" style="max-width: 1200px;">
@@ -36,111 +47,36 @@
                 </div>
                 <div class="col-md-4">
                     <label class="form-label small">품번</label>
-                    <input type="text" id="txtPartNo" class="form-control" placeholder="품번 입력 후 조회">
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-outline-primary flex-grow-1" id="btnOpenPartModal">
+                            <i class="bi bi-search me-1"></i> 품번 검색
+                        </button>
+                    </div>
                 </div>
                 <div class="col-md-2">
                     <button type="button" class="btn btn-primary w-100" id="btnSearch">
-                        <i class="bi bi-search me-1"></i> 조회
+                        <i class="bi bi-arrow-right-circle me-1"></i> 조회
                     </button>
                 </div>
             </div>
-            <!-- 조회 결과 -->
-            <div id="stockInfo" class="mt-3" style="display:none;">
-                <div class="row g-2">
-                    <div class="col-auto">
-                        <span class="info-badge bg-light border">
-                            품명: <strong id="lblPartName">-</strong>
-                        </span>
-                    </div>
-                    <div class="col-auto">
-                        <span class="info-badge bg-warning bg-opacity-25 border border-warning">
-                            NULL 재고: <strong id="lblNullQty">0</strong> EA
-                        </span>
-                    </div>
-                    <div class="col-auto">
-                        <span class="info-badge bg-info bg-opacity-10 border border-info">
-                            전체 재고: <strong id="lblTotalQty">0</strong> EA
-                        </span>
-                    </div>
-                    <div class="col-auto">
-                        <span class="info-badge bg-success bg-opacity-10 border border-success">
-                            기존 LOT: <strong id="lblLotCount">0</strong> 건
-                        </span>
-                    </div>
-                </div>
-                <!-- 기존 LOT 목록 -->
-                <div id="existingLots" class="mt-2" style="display:none;">
-                    <small class="text-muted">기존 LOT:</small>
-                    <span id="existingLotList"></span>
-                </div>
+            <!-- 선택된 품번 표시 -->
+            <div id="selectedPartsArea" class="mt-3" style="display:none;">
+                <small class="text-muted fw-bold">선택 품번:</small>
+                <div id="selectedPartsBadges" class="d-flex flex-wrap mt-1"></div>
             </div>
         </div>
     </div>
 
-    <!-- 카드2: LOT 입력 + 배분 목록 -->
+    <!-- 카드2: 품번별 LOT 배분 (동적 생성) -->
     <form method="post" id="allocForm" style="display:none;">
         {% csrf_token %}
         <input type="hidden" name="warehouse_id" id="hidWarehouseId">
-        <input type="hidden" name="part_id" id="hidPartId">
+        <div id="partCardsArea"></div>
 
-        <div class="card shadow-sm mb-4">
-            <div class="card-header bg-light fw-bold text-success">
-                <i class="bi bi-plus-circle me-1"></i> LOT 추가
-            </div>
-            <div class="card-body">
-                <div class="row g-3 align-items-end">
-                    <div class="col-md-3">
-                        <label class="form-label small">LOT 날짜</label>
-                        <input type="date" id="txtLotDate" class="form-control">
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label small">수량</label>
-                        <input type="number" id="txtLotQty" class="form-control" min="1" placeholder="수량">
-                    </div>
-                    <div class="col-md-2">
-                        <button type="button" class="btn btn-success w-100" id="btnAddLot">
-                            <i class="bi bi-plus-lg me-1"></i> 추가
-                        </button>
-                    </div>
-                </div>
-
-                <!-- 배분 목록 테이블 -->
-                <div class="table-responsive mt-3">
-                    <table class="table table-sm table-bordered align-middle mb-0" id="allocTable">
-                        <thead class="table-light">
-                            <tr>
-                                <th style="width:40px;">#</th>
-                                <th>LOT 날짜</th>
-                                <th style="width:150px;">수량 (EA)</th>
-                                <th style="width:60px;">삭제</th>
-                            </tr>
-                        </thead>
-                        <tbody id="allocBody">
-                            <tr id="emptyRow">
-                                <td colspan="4" class="text-center text-muted py-3">LOT를 추가해주세요.</td>
-                            </tr>
-                        </tbody>
-                        <tfoot class="table-light">
-                            <tr>
-                                <td colspan="2" class="text-end fw-bold">배분 합계:</td>
-                                <td class="fw-bold text-primary" id="tdAllocSum">0 EA</td>
-                                <td></td>
-                            </tr>
-                            <tr>
-                                <td colspan="2" class="text-end fw-bold">NULL 잔여:</td>
-                                <td class="fw-bold" id="tdRemaining">0 EA</td>
-                                <td></td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
-
-                <div class="text-end mt-3">
-                    <button type="submit" class="btn btn-primary btn-lg" id="btnSubmit" disabled>
-                        <i class="bi bi-check-circle me-1"></i> 배분 실행
-                    </button>
-                </div>
-            </div>
+        <div class="text-end mb-4">
+            <button type="submit" class="btn btn-primary btn-lg" id="btnSubmit" disabled>
+                <i class="bi bi-check-circle me-1"></i> 전체 배분 실행
+            </button>
         </div>
     </form>
 
@@ -184,184 +120,407 @@
             </div>
         </div>
     </div>
+</div>
 
+<!-- 품번 검색 모달 -->
+<div class="modal fade" id="partSearchModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-search me-2"></i>품번 검색</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group mb-3">
+                    <input type="text" id="modalSearchInput" class="form-control" placeholder="품번 또는 품명으로 검색 (2자 이상)..." autofocus>
+                    <button type="button" class="btn btn-primary" id="modalSearchBtn">
+                        <i class="bi bi-search"></i> 검색
+                    </button>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div>
+                        <input type="checkbox" class="form-check-input me-1" id="modalCheckAll">
+                        <label class="form-check-label small fw-bold" for="modalCheckAll">전체선택</label>
+                    </div>
+                    <span class="badge bg-primary" id="modalSelectedCount">선택: 0건</span>
+                </div>
+                <div style="max-height: 400px; overflow-y: auto;" id="modalResultsWrap">
+                    <table class="table table-sm table-hover mb-0 align-middle">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th style="width:40px;"></th>
+                                <th>품번</th>
+                                <th>품명</th>
+                                <th>품목군</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modalResultsBody">
+                            <tr><td colspan="4" class="text-center text-muted py-4">검색어를 입력하세요.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn btn-primary fw-bold" id="modalConfirmBtn">
+                    <i class="bi bi-check-circle me-1"></i> 선택 완료
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const selWarehouse = document.getElementById('selWarehouse');
-    const txtPartNo = document.getElementById('txtPartNo');
-    const btnSearch = document.getElementById('btnSearch');
-    const stockInfo = document.getElementById('stockInfo');
-    const allocForm = document.getElementById('allocForm');
-    const allocBody = document.getElementById('allocBody');
-    const emptyRow = document.getElementById('emptyRow');
-    const btnAddLot = document.getElementById('btnAddLot');
-    const btnSubmit = document.getElementById('btnSubmit');
 
-    let nullQty = 0;
-    let allocItems = []; // [{lot: '2026-01-15', qty: 200}, ...]
-    let warehouseId = null; // warehouse DB id (resolve from code)
+    // ── 상태 ──
+    let selectedParts = []; // [{part_no, part_name, part_id}, ...]
+    let partStockData = {}; // { part_id: {null_qty, existing_lots, total_qty, ...} }
+    let allocData = {};     // { part_id: [{lot, qty}, ...] }
+    let modalChecked = {};  // { part_no: {part_no, part_name, part_id} }
 
-    // 창고 코드→ID 매핑 (서버에서 전달)
     const warehouseMap = {
         {% for wh in warehouses %}
         '{{ wh.code }}': {{ wh.id }},
         {% endfor %}
     };
 
-    // 조회 버튼
-    btnSearch.addEventListener('click', doSearch);
-    txtPartNo.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') { e.preventDefault(); doSearch(); }
+    // ── 모달 열기 ──
+    document.getElementById('btnOpenPartModal').addEventListener('click', function() {
+        // 기존 선택 상태 복원
+        modalChecked = {};
+        selectedParts.forEach(p => { modalChecked[p.part_no] = p; });
+        document.getElementById('modalSearchInput').value = '';
+        document.getElementById('modalResultsBody').innerHTML =
+            '<tr><td colspan="4" class="text-center text-muted py-4">검색어를 입력하세요.</td></tr>';
+        updateModalCount();
+        const modal = new bootstrap.Modal(document.getElementById('partSearchModal'));
+        modal.show();
+        setTimeout(() => document.getElementById('modalSearchInput').focus(), 300);
     });
 
-    function doSearch() {
-        const whCode = selWarehouse.value;
-        const partNo = txtPartNo.value.trim();
-        if (!whCode || !partNo) {
-            alert('창고와 품번을 입력해주세요.');
-            return;
-        }
+    // ── 모달 검색 ──
+    document.getElementById('modalSearchBtn').addEventListener('click', doModalSearch);
+    document.getElementById('modalSearchInput').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); doModalSearch(); }
+    });
 
-        fetch(`{% url 'material:api_null_stock_info' %}?warehouse_code=${encodeURIComponent(whCode)}&part_no=${encodeURIComponent(partNo)}`)
+    function doModalSearch() {
+        const q = document.getElementById('modalSearchInput').value.trim();
+        if (q.length < 2) { alert('2자 이상 입력해주세요.'); return; }
+
+        const tbody = document.getElementById('modalResultsBody');
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center py-3"><div class="spinner-border spinner-border-sm"></div> 검색 중...</td></tr>';
+
+        fetch(`{% url 'material:api_part_search' %}?q=${encodeURIComponent(q)}`)
             .then(r => r.json())
             .then(data => {
-                if (!data.success) {
-                    alert(data.error || '조회 실패');
-                    stockInfo.style.display = 'none';
-                    allocForm.style.display = 'none';
+                const results = data.results || [];
+                if (results.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">검색 결과가 없습니다.</td></tr>';
                     return;
                 }
+                tbody.innerHTML = '';
+                results.forEach(p => {
+                    const checked = modalChecked[p.part_no] ? 'checked' : '';
+                    const selClass = modalChecked[p.part_no] ? 'selected' : '';
+                    const tr = document.createElement('tr');
+                    tr.className = `search-result-row ${selClass}`;
+                    tr.dataset.partNo = p.part_no;
+                    tr.innerHTML = `
+                        <td class="text-center">
+                            <input type="checkbox" class="form-check-input modal-part-check"
+                                   value="${p.part_no}" data-name="${p.part_name || ''}" data-id="${p.id}" ${checked}>
+                        </td>
+                        <td class="fw-bold text-primary">${p.part_no}</td>
+                        <td>${p.part_name || '-'}</td>
+                        <td class="small text-muted">${p.part_group || '-'}</td>
+                    `;
+                    // 행 클릭 → 체크 토글
+                    tr.addEventListener('click', function(e) {
+                        if (e.target.type === 'checkbox') return;
+                        const cb = this.querySelector('.modal-part-check');
+                        cb.checked = !cb.checked;
+                        cb.dispatchEvent(new Event('change'));
+                    });
+                    tbody.appendChild(tr);
+                });
 
-                nullQty = data.null_qty;
-                document.getElementById('lblPartName').textContent = data.part_name || partNo;
-                document.getElementById('lblNullQty').textContent = nullQty.toLocaleString();
-                document.getElementById('lblTotalQty').textContent = data.total_qty.toLocaleString();
-                document.getElementById('lblLotCount').textContent = data.existing_lots.length;
-                stockInfo.style.display = 'block';
-
-                // 기존 LOT 표시
-                const lotDiv = document.getElementById('existingLots');
-                const lotSpan = document.getElementById('existingLotList');
-                if (data.existing_lots.length > 0) {
-                    lotSpan.innerHTML = data.existing_lots.map(l =>
-                        `<span class="badge bg-light text-dark border me-1">${l.lot_no}: ${l.quantity.toLocaleString()}EA</span>`
-                    ).join('');
-                    lotDiv.style.display = 'block';
-                } else {
-                    lotDiv.style.display = 'none';
-                }
-
-                // 배분 폼 표시
-                if (nullQty > 0) {
-                    document.getElementById('hidWarehouseId').value = warehouseMap[whCode] || '';
-                    document.getElementById('hidPartId').value = data.part_id;
-                    allocForm.style.display = 'block';
-                    // 초기화
-                    allocItems = [];
-                    renderAllocTable();
-                } else {
-                    allocForm.style.display = 'none';
-                }
+                // 체크박스 이벤트
+                tbody.querySelectorAll('.modal-part-check').forEach(cb => {
+                    cb.addEventListener('change', function() {
+                        const pno = this.value;
+                        if (this.checked) {
+                            modalChecked[pno] = { part_no: pno, part_name: this.dataset.name, part_id: parseInt(this.dataset.id) };
+                            this.closest('tr').classList.add('selected');
+                        } else {
+                            delete modalChecked[pno];
+                            this.closest('tr').classList.remove('selected');
+                        }
+                        updateModalCount();
+                    });
+                });
+                updateCheckAll();
             })
             .catch(err => {
-                alert('조회 오류: ' + err);
+                tbody.innerHTML = `<tr><td colspan="4" class="text-center text-danger py-3">오류: ${err}</td></tr>`;
             });
     }
 
-    // LOT 추가
-    btnAddLot.addEventListener('click', addLot);
-    document.getElementById('txtLotQty').addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') { e.preventDefault(); addLot(); }
+    // ── 전체선택 ──
+    document.getElementById('modalCheckAll').addEventListener('change', function() {
+        document.querySelectorAll('.modal-part-check').forEach(cb => {
+            cb.checked = this.checked;
+            const pno = cb.value;
+            if (this.checked) {
+                modalChecked[pno] = { part_no: pno, part_name: cb.dataset.name, part_id: parseInt(cb.dataset.id) };
+                cb.closest('tr').classList.add('selected');
+            } else {
+                delete modalChecked[pno];
+                cb.closest('tr').classList.remove('selected');
+            }
+        });
+        updateModalCount();
     });
 
-    function addLot() {
-        const lotDate = document.getElementById('txtLotDate').value;
-        const lotQty = parseInt(document.getElementById('txtLotQty').value) || 0;
+    function updateCheckAll() {
+        const all = document.querySelectorAll('.modal-part-check');
+        const checked = document.querySelectorAll('.modal-part-check:checked');
+        document.getElementById('modalCheckAll').checked = all.length > 0 && all.length === checked.length;
+    }
+
+    function updateModalCount() {
+        const cnt = Object.keys(modalChecked).length;
+        document.getElementById('modalSelectedCount').textContent = `선택: ${cnt}건`;
+    }
+
+    // ── 선택 완료 ──
+    document.getElementById('modalConfirmBtn').addEventListener('click', function() {
+        selectedParts = Object.values(modalChecked);
+        renderSelectedBadges();
+        bootstrap.Modal.getInstance(document.getElementById('partSearchModal')).hide();
+    });
+
+    // ── 선택 품번 뱃지 렌더링 ──
+    function renderSelectedBadges() {
+        const area = document.getElementById('selectedPartsArea');
+        const badges = document.getElementById('selectedPartsBadges');
+        if (selectedParts.length === 0) {
+            area.style.display = 'none';
+            return;
+        }
+        area.style.display = 'block';
+        badges.innerHTML = '';
+        selectedParts.forEach((p, idx) => {
+            const span = document.createElement('span');
+            span.className = 'part-badge';
+            span.innerHTML = `<strong>${p.part_no}</strong> <small class="text-muted">${p.part_name}</small>
+                <span class="remove-btn" data-idx="${idx}" title="제거">&times;</span>`;
+            span.querySelector('.remove-btn').addEventListener('click', function() {
+                selectedParts.splice(idx, 1);
+                delete modalChecked[p.part_no];
+                renderSelectedBadges();
+                // 조회된 카드도 제거
+                if (allocData[p.part_id]) delete allocData[p.part_id];
+                if (partStockData[p.part_id]) delete partStockData[p.part_id];
+                renderPartCards();
+            });
+            badges.appendChild(span);
+        });
+    }
+
+    // ── 조회 버튼 ──
+    document.getElementById('btnSearch').addEventListener('click', function() {
+        const whCode = document.getElementById('selWarehouse').value;
+        if (!whCode) { alert('창고를 선택해주세요.'); return; }
+        if (selectedParts.length === 0) { alert('품번을 검색하여 선택해주세요.'); return; }
+
+        const partNos = selectedParts.map(p => p.part_no).join(',');
+        document.getElementById('hidWarehouseId').value = warehouseMap[whCode] || '';
+
+        fetch(`{% url 'material:api_null_stock_info' %}?warehouse_code=${encodeURIComponent(whCode)}&part_nos=${encodeURIComponent(partNos)}`)
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) { alert(data.error || '조회 실패'); return; }
+
+                partStockData = {};
+                allocData = {};
+                data.items.forEach(item => {
+                    partStockData[item.part_id] = item;
+                    allocData[item.part_id] = [];
+                });
+
+                document.getElementById('allocForm').style.display = 'block';
+                renderPartCards();
+            })
+            .catch(err => alert('조회 오류: ' + err));
+    });
+
+    // ── 품번별 카드 렌더링 ──
+    function renderPartCards() {
+        const area = document.getElementById('partCardsArea');
+        area.innerHTML = '';
+
+        const partIds = Object.keys(partStockData);
+        if (partIds.length === 0) {
+            document.getElementById('allocForm').style.display = 'none';
+            return;
+        }
+
+        partIds.forEach(pid => {
+            const info = partStockData[pid];
+            const lots = allocData[pid] || [];
+            const allocSum = lots.reduce((s, l) => s + l.qty, 0);
+            const remaining = info.null_qty - allocSum;
+
+            const card = document.createElement('div');
+            card.className = 'card shadow-sm mb-3';
+            card.innerHTML = `
+                <div class="card-header bg-light d-flex justify-content-between align-items-center py-2 px-3">
+                    <div>
+                        <strong class="text-primary">${info.part_no}</strong>
+                        <small class="text-muted ms-2">${info.part_name}</small>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <span class="info-badge bg-warning bg-opacity-25 border border-warning" style="font-size:0.8rem;">
+                            NULL: <strong>${info.null_qty.toLocaleString()}</strong>EA
+                        </span>
+                        <span class="info-badge bg-info bg-opacity-10 border border-info" style="font-size:0.8rem;">
+                            전체: <strong>${info.total_qty.toLocaleString()}</strong>EA
+                        </span>
+                        ${info.existing_lots.length > 0 ? `<span class="info-badge bg-success bg-opacity-10 border border-success" style="font-size:0.8rem;">기존LOT: ${info.existing_lots.length}건</span>` : ''}
+                    </div>
+                </div>
+                <div class="card-body py-2 px-3">
+                    <input type="hidden" name="part_ids[]" value="${pid}">
+                    ${info.null_qty > 0 ? `
+                    <!-- LOT 입력 행 -->
+                    <div class="row g-2 align-items-end mb-2">
+                        <div class="col-4">
+                            <input type="date" class="form-control form-control-sm lot-date-input" data-pid="${pid}">
+                        </div>
+                        <div class="col-3">
+                            <input type="number" class="form-control form-control-sm lot-qty-input" data-pid="${pid}" min="1" placeholder="수량">
+                        </div>
+                        <div class="col-2">
+                            <button type="button" class="btn btn-sm btn-success w-100 btn-add-lot" data-pid="${pid}">
+                                <i class="bi bi-plus-lg"></i> 추가
+                            </button>
+                        </div>
+                        <div class="col-3 text-end">
+                            <small>배분: <strong class="text-primary alloc-sum" data-pid="${pid}">${allocSum.toLocaleString()}</strong>
+                            / 잔여: <strong class="${remaining < 0 ? 'text-danger' : 'text-success'} alloc-remain" data-pid="${pid}">${remaining.toLocaleString()}</strong></small>
+                        </div>
+                    </div>
+                    <!-- LOT 목록 -->
+                    <div class="lot-list" data-pid="${pid}">
+                        ${lots.length === 0 ? '<div class="text-center text-muted small py-2">LOT를 추가해주세요.</div>' :
+                        lots.map((l, idx) => `
+                            <div class="d-flex align-items-center gap-2 mb-1 lot-item">
+                                <span class="badge bg-light text-dark border">${l.lot}</span>
+                                <span class="fw-bold">${l.qty.toLocaleString()} EA</span>
+                                <input type="hidden" name="lot_nos_${pid}[]" value="${l.lot}">
+                                <input type="hidden" name="qty_${pid}[]" value="${l.qty}">
+                                <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1 btn-remove-lot"
+                                        data-pid="${pid}" data-idx="${idx}" style="font-size:0.75rem;">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </div>
+                        `).join('')}
+                    </div>
+                    ` : '<div class="text-center text-muted small py-2">NULL 재고가 없습니다.</div>'}
+                    ${info.existing_lots.length > 0 ? `
+                    <div class="mt-1 pt-1 border-top">
+                        <small class="text-muted">기존 LOT: </small>
+                        ${info.existing_lots.map(l => `<span class="badge bg-light text-dark border me-1" style="font-size:0.75rem;">${l.lot_no}: ${l.quantity.toLocaleString()}</span>`).join('')}
+                    </div>` : ''}
+                </div>
+            `;
+            area.appendChild(card);
+        });
+
+        // 이벤트 바인딩
+        area.querySelectorAll('.btn-add-lot').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const pid = this.dataset.pid;
+                addLotTopart(pid);
+            });
+        });
+        area.querySelectorAll('.lot-qty-input').forEach(input => {
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') { e.preventDefault(); addLotTopart(this.dataset.pid); }
+            });
+        });
+        area.querySelectorAll('.btn-remove-lot').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const pid = this.dataset.pid;
+                const idx = parseInt(this.dataset.idx);
+                allocData[pid].splice(idx, 1);
+                renderPartCards();
+            });
+        });
+
+        updateSubmitButton();
+    }
+
+    function addLotTopart(pid) {
+        const dateInput = document.querySelector(`.lot-date-input[data-pid="${pid}"]`);
+        const qtyInput = document.querySelector(`.lot-qty-input[data-pid="${pid}"]`);
+        const lotDate = dateInput.value;
+        const lotQty = parseInt(qtyInput.value) || 0;
 
         if (!lotDate) { alert('LOT 날짜를 입력해주세요.'); return; }
         if (lotQty <= 0) { alert('수량은 1 이상이어야 합니다.'); return; }
 
-        // 중복 LOT 체크
-        const existing = allocItems.find(item => item.lot === lotDate);
+        const info = partStockData[pid];
+        if (!allocData[pid]) allocData[pid] = [];
+
+        // 중복 체크
+        const existing = allocData[pid].find(l => l.lot === lotDate);
         if (existing) {
             if (confirm(`${lotDate} LOT가 이미 있습니다. 수량을 합산하시겠습니까?`)) {
                 existing.qty += lotQty;
-            } else {
-                return;
-            }
+            } else { return; }
         } else {
-            allocItems.push({ lot: lotDate, qty: lotQty });
+            allocData[pid].push({ lot: lotDate, qty: lotQty });
         }
 
         // 합계 검증
-        const sum = allocItems.reduce((s, i) => s + i.qty, 0);
-        if (sum > nullQty) {
-            alert(`배분 합계(${sum.toLocaleString()})가 NULL 재고(${nullQty.toLocaleString()})를 초과합니다!`);
-            // 롤백
-            if (existing) {
-                existing.qty -= lotQty;
-            } else {
-                allocItems.pop();
-            }
+        const sum = allocData[pid].reduce((s, l) => s + l.qty, 0);
+        if (sum > info.null_qty) {
+            alert(`배분 합계(${sum.toLocaleString()})가 NULL 재고(${info.null_qty.toLocaleString()})를 초과합니다!`);
+            if (existing) { existing.qty -= lotQty; } else { allocData[pid].pop(); }
             return;
         }
 
-        renderAllocTable();
-        document.getElementById('txtLotDate').value = '';
-        document.getElementById('txtLotQty').value = '';
-        document.getElementById('txtLotDate').focus();
+        qtyInput.value = '';
+        dateInput.value = '';
+        dateInput.focus();
+        renderPartCards();
     }
 
-    function removeLot(idx) {
-        allocItems.splice(idx, 1);
-        renderAllocTable();
+    function updateSubmitButton() {
+        const hasAnyLots = Object.values(allocData).some(lots => lots.length > 0);
+        const allValid = Object.keys(allocData).every(pid => {
+            const info = partStockData[pid];
+            const sum = allocData[pid].reduce((s, l) => s + l.qty, 0);
+            return sum <= info.null_qty;
+        });
+        document.getElementById('btnSubmit').disabled = !hasAnyLots || !allValid;
     }
 
-    function renderAllocTable() {
-        allocBody.innerHTML = '';
-        const sum = allocItems.reduce((s, i) => s + i.qty, 0);
-        const remaining = nullQty - sum;
-
-        if (allocItems.length === 0) {
-            allocBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">LOT를 추가해주세요.</td></tr>';
-        } else {
-            allocItems.forEach((item, idx) => {
-                const tr = document.createElement('tr');
-                tr.className = 'alloc-row';
-                tr.innerHTML = `
-                    <td>${idx + 1}</td>
-                    <td>${item.lot}
-                        <input type="hidden" name="lot_nos[]" value="${item.lot}">
-                        <input type="hidden" name="quantities[]" value="${item.qty}">
-                    </td>
-                    <td class="text-end fw-bold">${item.qty.toLocaleString()}</td>
-                    <td class="text-center">
-                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="window._removeLot(${idx})">
-                            <i class="bi bi-x-lg"></i>
-                        </button>
-                    </td>
-                `;
-                allocBody.appendChild(tr);
-            });
-        }
-
-        document.getElementById('tdAllocSum').textContent = sum.toLocaleString() + ' EA';
-        const tdRemaining = document.getElementById('tdRemaining');
-        tdRemaining.textContent = remaining.toLocaleString() + ' EA';
-        tdRemaining.className = remaining < 0 ? 'fw-bold text-danger' : 'fw-bold text-success';
-
-        btnSubmit.disabled = (allocItems.length === 0 || remaining < 0);
-    }
-
-    // 전역 함수 (onclick에서 호출)
-    window._removeLot = removeLot;
-
-    // 폼 제출 확인
-    allocForm.addEventListener('submit', function(e) {
-        const sum = allocItems.reduce((s, i) => s + i.qty, 0);
-        if (!confirm(`${allocItems.length}개 LOT에 총 ${sum.toLocaleString()}EA를 배분하시겠습니까?\nNULL 잔여: ${(nullQty - sum).toLocaleString()}EA`)) {
+    // ── 폼 제출 확인 ──
+    document.getElementById('allocForm').addEventListener('submit', function(e) {
+        let totalParts = 0, totalLots = 0, totalEa = 0;
+        Object.keys(allocData).forEach(pid => {
+            const lots = allocData[pid];
+            if (lots.length > 0) {
+                totalParts++;
+                totalLots += lots.length;
+                totalEa += lots.reduce((s, l) => s + l.qty, 0);
+            }
+        });
+        if (!confirm(`${totalParts}개 품목, ${totalLots}개 LOT에 총 ${totalEa.toLocaleString()}EA를 배분하시겠습니까?`)) {
             e.preventDefault();
         }
     });
