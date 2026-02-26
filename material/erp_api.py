@@ -870,39 +870,92 @@ def sync_stock_from_erp():
             result['skipped_no_wh'] += 1
             continue
 
-        # lot_no=NULL 레코드 (ERP 관리 버킷) 조정
-        stock = MaterialStock.objects.filter(
+        # lot_no=NULL 레코드 (ERP 관리 버킷)
+        null_stock = MaterialStock.objects.filter(
             warehouse=warehouse, part=part, lot_no=None
         ).first()
+        null_qty = null_stock.quantity if null_stock else 0
 
-        if stock:
-            MaterialStock.objects.filter(pk=stock.pk).update(
-                quantity=F('quantity') + diff
-            )
-        else:
-            MaterialStock.objects.create(
-                warehouse=warehouse, part=part, lot_no=None, quantity=diff
-            )
-            result['created'] += 1
-
-        # 이력 트랜잭션 생성
         if diff > 0:
-            trx_type = 'ADJ_ERP_IN'
+            # ── SCM 부족 → NULL 증가 ──
+            if null_stock:
+                MaterialStock.objects.filter(pk=null_stock.pk).update(
+                    quantity=F('quantity') + diff
+                )
+            else:
+                MaterialStock.objects.create(
+                    warehouse=warehouse, part=part, lot_no=None, quantity=diff
+                )
+                result['created'] += 1
             result['increased'] += 1
+
+            _create_trx(
+                transaction_type='ADJ_ERP_IN',
+                part=part,
+                warehouse_to=warehouse,
+                quantity=abs(diff),
+                lot_no=None,
+                date=now,
+                remark=f'ERP 재고동기화 (ERP={erp_qty}, SCM={scm_qty}, diff={diff:+d})',
+            )
         else:
-            trx_type = 'ADJ_ERP_OUT'
+            # ── SCM 초과 → 감소 필요 (NULL 우선, 부족하면 오래된 LOT부터) ──
+            to_deduct = abs(diff)
+
+            # 1) NULL에서 먼저 차감
+            null_deduct = min(to_deduct, max(null_qty, 0))
+            if null_deduct > 0 and null_stock:
+                MaterialStock.objects.filter(pk=null_stock.pk).update(
+                    quantity=F('quantity') - null_deduct
+                )
+            remaining = to_deduct - null_deduct
+
+            # 2) NULL로 부족하면 가장 오래된 LOT부터 차감 (FIFO)
+            lot_deducted = []
+            if remaining > 0:
+                lot_stocks = MaterialStock.objects.filter(
+                    warehouse=warehouse, part=part,
+                    lot_no__isnull=False, quantity__gt=0
+                ).order_by('lot_no')  # 오래된 LOT 먼저
+
+                for ls in lot_stocks:
+                    if remaining <= 0:
+                        break
+                    ld = min(remaining, ls.quantity)
+                    MaterialStock.objects.filter(pk=ls.pk).update(
+                        quantity=F('quantity') - ld
+                    )
+                    lot_deducted.append(f'{ls.lot_no}:-{ld}')
+                    remaining -= ld
+
+            # 3) 극히 예외: LOT도 모두 부족하면 NULL을 음수로 (안전장치)
+            if remaining > 0:
+                if null_stock:
+                    MaterialStock.objects.filter(pk=null_stock.pk).update(
+                        quantity=F('quantity') - remaining
+                    )
+                else:
+                    MaterialStock.objects.create(
+                        warehouse=warehouse, part=part, lot_no=None, quantity=-remaining
+                    )
+                    result['created'] += 1
+
             result['decreased'] += 1
 
-        _create_trx(
-            transaction_type=trx_type,
-            part=part,
-            warehouse_to=warehouse if diff > 0 else None,
-            warehouse_from=warehouse if diff < 0 else None,
-            quantity=abs(diff),
-            lot_no=None,
-            date=now,
-            remark=f'ERP 재고동기화 (ERP={erp_qty}, SCM={scm_qty}, diff={diff:+d})',
-        )
+            remark = f'ERP 재고동기화 (ERP={erp_qty}, SCM={scm_qty}, diff={diff:+d})'
+            if lot_deducted:
+                remark += f' LOT차감: {", ".join(lot_deducted)}'
+
+            _create_trx(
+                transaction_type='ADJ_ERP_OUT',
+                part=part,
+                warehouse_from=warehouse,
+                quantity=abs(diff),
+                lot_no=None,
+                date=now,
+                remark=remark,
+            )
+
         result['adjusted'] += 1
 
         if (idx + 1) % 200 == 0:
