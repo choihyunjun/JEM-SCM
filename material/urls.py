@@ -64,6 +64,10 @@ urlpatterns = [
     path('stock/lot-details/<str:part_no>/', views.get_lot_details, name='wms_lot_details'),
     path('api/available-lots/', views.api_get_available_lots, name='api_get_available_lots'),
 
+    # LOT 배분
+    path('stock/lot-allocation/', views.lot_allocation, name='lot_allocation'),
+    path('api/null-stock-info/', views.api_null_stock_info, name='api_null_stock_info'),
+
     # ERP 동기화
     path('erp-sync/', views.erp_sync, name='erp_sync'),
     path('erp-sync/export/', views.erp_sync_export, name='erp_sync_export'),

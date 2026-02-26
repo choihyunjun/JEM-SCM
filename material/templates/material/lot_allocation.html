@@ -1,0 +1,371 @@
+{% extends 'material/material_base.html' %}
+
+{% block material_content %}
+<style>
+    .form-label { font-weight: 600; font-size: 0.9rem; color: #495057; margin-bottom: 0.4rem; }
+    .card { border: none; box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.05); border-radius: 0.5rem; }
+    .card-header { background-color: #fff; border-bottom: 2px solid #f1f3f5; padding: 1.2rem 1.5rem; }
+    .info-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 600; }
+    .alloc-row:hover { background-color: #f8f9fa; }
+</style>
+
+<div class="container-fluid" style="max-width: 1200px;">
+
+    <div class="d-flex justify-content-between align-items-center mb-4 pt-3">
+        <div>
+            <h3 class="fw-bold">LOT 배분</h3>
+            <span class="text-muted small">ERP 동기화 재고(NULL)를 실제 LOT별로 배분합니다.</span>
+        </div>
+    </div>
+
+    <!-- 카드1: 대상 선택 -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-light fw-bold text-primary">
+            <i class="bi bi-search me-1"></i> 대상 선택
+        </div>
+        <div class="card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small">창고</label>
+                    <select id="selWarehouse" class="form-select">
+                        <option value="">-- 창고 선택 --</option>
+                        {% for wh in warehouses %}
+                        <option value="{{ wh.code }}">{{ wh.code }} - {{ wh.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small">품번</label>
+                    <input type="text" id="txtPartNo" class="form-control" placeholder="품번 입력 후 조회">
+                </div>
+                <div class="col-md-2">
+                    <button type="button" class="btn btn-primary w-100" id="btnSearch">
+                        <i class="bi bi-search me-1"></i> 조회
+                    </button>
+                </div>
+            </div>
+            <!-- 조회 결과 -->
+            <div id="stockInfo" class="mt-3" style="display:none;">
+                <div class="row g-2">
+                    <div class="col-auto">
+                        <span class="info-badge bg-light border">
+                            품명: <strong id="lblPartName">-</strong>
+                        </span>
+                    </div>
+                    <div class="col-auto">
+                        <span class="info-badge bg-warning bg-opacity-25 border border-warning">
+                            NULL 재고: <strong id="lblNullQty">0</strong> EA
+                        </span>
+                    </div>
+                    <div class="col-auto">
+                        <span class="info-badge bg-info bg-opacity-10 border border-info">
+                            전체 재고: <strong id="lblTotalQty">0</strong> EA
+                        </span>
+                    </div>
+                    <div class="col-auto">
+                        <span class="info-badge bg-success bg-opacity-10 border border-success">
+                            기존 LOT: <strong id="lblLotCount">0</strong> 건
+                        </span>
+                    </div>
+                </div>
+                <!-- 기존 LOT 목록 -->
+                <div id="existingLots" class="mt-2" style="display:none;">
+                    <small class="text-muted">기존 LOT:</small>
+                    <span id="existingLotList"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 카드2: LOT 입력 + 배분 목록 -->
+    <form method="post" id="allocForm" style="display:none;">
+        {% csrf_token %}
+        <input type="hidden" name="warehouse_id" id="hidWarehouseId">
+        <input type="hidden" name="part_id" id="hidPartId">
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-light fw-bold text-success">
+                <i class="bi bi-plus-circle me-1"></i> LOT 추가
+            </div>
+            <div class="card-body">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label small">LOT 날짜</label>
+                        <input type="date" id="txtLotDate" class="form-control">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small">수량</label>
+                        <input type="number" id="txtLotQty" class="form-control" min="1" placeholder="수량">
+                    </div>
+                    <div class="col-md-2">
+                        <button type="button" class="btn btn-success w-100" id="btnAddLot">
+                            <i class="bi bi-plus-lg me-1"></i> 추가
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 배분 목록 테이블 -->
+                <div class="table-responsive mt-3">
+                    <table class="table table-sm table-bordered align-middle mb-0" id="allocTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width:40px;">#</th>
+                                <th>LOT 날짜</th>
+                                <th style="width:150px;">수량 (EA)</th>
+                                <th style="width:60px;">삭제</th>
+                            </tr>
+                        </thead>
+                        <tbody id="allocBody">
+                            <tr id="emptyRow">
+                                <td colspan="4" class="text-center text-muted py-3">LOT를 추가해주세요.</td>
+                            </tr>
+                        </tbody>
+                        <tfoot class="table-light">
+                            <tr>
+                                <td colspan="2" class="text-end fw-bold">배분 합계:</td>
+                                <td class="fw-bold text-primary" id="tdAllocSum">0 EA</td>
+                                <td></td>
+                            </tr>
+                            <tr>
+                                <td colspan="2" class="text-end fw-bold">NULL 잔여:</td>
+                                <td class="fw-bold" id="tdRemaining">0 EA</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <div class="text-end mt-3">
+                    <button type="submit" class="btn btn-primary btn-lg" id="btnSubmit" disabled>
+                        <i class="bi bi-check-circle me-1"></i> 배분 실행
+                    </button>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <!-- 카드3: 최근 배분 이력 -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-light fw-bold text-secondary">
+            <i class="bi bi-clock-history me-1"></i> 최근 배분 이력
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>일시</th>
+                            <th>품번</th>
+                            <th>품명</th>
+                            <th>창고</th>
+                            <th>LOT</th>
+                            <th class="text-end">수량</th>
+                            <th>처리자</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for trx in recent_assigns %}
+                        <tr>
+                            <td class="small">{{ trx.date|date:"m/d H:i" }}</td>
+                            <td><small class="text-muted">{{ trx.part.part_no }}</small></td>
+                            <td>{{ trx.part.part_name }}</td>
+                            <td>{{ trx.warehouse_to.name }}</td>
+                            <td>{{ trx.lot_no|date:"Y-m-d"|default:"-" }}</td>
+                            <td class="text-end fw-bold">{{ trx.quantity }}</td>
+                            <td class="small">{{ trx.actor.username|default:"-" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-3">배분 이력이 없습니다.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selWarehouse = document.getElementById('selWarehouse');
+    const txtPartNo = document.getElementById('txtPartNo');
+    const btnSearch = document.getElementById('btnSearch');
+    const stockInfo = document.getElementById('stockInfo');
+    const allocForm = document.getElementById('allocForm');
+    const allocBody = document.getElementById('allocBody');
+    const emptyRow = document.getElementById('emptyRow');
+    const btnAddLot = document.getElementById('btnAddLot');
+    const btnSubmit = document.getElementById('btnSubmit');
+
+    let nullQty = 0;
+    let allocItems = []; // [{lot: '2026-01-15', qty: 200}, ...]
+    let warehouseId = null; // warehouse DB id (resolve from code)
+
+    // 창고 코드→ID 매핑 (서버에서 전달)
+    const warehouseMap = {
+        {% for wh in warehouses %}
+        '{{ wh.code }}': {{ wh.id }},
+        {% endfor %}
+    };
+
+    // 조회 버튼
+    btnSearch.addEventListener('click', doSearch);
+    txtPartNo.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); doSearch(); }
+    });
+
+    function doSearch() {
+        const whCode = selWarehouse.value;
+        const partNo = txtPartNo.value.trim();
+        if (!whCode || !partNo) {
+            alert('창고와 품번을 입력해주세요.');
+            return;
+        }
+
+        fetch(`{% url 'material:api_null_stock_info' %}?warehouse_code=${encodeURIComponent(whCode)}&part_no=${encodeURIComponent(partNo)}`)
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) {
+                    alert(data.error || '조회 실패');
+                    stockInfo.style.display = 'none';
+                    allocForm.style.display = 'none';
+                    return;
+                }
+
+                nullQty = data.null_qty;
+                document.getElementById('lblPartName').textContent = data.part_name || partNo;
+                document.getElementById('lblNullQty').textContent = nullQty.toLocaleString();
+                document.getElementById('lblTotalQty').textContent = data.total_qty.toLocaleString();
+                document.getElementById('lblLotCount').textContent = data.existing_lots.length;
+                stockInfo.style.display = 'block';
+
+                // 기존 LOT 표시
+                const lotDiv = document.getElementById('existingLots');
+                const lotSpan = document.getElementById('existingLotList');
+                if (data.existing_lots.length > 0) {
+                    lotSpan.innerHTML = data.existing_lots.map(l =>
+                        `<span class="badge bg-light text-dark border me-1">${l.lot_no}: ${l.quantity.toLocaleString()}EA</span>`
+                    ).join('');
+                    lotDiv.style.display = 'block';
+                } else {
+                    lotDiv.style.display = 'none';
+                }
+
+                // 배분 폼 표시
+                if (nullQty > 0) {
+                    document.getElementById('hidWarehouseId').value = warehouseMap[whCode] || '';
+                    document.getElementById('hidPartId').value = data.part_id;
+                    allocForm.style.display = 'block';
+                    // 초기화
+                    allocItems = [];
+                    renderAllocTable();
+                } else {
+                    allocForm.style.display = 'none';
+                }
+            })
+            .catch(err => {
+                alert('조회 오류: ' + err);
+            });
+    }
+
+    // LOT 추가
+    btnAddLot.addEventListener('click', addLot);
+    document.getElementById('txtLotQty').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); addLot(); }
+    });
+
+    function addLot() {
+        const lotDate = document.getElementById('txtLotDate').value;
+        const lotQty = parseInt(document.getElementById('txtLotQty').value) || 0;
+
+        if (!lotDate) { alert('LOT 날짜를 입력해주세요.'); return; }
+        if (lotQty <= 0) { alert('수량은 1 이상이어야 합니다.'); return; }
+
+        // 중복 LOT 체크
+        const existing = allocItems.find(item => item.lot === lotDate);
+        if (existing) {
+            if (confirm(`${lotDate} LOT가 이미 있습니다. 수량을 합산하시겠습니까?`)) {
+                existing.qty += lotQty;
+            } else {
+                return;
+            }
+        } else {
+            allocItems.push({ lot: lotDate, qty: lotQty });
+        }
+
+        // 합계 검증
+        const sum = allocItems.reduce((s, i) => s + i.qty, 0);
+        if (sum > nullQty) {
+            alert(`배분 합계(${sum.toLocaleString()})가 NULL 재고(${nullQty.toLocaleString()})를 초과합니다!`);
+            // 롤백
+            if (existing) {
+                existing.qty -= lotQty;
+            } else {
+                allocItems.pop();
+            }
+            return;
+        }
+
+        renderAllocTable();
+        document.getElementById('txtLotDate').value = '';
+        document.getElementById('txtLotQty').value = '';
+        document.getElementById('txtLotDate').focus();
+    }
+
+    function removeLot(idx) {
+        allocItems.splice(idx, 1);
+        renderAllocTable();
+    }
+
+    function renderAllocTable() {
+        allocBody.innerHTML = '';
+        const sum = allocItems.reduce((s, i) => s + i.qty, 0);
+        const remaining = nullQty - sum;
+
+        if (allocItems.length === 0) {
+            allocBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">LOT를 추가해주세요.</td></tr>';
+        } else {
+            allocItems.forEach((item, idx) => {
+                const tr = document.createElement('tr');
+                tr.className = 'alloc-row';
+                tr.innerHTML = `
+                    <td>${idx + 1}</td>
+                    <td>${item.lot}
+                        <input type="hidden" name="lot_nos[]" value="${item.lot}">
+                        <input type="hidden" name="quantities[]" value="${item.qty}">
+                    </td>
+                    <td class="text-end fw-bold">${item.qty.toLocaleString()}</td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="window._removeLot(${idx})">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </td>
+                `;
+                allocBody.appendChild(tr);
+            });
+        }
+
+        document.getElementById('tdAllocSum').textContent = sum.toLocaleString() + ' EA';
+        const tdRemaining = document.getElementById('tdRemaining');
+        tdRemaining.textContent = remaining.toLocaleString() + ' EA';
+        tdRemaining.className = remaining < 0 ? 'fw-bold text-danger' : 'fw-bold text-success';
+
+        btnSubmit.disabled = (allocItems.length === 0 || remaining < 0);
+    }
+
+    // 전역 함수 (onclick에서 호출)
+    window._removeLot = removeLot;
+
+    // 폼 제출 확인
+    allocForm.addEventListener('submit', function(e) {
+        const sum = allocItems.reduce((s, i) => s + i.qty, 0);
+        if (!confirm(`${allocItems.length}개 LOT에 총 ${sum.toLocaleString()}EA를 배분하시겠습니까?\nNULL 잔여: ${(nullQty - sum).toLocaleString()}EA`)) {
+            e.preventDefault();
+        }
+    });
+});
+</script>
+
+{% endblock %}

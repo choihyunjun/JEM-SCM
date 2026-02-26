@@ -45,6 +45,7 @@
         <a href="{% url 'material:transaction_history' %}" class="submenu-item {% if request.resolver_match.url_name == 'transaction_history' %}active{% endif %}">- 기간별 수불 대장</a>
         {% if user|has_perm:'can_wms_stock_edit' or user|has_perm:'can_wms_adjustment' %}
         <a href="{% url 'material:stock_adjustment' %}" class="submenu-item {% if request.resolver_match.url_name == 'stock_adjustment' %}active{% endif %}">- 재고 조정(관리)</a>
+        <a href="{% url 'material:lot_allocation' %}" class="submenu-item {% if request.resolver_match.url_name == 'lot_allocation' %}active{% endif %}">- LOT 배분</a>
         {% endif %}
     </div>
     {% endif %}
