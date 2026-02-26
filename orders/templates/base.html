@@ -562,7 +562,7 @@
                                     <a class="nav-link {% if request.resolver_match.url_name == 'transaction_history' %}active{% endif %}" href="{% url 'material:transaction_history' %}">기간별 수불 대장</a>
                                     {% if user|has_perm:'can_wms_stock_edit' or user|has_perm:'can_wms_adjustment' %}
                                     <a class="nav-link {% if request.resolver_match.url_name == 'stock_adjustment' %}active{% endif %}" href="{% url 'material:stock_adjustment' %}">재고 조정(관리)</a>
-                                    <a class="nav-link {% if request.resolver_match.url_name == 'lot_allocation' %}active{% endif %}" href="{% url 'material:lot_allocation' %}">LOT 배분</a>
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'lot_allocation' %}active{% endif %}" href="{% url 'material:lot_allocation' %}">LOT 별도 적용</a>
                                     {% endif %}
                                 </nav>
                             </div>
