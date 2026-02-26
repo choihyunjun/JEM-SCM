@@ -1502,10 +1502,28 @@ def label_print(request, order_id):
     part = Part.objects.filter(part_no=first_item.part_no).first() if first_item else None
     v_name = part.vendor.name if part else "알수없음"
 
+    from material.models import ProcessTag
+
     for item in order.items.all():
+        part_obj = Part.objects.filter(part_no=item.part_no).first()
         for box_seq in range(1, item.box_count + 1):
             # TAG_ID 생성: DLV-{order_id:05d}-{item_id:05d}-{box_seq:03d}
             tag_id = f"DLV-{order.pk:05d}-{item.pk:05d}-{box_seq:03d}"
+
+            # ProcessTag에 저장 (스캔 중복 방지 + 표시 재고 차감용)
+            ProcessTag.objects.get_or_create(
+                tag_id=tag_id,
+                defaults={
+                    'part': part_obj,
+                    'part_no': item.part_no,
+                    'part_name': item.part_name,
+                    'quantity': item.snp,
+                    'lot_no': item.lot_no,
+                    'printed_by': request.user,
+                    'status': 'PRINTED',
+                }
+            )
+
             lot_str = item.lot_no.strftime('%Y-%m-%d') if item.lot_no else ''
             queue.append({
                 'tag_id': tag_id,
