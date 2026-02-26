@@ -1174,6 +1174,36 @@ def api_process_tag_info(request, tag_id):
     })
 
 
+@require_http_methods(["GET"])
+@wms_permission_required('can_wms_stock_view')
+def api_scan_history_by_part(request):
+    """
+    품번별 투입(스캔) 이력 조회 API
+    - 원재료 레이아웃에서 랙 셀 클릭 시 사용
+    GET ?part_no=11630-06360
+    """
+    from .models import ProcessTag
+
+    part_no = request.GET.get('part_no', '').strip()
+    if not part_no:
+        return JsonResponse({'success': False, 'error': '품번이 필요합니다.'}, status=400)
+
+    tags = ProcessTag.objects.filter(
+        part_no=part_no, status='USED'
+    ).select_related('used_by').order_by('-used_at')[:30]
+
+    items = [{
+        'tag_id': t.tag_id,
+        'lot_no': str(t.lot_no) if t.lot_no else '-',
+        'quantity': t.quantity,
+        'used_at': t.used_at.strftime('%Y-%m-%d %H:%M') if t.used_at else '-',
+        'used_by': t.used_by.username if t.used_by else '-',
+        'stock_reflected': t.stock_reflected,
+    } for t in tags]
+
+    return JsonResponse({'success': True, 'part_no': part_no, 'items': items})
+
+
 # =============================================================================
 # 4. 기타 메뉴
 # =============================================================================

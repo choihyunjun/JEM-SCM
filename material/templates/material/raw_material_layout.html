@@ -364,7 +364,7 @@
             <div class="wall-title wall-2f">2공장</div>
             <div class="pallet-grid">
                 {% for cell in wall_a.1 %}
-                <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}">
+                <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" onclick="showScanHistory(this)"{% endif %}>
                     <div class="rack-position">{{ cell.rack.position_code }}</div>
                     {% if cell.rack.part %}
                     <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
@@ -379,7 +379,7 @@
             </div>
             <div class="pallet-grid" style="margin-top: 15px;">
                 {% for cell in wall_a.2 %}
-                <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}">
+                <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" onclick="showScanHistory(this)"{% endif %}>
                     <div class="rack-position">{{ cell.rack.position_code }}</div>
                     {% if cell.rack.part %}
                     <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
@@ -413,7 +413,7 @@
                     <div class="floor-col">
                         <div class="cells-stack">
                             {% for cell in wall_a.2 %}
-                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}">
+                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" onclick="showScanHistory(this)"{% endif %}>
                                 <div class="rack-position">{{ cell.rack.position_code }}</div>
                                 {% if cell.rack.part %}
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
@@ -430,7 +430,7 @@
                     <div class="floor-col">
                         <div class="cells-stack">
                             {% for cell in wall_a.1 %}
-                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}">
+                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" onclick="showScanHistory(this)"{% endif %}>
                                 <div class="rack-position">{{ cell.rack.position_code }}</div>
                                 {% if cell.rack.part %}
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
@@ -465,7 +465,7 @@
                     <div class="floor-col">
                         <div class="cells-stack">
                             {% for cell in wall_b.1 %}
-                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}">
+                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" onclick="showScanHistory(this)"{% endif %}>
                                 <div class="rack-position">{{ cell.rack.position_code }}</div>
                                 {% if cell.rack.part %}
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
@@ -482,7 +482,7 @@
                     <div class="floor-col">
                         <div class="cells-stack">
                             {% for cell in wall_b.2 %}
-                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}">
+                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" onclick="showScanHistory(this)"{% endif %}>
                                 <div class="rack-position">{{ cell.rack.position_code }}</div>
                                 {% if cell.rack.part %}
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
@@ -632,6 +632,21 @@
     </div>
 </div>
 
+<!-- 투입 이력 모달 -->
+<div class="modal fade" id="scanHistoryModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius:12px; border:none; box-shadow:0 12px 40px rgba(0,0,0,0.15);">
+            <div class="modal-header" style="background:linear-gradient(135deg,#1e40af,#3b82f6); color:#fff; border-radius:12px 12px 0 0; padding:16px 20px;">
+                <h6 class="modal-title mb-0"><i class="bi bi-clock-history me-2"></i><span id="modalPartTitle"></span></h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" style="padding:20px; max-height:400px; overflow-y:auto;">
+                <div id="modalScanList"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 // 자동 새로고침 (스캔 입력 중에는 멈춤)
 let refreshTimer = setTimeout(function() { location.reload(); }, 30000);
@@ -705,6 +720,48 @@ function doScan() {
         scanResult.innerHTML = '<i class="bi bi-x-circle-fill me-1"></i>네트워크 오류';
         scanInput.value = '';
         scanInput.focus();
+    });
+}
+
+// 랙 셀 클릭 → 투입 이력 모달
+function showScanHistory(el) {
+    const partNo = el.dataset.partNo;
+    const partName = el.dataset.partName;
+    if (!partNo) return;
+
+    resetRefreshTimer();
+    document.getElementById('modalPartTitle').textContent = `${partNo} ${partName} - 투입 이력`;
+    document.getElementById('modalScanList').innerHTML = '<div class="text-center text-muted py-3"><i class="bi bi-hourglass-split"></i> 조회 중...</div>';
+
+    const modal = new bootstrap.Modal(document.getElementById('scanHistoryModal'));
+    modal.show();
+
+    fetch(`{% url "material:api_scan_history_by_part" %}?part_no=${encodeURIComponent(partNo)}`)
+    .then(r => r.json())
+    .then(data => {
+        const list = document.getElementById('modalScanList');
+        if (!data.success || !data.items.length) {
+            list.innerHTML = '<div class="text-center text-muted py-3"><i class="bi bi-inbox me-1"></i>투입 이력이 없습니다.</div>';
+            return;
+        }
+        let html = '<table class="table table-sm table-hover mb-0" style="font-size:0.85rem;"><thead><tr><th>태그ID</th><th>LOT</th><th class="text-end">수량</th><th>투입일시</th><th>상태</th></tr></thead><tbody>';
+        data.items.forEach(item => {
+            const badge = item.stock_reflected
+                ? '<span class="badge bg-secondary">출고완료</span>'
+                : '<span class="badge bg-danger">투입대기</span>';
+            html += `<tr>
+                <td><code style="font-size:0.75rem;">${item.tag_id}</code></td>
+                <td>${item.lot_no}</td>
+                <td class="text-end fw-bold">${item.quantity}</td>
+                <td>${item.used_at}</td>
+                <td>${badge}</td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+        list.innerHTML = html;
+    })
+    .catch(() => {
+        document.getElementById('modalScanList').innerHTML = '<div class="text-center text-danger py-3">조회 오류</div>';
     });
 }
 </script>
