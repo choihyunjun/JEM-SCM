@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     Warehouse, MaterialStock, MaterialTransaction, Product, BOMItem,
-    InventoryClosing, InventoryCheck, InventorySnapshot,
+    InventoryCheck,
     ProcessTag, ProcessTagScanLog, InventoryCheckSession, InventoryCheckSessionItem
 )
 
@@ -91,15 +91,8 @@ class BOMItemAdmin(admin.ModelAdmin):
 
 
 # =============================================================================
-# 재고 마감 관리
+# 재고 마감/조사 관리 (레거시 - UI 제거됨, DB 데이터 조회용)
 # =============================================================================
-
-@admin.register(InventoryClosing)
-class InventoryClosingAdmin(admin.ModelAdmin):
-    list_display = ('closing_month', 'closed_at', 'closed_by', 'is_active', 'remark')
-    list_filter = ('is_active',)
-    ordering = ('-closing_month',)
-
 
 @admin.register(InventoryCheck)
 class InventoryCheckAdmin(admin.ModelAdmin):
@@ -107,14 +100,6 @@ class InventoryCheckAdmin(admin.ModelAdmin):
     list_filter = ('status', 'warehouse', 'closing')
     search_fields = ('part__part_no', 'part__part_name')
     ordering = ('-checked_at',)
-
-
-@admin.register(InventorySnapshot)
-class InventorySnapshotAdmin(admin.ModelAdmin):
-    list_display = ('closing', 'warehouse', 'part', 'lot_no', 'quantity', 'created_at')
-    list_filter = ('closing', 'warehouse')
-    search_fields = ('part__part_no', 'part__part_name')
-    ordering = ('-closing__closing_month', 'warehouse__code')
 
 
 # =============================================================================

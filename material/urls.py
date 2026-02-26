@@ -12,10 +12,6 @@ urlpatterns = [
     path('stock/transfer/history/', views.transfer_history, name='transfer_history'),
     path('transaction/history/', views.transaction_history, name='transaction_history'),
     path('transaction/history/excel/', views.transaction_history_excel, name='transaction_history_excel'),
-    path('stock/adjustment/', views.stock_adjustment, name='stock_adjustment'),
-    path('stock/adjustment/template/', views.stock_adjustment_template, name='stock_adjustment_template'),
-    path('closing/report/', views.closing_report, name='closing_report'),
-    path('closing/report/excel/', views.closing_report_excel, name='closing_report_excel'),
     
     # 2. 입고 관리
     path('inbound/manual/', views.manual_incoming, name='manual_incoming'),
