@@ -956,6 +956,19 @@ def sync_stock_from_erp():
                 remark=remark,
             )
 
+            # 스캔 기록 소진: 재고 감소분만큼 미소진 스캔 태그를 반영 완료 처리
+            from .models import ProcessTag
+            unreflected = ProcessTag.objects.filter(
+                part_no=part.part_no, status='USED', stock_reflected=False
+            ).order_by('used_at')
+            consume_remaining = abs(diff)
+            for tag in unreflected:
+                if consume_remaining <= 0:
+                    break
+                tag.stock_reflected = True
+                tag.save(update_fields=['stock_reflected'])
+                consume_remaining -= tag.quantity
+
         result['adjusted'] += 1
 
         if (idx + 1) % 200 == 0:

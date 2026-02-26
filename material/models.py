@@ -411,6 +411,9 @@ class ProcessTag(models.Model):
     )
     scan_count = models.IntegerField("스캔 횟수", default=0)
 
+    # 재고 반영 여부 (스캔 후 ERP 생산출고 동기화 완료 시 True)
+    stock_reflected = models.BooleanField("재고반영완료", default=False)
+
     class Meta:
         verbose_name = "공정 현품표"
         verbose_name_plural = "9. 공정 현품표"

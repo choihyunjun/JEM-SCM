@@ -181,6 +181,12 @@
         font-size: 1.05rem;
         margin-top: 6px;
     }
+    .rack-scanned {
+        font-size: 0.7rem;
+        color: #dc2626;
+        font-weight: 600;
+        margin-top: 1px;
+    }
     .empty-dash {
         color: #cbd5e1;
         font-size: 1.4rem;
@@ -364,6 +370,7 @@
                     <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
                     <div class="rack-part-name">{{ cell.rack.part.part_name }}</div>
                     <div class="rack-stock">{{ cell.stock_qty|intcomma }}kg</div>
+                    {% if cell.scanned_qty %}<div class="rack-scanned">(투입: {{ cell.scanned_qty|intcomma }})</div>{% endif %}
                     {% else %}
                     <span class="empty-dash">—</span>
                     {% endif %}
@@ -378,6 +385,7 @@
                     <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
                     <div class="rack-part-name">{{ cell.rack.part.part_name }}</div>
                     <div class="rack-stock">{{ cell.stock_qty|intcomma }}kg</div>
+                    {% if cell.scanned_qty %}<div class="rack-scanned">(투입: {{ cell.scanned_qty|intcomma }})</div>{% endif %}
                     {% else %}
                     <span class="empty-dash">—</span>
                     {% endif %}
@@ -411,6 +419,7 @@
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
                                 <div class="rack-part-name">{{ cell.rack.part.part_name }}</div>
                                 <div class="rack-stock">{{ cell.stock_qty|intcomma }}kg</div>
+                    {% if cell.scanned_qty %}<div class="rack-scanned">(투입: {{ cell.scanned_qty|intcomma }})</div>{% endif %}
                                 {% else %}
                                 <span class="empty-dash">—</span>
                                 {% endif %}
@@ -427,6 +436,7 @@
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
                                 <div class="rack-part-name">{{ cell.rack.part.part_name }}</div>
                                 <div class="rack-stock">{{ cell.stock_qty|intcomma }}kg</div>
+                    {% if cell.scanned_qty %}<div class="rack-scanned">(투입: {{ cell.scanned_qty|intcomma }})</div>{% endif %}
                                 {% else %}
                                 <span class="empty-dash">—</span>
                                 {% endif %}
@@ -461,6 +471,7 @@
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
                                 <div class="rack-part-name">{{ cell.rack.part.part_name }}</div>
                                 <div class="rack-stock">{{ cell.stock_qty|intcomma }}kg</div>
+                    {% if cell.scanned_qty %}<div class="rack-scanned">(투입: {{ cell.scanned_qty|intcomma }})</div>{% endif %}
                                 {% else %}
                                 <span class="empty-dash">—</span>
                                 {% endif %}
@@ -477,6 +488,7 @@
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
                                 <div class="rack-part-name">{{ cell.rack.part.part_name }}</div>
                                 <div class="rack-stock">{{ cell.stock_qty|intcomma }}kg</div>
+                    {% if cell.scanned_qty %}<div class="rack-scanned">(투입: {{ cell.scanned_qty|intcomma }})</div>{% endif %}
                                 {% else %}
                                 <span class="empty-dash">—</span>
                                 {% endif %}
@@ -594,6 +606,23 @@
             </div>
         </div>
 
+        <!-- 바코드 스캔 -->
+        <div class="sidebar-card">
+            <div class="sidebar-header">
+                <i class="bi bi-upc-scan me-2"></i>현품표 스캔
+            </div>
+            <div class="sidebar-body">
+                <div class="input-group input-group-sm mb-2">
+                    <input type="text" id="scanInput" class="form-control" placeholder="바코드 스캔..." autofocus>
+                    <button class="btn btn-primary" onclick="doScan()">
+                        <i class="bi bi-check-lg"></i>
+                    </button>
+                </div>
+                <div id="scanResult" style="display:none; font-size:0.8rem; padding:8px; border-radius:6px; margin-top:4px;"></div>
+                <div id="scanHistory" style="font-size:0.75rem; margin-top:8px; max-height:200px; overflow-y:auto;"></div>
+            </div>
+        </div>
+
         <!-- 자동 새로고침 안내 -->
         <div class="sidebar-card">
             <div class="sidebar-body text-center text-muted" style="font-size: 0.8rem;">
@@ -604,6 +633,79 @@
 </div>
 
 <script>
-setTimeout(function() { location.reload(); }, 30000);
+// 자동 새로고침 (스캔 입력 중에는 멈춤)
+let refreshTimer = setTimeout(function() { location.reload(); }, 30000);
+function resetRefreshTimer() {
+    clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(function() { location.reload(); }, 30000);
+}
+
+// 바코드 스캔
+const scanInput = document.getElementById('scanInput');
+const scanResult = document.getElementById('scanResult');
+const scanHistory = document.getElementById('scanHistory');
+
+scanInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        doScan();
+    }
+    resetRefreshTimer();
+});
+
+function doScan() {
+    const tagId = scanInput.value.trim();
+    if (!tagId) return;
+
+    scanResult.style.display = 'block';
+    scanResult.style.background = '#f1f5f9';
+    scanResult.style.color = '#475569';
+    scanResult.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>처리 중...';
+
+    fetch('{% url "material:api_process_tag_scan" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({ tag_id: tagId })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            scanResult.style.background = '#dcfce7';
+            scanResult.style.color = '#166534';
+            const info = data.tag_info;
+            scanResult.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i><b>${info.part_no}</b> LOT:${info.lot_no || '-'} ${info.quantity}개 투입 완료`;
+
+            // 스캔 이력 추가
+            const now = new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
+            scanHistory.insertAdjacentHTML('afterbegin',
+                `<div class="d-flex justify-content-between" style="padding:2px 0; border-bottom:1px solid #f1f5f9;">
+                    <span>${info.part_no} (${info.quantity})</span>
+                    <span class="text-muted">${now}</span>
+                </div>`
+            );
+
+            // 1.5초 후 페이지 새로고침 (재고 갱신)
+            setTimeout(function() { location.reload(); }, 1500);
+        } else {
+            // FIFO 위반 or 중복 스캔
+            const isFifo = data.error && data.error.includes('FIFO');
+            scanResult.style.background = isFifo ? '#fef3c7' : '#fef2f2';
+            scanResult.style.color = isFifo ? '#92400e' : '#991b1b';
+            scanResult.innerHTML = `<i class="bi bi-${isFifo ? 'exclamation-triangle' : 'x-circle'}-fill me-1"></i>${data.error}`;
+        }
+        scanInput.value = '';
+        scanInput.focus();
+    })
+    .catch(err => {
+        scanResult.style.background = '#fef2f2';
+        scanResult.style.color = '#991b1b';
+        scanResult.innerHTML = '<i class="bi bi-x-circle-fill me-1"></i>네트워크 오류';
+        scanInput.value = '';
+        scanInput.focus();
+    });
+}
 </script>
 {% endblock %}

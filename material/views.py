@@ -1023,6 +1023,41 @@ def api_process_tag_scan(request):
         if warehouse_id:
             warehouse = Warehouse.objects.filter(id=warehouse_id).first()
 
+        # ── FIFO 검증 (3000번 창고, LOT가 있는 태그, 아직 미사용인 경우만) ──
+        if tag.status == 'PRINTED' and tag.lot_no:
+            wh_3000 = Warehouse.objects.filter(code='3000').first()
+            if wh_3000:
+                # 해당 품번의 LOT별 실재고 (3000번 창고)
+                lot_stocks = MaterialStock.objects.filter(
+                    warehouse=wh_3000, part__part_no=tag.part_no,
+                    lot_no__isnull=False, quantity__gt=0
+                ).values('lot_no').annotate(actual_qty=Sum('quantity'))
+
+                # 미소진 스캔 수량 (LOT별)
+                scanned_by_lot = dict(
+                    ProcessTag.objects.filter(
+                        part_no=tag.part_no, status='USED', stock_reflected=False
+                    ).values('lot_no').annotate(s=Sum('quantity')).values_list('lot_no', 's')
+                )
+
+                # 유효재고 = 실재고 - 미소진 스캔 (LOT별)
+                for ls in lot_stocks:
+                    lot = ls['lot_no']
+                    effective = ls['actual_qty'] - scanned_by_lot.get(lot, 0)
+                    if effective > 0 and lot < tag.lot_no:
+                        return JsonResponse({
+                            'success': False,
+                            'error': f'[FIFO 위반] LOT {lot} 에 {effective}개가 남아있습니다. 먼저 소진해주세요.',
+                            'tag_info': {
+                                'tag_id': tag.tag_id,
+                                'part_no': tag.part_no,
+                                'part_name': tag.part_name,
+                                'quantity': tag.quantity,
+                                'lot_no': str(tag.lot_no),
+                                'status': tag.get_status_display(),
+                            }
+                        })
+
         # 스캔 기록 (record_scan 메서드 호출)
         success, is_first_scan, error = tag.record_scan(user=request.user, warehouse=warehouse)
 
@@ -3878,16 +3913,29 @@ def raw_material_layout(request):
     ).select_related('part')
 
     def get_rack_info(rack):
-        """랙별 재고 정보 조회"""
+        """랙별 재고 정보 조회 (스캔 차감 반영)"""
         stock_qty = 0
+        scanned_qty = 0
         stock_status = 'empty'
 
         if rack.part:
+            # 실재고
             stock = MaterialStock.objects.filter(
                 part=rack.part,
                 warehouse__code='3000'
             ).aggregate(total=Sum('quantity'))
-            stock_qty = stock['total'] or 0
+            actual_qty = stock['total'] or 0
+
+            # 미소진 스캔 수량 (USED + stock_reflected=False)
+            from .models import ProcessTag
+            scanned = ProcessTag.objects.filter(
+                part_no=rack.part.part_no,
+                status='USED',
+                stock_reflected=False
+            ).aggregate(total=Sum('quantity'))
+            scanned_qty = scanned['total'] or 0
+
+            stock_qty = max(actual_qty - scanned_qty, 0)
 
             try:
                 setting = rack.part.raw_material_setting
@@ -3909,6 +3957,7 @@ def raw_material_layout(request):
         return {
             'rack': rack,
             'stock_qty': stock_qty,
+            'scanned_qty': scanned_qty,
             'stock_status': stock_status,
         }
 
