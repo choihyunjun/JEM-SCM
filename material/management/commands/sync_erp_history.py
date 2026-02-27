@@ -26,9 +26,24 @@ ERP 전체 수불 이력 동기화 커맨드
     7) sync_stock_from_erp → ERP 현재고와 최종 보정
 """
 
+import sys
 import time
+import fcntl
 from datetime import datetime
 from django.core.management.base import BaseCommand
+
+ERP_SYNC_LOCK_FILE = '/tmp/erp_sync.lock'
+
+
+def acquire_sync_lock():
+    """파일 기반 프로세스 간 lock. 성공 시 file object, 실패 시 None."""
+    fp = open(ERP_SYNC_LOCK_FILE, 'w')
+    try:
+        fcntl.flock(fp, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return fp
+    except (IOError, OSError):
+        fp.close()
+        return None
 
 
 class Command(BaseCommand):
@@ -63,6 +78,20 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        # ── 파일 기반 lock (동시 실행 방지) ──
+        lock = acquire_sync_lock()
+        if not lock:
+            self.stderr.write(self.style.WARNING(
+                '다른 ERP 동기화가 진행 중입니다. 건너뜁니다.'
+            ))
+            return
+
+        try:
+            self._run(options)
+        finally:
+            lock.close()
+
+    def _run(self, options):
         from material.erp_api import (
             sync_erp_incoming,
             sync_erp_issue,
