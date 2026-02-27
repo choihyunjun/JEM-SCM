@@ -80,6 +80,7 @@ class MaterialTransaction(models.Model):
         ('OUT_MANUAL', 'SCM 수기출고'), # SCM 수기 출고 처리
         ('OUT_RETURN', '반품 출고'),    # [신규 추가] 불량 반품 등
         ('LOT_ASSIGN', 'LOT 배분'),    # NULL 재고 → LOT 배분 (재고조사)
+        ('LOT_CORRECT', 'LOT 수정'),   # 기존 LOT 수량 수정 (재고조사)
     ]
 
     transaction_no = models.CharField("수불번호", max_length=30, unique=True) # 예: TRX-20250112-0001

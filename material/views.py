@@ -2086,8 +2086,84 @@ def api_get_available_lots(request):
 
 
 # =============================================================================
-# 6-1. LOT 배분 (NULL 재고 → LOT 배분)
+# 6-1. LOT 배분 (NULL 재고 → LOT 배분) + LOT 수정
 # =============================================================================
+
+def _handle_lot_correct(request):
+    """기존 LOT 수량 수정 처리 (LOT 간 수량 재배분)"""
+    try:
+        warehouse_id = request.POST.get('warehouse_id')
+        if not warehouse_id:
+            messages.error(request, "창고 정보가 없습니다.")
+            return redirect('material:lot_allocation')
+
+        warehouse = Warehouse.objects.get(id=warehouse_id)
+        stock_ids = request.POST.getlist('stock_ids[]')
+        new_qtys = request.POST.getlist('new_qtys[]')
+
+        if not stock_ids:
+            messages.error(request, "수정할 LOT가 없습니다.")
+            return redirect('material:lot_allocation')
+
+        total_corrected = 0
+
+        with transaction.atomic():
+            for stock_id, new_qty_str in zip(stock_ids, new_qtys):
+                new_qty = int(new_qty_str)
+                stock = MaterialStock.objects.select_for_update().get(pk=stock_id)
+                old_qty = stock.quantity
+                delta = new_qty - old_qty
+
+                if delta == 0:
+                    continue
+
+                if new_qty < 0:
+                    messages.error(request, f"{stock.part.part_no} LOT {stock.lot_no}: 음수 수량 불가")
+                    return redirect('material:lot_allocation')
+
+                # LOT 재고 업데이트
+                stock.quantity = new_qty
+                stock.save()
+
+                # NULL 재고 역보정 (LOT +100 → NULL -100)
+                null_stock, _ = MaterialStock.objects.select_for_update().get_or_create(
+                    warehouse=warehouse, part=stock.part, lot_no=None,
+                    defaults={'quantity': 0}
+                )
+                null_stock.quantity -= delta
+                null_stock.save()
+
+                # 트랜잭션 기록
+                trx_no = f"LOTC-{timezone.now().strftime('%y%m%d%H%M%S%f')}-{request.user.id}"
+                MaterialTransaction.objects.create(
+                    transaction_no=trx_no,
+                    transaction_type='LOT_CORRECT',
+                    date=timezone.now(),
+                    part=stock.part,
+                    quantity=delta,
+                    lot_no=stock.lot_no,
+                    warehouse_to=warehouse,
+                    result_stock=new_qty,
+                    actor=request.user,
+                    remark=f"LOT 수정: {stock.lot_no} {old_qty}→{new_qty} ({delta:+d})"
+                )
+                total_corrected += 1
+
+        if total_corrected > 0:
+            messages.success(request, f"LOT 수정 완료: {total_corrected}건")
+        else:
+            messages.info(request, "변경 사항이 없습니다.")
+
+    except MaterialStock.DoesNotExist:
+        messages.error(request, "존재하지 않는 재고 레코드입니다.")
+    except (ValueError, TypeError) as e:
+        messages.error(request, f"입력값 오류: {e}")
+    except Exception as e:
+        logger.error(f"LOT 수정 오류: {e}")
+        messages.error(request, f"LOT 수정 처리 중 오류: {e}")
+
+    return redirect('material:lot_allocation')
+
 
 @wms_permission_required('can_wms_stock_edit')
 def lot_allocation(request):
@@ -2097,6 +2173,12 @@ def lot_allocation(request):
     warehouses = Warehouse.objects.all().order_by('code')
 
     if request.method == 'POST':
+        action = request.POST.get('action', 'allocate')
+
+        # ── LOT 수정 (기존 LOT 수량 변경) ──
+        if action == 'lot_correct':
+            return _handle_lot_correct(request)
+
         try:
             warehouse_id = request.POST.get('warehouse_id')
             part_ids = request.POST.getlist('part_ids[]')
@@ -2206,9 +2288,9 @@ def lot_allocation(request):
         return redirect('material:lot_allocation')
 
     # GET: 페이지 렌더링
-    # 최근 LOT_ASSIGN 이력 조회
+    # 최근 LOT_ASSIGN / LOT_CORRECT 이력 조회
     recent_assigns = MaterialTransaction.objects.filter(
-        transaction_type='LOT_ASSIGN'
+        transaction_type__in=['LOT_ASSIGN', 'LOT_CORRECT']
     ).select_related('part', 'warehouse_to', 'actor').order_by('-date')[:50]
 
     context = {
@@ -2254,7 +2336,7 @@ def api_null_stock_info(request):
                     warehouse=warehouse, part=part, lot_no__isnull=False
                 ).order_by('lot_no')
                 existing_lots = [
-                    {'lot_no': s.lot_no.strftime('%Y-%m-%d'), 'quantity': s.quantity}
+                    {'id': s.id, 'lot_no': s.lot_no.strftime('%Y-%m-%d'), 'quantity': s.quantity}
                     for s in lot_stocks
                 ]
                 total_qty = null_qty + sum(s.quantity for s in lot_stocks)
@@ -2287,7 +2369,7 @@ def api_null_stock_info(request):
             warehouse=warehouse, part=part, lot_no__isnull=False
         ).order_by('lot_no')
         existing_lots = [
-            {'lot_no': s.lot_no.strftime('%Y-%m-%d'), 'quantity': s.quantity}
+            {'id': s.id, 'lot_no': s.lot_no.strftime('%Y-%m-%d'), 'quantity': s.quantity}
             for s in lot_stocks
         ]
         total_qty = null_qty + sum(s.quantity for s in lot_stocks)

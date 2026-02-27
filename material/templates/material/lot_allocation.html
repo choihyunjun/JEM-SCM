@@ -73,17 +73,27 @@
         <input type="hidden" name="warehouse_id" id="hidWarehouseId">
         <div id="partCardsArea"></div>
 
-        <div class="text-end mb-4">
+        <div class="text-end mb-4 d-flex justify-content-end gap-2">
+            <button type="button" class="btn btn-warning btn-lg" id="btnCorrect" style="display:none;" onclick="submitLotCorrect()">
+                <i class="bi bi-pencil-square me-1"></i> LOT 수정
+            </button>
             <button type="submit" class="btn btn-primary btn-lg" id="btnSubmit" disabled>
                 <i class="bi bi-check-circle me-1"></i> 전체 배분 실행
             </button>
         </div>
     </form>
 
+    <!-- LOT 수정 폼 (별도) -->
+    <form method="post" id="lotCorrectForm" style="display:none;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="lot_correct">
+        <input type="hidden" name="warehouse_id" id="correctWarehouseId">
+    </form>
+
     <!-- 카드3: 최근 배분 이력 -->
     <div class="card shadow-sm mb-4">
         <div class="card-header bg-light fw-bold text-secondary">
-            <i class="bi bi-clock-history me-1"></i> 최근 배분 이력
+            <i class="bi bi-clock-history me-1"></i> 최근 배분/수정 이력
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -91,6 +101,7 @@
                     <thead class="table-light">
                         <tr>
                             <th>일시</th>
+                            <th>구분</th>
                             <th>품번</th>
                             <th>품명</th>
                             <th>창고</th>
@@ -103,16 +114,25 @@
                         {% for trx in recent_assigns %}
                         <tr>
                             <td class="small">{{ trx.date|date:"m/d H:i" }}</td>
+                            <td>
+                                {% if trx.transaction_type == 'LOT_CORRECT' %}
+                                    <span class="badge bg-warning text-dark" style="font-size:0.7rem;">수정</span>
+                                {% else %}
+                                    <span class="badge bg-primary" style="font-size:0.7rem;">배분</span>
+                                {% endif %}
+                            </td>
                             <td><small class="text-muted">{{ trx.part.part_no }}</small></td>
                             <td>{{ trx.part.part_name }}</td>
                             <td>{{ trx.warehouse_to.name }}</td>
                             <td>{{ trx.lot_no|date:"Y-m-d"|default:"-" }}</td>
-                            <td class="text-end fw-bold">{{ trx.quantity }}</td>
+                            <td class="text-end fw-bold {% if trx.quantity > 0 %}text-primary{% elif trx.quantity < 0 %}text-danger{% endif %}">
+                                {% if trx.quantity > 0 %}+{% endif %}{{ trx.quantity }}
+                            </td>
                             <td class="small">{{ trx.actor.username|default:"-" }}</td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="7" class="text-center text-muted py-3">배분 이력이 없습니다.</td>
+                            <td colspan="8" class="text-center text-muted py-3">배분 이력이 없습니다.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -430,9 +450,20 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                     ` : '<div class="text-center text-muted small py-2">NULL 재고가 없습니다.</div>'}
                     ${info.existing_lots.length > 0 ? `
-                    <div class="mt-1 pt-1 border-top">
-                        <small class="text-muted">기존 LOT: </small>
-                        ${info.existing_lots.map(l => `<span class="badge bg-light text-dark border me-1" style="font-size:0.75rem;">${l.lot_no}: ${l.quantity.toLocaleString()}</span>`).join('')}
+                    <div class="mt-2 pt-2 border-top">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <small class="fw-bold text-secondary"><i class="bi bi-pencil-square me-1"></i>기존 LOT 수정</small>
+                        </div>
+                        ${info.existing_lots.map(l => `
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                <span class="badge bg-info text-dark" style="min-width:90px;">${l.lot_no}</span>
+                                <input type="number" class="form-control form-control-sm lot-correct-input"
+                                       data-pid="${pid}" data-stock-id="${l.id}" data-orig="${l.quantity}"
+                                       value="${l.quantity}" style="width:100px;" min="0">
+                                <small class="text-muted">(현재: ${l.quantity.toLocaleString()})</small>
+                                <span class="lot-delta-label" data-stock-id="${l.id}" style="font-size:0.8rem;"></span>
+                            </div>
+                        `).join('')}
                     </div>` : ''}
                 </div>
             `;
@@ -460,7 +491,40 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
 
+        // LOT 수정 입력 이벤트 바인딩
+        area.querySelectorAll('.lot-correct-input').forEach(input => {
+            input.addEventListener('input', function() {
+                const orig = parseInt(this.dataset.orig) || 0;
+                const newVal = parseInt(this.value) || 0;
+                const delta = newVal - orig;
+                const label = document.querySelector(`.lot-delta-label[data-stock-id="${this.dataset.stockId}"]`);
+                if (label) {
+                    if (delta > 0) {
+                        label.innerHTML = `<span class="text-primary fw-bold">+${delta.toLocaleString()}</span>`;
+                    } else if (delta < 0) {
+                        label.innerHTML = `<span class="text-danger fw-bold">${delta.toLocaleString()}</span>`;
+                    } else {
+                        label.innerHTML = '';
+                    }
+                }
+                updateCorrectButton();
+            });
+        });
+
         updateSubmitButton();
+        updateCorrectButton();
+    }
+
+    function updateCorrectButton() {
+        const inputs = document.querySelectorAll('.lot-correct-input');
+        let hasChanges = false;
+        inputs.forEach(inp => {
+            const orig = parseInt(inp.dataset.orig) || 0;
+            const newVal = parseInt(inp.value) || 0;
+            if (orig !== newVal) hasChanges = true;
+        });
+        const btn = document.getElementById('btnCorrect');
+        btn.style.display = hasChanges ? 'inline-block' : 'none';
     }
 
     function addLotTopart(pid) {
@@ -525,6 +589,46 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
+function submitLotCorrect() {
+    const inputs = document.querySelectorAll('.lot-correct-input');
+    let changes = [];
+    inputs.forEach(inp => {
+        const orig = parseInt(inp.dataset.orig) || 0;
+        const newVal = parseInt(inp.value) || 0;
+        if (orig !== newVal) {
+            changes.push({ stockId: inp.dataset.stockId, orig, newVal });
+        }
+    });
+    if (changes.length === 0) { alert('변경 사항이 없습니다.'); return; }
+
+    let msg = 'LOT 수량을 수정하시겠습니까?\n\n';
+    changes.forEach(c => {
+        const delta = c.newVal - c.orig;
+        msg += `  ${c.orig.toLocaleString()} → ${c.newVal.toLocaleString()} (${delta > 0 ? '+' : ''}${delta.toLocaleString()})\n`;
+    });
+    if (!confirm(msg)) return;
+
+    const form = document.getElementById('lotCorrectForm');
+    document.getElementById('correctWarehouseId').value = document.getElementById('hidWarehouseId').value;
+
+    // 기존 동적 input 제거
+    form.querySelectorAll('.dynamic-input').forEach(el => el.remove());
+
+    changes.forEach(c => {
+        const idInput = document.createElement('input');
+        idInput.type = 'hidden'; idInput.name = 'stock_ids[]'; idInput.value = c.stockId;
+        idInput.className = 'dynamic-input';
+        form.appendChild(idInput);
+
+        const qtyInput = document.createElement('input');
+        qtyInput.type = 'hidden'; qtyInput.name = 'new_qtys[]'; qtyInput.value = c.newVal;
+        qtyInput.className = 'dynamic-input';
+        form.appendChild(qtyInput);
+    });
+
+    form.submit();
+}
 </script>
 
 {% endblock %}
