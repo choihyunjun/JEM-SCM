@@ -53,7 +53,7 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="stopCamera()"></button>
             </div>
             <div class="modal-body p-0 position-relative" style="background: #000; overflow: hidden; min-height: 300px;">
-                <video id="qrVideo" style="width: 100%; height: auto; display: block;"></video>
+                <video id="qrVideo" playsinline autoplay muted style="width: 100%; height: auto; display: block;"></video>
                 <canvas id="qrCanvas" style="display: none;"></canvas>
                 <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 200px; height: 200px; border: 2px solid rgba(13, 110, 253, 0.5); border-radius: 20px;"></div>
             </div>
