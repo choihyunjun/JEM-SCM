@@ -1809,12 +1809,15 @@ def fetch_erp_receipt_list(date_from, date_to):
 
 def sync_erp_receipt(date_from=None, date_to=None):
     """
-    ERP 생산입고 내역을 WMS에 동기화 (이력만 기록, 재고 미반영)
+    ERP 생산입고 내역을 WMS에 동기화 (이력 기록 + LOT 재고 반영)
+    - 이력: MaterialTransaction (lot_no=rcvDt)
+    - 재고: MaterialStock LOT 레코드 생성/증가 + NULL 차감
     Returns: (synced_count, skipped_count, error_count, error_list)
     """
-    from material.models import MaterialTransaction, Warehouse
+    from material.models import MaterialTransaction, MaterialStock, Warehouse
     from orders.models import Part
     from django.utils import timezone as tz
+    from django.db.models import F
     from datetime import datetime, timedelta
 
     if date_from is None:
@@ -1891,13 +1894,33 @@ def sync_erp_receipt(date_from=None, date_to=None):
             if not warehouse:
                 warehouse = Warehouse.objects.filter(code='2000').first()
 
-            result_stock = 0  # 재고 미반영 (sync_stock_from_erp에서 일괄 처리)
-
             # LOT = 입고일(rcvDt) → 생산실적일로 사용
             lot_date = erp_date  # 위에서 파싱한 datetime.date 객체
 
             twh_nm = item.get('twhNm', '') or ''
 
+            # ── 1) LOT 재고 반영 (MaterialStock) ──
+            with transaction.atomic():
+                # LOT 재고 생성/증가
+                lot_stock, created = MaterialStock.objects.select_for_update().get_or_create(
+                    warehouse=warehouse, part=part, lot_no=lot_date,
+                    defaults={'quantity': 0}
+                )
+                MaterialStock.objects.filter(pk=lot_stock.pk).update(
+                    quantity=F('quantity') + qty
+                )
+
+                # NULL 재고 차감 (있으면)
+                null_stock = MaterialStock.objects.select_for_update().filter(
+                    warehouse=warehouse, part=part, lot_no=None
+                ).first()
+                if null_stock and null_stock.quantity > 0:
+                    deduct = min(null_stock.quantity, qty)
+                    MaterialStock.objects.filter(pk=null_stock.pk).update(
+                        quantity=F('quantity') - deduct
+                    )
+
+            # ── 2) 이력 기록 (MaterialTransaction) ──
             _create_trx(
                 transaction_type='RCV_ERP',
                 date=rcv_date,
@@ -1905,7 +1928,7 @@ def sync_erp_receipt(date_from=None, date_to=None):
                 lot_no=lot_date,
                 quantity=qty,
                 warehouse_to=warehouse,
-                result_stock=result_stock,
+                result_stock=0,
                 remark=f'ERP생산입고({twh_nm}) {remark}'.strip(),
                 erp_incoming_no=rcv_nb,
                 erp_sync_status='SUCCESS',
