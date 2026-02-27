@@ -317,8 +317,8 @@ def stock_list(request):
 
     # 2. 검색 버튼이 눌렸을 때만 DB 조회 실행
     if search_triggered == 'yes':
-        # 수량이 0보다 큰 것만 가져옴
-        stocks = MaterialStock.objects.select_related('warehouse', 'part', 'part__vendor').filter(quantity__gt=0)
+        # 수량이 0이 아닌 것만 가져옴 (마이너스 재고 포함)
+        stocks = MaterialStock.objects.select_related('warehouse', 'part', 'part__vendor').exclude(quantity=0)
 
         # 검색 및 필터 적용
         if q:

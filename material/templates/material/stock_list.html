@@ -98,7 +98,7 @@
                                     <td class="fw-bold text-primary">{{ item.part__part_no }}</td>
                                     <td class="text-start text-truncate" style="max-width: 300px;">{{ item.part__part_name }}</td>
                                     <td class="text-truncate" style="max-width: 150px;">{{ item.part__vendor__name }}</td>
-                                    <td class="fw-bold text-end pe-3 fs-6 cursor-pointer lot-detail-cell"
+                                    <td class="fw-bold text-end pe-3 fs-6 cursor-pointer lot-detail-cell {% if item.total_qty < 0 %}text-danger{% endif %}"
                                         data-part-no="{{ item.part__part_no }}"
                                         data-warehouse-code="{{ item.warehouse__code }}"
                                         title="더블클릭하여 LOT별 상세 보기"
@@ -112,7 +112,7 @@
                                     <td class="fw-bold text-primary">{{ item.part__part_no }}</td>
                                     <td class="text-start text-truncate" style="max-width: 300px;">{{ item.part__part_name }}</td>
                                     <td class="text-truncate" style="max-width: 150px;">{{ item.part__vendor__name }}</td>
-                                    <td class="fw-bold text-end pe-3 fs-6 text-primary cursor-pointer lot-detail-cell"
+                                    <td class="fw-bold text-end pe-3 fs-6 cursor-pointer lot-detail-cell {% if item.total_qty < 0 %}text-danger{% else %}text-primary{% endif %}"
                                         data-part-no="{{ item.part__part_no }}"
                                         title="더블클릭하여 LOT별 상세 보기 (전체 창고)"
                                         ondblclick="showLotDetails('{{ item.part__part_no }}', null)">
