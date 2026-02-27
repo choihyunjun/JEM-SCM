@@ -106,14 +106,15 @@
                 <table class="table table-sm table-hover mb-0 text-center align-middle table-bordered" style="font-size: 0.85rem;">
                     <thead class="table-light">
                         <tr>
-                            <th style="width: 5%;">No</th>
-                            <th style="width: 12%;">이동일시</th>
-                            <th style="width: 12%;">품번</th>
-                            <th style="width: 18%;">품명</th>
-                            <th style="width: 8%;">LOT</th>
-                            <th style="width: 14%;">보낸 창고</th>
+                            <th style="width: 4%;">No</th>
+                            <th style="width: 11%;">이동번호</th>
+                            <th style="width: 11%;">이동일시</th>
+                            <th style="width: 10%;">품번</th>
+                            <th style="width: 16%;">품명</th>
+                            <th style="width: 7%;">LOT</th>
+                            <th style="width: 12%;">보낸 창고</th>
                             <th style="width: 3%;"><i class="bi bi-arrow-right"></i></th>
-                            <th style="width: 14%;">받은 창고</th>
+                            <th style="width: 12%;">받은 창고</th>
                             <th style="width: 7%;">수량</th>
                             <th style="width: 7%;">처리자</th>
                         </tr>
@@ -122,6 +123,7 @@
                         {% for trx in page_obj %}
                         <tr>
                             <td class="text-muted small">{{ forloop.counter|add:page_obj.start_index|add:"-1" }}</td>
+                            <td class="small text-muted">{{ trx.erp_incoming_no|default:"-" }}</td>
                             <td class="small">{{ trx.date|date:"Y-m-d H:i" }}</td>
                             <td class="fw-bold text-primary">{{ trx.part.part_no }}</td>
                             <td class="text-start small">{{ trx.part.part_name|truncatechars:25 }}</td>
@@ -154,7 +156,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="10" class="text-muted py-5">
+                            <td colspan="11" class="text-muted py-5">
                                 <i class="bi bi-inbox fs-1 d-block mb-2"></i>
                                 조회된 이동 이력이 없습니다.
                             </td>
