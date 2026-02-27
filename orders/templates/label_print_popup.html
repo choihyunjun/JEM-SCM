@@ -178,7 +178,7 @@
                     <div class="label-title">납품 현품표</div>
                     <table class="label-table">
                         <tr>
-                            <td class="qr-cell" rowspan="5">
+                            <td class="qr-cell" rowspan="6">
                                 <div id="qr_{{ forloop.counter }}" class="qr-area"></div>
                             </td>
                             <td class="label-header">업체명</td>
@@ -195,6 +195,10 @@
                         <tr>
                             <td class="label-header">수량</td>
                             <td class="label-data" style="font-size: 12pt; color: #2c3e50;">{{ item.snp }} EA</td>
+                        </tr>
+                        <tr>
+                            <td class="label-header">중량</td>
+                            <td class="label-data" style="color: #8e44ad;">{% if item.weight_qty %}{{ item.weight_qty }} {{ item.weight_unit }}{% else %}-{% endif %}</td>
                         </tr>
                         <tr>
                             <td class="label-header">LOT</td>

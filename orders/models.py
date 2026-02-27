@@ -72,6 +72,10 @@ class Part(models.Model):
     part_name = models.CharField(max_length=100, verbose_name='품명')
     account_type = models.CharField(max_length=10, choices=ACCOUNT_TYPE_CHOICES,
                                     default='RAW', verbose_name='계정구분')
+    weight_qty = models.DecimalField(max_digits=17, decimal_places=6, default=0,
+                                     verbose_name='단위중량')
+    weight_unit = models.CharField(max_length=10, blank=True, default='',
+                                   verbose_name='중량단위')
 
     class Meta:
         verbose_name = "품목 마스터"

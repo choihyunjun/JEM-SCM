@@ -947,12 +947,18 @@ def process_tag_print(request):
                 'tag_id': tag_id,
             })
 
+        # 중량 정보
+        weight_qty = float(part.weight_qty) if part and part.weight_qty else 0
+        weight_unit = part.weight_unit if part else ''
+
         context = {
             'part_no': part_no,
             'part_name': part_name,
             'part_group': part.part_group if part else '',  # 품목군 추가
             'quantity': quantity,
             'lot_no': lot_no,
+            'weight_qty': weight_qty,
+            'weight_unit': weight_unit,
             'print_mode': print_mode,
             'size_type': size_type,
             'print_range': range(print_count),
@@ -1039,6 +1045,8 @@ def lot_allocation_print(request):
             'part_group': item.get('part_group', ''),
             'quantity': int(item.get('quantity', 0)),
             'lot_no': item.get('lot_no', ''),
+            'weight_qty': float(part.weight_qty) if part and part.weight_qty else 0,
+            'weight_unit': part.weight_unit if part else '',
         })
 
     context = {
@@ -4763,7 +4771,7 @@ def raw_material_label_print(request):
     ids = request.GET.get('ids', '')
     label_ids = [int(i) for i in ids.split(',') if i.isdigit()]
 
-    labels = RawMaterialLabel.objects.filter(id__in=label_ids).order_by('id')
+    labels = RawMaterialLabel.objects.filter(id__in=label_ids).select_related('part').order_by('id')
 
     context = {
         'labels': labels,

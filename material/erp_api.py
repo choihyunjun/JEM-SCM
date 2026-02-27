@@ -1192,6 +1192,10 @@ def sync_erp_items():
         trmain_cd = (item.get('trmainCd') or '').strip()
         vendor = vendor_cache.get(trmain_cd)
 
+        # 중량 정보
+        weight_qty = item.get('weightQt') or 0
+        weight_unit = (item.get('weightUm') or '').strip()
+
         try:
             part = Part.objects.filter(part_no=item_cd).first()
 
@@ -1200,6 +1204,8 @@ def sync_erp_items():
                 part.part_name = item_nm or part.part_name
                 part.account_type = account_type
                 part.part_group = part_group
+                part.weight_qty = weight_qty
+                part.weight_unit = weight_unit
                 if vendor:
                     part.vendor = vendor
                 part.save()
@@ -1212,6 +1218,8 @@ def sync_erp_items():
                     account_type=account_type,
                     part_group=part_group,
                     vendor=vendor,
+                    weight_qty=weight_qty,
+                    weight_unit=weight_unit,
                 )
                 result['created'] += 1
 

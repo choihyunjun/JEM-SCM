@@ -335,6 +335,12 @@
                         <span class="info-label">수량</span>
                         <span class="info-value qty-value">{{ label.quantity }}{{ label.get_unit_display }}</span>
                     </div>
+                    {% if label.part.weight_qty %}
+                    <div class="info-row">
+                        <span class="info-label">중량</span>
+                        <span class="info-value qty-value">{{ label.part.weight_qty }}{{ label.part.weight_unit }}</span>
+                    </div>
+                    {% endif %}
                     {% if label.expiry_date %}
                     <div class="info-row">
                         <span class="info-label">유효</span>

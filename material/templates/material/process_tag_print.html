@@ -212,7 +212,7 @@
             </div>
             <table class="label-table">
                 <tr>
-                    <td class="qr-cell" rowspan="4">
+                    <td class="qr-cell" rowspan="5">
                         <div id="qr_{{ tag.index }}" class="qr-area"></div>
                     </td>
                     <td class="label-header">품번</td>
@@ -230,6 +230,17 @@
                     <td class="label-header">LOT</td>
                     <td class="label-data" style="font-family: monospace;">{% if multi_mode %}{{ tag.lot_no }}{% else %}{{ lot_no }}{% endif %}</td>
                 </tr>
+                {% if multi_mode %}{% if tag.weight_qty %}
+                <tr>
+                    <td class="label-header">중량</td>
+                    <td class="label-data" style="color: #8e44ad;">{{ tag.weight_qty }} {{ tag.weight_unit }}</td>
+                </tr>
+                {% endif %}{% else %}{% if weight_qty %}
+                <tr>
+                    <td class="label-header">중량</td>
+                    <td class="label-data" style="color: #8e44ad;">{{ weight_qty }} {{ weight_unit }}</td>
+                </tr>
+                {% endif %}{% endif %}
             </table>
         </div>
         {% endfor %}

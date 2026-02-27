@@ -1525,6 +1525,8 @@ def label_print(request, order_id):
             )
 
             lot_str = item.lot_no.strftime('%Y-%m-%d') if item.lot_no else ''
+            weight_qty = float(part_obj.weight_qty) if part_obj and part_obj.weight_qty else 0
+            weight_unit = part_obj.weight_unit if part_obj else ''
             queue.append({
                 'tag_id': tag_id,
                 'vendor_name': v_name,
@@ -1533,7 +1535,9 @@ def label_print(request, order_id):
                 'snp': item.snp,
                 'lot_no': item.lot_no,
                 'lot_str': lot_str,
-                'print_date': timezone.now()
+                'print_date': timezone.now(),
+                'weight_qty': weight_qty,
+                'weight_unit': weight_unit,
             })
 
     return render(request, 'label_print_popup.html', {'box_count': queue, 'vendor_name': v_name})
