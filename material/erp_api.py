@@ -1893,13 +1893,16 @@ def sync_erp_receipt(date_from=None, date_to=None):
 
             result_stock = 0  # 재고 미반영 (sync_stock_from_erp에서 일괄 처리)
 
+            # LOT = 입고일(rcvDt) → 생산실적일로 사용
+            lot_date = erp_date  # 위에서 파싱한 datetime.date 객체
+
             twh_nm = item.get('twhNm', '') or ''
 
             _create_trx(
                 transaction_type='RCV_ERP',
                 date=rcv_date,
                 part=part,
-                lot_no=None,
+                lot_no=lot_date,
                 quantity=qty,
                 warehouse_to=warehouse,
                 result_stock=result_stock,
