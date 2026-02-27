@@ -211,9 +211,11 @@ def dashboard(request):
         lot_no__lt=fifo_warning_date
     ).count()
 
-    # ========== 6. 최근 입출고 이력 ==========
+    # ========== 6. 최근 입출고 이력 (내부 재고 보정 제외) ==========
     recent_transactions = MaterialTransaction.objects.select_related(
         'part', 'warehouse_from', 'warehouse_to', 'actor'
+    ).exclude(
+        transaction_type__in=['ADJ_ERP_IN', 'ADJ_ERP_OUT']
     ).order_by('-date')[:15]
 
     # ========== 7. BOM 현황 ==========
@@ -1262,11 +1264,13 @@ def transaction_history(request):
                 lot_no__isnull=False
             ).values_list('lot_no', flat=True).distinct().order_by('-lot_no')
 
-            # 트랜잭션 조회
+            # 트랜잭션 조회 (내부 재고 보정 제외)
             trx_qs = MaterialTransaction.objects.filter(
                 part=selected_part,
                 date__date__gte=start_dt,
                 date__date__lte=end_dt
+            ).exclude(
+                transaction_type__in=['ADJ_ERP_IN', 'ADJ_ERP_OUT']
             )
 
             # LOT 필터 적용
