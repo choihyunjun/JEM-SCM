@@ -1,6 +1,7 @@
 {% extends 'material/material_base.html' %}
 
 {% block material_content %}
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4 pt-3">
         <h3 class="fw-bold">재고 이동 처리</h3>
@@ -28,15 +29,40 @@
                         <label class="small fw-bold mb-1 text-primary">
                             <i class="bi bi-qr-code-scan me-1"></i>QR 코드 스캔 (빠른 입력)
                         </label>
-                        <input type="text" id="qrScanInput" class="form-control form-control-lg border-primary"
-                               placeholder="현품표 QR 코드를 스캔하세요"
-                               autocomplete="off"
-                               style="background: #f0f8ff; font-weight: bold;">
+                        <div class="input-group input-group-lg">
+                            <input type="text" id="qrScanInput" class="form-control border-primary"
+                                   placeholder="현품표 QR 코드를 스캔하세요"
+                                   autocomplete="off"
+                                   style="background: #f0f8ff; font-weight: bold;">
+                            <button type="button" class="btn btn-outline-primary border-primary bg-white" onclick="startCameraScan()">
+                                <i class="bi bi-camera-fill"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <small class="text-muted d-block mb-2">
                     <i class="bi bi-info-circle"></i> QR 코드를 스캔하면 품번, 수량, LOT가 자동으로 입력됩니다. 이동 처리일을 과거 날짜로 설정하면 해당 일자로 이력이 생성됩니다.
                 </small>
+
+<!-- 카메라 QR 스캔 모달 -->
+<div class="modal fade" id="cameraModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-camera me-2"></i>QR 코드 스캔 중...</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="stopCamera()"></button>
+            </div>
+            <div class="modal-body p-0 position-relative" style="background: #000; overflow: hidden; min-height: 300px;">
+                <video id="qrVideo" style="width: 100%; height: auto; display: block;"></video>
+                <canvas id="qrCanvas" style="display: none;"></canvas>
+                <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 200px; height: 200px; border: 2px solid rgba(13, 110, 253, 0.5); border-radius: 20px;"></div>
+            </div>
+            <div class="modal-footer justify-content-center">
+                <p class="text-muted small mb-0">현품표의 QR코드를 사각형 안에 맞춰주세요.</p>
+            </div>
+        </div>
+    </div>
+</div>
 
                 <hr class="my-3">
 
@@ -1005,6 +1031,54 @@
             btn.innerHTML = '<i class="bi bi-x-circle me-1"></i>이동 취소';
         }
     }
+
+    // 카메라 QR 스캔
+    let qrVideo = document.getElementById("qrVideo");
+    let qrCanvasEl = document.getElementById("qrCanvas");
+    let qrCanvasCtx = qrCanvasEl.getContext("2d", { willReadFrequently: true });
+    let scanning = false;
+    let cameraModal;
+
+    function startCameraScan() {
+        if (!cameraModal) { cameraModal = new bootstrap.Modal(document.getElementById('cameraModal')); }
+        cameraModal.show();
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }).then(function(stream) {
+            scanning = true;
+            qrVideo.srcObject = stream;
+            qrVideo.setAttribute("playsinline", true);
+            qrVideo.play();
+            requestAnimationFrame(tick);
+        }).catch(function(err) {
+            alert("카메라를 사용할 수 없습니다: " + err);
+            cameraModal.hide();
+        });
+    }
+
+    function stopCamera() {
+        scanning = false;
+        if (qrVideo.srcObject) { qrVideo.srcObject.getTracks().forEach(track => track.stop()); }
+    }
+
+    function tick() {
+        if (qrVideo.readyState === qrVideo.HAVE_ENOUGH_DATA && scanning) {
+            qrCanvasEl.height = qrVideo.videoHeight;
+            qrCanvasEl.width = qrVideo.videoWidth;
+            qrCanvasCtx.drawImage(qrVideo, 0, 0, qrCanvasEl.width, qrCanvasEl.height);
+            let imageData = qrCanvasCtx.getImageData(0, 0, qrCanvasEl.width, qrCanvasEl.height);
+            let code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
+            if (code) {
+                scanning = false;
+                document.getElementById("qrScanInput").value = code.data;
+                stopCamera();
+                bootstrap.Modal.getInstance(document.getElementById('cameraModal')).hide();
+                setTimeout(() => { handleQRScan(code.data); }, 500);
+                return;
+            }
+        }
+        if (scanning) { requestAnimationFrame(tick); }
+    }
+
+    document.getElementById('cameraModal').addEventListener('hidden.bs.modal', function() { stopCamera(); });
 
     // 이벤트 리스너 등록
     document.addEventListener('DOMContentLoaded', function() {
