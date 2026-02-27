@@ -194,9 +194,58 @@
     <form method="post" action="{% url 'material:lot_allocation_print' %}" target="_blank" id="reprintForm" style="display:none;">
         {% csrf_token %}
         <input type="hidden" name="items" id="reprintItems">
-        <input type="hidden" name="print_mode" value="roll">
-        <input type="hidden" name="size_type" value="medium">
+        <input type="hidden" name="print_mode" id="reprintMode" value="roll">
+        <input type="hidden" name="size_type" id="reprintSize" value="medium">
     </form>
+
+    <!-- 재발행 설정 모달 -->
+    <div class="modal fade" id="reprintModal" tabindex="-1">
+        <div class="modal-dialog modal-sm modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-secondary text-white py-2">
+                    <h6 class="modal-title fw-bold"><i class="bi bi-printer me-1"></i>현품표 재발행</h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <small class="fw-bold text-muted">품번</small>
+                        <div id="reprintPartInfo" class="fw-bold text-primary"></div>
+                    </div>
+                    <div class="mb-2">
+                        <small class="fw-bold text-muted">LOT / 수량</small>
+                        <div id="reprintLotInfo" class="fw-bold"></div>
+                    </div>
+                    <hr class="my-2">
+                    <div class="mb-2">
+                        <label class="small fw-bold mb-1">SNP (장당수량)</label>
+                        <input type="number" id="reprintSnp" class="form-control form-control-sm" min="1">
+                    </div>
+                    <div class="mb-2">
+                        <label class="small fw-bold mb-1">출력 모드</label>
+                        <select id="reprintModeSelect" class="form-select form-select-sm">
+                            <option value="roll">라벨 프린터</option>
+                            <option value="sheet">A4 모아찍기</option>
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="small fw-bold mb-1">라벨 크기</label>
+                        <select id="reprintSizeSelect" class="form-select form-select-sm">
+                            <option value="medium" selected>중간 (95x45)</option>
+                            <option value="small">소형 (60x70)</option>
+                            <option value="large">대형 (A5)</option>
+                        </select>
+                    </div>
+                    <div class="text-end text-muted small" id="reprintSheetCount"></div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button>
+                    <button type="button" class="btn btn-success btn-sm" id="reprintConfirmBtn">
+                        <i class="bi bi-printer me-1"></i>출력
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- 카드3: 최근 배분 이력 -->
     <div class="card shadow-sm mb-4">
@@ -625,25 +674,28 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
 
-        // 현품표 재발행 버튼 이벤트
+        // 현품표 재발행 버튼 이벤트 → 모달 열기
         area.querySelectorAll('.btn-reprint-lot').forEach(btn => {
             btn.addEventListener('click', function() {
                 const partNo = this.dataset.partNo;
                 const partName = this.dataset.partName;
                 const lotNo = this.dataset.lot;
                 const qty = parseInt(this.dataset.qty);
-                const snp = prompt(`SNP(장당수량)을 입력하세요.\n총 수량: ${qty}EA\n\n미입력 시 1장으로 출력됩니다.`, qty);
-                if (snp === null) return;
-                const snpVal = parseInt(snp) || qty;
-                const items = [];
-                let remaining = qty;
-                while (remaining > 0) {
-                    const tagQty = Math.min(snpVal, remaining);
-                    items.push({ part_no: partNo, part_name: partName, lot_no: lotNo, quantity: tagQty });
-                    remaining -= tagQty;
-                }
-                document.getElementById('reprintItems').value = JSON.stringify(items);
-                document.getElementById('reprintForm').submit();
+
+                document.getElementById('reprintPartInfo').textContent = `${partNo} / ${partName}`;
+                document.getElementById('reprintLotInfo').textContent = `${lotNo} / ${qty.toLocaleString()} EA`;
+                document.getElementById('reprintSnp').value = qty;
+                document.getElementById('reprintSnp').max = qty;
+                updateReprintSheetCount();
+
+                // 모달에 데이터 저장
+                const modal = document.getElementById('reprintModal');
+                modal.dataset.partNo = partNo;
+                modal.dataset.partName = partName;
+                modal.dataset.lot = lotNo;
+                modal.dataset.qty = qty;
+
+                new bootstrap.Modal(modal).show();
             });
         });
 
@@ -765,6 +817,44 @@ function submitLotCorrect() {
 
     form.submit();
 }
+
+// ============================================
+// 현품표 재발행 모달 관련
+// ============================================
+function updateReprintSheetCount() {
+    const qty = parseInt(document.getElementById('reprintModal').dataset.qty) || 0;
+    const snp = parseInt(document.getElementById('reprintSnp').value) || qty;
+    const sheets = snp > 0 ? Math.ceil(qty / snp) : 1;
+    document.getElementById('reprintSheetCount').textContent = `${sheets}장 출력`;
+}
+
+document.getElementById('reprintSnp').addEventListener('input', updateReprintSheetCount);
+
+document.getElementById('reprintConfirmBtn').addEventListener('click', function() {
+    const modal = document.getElementById('reprintModal');
+    const partNo = modal.dataset.partNo;
+    const partName = modal.dataset.partName;
+    const lotNo = modal.dataset.lot;
+    const qty = parseInt(modal.dataset.qty);
+    const snpVal = parseInt(document.getElementById('reprintSnp').value) || qty;
+    const printMode = document.getElementById('reprintModeSelect').value;
+    const sizeType = document.getElementById('reprintSizeSelect').value;
+
+    const items = [];
+    let remaining = qty;
+    while (remaining > 0) {
+        const tagQty = Math.min(snpVal, remaining);
+        items.push({ part_no: partNo, part_name: partName, lot_no: lotNo, quantity: tagQty });
+        remaining -= tagQty;
+    }
+
+    document.getElementById('reprintItems').value = JSON.stringify(items);
+    document.getElementById('reprintMode').value = printMode;
+    document.getElementById('reprintSize').value = sizeType;
+
+    bootstrap.Modal.getInstance(modal).hide();
+    document.getElementById('reprintForm').submit();
+});
 </script>
 
 {% endblock %}
