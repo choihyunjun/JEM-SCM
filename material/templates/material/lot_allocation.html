@@ -38,7 +38,7 @@
         <div class="card-body">
             <table class="table table-sm table-bordered mb-3 text-center" style="font-size: 0.85rem;">
                 <thead class="table-light">
-                    <tr><th>품번</th><th>품명</th><th>LOT</th><th>수량</th></tr>
+                    <tr><th>품번</th><th>품명</th><th>LOT</th><th>재고</th><th style="width:100px;">SNP</th><th style="width:80px;">매수</th></tr>
                 </thead>
                 <tbody>
                 {% for item in alloc_result %}
@@ -47,11 +47,17 @@
                         <td class="text-start">{{ item.part_name }}</td>
                         <td><span class="badge bg-info text-dark">{{ item.lot_no }}</span></td>
                         <td class="fw-bold">{{ item.quantity }}EA</td>
+                        <td>
+                            <input type="number" class="form-control form-control-sm text-center snp-input"
+                                   data-idx="{{ forloop.counter0 }}" data-total="{{ item.quantity }}"
+                                   value="{{ item.quantity }}" min="1" max="{{ item.quantity }}">
+                        </td>
+                        <td class="fw-bold text-success" id="sheet-count-{{ forloop.counter0 }}">1</td>
                     </tr>
                 {% endfor %}
                 </tbody>
             </table>
-            <form method="post" action="{% url 'material:lot_allocation_print' %}" target="_blank">
+            <form method="post" action="{% url 'material:lot_allocation_print' %}" target="_blank" id="allocPrintForm">
                 {% csrf_token %}
                 <input type="hidden" name="items" id="allocPrintItems">
                 <div class="d-flex gap-2 align-items-center">
@@ -67,13 +73,59 @@
                     <button type="submit" class="btn btn-success">
                         <i class="bi bi-printer me-1"></i>현품표 출력
                     </button>
-                    <span class="text-muted small ms-2">새 탭에서 출력됩니다</span>
+                    <span class="text-muted small ms-2" id="totalSheetInfo"></span>
                 </div>
             </form>
         </div>
     </div>
     <script>
-        document.getElementById('allocPrintItems').value = JSON.stringify({{ alloc_result|safe }});
+        const allocResult = {{ alloc_result|safe }};
+
+        // SNP 변경 시 매수 계산
+        function updateSheetCounts() {
+            document.querySelectorAll('.snp-input').forEach(input => {
+                const idx = input.dataset.idx;
+                const total = parseInt(input.dataset.total);
+                const snp = parseInt(input.value) || total;
+                const sheets = Math.ceil(total / snp);
+                document.getElementById(`sheet-count-${idx}`).textContent = sheets + '장';
+            });
+            // 총 매수
+            let totalSheets = 0;
+            document.querySelectorAll('[id^="sheet-count-"]').forEach(el => {
+                totalSheets += parseInt(el.textContent) || 0;
+            });
+            document.getElementById('totalSheetInfo').textContent = `총 ${totalSheets}장 출력`;
+        }
+
+        document.querySelectorAll('.snp-input').forEach(input => {
+            input.addEventListener('input', updateSheetCounts);
+        });
+        updateSheetCounts();
+
+        // 출력 시 SNP 기준으로 items 분할
+        document.getElementById('allocPrintForm').addEventListener('submit', function() {
+            const printItems = [];
+            document.querySelectorAll('.snp-input').forEach(input => {
+                const idx = parseInt(input.dataset.idx);
+                const item = allocResult[idx];
+                const total = parseInt(input.dataset.total);
+                const snp = parseInt(input.value) || total;
+                let remaining = total;
+                while (remaining > 0) {
+                    const qty = Math.min(snp, remaining);
+                    printItems.push({
+                        part_no: item.part_no,
+                        part_name: item.part_name,
+                        part_group: item.part_group || '',
+                        lot_no: item.lot_no,
+                        quantity: qty,
+                    });
+                    remaining -= qty;
+                }
+            });
+            document.getElementById('allocPrintItems').value = JSON.stringify(printItems);
+        });
     </script>
     {% endif %}
 
