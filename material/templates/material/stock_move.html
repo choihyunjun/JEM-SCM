@@ -44,26 +44,6 @@
                     <i class="bi bi-info-circle"></i> QR 코드를 스캔하면 품번, 수량, LOT가 자동으로 입력됩니다. 이동 처리일을 과거 날짜로 설정하면 해당 일자로 이력이 생성됩니다.
                 </small>
 
-<!-- 카메라 QR 스캔 모달 -->
-<div class="modal fade" id="cameraModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title fw-bold"><i class="bi bi-camera me-2"></i>QR 코드 스캔 중...</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="stopCamera()"></button>
-            </div>
-            <div class="modal-body p-0 position-relative" style="background: #000; overflow: hidden; min-height: 300px;">
-                <video id="qrVideo" playsinline autoplay muted style="width: 100%; height: auto; display: block;"></video>
-                <canvas id="qrCanvas" style="display: none;"></canvas>
-                <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 200px; height: 200px; border: 2px solid rgba(13, 110, 253, 0.5); border-radius: 20px;"></div>
-            </div>
-            <div class="modal-footer justify-content-center">
-                <p class="text-muted small mb-0">현품표의 QR코드를 사각형 안에 맞춰주세요.</p>
-            </div>
-        </div>
-    </div>
-</div>
-
                 <hr class="my-3">
 
                 <!-- 수동 입력란 -->
@@ -429,6 +409,26 @@
                     <i class="bi bi-x-circle me-1"></i>이동 취소
                 </button>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 카메라 QR 스캔 모달 -->
+<div class="modal fade" id="cameraModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-camera me-2"></i>QR 코드 스캔 중...</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="stopCamera()"></button>
+            </div>
+            <div class="modal-body p-0 position-relative" style="background: #000; overflow: hidden; min-height: 300px;">
+                <video id="video" style="width: 100%; height: auto; display: block;"></video>
+                <canvas id="canvas" style="display: none;"></canvas>
+                <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 200px; height: 200px; border: 2px solid rgba(25, 135, 84, 0.5); border-radius: 20px;"></div>
+            </div>
+            <div class="modal-footer justify-content-center">
+                <p class="text-muted small mb-0">현품표의 QR코드를 사각형 안에 맞춰주세요.</p>
             </div>
         </div>
     </div>
@@ -1032,10 +1032,10 @@
         }
     }
 
-    // 카메라 QR 스캔
-    let qrVideo = document.getElementById("qrVideo");
-    let qrCanvasEl = document.getElementById("qrCanvas");
-    let qrCanvasCtx = qrCanvasEl.getContext("2d", { willReadFrequently: true });
+    // 카메라 QR 스캔 (입고처리와 동일 패턴)
+    let video = document.getElementById("video");
+    let canvasElement = document.getElementById("canvas");
+    let canvas = canvasElement.getContext("2d", { willReadFrequently: true });
     let scanning = false;
     let cameraModal;
 
@@ -1043,34 +1043,24 @@
         if (!cameraModal) { cameraModal = new bootstrap.Modal(document.getElementById('cameraModal')); }
         cameraModal.show();
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }).then(function(stream) {
-            scanning = true;
-            qrVideo.srcObject = stream;
-            qrVideo.setAttribute("playsinline", true);
-            qrVideo.play();
-            requestAnimationFrame(tick);
-        }).catch(function(err) {
-            alert("카메라를 사용할 수 없습니다: " + err);
-            cameraModal.hide();
-        });
+            scanning = true; video.srcObject = stream; video.setAttribute("playsinline", true); video.play(); requestAnimationFrame(tick);
+        }).catch(function(err) { alert("카메라를 켤 수 없습니다: " + err); cameraModal.hide(); });
     }
 
     function stopCamera() {
         scanning = false;
-        if (qrVideo.srcObject) { qrVideo.srcObject.getTracks().forEach(track => track.stop()); }
+        if (video.srcObject) { video.srcObject.getTracks().forEach(track => track.stop()); }
     }
 
     function tick() {
-        if (qrVideo.readyState === qrVideo.HAVE_ENOUGH_DATA && scanning) {
-            qrCanvasEl.height = qrVideo.videoHeight;
-            qrCanvasEl.width = qrVideo.videoWidth;
-            qrCanvasCtx.drawImage(qrVideo, 0, 0, qrCanvasEl.width, qrCanvasEl.height);
-            let imageData = qrCanvasCtx.getImageData(0, 0, qrCanvasEl.width, qrCanvasEl.height);
+        if (video.readyState === video.HAVE_ENOUGH_DATA && scanning) {
+            canvasElement.height = video.videoHeight; canvasElement.width = video.videoWidth;
+            canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
+            let imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
             let code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
             if (code) {
-                scanning = false;
-                document.getElementById("qrScanInput").value = code.data;
-                stopCamera();
-                bootstrap.Modal.getInstance(document.getElementById('cameraModal')).hide();
+                scanning = false; document.getElementById("qrScanInput").value = code.data;
+                stopCamera(); bootstrap.Modal.getInstance(document.getElementById('cameraModal')).hide();
                 setTimeout(() => { handleQRScan(code.data); }, 500);
                 return;
             }
@@ -1078,7 +1068,7 @@
         if (scanning) { requestAnimationFrame(tick); }
     }
 
-    document.getElementById('cameraModal').addEventListener('hidden.bs.modal', function() { stopCamera(); });
+    document.getElementById('cameraModal').addEventListener('hidden.bs.modal', function () { stopCamera(); });
 
     // 이벤트 리스너 등록
     document.addEventListener('DOMContentLoaded', function() {
