@@ -190,6 +190,14 @@
         <input type="hidden" name="warehouse_id" id="correctWarehouseId">
     </form>
 
+    <!-- 현품표 재발행 폼 -->
+    <form method="post" action="{% url 'material:lot_allocation_print' %}" target="_blank" id="reprintForm" style="display:none;">
+        {% csrf_token %}
+        <input type="hidden" name="items" id="reprintItems">
+        <input type="hidden" name="print_mode" value="roll">
+        <input type="hidden" name="size_type" value="medium">
+    </form>
+
     <!-- 카드3: 최근 배분 이력 -->
     <div class="card shadow-sm mb-4">
         <div class="card-header bg-light fw-bold text-secondary">
@@ -562,6 +570,12 @@ document.addEventListener('DOMContentLoaded', function() {
                                        value="${l.quantity}" style="width:100px;" min="0">
                                 <small class="text-muted">(현재: ${l.quantity.toLocaleString()})</small>
                                 <span class="lot-delta-label" data-stock-id="${l.id}" style="font-size:0.8rem;"></span>
+                                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 btn-reprint-lot"
+                                        data-part-no="${info.part_no}" data-part-name="${info.part_name}"
+                                        data-lot="${l.lot_no}" data-qty="${l.quantity}"
+                                        title="현품표 재발행" style="font-size:0.75rem;">
+                                    <i class="bi bi-printer"></i>
+                                </button>
                             </div>
                         `).join('')}
                     </div>` : ''}
@@ -608,6 +622,28 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
                 updateCorrectButton();
+            });
+        });
+
+        // 현품표 재발행 버튼 이벤트
+        area.querySelectorAll('.btn-reprint-lot').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const partNo = this.dataset.partNo;
+                const partName = this.dataset.partName;
+                const lotNo = this.dataset.lot;
+                const qty = parseInt(this.dataset.qty);
+                const snp = prompt(`SNP(장당수량)을 입력하세요.\n총 수량: ${qty}EA\n\n미입력 시 1장으로 출력됩니다.`, qty);
+                if (snp === null) return;
+                const snpVal = parseInt(snp) || qty;
+                const items = [];
+                let remaining = qty;
+                while (remaining > 0) {
+                    const tagQty = Math.min(snpVal, remaining);
+                    items.push({ part_no: partNo, part_name: partName, lot_no: lotNo, quantity: tagQty });
+                    remaining -= tagQty;
+                }
+                document.getElementById('reprintItems').value = JSON.stringify(items);
+                document.getElementById('reprintForm').submit();
             });
         });
 
