@@ -204,7 +204,11 @@
         <div class="label">
             <div class="label-title">
                 <span>공정 현품표</span>
-                {% if part_group %}<span class="label-part-group">{{ part_group }}</span>{% endif %}
+                {% if multi_mode %}
+                    {% if tag.part_group %}<span class="label-part-group">{{ tag.part_group }}</span>{% endif %}
+                {% else %}
+                    {% if part_group %}<span class="label-part-group">{{ part_group }}</span>{% endif %}
+                {% endif %}
             </div>
             <table class="label-table">
                 <tr>
@@ -212,19 +216,19 @@
                         <div id="qr_{{ tag.index }}" class="qr-area"></div>
                     </td>
                     <td class="label-header">품번</td>
-                    <td class="label-data" style="font-family: monospace;">{{ part_no }}</td>
+                    <td class="label-data" style="font-family: monospace;">{% if multi_mode %}{{ tag.part_no }}{% else %}{{ part_no }}{% endif %}</td>
                 </tr>
                 <tr>
                     <td class="label-header">품명</td>
-                    <td class="label-data">{{ part_name }}</td>
+                    <td class="label-data">{% if multi_mode %}{{ tag.part_name }}{% else %}{{ part_name }}{% endif %}</td>
                 </tr>
                 <tr>
                     <td class="label-header">수량</td>
-                    <td class="label-data" style="font-size: 13pt; color: #2c3e50;">{{ quantity }} EA</td>
+                    <td class="label-data" style="font-size: 13pt; color: #2c3e50;">{% if multi_mode %}{{ tag.quantity }}{% else %}{{ quantity }}{% endif %} EA</td>
                 </tr>
                 <tr>
                     <td class="label-header">LOT</td>
-                    <td class="label-data" style="font-family: monospace;">{{ lot_no }}</td>
+                    <td class="label-data" style="font-family: monospace;">{% if multi_mode %}{{ tag.lot_no }}{% else %}{{ lot_no }}{% endif %}</td>
                 </tr>
             </table>
         </div>
@@ -242,15 +246,19 @@
         else if (sizeType === 'large') qrSize = 140;
 
         // 각 태그별 고유 QR 데이터 생성
+        const multiMode = {% if multi_mode %}true{% else %}false{% endif %};
         const tagList = [
             {% for tag in tag_list %}
-            { index: {{ tag.index }}, tag_id: "{{ tag.tag_id }}" }{% if not forloop.last %},{% endif %}
+            { index: {{ tag.index }}, tag_id: "{{ tag.tag_id }}"{% if multi_mode %}, part_no: "{{ tag.part_no }}", quantity: "{{ tag.quantity }}", lot_no: "{{ tag.lot_no }}"{% endif %} }{% if not forloop.last %},{% endif %}
             {% endfor %}
         ];
 
         tagList.forEach(tag => {
             // QR 데이터: TAG_ID|품번|수량|LOT
-            const qrData = `${tag.tag_id}|{{ part_no }}|{{ quantity }}|{{ lot_no }}`;
+            const pno = multiMode ? tag.part_no : '{{ part_no }}';
+            const qty = multiMode ? tag.quantity : '{{ quantity }}';
+            const lot = multiMode ? tag.lot_no : '{{ lot_no }}';
+            const qrData = `${tag.tag_id}|${pno}|${qty}|${lot}`;
             new QRCode(document.getElementById(`qr_${tag.index}`), {
                 text: qrData,
                 width: qrSize,

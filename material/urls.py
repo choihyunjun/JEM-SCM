@@ -63,6 +63,7 @@ urlpatterns = [
 
     # LOT 배분
     path('stock/lot-allocation/', views.lot_allocation, name='lot_allocation'),
+    path('stock/lot-allocation/print/', views.lot_allocation_print, name='lot_allocation_print'),
     path('api/null-stock-info/', views.api_null_stock_info, name='api_null_stock_info'),
 
     # ERP 동기화

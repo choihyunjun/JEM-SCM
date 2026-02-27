@@ -29,6 +29,54 @@
         </div>
     </div>
 
+    <!-- 배분 결과 + 현품표 출력 -->
+    {% if alloc_result %}
+    <div class="card shadow-sm border-success mb-4">
+        <div class="card-header fw-bold text-white" style="background-color: #198754; border-bottom: none;">
+            <i class="bi bi-check-circle me-2"></i>LOT 배분 완료 — 현품표 출력
+        </div>
+        <div class="card-body">
+            <table class="table table-sm table-bordered mb-3 text-center" style="font-size: 0.85rem;">
+                <thead class="table-light">
+                    <tr><th>품번</th><th>품명</th><th>LOT</th><th>수량</th></tr>
+                </thead>
+                <tbody>
+                {% for item in alloc_result %}
+                    <tr>
+                        <td class="fw-bold text-primary">{{ item.part_no }}</td>
+                        <td class="text-start">{{ item.part_name }}</td>
+                        <td><span class="badge bg-info text-dark">{{ item.lot_no }}</span></td>
+                        <td class="fw-bold">{{ item.quantity }}EA</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            <form method="post" action="{% url 'material:lot_allocation_print' %}" target="_blank">
+                {% csrf_token %}
+                <input type="hidden" name="items" id="allocPrintItems">
+                <div class="d-flex gap-2 align-items-center">
+                    <select name="print_mode" class="form-select form-select-sm" style="width:140px">
+                        <option value="roll">라벨 프린터</option>
+                        <option value="sheet">A4 용지</option>
+                    </select>
+                    <select name="size_type" class="form-select form-select-sm" style="width:140px">
+                        <option value="medium" selected>중간 (95x45)</option>
+                        <option value="small">소형 (60x70)</option>
+                        <option value="large">대형 (A5)</option>
+                    </select>
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-printer me-1"></i>현품표 출력
+                    </button>
+                    <span class="text-muted small ms-2">새 탭에서 출력됩니다</span>
+                </div>
+            </form>
+        </div>
+    </div>
+    <script>
+        document.getElementById('allocPrintItems').value = JSON.stringify({{ alloc_result|safe }});
+    </script>
+    {% endif %}
+
     <!-- 카드1: 대상 선택 -->
     <div class="card shadow-sm mb-4">
         <div class="card-header bg-light fw-bold text-primary">

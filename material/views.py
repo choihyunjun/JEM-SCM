@@ -972,6 +972,97 @@ def process_tag_print(request):
     return redirect('material:process_tag_form')
 
 
+@login_required
+def lot_allocation_print(request):
+    """LOT 배분 후 현품표 일괄 출력 (복수 품번×LOT)"""
+    if request.method != 'POST':
+        return redirect('material:lot_allocation')
+
+    import json
+    from .models import ProcessTag
+    from datetime import datetime
+
+    items = json.loads(request.POST.get('items', '[]'))
+    print_mode = request.POST.get('print_mode', 'roll')
+    size_type = request.POST.get('size_type', 'medium')
+
+    if not items:
+        return redirect('material:lot_allocation')
+
+    # A4 모아찍기 레이아웃 계산
+    if print_mode == 'sheet':
+        if size_type == 'small':
+            label_w_mm, label_h_mm = 60, 70
+        elif size_type == 'medium':
+            label_w_mm, label_h_mm = 95, 45
+        elif size_type == 'large':
+            label_w_mm, label_h_mm = 210, 148
+        else:
+            label_w_mm, label_h_mm = 95, 45
+
+        usable_width = 200  # 210 - 10
+        usable_height = 287  # 297 - 10
+        sheet_cols = max(1, int((usable_width + 3) / (label_w_mm + 3)))
+        sheet_rows = max(1, int((usable_height + 3) / (label_h_mm + 3)))
+        per_page = sheet_cols * sheet_rows
+    else:
+        label_w_mm = label_h_mm = 0
+        sheet_cols = per_page = 0
+
+    # 각 아이템별 ProcessTag 생성
+    all_tags = []
+    for item in items:
+        part = Part.objects.filter(part_no=item['part_no']).first()
+        lot_date = None
+        if item.get('lot_no'):
+            try:
+                lot_date = datetime.strptime(item['lot_no'], '%Y-%m-%d').date()
+            except (ValueError, TypeError):
+                pass
+
+        tag_id = ProcessTag.generate_tag_id()
+        ProcessTag.objects.create(
+            tag_id=tag_id,
+            part=part,
+            part_no=item['part_no'],
+            part_name=item.get('part_name', ''),
+            quantity=int(item.get('quantity', 0)),
+            lot_no=lot_date,
+            status='PRINTED',
+            printed_by=request.user if request.user.is_authenticated else None,
+        )
+        all_tags.append({
+            'index': len(all_tags),
+            'tag_id': tag_id,
+            'part_no': item['part_no'],
+            'part_name': item.get('part_name', ''),
+            'part_group': item.get('part_group', ''),
+            'quantity': int(item.get('quantity', 0)),
+            'lot_no': item.get('lot_no', ''),
+        })
+
+    context = {
+        'multi_mode': True,
+        'tag_list': all_tags,
+        'print_mode': print_mode,
+        'size_type': size_type,
+        'print_date': timezone.now().strftime('%Y-%m-%d'),
+        'worker': request.user.username,
+        'label_w_mm': label_w_mm,
+        'label_h_mm': label_h_mm,
+        'sheet_cols': sheet_cols,
+        'per_page': per_page,
+        # 단일모드 호환 변수
+        'part_no': '',
+        'part_name': '',
+        'part_group': '',
+        'quantity': '',
+        'lot_no': '',
+        'print_range': range(len(all_tags)),
+    }
+    return render(request, 'material/process_tag_print.html', context)
+
+
 # =============================================================================
 # 3-2. 현품표 스캔 API (중복 스캔 확인)
 # =============================================================================
@@ -2277,6 +2368,26 @@ def lot_allocation(request):
                 messages.warning(request, "배분할 LOT 정보가 없습니다.")
             else:
                 messages.success(request, f"LOT 배분 완료: {total_parts}개 품목, {total_lots}건 LOT, 총 {total_ea}EA")
+
+                # 배분 결과를 세션에 저장 (현품표 출력용)
+                alloc_items_for_print = []
+                for pid in part_ids:
+                    p = Part.objects.get(id=pid)
+                    lot_list = request.POST.getlist(f'lot_nos_{pid}[]')
+                    qty_list = request.POST.getlist(f'qty_{pid}[]')
+                    for ls, qs in zip(lot_list, qty_list):
+                        ls, qs = ls.strip(), qs.strip()
+                        if ls and qs and int(qs) > 0:
+                            alloc_items_for_print.append({
+                                'part_no': p.part_no,
+                                'part_name': p.part_name,
+                                'part_group': p.part_group or '',
+                                'lot_no': ls,
+                                'quantity': int(qs),
+                            })
+                if alloc_items_for_print:
+                    request.session['lot_alloc_result'] = alloc_items_for_print
+
             return redirect('material:lot_allocation')
 
         except Warehouse.DoesNotExist:
@@ -2297,9 +2408,13 @@ def lot_allocation(request):
         transaction_type__in=['LOT_ASSIGN', 'LOT_CORRECT']
     ).select_related('part', 'warehouse_to', 'actor').order_by('-date')[:50]
 
+    # 배분 결과 (현품표 출력용)
+    alloc_result = request.session.pop('lot_alloc_result', None)
+
     context = {
         'warehouses': warehouses,
         'recent_assigns': recent_assigns,
+        'alloc_result': alloc_result,
     }
     return render(request, 'material/lot_allocation.html', context)
 
