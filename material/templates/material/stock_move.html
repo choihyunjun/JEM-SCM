@@ -455,7 +455,7 @@
             // 품번|수량|LOT (레거시)
             [partNo, qty, lotNo] = parts;
         } else {
-            alert('올바른 QR 코드 형식이 아닙니다.\n형식: ID|품번|수량|LOT 또는 품번|수량|LOT');
+            alert('올바른 QR 코드 형식이 아닙니다.\n형식: ID|품번|수량|LOT 또는 품번|수량|LOT\n\n[디버그] 필드수: ' + parts.length + '\n데이터: ' + qrData);
             qrInput.value = '';
             qrInput.focus();
             return;
