@@ -445,16 +445,21 @@
     async function handleQRScan(qrData) {
         const qrInput = document.getElementById('qrScanInput');
 
-        const parts = qrData.split('|');
+        const parts = qrData.split('|').map(p => p.trim());
+        let partNo, qty, lotNo;
 
-        if (parts.length !== 3) {
-            alert('올바른 QR 코드 형식이 아닙니다.\n형식: 품번|수량|LOT');
+        if (parts.length === 4) {
+            // TAG_ID|품번|수량|LOT (현품표, 원자재라벨, 수주라벨)
+            [, partNo, qty, lotNo] = parts;
+        } else if (parts.length === 3) {
+            // 품번|수량|LOT (레거시)
+            [partNo, qty, lotNo] = parts;
+        } else {
+            alert('올바른 QR 코드 형식이 아닙니다.\n형식: ID|품번|수량|LOT 또는 품번|수량|LOT');
             qrInput.value = '';
             qrInput.focus();
             return;
         }
-
-        const [partNo, qty, lotNo] = parts.map(p => p.trim());
 
         if (!partNo) {
             alert('품번 정보가 없습니다.');
