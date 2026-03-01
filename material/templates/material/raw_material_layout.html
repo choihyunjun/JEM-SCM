@@ -364,7 +364,7 @@
             <div class="wall-title wall-2f">2공장</div>
             <div class="pallet-grid">
                 {% for cell in wall_a.1 %}
-                <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.rack.display_override|default_if_none:'' }}" onclick="showScanHistory(this)"{% endif %}>
+                <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.base_qty }}" onclick="showScanHistory(this)"{% endif %}>
                     <div class="rack-position">{{ cell.rack.position_code }}</div>
                     {% if cell.rack.part %}
                     <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
@@ -379,7 +379,7 @@
             </div>
             <div class="pallet-grid" style="margin-top: 15px;">
                 {% for cell in wall_a.2 %}
-                <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.rack.display_override|default_if_none:'' }}" onclick="showScanHistory(this)"{% endif %}>
+                <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.base_qty }}" onclick="showScanHistory(this)"{% endif %}>
                     <div class="rack-position">{{ cell.rack.position_code }}</div>
                     {% if cell.rack.part %}
                     <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
@@ -413,7 +413,7 @@
                     <div class="floor-col">
                         <div class="cells-stack">
                             {% for cell in wall_a.2 %}
-                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.rack.display_override|default_if_none:'' }}" onclick="showScanHistory(this)"{% endif %}>
+                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.base_qty }}" onclick="showScanHistory(this)"{% endif %}>
                                 <div class="rack-position">{{ cell.rack.position_code }}</div>
                                 {% if cell.rack.part %}
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
@@ -430,7 +430,7 @@
                     <div class="floor-col">
                         <div class="cells-stack">
                             {% for cell in wall_a.1 %}
-                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.rack.display_override|default_if_none:'' }}" onclick="showScanHistory(this)"{% endif %}>
+                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.base_qty }}" onclick="showScanHistory(this)"{% endif %}>
                                 <div class="rack-position">{{ cell.rack.position_code }}</div>
                                 {% if cell.rack.part %}
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
@@ -465,7 +465,7 @@
                     <div class="floor-col">
                         <div class="cells-stack">
                             {% for cell in wall_b.1 %}
-                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.rack.display_override|default_if_none:'' }}" onclick="showScanHistory(this)"{% endif %}>
+                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.base_qty }}" onclick="showScanHistory(this)"{% endif %}>
                                 <div class="rack-position">{{ cell.rack.position_code }}</div>
                                 {% if cell.rack.part %}
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
@@ -482,7 +482,7 @@
                     <div class="floor-col">
                         <div class="cells-stack">
                             {% for cell in wall_b.2 %}
-                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.rack.display_override|default_if_none:'' }}" onclick="showScanHistory(this)"{% endif %}>
+                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.base_qty }}" onclick="showScanHistory(this)"{% endif %}>
                                 <div class="rack-position">{{ cell.rack.position_code }}</div>
                                 {% if cell.rack.part %}
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
@@ -904,7 +904,7 @@ function setOverrideValue() {
         result.style.display = 'block';
         if (data.success) {
             result.style.background = '#dcfce7'; result.style.color = '#166534';
-            result.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i>${data.position_code} 오버라이드 ${data.display_override !== null ? data.display_override + 'kg' : '해제'}`;
+            result.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i>${data.position_code} 오버라이드 ${data.display_adjustment !== null ? '적용 (보정: ' + (data.display_adjustment >= 0 ? '+' : '') + data.display_adjustment + 'kg)' : '해제'}`;
             setTimeout(() => location.reload(), 1000);
         } else {
             result.style.background = '#fef2f2'; result.style.color = '#991b1b';

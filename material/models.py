@@ -636,8 +636,8 @@ class RawMaterialRack(models.Model):
 
     display_order = models.IntegerField("표시순서", default=0)
     is_active = models.BooleanField("사용여부", default=True)
-    display_override = models.IntegerField("표시재고 오버라이드", null=True, blank=True,
-                                            help_text="감사모드 시 실재고 대신 표시할 기준 수량(kg)")
+    display_adjustment = models.IntegerField("표시재고 보정값", null=True, blank=True,
+                                             help_text="감사모드 시 실재고에 더할 보정값(kg). 양수=증가, 음수=감소")
 
     created_at = models.DateTimeField("생성일시", auto_now_add=True)
     updated_at = models.DateTimeField("수정일시", auto_now=True)

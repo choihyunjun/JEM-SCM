@@ -4179,9 +4179,9 @@ def raw_material_layout(request):
             ).aggregate(total=Sum('quantity'))
             scanned_qty = scanned['total'] or 0
 
-            # 감사모드: override 값이 있으면 actual_qty 대신 사용
-            if audit_mode_on and rack.display_override is not None:
-                base_qty = rack.display_override
+            # 감사모드: 보정값(delta)이 있으면 실재고에 더함
+            if audit_mode_on and rack.display_adjustment is not None:
+                base_qty = actual_qty + rack.display_adjustment
             else:
                 base_qty = actual_qty
 
@@ -4209,6 +4209,7 @@ def raw_material_layout(request):
             'stock_qty': stock_qty,
             'scanned_qty': scanned_qty,
             'stock_status': stock_status,
+            'base_qty': base_qty,  # 감사모드 오버라이드 입력 시 표시용 (base = actual + adjustment)
         }
 
     # A열, B열 분리 후 col_num 오름차순 정렬
@@ -4294,37 +4295,43 @@ def api_audit_mode_toggle(request):
 @require_http_methods(["POST"])
 @wms_permission_required('can_wms_stock_edit')
 def api_audit_mode_set_override(request):
-    """특정 랙의 오버라이드 값 설정"""
+    """특정 랙의 오버라이드 값 설정 (델타 방식: 입력값 - 실재고 = 보정값)"""
     data = json.loads(request.body)
     rack_id = data.get('rack_id')
     override_value = data.get('override_value')
 
     try:
-        rack = RawMaterialRack.objects.get(id=rack_id)
+        rack = RawMaterialRack.objects.select_related('part').get(id=rack_id)
     except RawMaterialRack.DoesNotExist:
         return JsonResponse({'success': False, 'error': '랙을 찾을 수 없습니다.'}, status=404)
 
-    if override_value is not None:
-        rack.display_override = int(override_value)
+    if override_value is not None and rack.part:
+        desired = int(override_value)
+        # 현재 실재고 조회
+        actual = MaterialStock.objects.filter(
+            part=rack.part,
+            warehouse__code='RAW'
+        ).aggregate(total=Sum('quantity'))['total'] or 0
+        rack.display_adjustment = desired - actual
     else:
-        rack.display_override = None
-    rack.save(update_fields=['display_override', 'updated_at'])
+        rack.display_adjustment = None
+    rack.save(update_fields=['display_adjustment', 'updated_at'])
 
     return JsonResponse({
         'success': True,
         'rack_id': rack.id,
         'position_code': rack.position_code,
-        'display_override': rack.display_override,
+        'display_adjustment': rack.display_adjustment,
     })
 
 
 @require_http_methods(["POST"])
 @wms_permission_required('can_wms_stock_edit')
 def api_audit_mode_clear_all(request):
-    """모든 랙의 오버라이드 값 초기화"""
+    """모든 랙의 보정값 초기화"""
     count = RawMaterialRack.objects.filter(
-        display_override__isnull=False
-    ).update(display_override=None)
+        display_adjustment__isnull=False
+    ).update(display_adjustment=None)
     return JsonResponse({
         'success': True,
         'cleared_count': count,
