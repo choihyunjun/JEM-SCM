@@ -354,6 +354,29 @@
     </div>
 </div>
 
+{% if audit_mode %}
+<div class="alert mb-3 d-flex align-items-center justify-content-between flex-wrap gap-2"
+     style="background: linear-gradient(135deg, #fef3c7, #fde68a); border: 2px solid #f59e0b; border-radius: 12px; padding: 12px 20px;">
+    <div>
+        <i class="bi bi-shield-exclamation" style="font-size: 1.2rem; color: #d97706;"></i>
+        <strong style="color: #92400e; margin-left: 8px;">감사모드 활성</strong>
+        <span style="color: #78350f; font-size: 0.85rem; margin-left: 12px;">
+            오버라이드 값이 설정된 랙은 수정된 기준 수량으로 표시됩니다
+        </span>
+    </div>
+    {% if can_edit %}
+    <div>
+        <button class="btn btn-sm btn-outline-warning me-2" onclick="clearAllOverrides()">
+            <i class="bi bi-arrow-counterclockwise me-1"></i>전체 초기화
+        </button>
+        <button class="btn btn-sm btn-warning" onclick="toggleAuditMode()">
+            <i class="bi bi-shield-x me-1"></i>감사모드 OFF
+        </button>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
 <div class="main-container">
     <!-- 창고 영역 -->
     <div class="warehouse-area">
@@ -364,8 +387,8 @@
             <div class="wall-title wall-2f">2공장</div>
             <div class="pallet-grid">
                 {% for cell in wall_a.1 %}
-                <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" onclick="showScanHistory(this)"{% endif %}>
-                    <div class="rack-position">{{ cell.rack.position_code }}</div>
+                <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.rack.display_override|default_if_none:'' }}" onclick="showScanHistory(this)"{% endif %}>
+                    <div class="rack-position">{{ cell.rack.position_code }}{% if audit_mode and cell.rack.display_override != None %} <i class="bi bi-pencil-square" style="color:#d97706;"></i>{% endif %}</div>
                     {% if cell.rack.part %}
                     <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
                     <div class="rack-part-name">{{ cell.rack.part.part_name }}</div>
@@ -379,8 +402,8 @@
             </div>
             <div class="pallet-grid" style="margin-top: 15px;">
                 {% for cell in wall_a.2 %}
-                <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" onclick="showScanHistory(this)"{% endif %}>
-                    <div class="rack-position">{{ cell.rack.position_code }}</div>
+                <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.rack.display_override|default_if_none:'' }}" onclick="showScanHistory(this)"{% endif %}>
+                    <div class="rack-position">{{ cell.rack.position_code }}{% if audit_mode and cell.rack.display_override != None %} <i class="bi bi-pencil-square" style="color:#d97706;"></i>{% endif %}</div>
                     {% if cell.rack.part %}
                     <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
                     <div class="rack-part-name">{{ cell.rack.part.part_name }}</div>
@@ -413,8 +436,8 @@
                     <div class="floor-col">
                         <div class="cells-stack">
                             {% for cell in wall_a.2 %}
-                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" onclick="showScanHistory(this)"{% endif %}>
-                                <div class="rack-position">{{ cell.rack.position_code }}</div>
+                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.rack.display_override|default_if_none:'' }}" onclick="showScanHistory(this)"{% endif %}>
+                                <div class="rack-position">{{ cell.rack.position_code }}{% if audit_mode and cell.rack.display_override != None %} <i class="bi bi-pencil-square" style="color:#d97706;"></i>{% endif %}</div>
                                 {% if cell.rack.part %}
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
                                 <div class="rack-part-name">{{ cell.rack.part.part_name }}</div>
@@ -430,8 +453,8 @@
                     <div class="floor-col">
                         <div class="cells-stack">
                             {% for cell in wall_a.1 %}
-                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" onclick="showScanHistory(this)"{% endif %}>
-                                <div class="rack-position">{{ cell.rack.position_code }}</div>
+                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.rack.display_override|default_if_none:'' }}" onclick="showScanHistory(this)"{% endif %}>
+                                <div class="rack-position">{{ cell.rack.position_code }}{% if audit_mode and cell.rack.display_override != None %} <i class="bi bi-pencil-square" style="color:#d97706;"></i>{% endif %}</div>
                                 {% if cell.rack.part %}
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
                                 <div class="rack-part-name">{{ cell.rack.part.part_name }}</div>
@@ -465,8 +488,8 @@
                     <div class="floor-col">
                         <div class="cells-stack">
                             {% for cell in wall_b.1 %}
-                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" onclick="showScanHistory(this)"{% endif %}>
-                                <div class="rack-position">{{ cell.rack.position_code }}</div>
+                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.rack.display_override|default_if_none:'' }}" onclick="showScanHistory(this)"{% endif %}>
+                                <div class="rack-position">{{ cell.rack.position_code }}{% if audit_mode and cell.rack.display_override != None %} <i class="bi bi-pencil-square" style="color:#d97706;"></i>{% endif %}</div>
                                 {% if cell.rack.part %}
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
                                 <div class="rack-part-name">{{ cell.rack.part.part_name }}</div>
@@ -482,8 +505,8 @@
                     <div class="floor-col">
                         <div class="cells-stack">
                             {% for cell in wall_b.2 %}
-                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" onclick="showScanHistory(this)"{% endif %}>
-                                <div class="rack-position">{{ cell.rack.position_code }}</div>
+                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.rack.display_override|default_if_none:'' }}" onclick="showScanHistory(this)"{% endif %}>
+                                <div class="rack-position">{{ cell.rack.position_code }}{% if audit_mode and cell.rack.display_override != None %} <i class="bi bi-pencil-square" style="color:#d97706;"></i>{% endif %}</div>
                                 {% if cell.rack.part %}
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
                                 <div class="rack-part-name">{{ cell.rack.part.part_name }}</div>
@@ -606,6 +629,24 @@
             </div>
         </div>
 
+        {% if can_edit %}
+        <!-- 감사모드 -->
+        <div class="sidebar-card" {% if audit_mode %}style="border-color: #f59e0b;"{% endif %}>
+            <div class="sidebar-header" {% if audit_mode %}style="background: linear-gradient(180deg, #fffbeb, #fef3c7); color: #92400e;"{% endif %}>
+                <i class="bi bi-shield-lock me-2"></i>감사모드
+            </div>
+            <div class="sidebar-body text-center">
+                <button class="btn btn-sm w-100 {% if audit_mode %}btn-warning{% else %}btn-outline-secondary{% endif %}" onclick="toggleAuditMode()">
+                    <i class="bi bi-{% if audit_mode %}shield-fill-check{% else %}shield{% endif %} me-1"></i>
+                    {% if audit_mode %}감사모드 ON{% else %}감사모드 OFF{% endif %}
+                </button>
+                {% if audit_mode %}
+                <small class="d-block text-muted mt-2">랙 클릭 시 오버라이드 값 설정 가능</small>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
         <!-- 자동 새로고침 안내 -->
         <div class="sidebar-card">
             <div class="sidebar-body text-center text-muted" style="font-size: 0.8rem;">
@@ -624,6 +665,22 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body" style="padding:20px;">
+                {% if audit_mode and can_edit %}
+                <!-- 감사모드: 오버라이드 값 설정 -->
+                <div class="mb-3 p-3" style="background: #fffbeb; border-radius: 8px; border: 1px solid #fde68a;">
+                    <label class="form-label fw-bold mb-1" style="color: #92400e; font-size: 0.85rem;">
+                        <i class="bi bi-pencil-square me-1"></i>감사모드 오버라이드 값 (kg)
+                    </label>
+                    <div class="input-group input-group-sm">
+                        <input type="number" id="overrideInput" class="form-control"
+                               placeholder="기준 수량 입력 (비우면 실재고 사용)" min="0">
+                        <button class="btn btn-warning" onclick="setOverrideValue()">
+                            <i class="bi bi-check-lg me-1"></i>적용
+                        </button>
+                    </div>
+                    <div id="overrideResult" style="display:none; font-size:0.82rem; padding:6px 10px; border-radius:6px; margin-top:6px;"></div>
+                </div>
+                {% endif %}
                 <!-- 바코드 스캔 입력 -->
                 <div class="mb-3">
                     <div class="input-group">
@@ -722,15 +779,26 @@ function doScan() {
 }
 
 // 랙 셀 클릭 → 모달
+let currentModalRackId = '';
+
 function showScanHistory(el) {
     const partNo = el.dataset.partNo;
     const partName = el.dataset.partName;
     if (!partNo) return;
 
     currentModalPartNo = partNo;
+    currentModalRackId = el.dataset.rackId || '';
     document.getElementById('modalPartTitle').textContent = `${partNo} ${partName}`;
     document.getElementById('scanResult').style.display = 'none';
     document.getElementById('scanInput').value = '';
+
+    // 감사모드: 오버라이드 값 채우기
+    const overrideInput = document.getElementById('overrideInput');
+    if (overrideInput) {
+        overrideInput.value = el.dataset.override || '';
+        const overrideResult = document.getElementById('overrideResult');
+        if (overrideResult) overrideResult.style.display = 'none';
+    }
 
     const modal = new bootstrap.Modal(scanModal);
     modal.show();
@@ -767,6 +835,60 @@ function loadScanHistory(partNo) {
     })
     .catch(() => {
         list.innerHTML = '<div class="text-center text-danger py-3">조회 오류</div>';
+    });
+}
+
+// === 감사모드 기능 ===
+function toggleAuditMode() {
+    if (!confirm('감사모드를 변경하시겠습니까?')) return;
+    fetch('{% url "material:api_audit_mode_toggle" %}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) location.reload();
+        else alert(data.error || '오류가 발생했습니다.');
+    });
+}
+
+function setOverrideValue() {
+    if (!currentModalRackId) return;
+    const input = document.getElementById('overrideInput');
+    const result = document.getElementById('overrideResult');
+    const value = input.value.trim();
+
+    fetch('{% url "material:api_audit_mode_set_override" %}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+        body: JSON.stringify({
+            rack_id: currentModalRackId,
+            override_value: value === '' ? null : parseInt(value)
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        result.style.display = 'block';
+        if (data.success) {
+            result.style.background = '#dcfce7'; result.style.color = '#166534';
+            result.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i>${data.position_code} 오버라이드 ${data.display_override !== null ? data.display_override + 'kg' : '해제'}`;
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            result.style.background = '#fef2f2'; result.style.color = '#991b1b';
+            result.innerHTML = `<i class="bi bi-x-circle-fill me-1"></i>${data.error}`;
+        }
+    });
+}
+
+function clearAllOverrides() {
+    if (!confirm('모든 랙의 오버라이드 값을 초기화하시겠습니까?')) return;
+    fetch('{% url "material:api_audit_mode_clear_all" %}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) { alert(data.message); location.reload(); }
     });
 }
 </script>

@@ -100,4 +100,9 @@ urlpatterns = [
     path('api/labels-for-lot/', views.api_labels_for_lot, name='api_labels_for_lot'),
     path('api/transfer-detail/<int:trx_id>/', views.api_transfer_detail, name='api_transfer_detail'),
     path('api/cancel-stock-move/<int:trx_id>/', views.cancel_stock_move, name='cancel_stock_move'),
+
+    # 감사모드 API
+    path('api/audit-mode/toggle/', views.api_audit_mode_toggle, name='api_audit_mode_toggle'),
+    path('api/audit-mode/set-override/', views.api_audit_mode_set_override, name='api_audit_mode_set_override'),
+    path('api/audit-mode/clear-all/', views.api_audit_mode_clear_all, name='api_audit_mode_clear_all'),
 ]

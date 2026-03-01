@@ -636,6 +636,8 @@ class RawMaterialRack(models.Model):
 
     display_order = models.IntegerField("표시순서", default=0)
     is_active = models.BooleanField("사용여부", default=True)
+    display_override = models.IntegerField("표시재고 오버라이드", null=True, blank=True,
+                                            help_text="감사모드 시 실재고 대신 표시할 기준 수량(kg)")
 
     created_at = models.DateTimeField("생성일시", auto_now_add=True)
     updated_at = models.DateTimeField("수정일시", auto_now=True)
@@ -779,3 +781,36 @@ class RawMaterialLabel(models.Model):
         if self.expiry_date:
             return timezone.now().date() > self.expiry_date
         return False
+
+
+# -----------------------------------------------------------------------------
+# 16. WMS 전역 설정 (WMS Config) - 싱글톤
+# -----------------------------------------------------------------------------
+class WMSConfig(models.Model):
+    """
+    [WMS] 전역 설정 - 싱글톤 (pk=1 고정)
+    감사모드 등 시스템 전역 설정
+    """
+    audit_mode = models.BooleanField("감사모드", default=False,
+                                      help_text="ON이면 레이아웃에 오버라이드 수량 표시")
+    audit_mode_changed_at = models.DateTimeField("감사모드 변경일시", null=True, blank=True)
+    audit_mode_changed_by = models.ForeignKey(
+        'auth.User', on_delete=models.SET_NULL, null=True, blank=True,
+        verbose_name="감사모드 변경자"
+    )
+
+    class Meta:
+        verbose_name = "WMS 전역 설정"
+        verbose_name_plural = "16. WMS 전역 설정"
+
+    def __str__(self):
+        return f"WMS 설정 (감사모드: {'ON' if self.audit_mode else 'OFF'})"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_config(cls):
+        config, _ = cls.objects.get_or_create(pk=1)
+        return config

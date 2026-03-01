@@ -4145,6 +4145,11 @@ def raw_material_layout(request):
     """
     section = request.GET.get('section', '3F')
 
+    # 감사모드 상태 조회
+    from .models import WMSConfig
+    config = WMSConfig.get_config()
+    audit_mode_on = config.audit_mode
+
     # 해당 구역의 랙 목록 조회
     racks = RawMaterialRack.objects.filter(
         section=section,
@@ -4152,7 +4157,7 @@ def raw_material_layout(request):
     ).select_related('part')
 
     def get_rack_info(rack):
-        """랙별 재고 정보 조회 (스캔 차감 반영)"""
+        """랙별 재고 정보 조회 (스캔 차감 반영, 감사모드 지원)"""
         stock_qty = 0
         scanned_qty = 0
         stock_status = 'empty'
@@ -4174,7 +4179,13 @@ def raw_material_layout(request):
             ).aggregate(total=Sum('quantity'))
             scanned_qty = scanned['total'] or 0
 
-            stock_qty = max(actual_qty - scanned_qty, 0)
+            # 감사모드: override 값이 있으면 actual_qty 대신 사용
+            if audit_mode_on and rack.display_override is not None:
+                base_qty = rack.display_override
+            else:
+                base_qty = actual_qty
+
+            stock_qty = max(base_qty - scanned_qty, 0)
 
             try:
                 setting = rack.part.raw_material_setting
@@ -4240,6 +4251,10 @@ def raw_material_layout(request):
         status__in=['INSTOCK', 'PRINTED']
     ).count()
 
+    # 편집 권한 확인
+    profile = getattr(request.user, 'userprofile', None)
+    can_edit = request.user.is_superuser or (profile and getattr(profile, 'can_wms_stock_edit', False))
+
     context = {
         'section': section,
         'section_display': '3공장' if section == '3F' else '2공장',
@@ -4249,9 +4264,72 @@ def raw_material_layout(request):
         'expiry_expired': expiry_expired,
         'expiry_imminent': expiry_imminent,
         'expiry_warning': expiry_warning,
+        'audit_mode': audit_mode_on,
+        'can_edit': can_edit,
     }
 
     return render(request, 'material/raw_material_layout.html', context)
+
+
+# =============================================================================
+# 감사모드 API
+# =============================================================================
+@require_http_methods(["POST"])
+@wms_permission_required('can_wms_stock_edit')
+def api_audit_mode_toggle(request):
+    """감사모드 ON/OFF 토글"""
+    from .models import WMSConfig
+    config = WMSConfig.get_config()
+    config.audit_mode = not config.audit_mode
+    config.audit_mode_changed_at = timezone.now()
+    config.audit_mode_changed_by = request.user
+    config.save()
+    return JsonResponse({
+        'success': True,
+        'audit_mode': config.audit_mode,
+        'message': f"감사모드 {'활성화' if config.audit_mode else '비활성화'}"
+    })
+
+
+@require_http_methods(["POST"])
+@wms_permission_required('can_wms_stock_edit')
+def api_audit_mode_set_override(request):
+    """특정 랙의 오버라이드 값 설정"""
+    data = json.loads(request.body)
+    rack_id = data.get('rack_id')
+    override_value = data.get('override_value')
+
+    try:
+        rack = RawMaterialRack.objects.get(id=rack_id)
+    except RawMaterialRack.DoesNotExist:
+        return JsonResponse({'success': False, 'error': '랙을 찾을 수 없습니다.'}, status=404)
+
+    if override_value is not None:
+        rack.display_override = int(override_value)
+    else:
+        rack.display_override = None
+    rack.save(update_fields=['display_override', 'updated_at'])
+
+    return JsonResponse({
+        'success': True,
+        'rack_id': rack.id,
+        'position_code': rack.position_code,
+        'display_override': rack.display_override,
+    })
+
+
+@require_http_methods(["POST"])
+@wms_permission_required('can_wms_stock_edit')
+def api_audit_mode_clear_all(request):
+    """모든 랙의 오버라이드 값 초기화"""
+    count = RawMaterialRack.objects.filter(
+        display_override__isnull=False
+    ).update(display_override=None)
+    return JsonResponse({
+        'success': True,
+        'cleared_count': count,
+        'message': f'{count}개 랙의 오버라이드 값이 초기화되었습니다.'
+    })
 
 
 @wms_permission_required('can_wms_stock_view')

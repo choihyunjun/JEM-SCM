@@ -2,7 +2,8 @@ from django.contrib import admin
 from .models import (
     Warehouse, MaterialStock, MaterialTransaction, Product, BOMItem,
     InventoryCheck,
-    ProcessTag, ProcessTagScanLog, InventoryCheckSession, InventoryCheckSessionItem
+    ProcessTag, ProcessTagScanLog, InventoryCheckSession, InventoryCheckSessionItem,
+    WMSConfig,
 )
 
 @admin.register(Warehouse)
@@ -150,3 +151,14 @@ class InventoryCheckSessionItemAdmin(admin.ModelAdmin):
     list_filter = ('is_matched', 'check_session__warehouse')
     search_fields = ('tag_id', 'part_no', 'part_name')
     ordering = ('-scanned_at',)
+
+
+@admin.register(WMSConfig)
+class WMSConfigAdmin(admin.ModelAdmin):
+    list_display = ('audit_mode', 'audit_mode_changed_at', 'audit_mode_changed_by')
+
+    def has_add_permission(self, request):
+        return not WMSConfig.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
