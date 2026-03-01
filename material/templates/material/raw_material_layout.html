@@ -354,29 +354,6 @@
     </div>
 </div>
 
-{% if audit_mode %}
-<div class="alert mb-3 d-flex align-items-center justify-content-between flex-wrap gap-2"
-     style="background: linear-gradient(135deg, #fef3c7, #fde68a); border: 2px solid #f59e0b; border-radius: 12px; padding: 12px 20px;">
-    <div>
-        <i class="bi bi-shield-exclamation" style="font-size: 1.2rem; color: #d97706;"></i>
-        <strong style="color: #92400e; margin-left: 8px;">감사모드 활성</strong>
-        <span style="color: #78350f; font-size: 0.85rem; margin-left: 12px;">
-            오버라이드 값이 설정된 랙은 수정된 기준 수량으로 표시됩니다
-        </span>
-    </div>
-    {% if can_edit %}
-    <div>
-        <button class="btn btn-sm btn-outline-warning me-2" onclick="clearAllOverrides()">
-            <i class="bi bi-arrow-counterclockwise me-1"></i>전체 초기화
-        </button>
-        <button class="btn btn-sm btn-warning" onclick="toggleAuditMode()">
-            <i class="bi bi-shield-x me-1"></i>감사모드 OFF
-        </button>
-    </div>
-    {% endif %}
-</div>
-{% endif %}
-
 <div class="main-container">
     <!-- 창고 영역 -->
     <div class="warehouse-area">
@@ -680,8 +657,8 @@
             </div>
             <div class="modal-body" style="padding:20px;">
                 {% if audit_mode and can_edit %}
-                <!-- 감사모드: 오버라이드 값 설정 -->
-                <div class="mb-3 p-3" style="background: #fffbeb; border-radius: 8px; border: 1px solid #fde68a;">
+                <!-- 감사모드: 오버라이드 값 설정 (숨김 - 바코드 아이콘 더블클릭으로 표시) -->
+                <div id="overrideSection" class="mb-3 p-3" style="display:none; background: #fffbeb; border-radius: 8px; border: 1px solid #fde68a;">
                     <label class="form-label fw-bold mb-1" style="color: #92400e; font-size: 0.85rem;">
                         <i class="bi bi-pencil-square me-1"></i>감사모드 오버라이드 값 (kg)
                     </label>
@@ -698,7 +675,7 @@
                 <!-- 바코드 스캔 입력 -->
                 <div class="mb-3">
                     <div class="input-group">
-                        <span class="input-group-text"><i class="bi bi-upc-scan"></i></span>
+                        <span class="input-group-text" id="scanIconBtn" style="cursor:pointer;"><i class="bi bi-upc-scan"></i></span>
                         <input type="text" id="scanInput" class="form-control" placeholder="바코드를 스캔하세요...">
                         <button class="btn btn-primary" onclick="doScan()">
                             <i class="bi bi-check-lg me-1"></i>투입
@@ -860,6 +837,17 @@ function loadScanHistory(partNo) {
         list.innerHTML = '<div class="text-center text-danger py-3">조회 오류</div>';
     });
 }
+
+// === 바코드 아이콘 더블클릭 → 오버라이드 입력 토글 ===
+(function() {
+    const icon = document.getElementById('scanIconBtn');
+    const section = document.getElementById('overrideSection');
+    if (icon && section) {
+        icon.addEventListener('dblclick', function() {
+            section.style.display = section.style.display === 'none' ? 'block' : 'none';
+        });
+    }
+})();
 
 // === 새로고침 카드 3회 클릭 → 감사모드 모달 ===
 (function() {
