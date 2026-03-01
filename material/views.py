@@ -4161,6 +4161,7 @@ def raw_material_layout(request):
         stock_qty = 0
         scanned_qty = 0
         stock_status = 'empty'
+        base_qty = 0
 
         if rack.part:
             # 실재고
