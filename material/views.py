@@ -1,5 +1,6 @@
 # material/views.py
 import logging
+import re
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
@@ -815,7 +816,6 @@ def incoming_history(request):
             item.display_type = "ERP입고"
             # 비고에서 'ERP입고(업체명)' 부분 제거 (입고처 칼럼으로 분리)
             remark = item.remark or ""
-            import re
             item.display_remark = re.sub(r'^ERP입고\([^)]*\)\s*', '', remark)
         elif item.transaction_type == 'ISU_ERP':
             item.display_type = "ERP생산출고"
@@ -2072,41 +2072,55 @@ def get_lot_details(request, part_no):
         if not part:
             return JsonResponse({'error': '품목을 찾을 수 없습니다.'}, status=404)
 
-        # MaterialStock에서 해당 품목의 LOT별 재고 조회
-        lot_stocks = MaterialStock.objects.filter(part=part, quantity__gt=0).select_related('warehouse')
+        # MaterialStock에서 해당 품목의 전체 재고 합계 (NULL 포함)
+        base_qs = MaterialStock.objects.filter(part=part).select_related('warehouse')
 
         # 창고 필터링 (warehouse 파라미터가 있으면)
         warehouse_code = request.GET.get('warehouse')
         if warehouse_code:
-            lot_stocks = lot_stocks.filter(warehouse__code=warehouse_code)
+            base_qs = base_qs.filter(warehouse__code=warehouse_code)
 
-        # 우선순위: lot_no=NULL(ERP 재고) 먼저 → 오래된 LOT 순 (FIFO)
+        # 전체 재고 합계 (음수 NULL 포함)
+        total_qty = base_qs.aggregate(total=Sum('quantity'))['total'] or 0
+
+        # 표시용: quantity > 0인 LOT만 (NULL 제외, LOT만 보여줌)
         from django.db.models import F as _F
-        lot_stocks = lot_stocks.order_by(_F('lot_no').asc(nulls_first=True))
+        lot_stocks = base_qs.filter(lot_no__isnull=False, quantity__gt=0).order_by(_F('lot_no').asc())
 
         lot_data = []
-        total_qty = 0
+        lot_total = 0
         oldest_lot = None
 
         for stock in lot_stocks:
-            if stock.lot_no:
-                days_old = (timezone.now().date() - stock.lot_no).days
-            else:
-                days_old = 99999  # NULL = 가장 오래된 재고 (우선 소진)
+            days_old = (timezone.now().date() - stock.lot_no).days
             lot_info = {
                 'warehouse': stock.warehouse.name,
                 'warehouse_code': stock.warehouse.code,
-                'lot_no': stock.lot_no.strftime('%Y-%m-%d') if stock.lot_no else '-',
+                'lot_no': stock.lot_no.strftime('%Y-%m-%d'),
                 'quantity': stock.quantity,
                 'days_old': days_old,
-                'is_null_lot': stock.lot_no is None,
+                'is_null_lot': False,
             }
             lot_data.append(lot_info)
-            total_qty += stock.quantity
+            lot_total += stock.quantity
 
             # 가장 오래된 LOT 추적 (FIFO 경고용)
-            if stock.lot_no and (oldest_lot is None or stock.lot_no < oldest_lot):
+            if oldest_lot is None or stock.lot_no < oldest_lot:
                 oldest_lot = stock.lot_no
+
+        # LOT에 배분 안 된 나머지 (ERP 관리분)
+        unallocated = total_qty - lot_total
+        if unallocated > 0:
+            # NULL 버킷 = LOT 미배분 재고
+            wh = base_qs.first().warehouse if base_qs.exists() else None
+            lot_data.insert(0, {
+                'warehouse': wh.name if wh else '-',
+                'warehouse_code': wh.code if wh else '-',
+                'lot_no': '-',
+                'quantity': unallocated,
+                'days_old': 99999,
+                'is_null_lot': True,
+            })
 
         # FIFO 경고 판정 (60일 이상 된 LOT가 있으면 경고)
         fifo_warning = False
@@ -2118,7 +2132,7 @@ def get_lot_details(request, part_no):
         return JsonResponse({
             'part_no': part.part_no,
             'part_name': part.part_name,
-            'vendor_name': part.vendor.name,
+            'vendor_name': part.vendor.name if part.vendor else '-',
             'total_quantity': total_qty,
             'lot_details': lot_data,
             'fifo_warning': fifo_warning,
@@ -4198,9 +4212,9 @@ def raw_material_layout(request):
 
             if stock_qty <= 0:
                 stock_status = 'empty'
-            elif stock_qty < safety:
-                stock_status = 'danger'
             elif stock_qty < warning:
+                stock_status = 'danger'
+            elif stock_qty < safety:
                 stock_status = 'warning'
             else:
                 stock_status = 'safe'

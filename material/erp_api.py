@@ -899,52 +899,22 @@ def sync_stock_from_erp():
                 remark=f'ERP 재고동기화 (ERP={erp_qty}, SCM={scm_qty}, diff={diff:+d})',
             )
         else:
-            # ── SCM 초과 → 감소 필요 (NULL 우선, 부족하면 오래된 LOT부터) ──
+            # ── SCM 초과 → 감소 필요 (NULL 버킷에서만 차감, LOT 보존) ──
             to_deduct = abs(diff)
 
-            # 1) NULL에서 먼저 차감
-            null_deduct = min(to_deduct, max(null_qty, 0))
-            if null_deduct > 0 and null_stock:
+            if null_stock:
                 MaterialStock.objects.filter(pk=null_stock.pk).update(
-                    quantity=F('quantity') - null_deduct
+                    quantity=F('quantity') - to_deduct
                 )
-            remaining = to_deduct - null_deduct
-
-            # 2) NULL로 부족하면 가장 오래된 LOT부터 차감 (FIFO)
-            lot_deducted = []
-            if remaining > 0:
-                lot_stocks = MaterialStock.objects.filter(
-                    warehouse=warehouse, part=part,
-                    lot_no__isnull=False, quantity__gt=0
-                ).order_by('lot_no')  # 오래된 LOT 먼저
-
-                for ls in lot_stocks:
-                    if remaining <= 0:
-                        break
-                    ld = min(remaining, ls.quantity)
-                    MaterialStock.objects.filter(pk=ls.pk).update(
-                        quantity=F('quantity') - ld
-                    )
-                    lot_deducted.append(f'{ls.lot_no}:-{ld}')
-                    remaining -= ld
-
-            # 3) 극히 예외: LOT도 모두 부족하면 NULL을 음수로 (안전장치)
-            if remaining > 0:
-                if null_stock:
-                    MaterialStock.objects.filter(pk=null_stock.pk).update(
-                        quantity=F('quantity') - remaining
-                    )
-                else:
-                    MaterialStock.objects.create(
-                        warehouse=warehouse, part=part, lot_no=None, quantity=-remaining
-                    )
-                    result['created'] += 1
+            else:
+                MaterialStock.objects.create(
+                    warehouse=warehouse, part=part, lot_no=None, quantity=-to_deduct
+                )
+                result['created'] += 1
 
             result['decreased'] += 1
 
             remark = f'ERP 재고동기화 (ERP={erp_qty}, SCM={scm_qty}, diff={diff:+d})'
-            if lot_deducted:
-                remark += f' LOT차감: {", ".join(lot_deducted)}'
 
             _create_trx(
                 transaction_type='ADJ_ERP_OUT',
@@ -1872,6 +1842,7 @@ def sync_erp_receipt(date_from=None, date_to=None):
         if rcv_nb in existing_nbs:
             skipped += 1
             continue
+        existing_nbs.add(rcv_nb)  # 같은 rcvNb 중복 처리 방지
 
         try:
             item_cd = item.get('itemCd', '')
