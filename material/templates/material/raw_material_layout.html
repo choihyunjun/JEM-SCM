@@ -629,32 +629,46 @@
             </div>
         </div>
 
-        {% if can_edit %}
-        <!-- 감사모드 -->
-        <div class="sidebar-card" {% if audit_mode %}style="border-color: #f59e0b;"{% endif %}>
-            <div class="sidebar-header" {% if audit_mode %}style="background: linear-gradient(180deg, #fffbeb, #fef3c7); color: #92400e;"{% endif %}>
-                <i class="bi bi-shield-lock me-2"></i>감사모드
-            </div>
-            <div class="sidebar-body text-center">
-                <button class="btn btn-sm w-100 {% if audit_mode %}btn-warning{% else %}btn-outline-secondary{% endif %}" onclick="toggleAuditMode()">
-                    <i class="bi bi-{% if audit_mode %}shield-fill-check{% else %}shield{% endif %} me-1"></i>
-                    {% if audit_mode %}감사모드 ON{% else %}감사모드 OFF{% endif %}
-                </button>
-                {% if audit_mode %}
-                <small class="d-block text-muted mt-2">랙 클릭 시 오버라이드 값 설정 가능</small>
-                {% endif %}
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- 자동 새로고침 안내 -->
-        <div class="sidebar-card">
+        <!-- 자동 새로고침 안내 (3회 연속 클릭 → 감사모드 모달) -->
+        <div class="sidebar-card" id="refreshCard" style="cursor: default; user-select: none;">
             <div class="sidebar-body text-center text-muted" style="font-size: 0.8rem;">
                 <i class="bi bi-arrow-clockwise me-1"></i>30초마다 자동 새로고침
             </div>
         </div>
     </div>
 </div>
+
+<!-- 감사모드 모달 (숨겨진 진입점: 새로고침 카드 3회 클릭) -->
+{% if can_edit %}
+<div class="modal fade" id="auditModeModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content" style="border-radius:12px; border:none; box-shadow:0 12px 40px rgba(0,0,0,0.15);">
+            <div class="modal-header" style="background:linear-gradient(135deg,#d97706,#f59e0b); color:#fff; border-radius:12px 12px 0 0; padding:14px 18px;">
+                <h6 class="modal-title mb-0"><i class="bi bi-shield-lock me-2"></i>감사모드</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center" style="padding:24px;">
+                <div class="mb-3">
+                    <span class="badge {% if audit_mode %}bg-warning text-dark{% else %}bg-secondary{% endif %}" style="font-size:0.9rem; padding:8px 16px;">
+                        현재: {% if audit_mode %}ON{% else %}OFF{% endif %}
+                    </span>
+                </div>
+                <button class="btn w-100 {% if audit_mode %}btn-warning{% else %}btn-outline-dark{% endif %}" onclick="toggleAuditMode()" style="border-radius:10px; padding:10px;">
+                    <i class="bi bi-{% if audit_mode %}shield-fill-check{% else %}shield{% endif %} me-1"></i>
+                    감사모드 {% if audit_mode %}OFF로 전환{% else %}ON으로 전환{% endif %}
+                </button>
+                {% if audit_mode %}
+                <hr style="margin:16px 0;">
+                <button class="btn btn-outline-danger btn-sm w-100" onclick="clearAllOverrides()" style="border-radius:8px;">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>전체 오버라이드 초기화
+                </button>
+                <small class="d-block text-muted mt-3">랙 클릭 시 오버라이드 값 설정 가능</small>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- 투입 이력 + 바코드 스캔 모달 -->
 <div class="modal fade" id="scanHistoryModal" tabindex="-1">
@@ -717,6 +731,15 @@ scanModal.addEventListener('hidden.bs.modal', function() {
     document.getElementById('scanResult').style.display = 'none';
     refreshTimer = setTimeout(function() { location.reload(); }, 30000);
 });
+
+// 감사모드 모달도 동일 처리
+const auditModal = document.getElementById('auditModeModal');
+if (auditModal) {
+    auditModal.addEventListener('shown.bs.modal', function() { clearTimeout(refreshTimer); });
+    auditModal.addEventListener('hidden.bs.modal', function() {
+        refreshTimer = setTimeout(function() { location.reload(); }, 30000);
+    });
+}
 
 // 현재 모달에 열린 품번 저장
 let currentModalPartNo = '';
@@ -837,6 +860,28 @@ function loadScanHistory(partNo) {
         list.innerHTML = '<div class="text-center text-danger py-3">조회 오류</div>';
     });
 }
+
+// === 새로고침 카드 3회 클릭 → 감사모드 모달 ===
+(function() {
+    let clickCount = 0;
+    let clickTimer = null;
+    const card = document.getElementById('refreshCard');
+    if (card) {
+        card.addEventListener('click', function() {
+            clickCount++;
+            clearTimeout(clickTimer);
+            if (clickCount >= 3) {
+                clickCount = 0;
+                const modal = document.getElementById('auditModeModal');
+                if (modal) {
+                    new bootstrap.Modal(modal).show();
+                }
+            } else {
+                clickTimer = setTimeout(function() { clickCount = 0; }, 1500);
+            }
+        });
+    }
+})();
 
 // === 감사모드 기능 ===
 function toggleAuditMode() {
