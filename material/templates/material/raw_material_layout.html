@@ -365,7 +365,7 @@
             <div class="pallet-grid">
                 {% for cell in wall_a.1 %}
                 <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.rack.display_override|default_if_none:'' }}" onclick="showScanHistory(this)"{% endif %}>
-                    <div class="rack-position">{{ cell.rack.position_code }}{% if audit_mode and cell.rack.display_override != None %} <i class="bi bi-pencil-square" style="color:#d97706;"></i>{% endif %}</div>
+                    <div class="rack-position">{{ cell.rack.position_code }}</div>
                     {% if cell.rack.part %}
                     <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
                     <div class="rack-part-name">{{ cell.rack.part.part_name }}</div>
@@ -380,7 +380,7 @@
             <div class="pallet-grid" style="margin-top: 15px;">
                 {% for cell in wall_a.2 %}
                 <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.rack.display_override|default_if_none:'' }}" onclick="showScanHistory(this)"{% endif %}>
-                    <div class="rack-position">{{ cell.rack.position_code }}{% if audit_mode and cell.rack.display_override != None %} <i class="bi bi-pencil-square" style="color:#d97706;"></i>{% endif %}</div>
+                    <div class="rack-position">{{ cell.rack.position_code }}</div>
                     {% if cell.rack.part %}
                     <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
                     <div class="rack-part-name">{{ cell.rack.part.part_name }}</div>
@@ -414,7 +414,7 @@
                         <div class="cells-stack">
                             {% for cell in wall_a.2 %}
                             <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.rack.display_override|default_if_none:'' }}" onclick="showScanHistory(this)"{% endif %}>
-                                <div class="rack-position">{{ cell.rack.position_code }}{% if audit_mode and cell.rack.display_override != None %} <i class="bi bi-pencil-square" style="color:#d97706;"></i>{% endif %}</div>
+                                <div class="rack-position">{{ cell.rack.position_code }}</div>
                                 {% if cell.rack.part %}
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
                                 <div class="rack-part-name">{{ cell.rack.part.part_name }}</div>
@@ -431,7 +431,7 @@
                         <div class="cells-stack">
                             {% for cell in wall_a.1 %}
                             <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.rack.display_override|default_if_none:'' }}" onclick="showScanHistory(this)"{% endif %}>
-                                <div class="rack-position">{{ cell.rack.position_code }}{% if audit_mode and cell.rack.display_override != None %} <i class="bi bi-pencil-square" style="color:#d97706;"></i>{% endif %}</div>
+                                <div class="rack-position">{{ cell.rack.position_code }}</div>
                                 {% if cell.rack.part %}
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
                                 <div class="rack-part-name">{{ cell.rack.part.part_name }}</div>
@@ -466,7 +466,7 @@
                         <div class="cells-stack">
                             {% for cell in wall_b.1 %}
                             <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.rack.display_override|default_if_none:'' }}" onclick="showScanHistory(this)"{% endif %}>
-                                <div class="rack-position">{{ cell.rack.position_code }}{% if audit_mode and cell.rack.display_override != None %} <i class="bi bi-pencil-square" style="color:#d97706;"></i>{% endif %}</div>
+                                <div class="rack-position">{{ cell.rack.position_code }}</div>
                                 {% if cell.rack.part %}
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
                                 <div class="rack-part-name">{{ cell.rack.part.part_name }}</div>
@@ -483,7 +483,7 @@
                         <div class="cells-stack">
                             {% for cell in wall_b.2 %}
                             <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.rack.display_override|default_if_none:'' }}" onclick="showScanHistory(this)"{% endif %}>
-                                <div class="rack-position">{{ cell.rack.position_code }}{% if audit_mode and cell.rack.display_override != None %} <i class="bi bi-pencil-square" style="color:#d97706;"></i>{% endif %}</div>
+                                <div class="rack-position">{{ cell.rack.position_code }}</div>
                                 {% if cell.rack.part %}
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
                                 <div class="rack-part-name">{{ cell.rack.part.part_name }}</div>
@@ -608,7 +608,7 @@
 
         <!-- 자동 새로고침 안내 (3회 연속 클릭 → 감사모드 모달) -->
         <div class="sidebar-card" id="refreshCard" style="cursor: default; user-select: none;">
-            <div class="sidebar-body text-center text-muted" style="font-size: 0.8rem;">
+            <div class="sidebar-body text-center" style="font-size: 0.8rem; color: {% if audit_mode %}#16a34a{% else %}#94a3b8{% endif %};">
                 <i class="bi bi-arrow-clockwise me-1"></i>30초마다 자동 새로고침
             </div>
         </div>
