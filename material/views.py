@@ -4311,7 +4311,7 @@ def api_audit_mode_set_override(request):
         # 현재 실재고 조회
         actual = MaterialStock.objects.filter(
             part=rack.part,
-            warehouse__code='RAW'
+            warehouse__code='3000'
         ).aggregate(total=Sum('quantity'))['total'] or 0
         rack.display_adjustment = desired - actual
     else:
