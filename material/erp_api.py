@@ -1945,6 +1945,9 @@ def register_erp_stock_move(trx, qty, from_warehouse_code, to_warehouse_code):
     if not getattr(settings, 'ERP_ENABLED', False):
         return False, None, 'ERP 비활성화'
 
+    if not from_warehouse_code or not to_warehouse_code:
+        return False, None, f'창고코드 누락 (from={from_warehouse_code}, to={to_warehouse_code})'
+
     # 이동일자
     if hasattr(trx.date, 'strftime'):
         key_dt = trx.date.strftime('%Y%m%d')
@@ -1968,6 +1971,10 @@ def register_erp_stock_move(trx, qty, from_warehouse_code, to_warehouse_code):
             'moveSq': 1,
             'itemCd': trx.part.part_no,
             'moveQt': qty,
+            'fwhCd': from_warehouse_code,
+            'flcCd': from_warehouse_code,
+            'twhCd': to_warehouse_code,
+            'tlcCd': to_warehouse_code,
             'lotNb': '',
             'remarkDc': f'SCM ({trx.transaction_no})',
         }]
