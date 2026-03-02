@@ -585,6 +585,7 @@
                 return;
             }
 
+            const unit = data.unit || 'EA';
             lotSelect.innerHTML = '<option value="">:: LOT 선택 ::</option>';
             data.lots.forEach((lot, index) => {
                 const option = document.createElement('option');
@@ -595,9 +596,9 @@
 
                 let displayText;
                 if (lot.is_null_lot) {
-                    displayText = `ERP 재고 (재고: ${lot.quantity.toLocaleString()} EA) ★ 우선 소진`;
+                    displayText = `ERP 재고 (재고: ${lot.quantity.toLocaleString()} ${unit}) ★ 우선 소진`;
                 } else {
-                    displayText = `${lot.lot_no} (재고: ${lot.quantity.toLocaleString()} EA, ${lot.days_old}일 경과)`;
+                    displayText = `${lot.lot_no} (재고: ${lot.quantity.toLocaleString()} ${unit}, ${lot.days_old}일 경과)`;
                     if (index === 0 || (index === 1 && data.lots[0].is_null_lot)) {
                         displayText += ' ⚠️ FIFO 추천';
                     }
@@ -608,6 +609,7 @@
             });
 
             lotSelect.disabled = false;
+            lotSelect.dataset.unit = unit;
             lotInfo.textContent = `총 ${data.lots.length}개 LOT 사용 가능`;
             lotInfo.className = 'text-success small';
 
@@ -628,7 +630,8 @@
                 stock_id: selectedOption.value,
                 lot_no: selectedOption.dataset.lotNo,
                 max_qty: parseInt(selectedOption.dataset.quantity),
-                days_old: parseInt(selectedOption.dataset.daysOld)
+                days_old: parseInt(selectedOption.dataset.daysOld),
+                unit: lotSelect.dataset.unit || 'EA'
             };
 
             qtyInput.value = currentLotData.max_qty;
@@ -674,7 +677,7 @@
         if(!qty || parseInt(qty) <= 0) { alert('수량은 1 이상이어야 합니다.'); return; }
 
         if (currentLotData && parseInt(qty) > currentLotData.max_qty) {
-            alert(`선택한 LOT의 재고(${currentLotData.max_qty} EA)를 초과할 수 없습니다.`);
+            alert(`선택한 LOT의 재고(${currentLotData.max_qty} ${currentLotData.unit})를 초과할 수 없습니다.`);
             return;
         }
 
@@ -690,7 +693,7 @@
             });
             if (alreadyAdded + parseInt(qty) > currentLotData.max_qty) {
                 const remaining = currentLotData.max_qty - alreadyAdded;
-                alert(`이미 이 LOT에서 ${alreadyAdded} EA가 추가되어 있습니다.\n잔여 이동 가능: ${remaining} EA`);
+                alert(`이미 이 LOT에서 ${alreadyAdded} ${currentLotData.unit}가 추가되어 있습니다.\n잔여 이동 가능: ${remaining} ${currentLotData.unit}`);
                 return;
             }
         }

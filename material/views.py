@@ -2238,10 +2238,14 @@ def api_get_available_lots(request):
             }
             lots.append(lot_info)
 
+        # 단위: weight_unit이 있으면 사용, 없으면 기본 EA
+        unit = (part.weight_unit or 'EA').strip() or 'EA'
+
         return JsonResponse({
             'success': True,
             'part_name': part.part_name,
             'warehouse_name': warehouse.name,
+            'unit': unit,
             'lots': lots
         })
 
