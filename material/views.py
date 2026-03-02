@@ -1890,7 +1890,7 @@ def stock_move(request):
         if transfer_date_str:
             try:
                 transfer_date = dt_cls.strptime(transfer_date_str, '%Y-%m-%d').date()
-                transfer_datetime = timezone.make_aware(dt_cls.combine(transfer_date, timezone.now().time()))
+                transfer_datetime = timezone.make_aware(dt_cls.combine(transfer_date, timezone.localtime().time()))
             except ValueError:
                 transfer_datetime = timezone.now()
         else:
