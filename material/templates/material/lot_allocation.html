@@ -52,7 +52,11 @@
                                    data-idx="{{ forloop.counter0 }}" data-total="{{ item.quantity }}"
                                    value="{{ item.quantity }}" min="1" max="{{ item.quantity }}">
                         </td>
-                        <td class="fw-bold text-success" id="sheet-count-{{ forloop.counter0 }}">1</td>
+                        <td>
+                            <input type="number" class="form-control form-control-sm text-center fw-bold text-success sheet-input"
+                                   id="sheet-count-{{ forloop.counter0 }}" data-idx="{{ forloop.counter0 }}"
+                                   value="1" min="1" style="width:70px; margin:0 auto;">
+                        </td>
                     </tr>
                 {% endfor %}
                 </tbody>
@@ -81,29 +85,38 @@
     <script>
         const allocResult = {{ alloc_result|safe }};
 
-        // SNP 변경 시 매수 계산
-        function updateSheetCounts() {
-            document.querySelectorAll('.snp-input').forEach(input => {
-                const idx = input.dataset.idx;
-                const total = parseInt(input.dataset.total);
-                const snp = parseInt(input.value) || total;
+        // SNP 변경 시 매수 자동계산 (매수 기본값 설정)
+        function updateSheetCounts(fromSnp) {
+            if (fromSnp) {
+                // SNP가 변경된 경우: 해당 행의 매수를 자동계산값으로 리셋
+                const idx = fromSnp.dataset.idx;
+                const total = parseInt(fromSnp.dataset.total);
+                const snp = parseInt(fromSnp.value) || total;
                 const sheets = Math.ceil(total / snp);
-                document.getElementById(`sheet-count-${idx}`).textContent = sheets + '장';
-            });
-            // 총 매수
+                const sheetInput = document.getElementById(`sheet-count-${idx}`);
+                sheetInput.value = sheets;
+                sheetInput.max = sheets;
+            }
+            // 총 매수 집계
             let totalSheets = 0;
-            document.querySelectorAll('[id^="sheet-count-"]').forEach(el => {
-                totalSheets += parseInt(el.textContent) || 0;
+            document.querySelectorAll('.sheet-input').forEach(el => {
+                totalSheets += parseInt(el.value) || 0;
             });
             document.getElementById('totalSheetInfo').textContent = `총 ${totalSheets}장 출력`;
         }
 
+        // SNP 변경 → 매수 자동계산
         document.querySelectorAll('.snp-input').forEach(input => {
-            input.addEventListener('input', updateSheetCounts);
+            input.addEventListener('input', function() { updateSheetCounts(this); });
         });
-        updateSheetCounts();
+        // 매수 직접 수정 → 총 매수만 갱신
+        document.querySelectorAll('.sheet-input').forEach(input => {
+            input.addEventListener('input', function() { updateSheetCounts(); });
+        });
+        // 초기 계산
+        document.querySelectorAll('.snp-input').forEach(input => { updateSheetCounts(input); });
 
-        // 출력 시 SNP 기준으로 items 분할
+        // 출력 시 SNP 기준으로 items 분할 (매수만큼만 생성)
         document.getElementById('allocPrintForm').addEventListener('submit', function() {
             const printItems = [];
             document.querySelectorAll('.snp-input').forEach(input => {
@@ -111,8 +124,11 @@
                 const item = allocResult[idx];
                 const total = parseInt(input.dataset.total);
                 const snp = parseInt(input.value) || total;
+                const sheetInput = document.getElementById(`sheet-count-${idx}`);
+                const maxSheets = parseInt(sheetInput.value) || Math.ceil(total / snp);
                 let remaining = total;
-                while (remaining > 0) {
+                let count = 0;
+                while (remaining > 0 && count < maxSheets) {
                     const qty = Math.min(snp, remaining);
                     printItems.push({
                         part_no: item.part_no,
@@ -122,6 +138,7 @@
                         quantity: qty,
                     });
                     remaining -= qty;
+                    count++;
                 }
             });
             document.getElementById('allocPrintItems').value = JSON.stringify(printItems);
