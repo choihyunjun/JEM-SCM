@@ -260,15 +260,15 @@
     <!-- 동적 인쇄 스타일 (JS에서 교체) -->
     <style id="dynamic-print-style">
         @media print {
-            @page { size: 80mm 50mm; margin: 0mm 4mm 0mm 0mm; }
+            @page { size: 80mm 50mm; margin: 0; }
             #preview-container {
                 display: block;
                 padding: 0;
                 margin: 0;
             }
             .label {
-                width: 80mm !important;
-                height: 50mm !important;
+                width: 73mm !important;
+                height: 48mm !important;
                 box-shadow: none;
                 page-break-after: always;
                 margin: 0;
@@ -435,18 +435,20 @@
                     }
                 }`;
             } else {
-                // 라벨 프린터 - 1장씩
+                // 라벨 프린터 - 1장씩 (라벨보다 7mm 작게 인쇄하여 잘림 방지)
+                const pw = s.w - 7;
+                const ph = s.h - 2;
                 css = `
                 @media print {
-                    @page { size: ${s.w}mm ${s.h}mm; margin: 0mm 4mm 0mm 0mm; }
+                    @page { size: ${s.w}mm ${s.h}mm; margin: 0; }
                     #preview-container {
                         display: block !important;
                         padding: 0 !important;
                         margin: 0 !important;
                     }
                     .label {
-                        width: ${s.w}mm !important;
-                        height: ${s.h}mm !important;
+                        width: ${pw}mm !important;
+                        height: ${ph}mm !important;
                         box-shadow: none !important;
                         page-break-after: always !important;
                         margin: 0 !important;

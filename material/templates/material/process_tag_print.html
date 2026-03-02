@@ -158,7 +158,7 @@
             {% else %}
                 /* 라벨 프린터 - 1장씩 */
                 @page {
-                    margin: 0mm 4mm 0mm 0mm;
+                    margin: 0;
                     {% if size_type == 'small' %}
                         size: 60mm 70mm;
                     {% elif size_type == 'medium' %}
@@ -174,8 +174,15 @@
                 }
 
                 .label {
-                    width: 100%;
-                    height: 100%;
+                    {% if size_type == 'small' %}
+                        width: 55mm !important; height: 68mm !important;
+                    {% elif size_type == 'medium' %}
+                        width: 93mm !important; height: 58mm !important;
+                    {% elif size_type == 'large' %}
+                        width: 203mm !important; height: 146mm !important;
+                    {% else %}
+                        width: 93mm !important; height: 58mm !important;
+                    {% endif %}
                     box-shadow: none;
                     page-break-after: always;
                 }
