@@ -1309,6 +1309,54 @@ def api_scan_history_by_part(request):
     return JsonResponse({'success': True, 'part_no': part_no, 'items': items})
 
 
+@require_http_methods(["POST"])
+@wms_permission_required('can_wms_stock_view')
+def api_process_tag_cancel_scan(request):
+    """
+    투입(스캔) 취소 API - 태그를 PRINTED 상태로 되돌려 재스캔 가능하게 함
+    - stock_reflected=True (이미 출고 반영됨)인 경우 취소 불가
+    """
+    from .models import ProcessTag, ProcessTagScanLog
+
+    try:
+        data = json.loads(request.body)
+        tag_id = data.get('tag_id', '').strip()
+
+        if not tag_id:
+            return JsonResponse({'success': False, 'error': '태그 ID가 누락되었습니다.'}, status=400)
+
+        tag = ProcessTag.objects.filter(tag_id=tag_id).first()
+        if not tag:
+            return JsonResponse({'success': False, 'error': f'등록되지 않은 태그: {tag_id}'}, status=404)
+
+        if tag.status != 'USED':
+            return JsonResponse({'success': False, 'error': f'투입 상태가 아닙니다. (현재: {tag.get_status_display()})'})
+
+        if tag.stock_reflected:
+            return JsonResponse({'success': False, 'error': '이미 출고 처리된 태그는 취소할 수 없습니다.'})
+
+        # 투입 취소: PRINTED로 되돌리기
+        tag.status = 'PRINTED'
+        tag.used_at = None
+        tag.used_by = None
+        tag.used_warehouse = None
+        tag.scan_count = 0
+        tag.save()
+
+        # 취소 로그 기록
+        ProcessTagScanLog.objects.create(
+            tag=tag,
+            scanned_by=request.user,
+            is_first_scan=False,
+            remark=f'투입 취소 ({request.user.username})'
+        )
+
+        return JsonResponse({'success': True, 'message': f'{tag_id} 투입이 취소되었습니다.'})
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
 # =============================================================================
 # 4. 기타 메뉴
 # =============================================================================

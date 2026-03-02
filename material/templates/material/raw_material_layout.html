@@ -760,6 +760,8 @@ function doScan() {
             if (currentModalPartNo) {
                 loadScanHistory(currentModalPartNo);
             }
+            // 1.5초 후 페이지 리로드 (레이아웃 재고 갱신)
+            setTimeout(() => location.reload(), 1500);
         } else {
             const isFifo = data.error && data.error.includes('FIFO');
             scanResult.style.background = isFifo ? '#fef3c7' : '#fef2f2';
@@ -817,17 +819,23 @@ function loadScanHistory(partNo) {
             return;
         }
         let html = '<table class="table table-sm table-hover mb-0" style="font-size:0.85rem;">'
-            + '<thead><tr><th>태그ID</th><th>LOT</th><th class="text-end">수량</th><th>투입일시</th><th>상태</th></tr></thead><tbody>';
+            + '<thead><tr><th>태그ID</th><th>LOT</th><th class="text-end">수량</th><th>투입일시</th><th>상태</th><th></th></tr></thead><tbody>';
         data.items.forEach(item => {
-            const badge = item.stock_reflected
-                ? '<span class="badge bg-secondary">출고완료</span>'
-                : '<span class="badge bg-danger">투입대기</span>';
+            let badge, cancelBtn;
+            if (item.stock_reflected) {
+                badge = '<span class="badge bg-secondary">출고완료</span>';
+                cancelBtn = '';
+            } else {
+                badge = '<span class="badge bg-success">투입</span>';
+                cancelBtn = `<button class="btn btn-outline-danger btn-sm py-0 px-1" style="font-size:0.7rem;" onclick="cancelScan('${item.tag_id}')">취소</button>`;
+            }
             html += `<tr>
                 <td><code style="font-size:0.75rem;">${item.tag_id}</code></td>
                 <td>${item.lot_no}</td>
                 <td class="text-end fw-bold">${item.quantity}</td>
                 <td>${item.used_at}</td>
                 <td>${badge}</td>
+                <td>${cancelBtn}</td>
             </tr>`;
         });
         html += '</tbody></table>';
@@ -835,6 +843,36 @@ function loadScanHistory(partNo) {
     })
     .catch(() => {
         list.innerHTML = '<div class="text-center text-danger py-3">조회 오류</div>';
+    });
+}
+
+// 투입 취소
+function cancelScan(tagId) {
+    if (!confirm(`${tagId} 투입을 취소하시겠습니까?\n취소된 라벨은 다시 스캔할 수 있습니다.`)) return;
+
+    fetch('{% url "material:api_process_tag_cancel_scan" %}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+        body: JSON.stringify({ tag_id: tagId })
+    })
+    .then(r => r.json())
+    .then(data => {
+        const scanResult = document.getElementById('scanResult');
+        scanResult.style.display = 'block';
+        if (data.success) {
+            scanResult.style.background = '#fef3c7';
+            scanResult.style.color = '#92400e';
+            scanResult.innerHTML = `<i class="bi bi-arrow-counterclockwise me-1"></i>${data.message}`;
+            if (currentModalPartNo) loadScanHistory(currentModalPartNo);
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            scanResult.style.background = '#fef2f2';
+            scanResult.style.color = '#991b1b';
+            scanResult.innerHTML = `<i class="bi bi-x-circle-fill me-1"></i>${data.error}`;
+        }
+    })
+    .catch(() => {
+        alert('네트워크 오류');
     });
 }
 
