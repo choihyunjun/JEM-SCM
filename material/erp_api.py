@@ -1953,6 +1953,7 @@ def register_erp_stock_move(trx, qty, from_warehouse_code, to_warehouse_code):
 
     body = {
         'coCd': settings.ERP_COMPANY_CODE,
+        'keyDt': key_dt,
         'moveDt': key_dt,
         'fwhCd': from_warehouse_code,
         'flcCd': from_warehouse_code,
