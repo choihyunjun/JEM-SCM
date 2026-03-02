@@ -1951,14 +1951,6 @@ def register_erp_stock_move(trx, qty, from_warehouse_code, to_warehouse_code):
     else:
         key_dt = str(trx.date).replace('-', '')[:8]
 
-    # LOT 번호 포맷
-    lot_str = ''
-    if trx.lot_no:
-        if hasattr(trx.lot_no, 'strftime'):
-            lot_str = trx.lot_no.strftime('%y%m%d') + '-001'
-        else:
-            lot_str = str(trx.lot_no).replace('-', '')[:6] + '-001'
-
     body = {
         'coCd': settings.ERP_COMPANY_CODE,
         'moveDt': key_dt,
@@ -1974,7 +1966,7 @@ def register_erp_stock_move(trx, qty, from_warehouse_code, to_warehouse_code):
             'moveSq': 1,
             'itemCd': trx.part.part_no,
             'moveQt': qty,
-            'lotNb': lot_str,
+            'lotNb': '',
             'remarkDc': f'SCM ({trx.transaction_no})',
         }]
     }
