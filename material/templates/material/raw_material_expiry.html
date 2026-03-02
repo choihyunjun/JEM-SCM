@@ -173,7 +173,7 @@
                         <th class="ps-3" style="width:12%;">품번</th>
                         <th>품명</th>
                         <th class="text-end" style="width:10%;">수량</th>
-                        <th class="text-center" style="width:7%;">라벨수</th>
+                        <th class="text-center" style="width:7%;">보관기간</th>
                         <th class="text-center" style="width:9%;">LOT</th>
                         <th class="text-center" style="width:9%;">유효기간</th>
                         <th class="text-center" style="width:7%;">D-Day</th>
@@ -186,7 +186,7 @@
                         <td class="ps-3 fw-bold text-primary">{{ item.part_no }}</td>
                         <td class="small">{{ item.part_name|truncatechars:25 }}</td>
                         <td class="text-end fw-bold">{{ item.total_qty|floatformat:0 }}{{ item.unit_display }}</td>
-                        <td class="text-center"><span class="badge bg-secondary">{{ item.label_count }}</span></td>
+                        <td class="text-center small text-muted">{{ item.shelf_life }}일</td>
                         <td class="text-center small">{{ item.lot_no|date:"Y-m-d" }}</td>
                         <td class="text-center small">{{ item.expiry_date|date:"Y-m-d" }}</td>
                         <td class="text-center">

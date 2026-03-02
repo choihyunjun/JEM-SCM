@@ -4401,70 +4401,89 @@ def api_audit_mode_clear_all(request):
 @wms_permission_required('can_wms_stock_view')
 def raw_material_expiry(request):
     """
-    유효기간 관리 - 임박/경과 품목 모니터링 (품번+LOT 합산)
+    유효기간 관리 - 품목설정에 등록된 품목 기준, LOT 입고일 + 보관기간으로 자동 계산
     """
     from datetime import timedelta
-    from django.db.models import Count
+    from collections import defaultdict
 
     today = timezone.now().date()
     filter_status = request.GET.get('status', 'all')
     stock_search = request.GET.get('search', '').strip()
 
-    # 유효기간이 있는 재고 라벨만 조회
-    base_qs = RawMaterialLabel.objects.filter(
-        expiry_date__isnull=False,
-        status__in=['INSTOCK', 'PRINTED']
-    )
+    # 품목설정에 등록된 품목만 대상
+    settings_map = {}
+    for s in RawMaterialSetting.objects.select_related('part').all():
+        settings_map[s.part_id] = s
 
-    if stock_search:
-        from django.db.models import Q as _Q
-        base_qs = base_qs.filter(
-            _Q(part_no__icontains=stock_search) | _Q(part_name__icontains=stock_search)
-        )
+    all_items = []
+    if settings_map:
+        # 해당 품목들의 재고 (LOT 날짜 있고 수량 > 0)
+        stock_qs = MaterialStock.objects.filter(
+            part_id__in=settings_map.keys(),
+            lot_no__isnull=False,
+            quantity__gt=0,
+        ).select_related('part', 'warehouse')
 
-    # 품번 + LOT + 유효기간 기준 합산
-    def _aggregate(qs):
-        return qs.values(
-            'part_no', 'part_name', 'lot_no', 'expiry_date', 'unit'
-        ).annotate(
-            total_qty=Sum('quantity'),
-            label_count=Count('id'),
-        ).order_by('expiry_date')
+        if stock_search:
+            from django.db.models import Q as _Q
+            stock_qs = stock_qs.filter(
+                _Q(part__part_no__icontains=stock_search) | _Q(part__part_name__icontains=stock_search)
+            )
+
+        # 품번 + LOT 기준 합산 (여러 창고에 걸칠 수 있으므로)
+        grouped = defaultdict(lambda: {'total_qty': 0, 'shelf_life': 0})
+        for stock in stock_qs:
+            setting = settings_map.get(stock.part_id)
+            if not setting:
+                continue
+            expiry_date = stock.lot_no + timedelta(days=setting.shelf_life_days)
+            key = (stock.part.part_no, stock.part.part_name, stock.lot_no, expiry_date)
+            grouped[key]['total_qty'] += stock.quantity
+            grouped[key]['shelf_life'] = setting.shelf_life_days
+
+        # 아이템 리스트 생성 + D-day/상태 계산
+        for (part_no, part_name, lot_no, expiry_date), data in grouped.items():
+            delta = (expiry_date - today).days
+            if delta < 0:
+                expiry_status = 'expired'
+            elif delta <= 30:
+                expiry_status = 'imminent'
+            elif delta <= 90:
+                expiry_status = 'warning'
+            else:
+                expiry_status = 'safe'
+            all_items.append({
+                'part_no': part_no,
+                'part_name': part_name,
+                'lot_no': lot_no,
+                'expiry_date': expiry_date,
+                'total_qty': data['total_qty'],
+                'unit_display': 'kg',
+                'shelf_life': data['shelf_life'],
+                'd_day': delta,
+                'expiry_status': expiry_status,
+            })
+
+    # 요약 카운트 (전체 기준)
+    count_expired = sum(1 for i in all_items if i['expiry_status'] == 'expired')
+    count_imminent = sum(1 for i in all_items if i['expiry_status'] == 'imminent')
+    count_warning = sum(1 for i in all_items if i['expiry_status'] == 'warning')
+    count_safe = sum(1 for i in all_items if i['expiry_status'] == 'safe')
 
     # 상태별 필터링
     if filter_status == 'expired':
-        labels = _aggregate(base_qs.filter(expiry_date__lt=today))
+        labels = [i for i in all_items if i['expiry_status'] == 'expired']
     elif filter_status == 'imminent':
-        labels = _aggregate(base_qs.filter(expiry_date__gte=today, expiry_date__lte=today + timedelta(days=30)))
+        labels = [i for i in all_items if i['expiry_status'] == 'imminent']
     elif filter_status == 'warning':
-        labels = _aggregate(base_qs.filter(expiry_date__gt=today + timedelta(days=30), expiry_date__lte=today + timedelta(days=90)))
+        labels = [i for i in all_items if i['expiry_status'] == 'warning']
     elif filter_status == 'safe':
-        labels = _aggregate(base_qs.filter(expiry_date__gt=today + timedelta(days=90)))
+        labels = [i for i in all_items if i['expiry_status'] == 'safe']
     else:
-        labels = _aggregate(base_qs)
+        labels = all_items
 
-    # D-day, 상태 계산
-    labels = list(labels)
-    for item in labels:
-        delta = (item['expiry_date'] - today).days
-        item['d_day'] = delta
-        if delta < 0:
-            item['expiry_status'] = 'expired'
-        elif delta <= 30:
-            item['expiry_status'] = 'imminent'
-        elif delta <= 90:
-            item['expiry_status'] = 'warning'
-        else:
-            item['expiry_status'] = 'safe'
-        # 단위 표시
-        unit_map = dict(RawMaterialLabel.UNIT_CHOICES) if hasattr(RawMaterialLabel, 'UNIT_CHOICES') else {}
-        item['unit_display'] = unit_map.get(item['unit'], item['unit'] or '')
-
-    # 요약 카운트 (합산 그룹 수)
-    count_expired = _aggregate(base_qs.filter(expiry_date__lt=today)).count()
-    count_imminent = _aggregate(base_qs.filter(expiry_date__gte=today, expiry_date__lte=today + timedelta(days=30))).count()
-    count_warning = _aggregate(base_qs.filter(expiry_date__gt=today + timedelta(days=30), expiry_date__lte=today + timedelta(days=90))).count()
-    count_safe = _aggregate(base_qs.filter(expiry_date__gt=today + timedelta(days=90))).count()
+    # 유효기간 순 정렬
+    labels.sort(key=lambda x: x['expiry_date'])
 
     # 현장 투입 이력 (USED 라벨)
     from django.db.models import Q
