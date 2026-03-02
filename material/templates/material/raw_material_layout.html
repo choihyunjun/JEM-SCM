@@ -850,15 +850,22 @@ function loadScanHistory(partNo) {
 function cancelScan(tagId) {
     if (!confirm(`${tagId} 투입을 취소하시겠습니까?\n취소된 라벨은 다시 스캔할 수 있습니다.`)) return;
 
+    const scanResult = document.getElementById('scanResult');
+    scanResult.style.display = 'block';
+    scanResult.style.background = '#f1f5f9';
+    scanResult.style.color = '#475569';
+    scanResult.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>취소 처리 중...';
+
     fetch('{% url "material:api_process_tag_cancel_scan" %}', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
         body: JSON.stringify({ tag_id: tagId })
     })
-    .then(r => r.json())
+    .then(r => {
+        if (!r.ok) return r.text().then(t => { throw new Error(`서버 오류 (${r.status}): ${t.substring(0, 100)}`); });
+        return r.json();
+    })
     .then(data => {
-        const scanResult = document.getElementById('scanResult');
-        scanResult.style.display = 'block';
         if (data.success) {
             scanResult.style.background = '#fef3c7';
             scanResult.style.color = '#92400e';
@@ -871,8 +878,10 @@ function cancelScan(tagId) {
             scanResult.innerHTML = `<i class="bi bi-x-circle-fill me-1"></i>${data.error}`;
         }
     })
-    .catch(() => {
-        alert('네트워크 오류');
+    .catch(err => {
+        scanResult.style.background = '#fef2f2';
+        scanResult.style.color = '#991b1b';
+        scanResult.innerHTML = `<i class="bi bi-x-circle-fill me-1"></i>${err.message || '네트워크 오류'}`;
     });
 }
 
