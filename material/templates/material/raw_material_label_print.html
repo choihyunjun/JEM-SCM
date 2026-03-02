@@ -260,7 +260,7 @@
     <!-- 동적 인쇄 스타일 (JS에서 교체) -->
     <style id="dynamic-print-style">
         @media print {
-            @page { size: 80mm 50mm; margin: 2mm; }
+            @page { size: 80mm 50mm; margin: 0mm 4mm 0mm 0mm; }
             #preview-container {
                 display: block;
                 padding: 0;
@@ -438,7 +438,7 @@
                 // 라벨 프린터 - 1장씩
                 css = `
                 @media print {
-                    @page { size: ${s.w}mm ${s.h}mm; margin: 2mm; }
+                    @page { size: ${s.w}mm ${s.h}mm; margin: 0mm 4mm 0mm 0mm; }
                     #preview-container {
                         display: block !important;
                         padding: 0 !important;
