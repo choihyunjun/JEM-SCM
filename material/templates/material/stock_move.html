@@ -381,6 +381,10 @@
                             <th class="bg-light">ERP 연동</th>
                             <td id="detailErp">-</td>
                         </tr>
+                        <tr id="detailRemarkRow" style="display:none;">
+                            <th class="bg-light">비고</th>
+                            <td id="detailRemark" class="small"></td>
+                        </tr>
                     </tbody>
                 </table>
 
@@ -702,7 +706,7 @@
                     `⚠️ FIFO 위반 경고!\n\n` +
                     `선입선출 원칙에 따라 가장 오래된 LOT(${firstLotNo}, ${firstLotDays}일 경과)를 먼저 사용해야 합니다.\n` +
                     `선택한 LOT: ${currentLotData.lot_no} (${currentLotData.days_old}일 경과)\n\n` +
-                    `FIFO를 무시하고 진행하려면 사유를 입력하세요:`
+                    `예외로 이동을 처리하려면 사유를 입력하세요:`
                 );
                 if (reason === null || reason.trim() === '') {
                     alert('FIFO 위반 사유를 입력해야 진행할 수 있습니다.');
@@ -956,6 +960,15 @@
             document.getElementById('detailFromWh').textContent = t.from_wh;
             document.getElementById('detailToWh').textContent = t.to_wh;
             document.getElementById('detailActor').textContent = t.actor;
+
+            // 비고 (FIFO 위반 사유 등)
+            const remarkRow = document.getElementById('detailRemarkRow');
+            if (t.remark) {
+                document.getElementById('detailRemark').textContent = t.remark;
+                remarkRow.style.display = '';
+            } else {
+                remarkRow.style.display = 'none';
+            }
 
             // ERP 연동 상태
             const erpEl = document.getElementById('detailErp');
