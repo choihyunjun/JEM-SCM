@@ -2071,6 +2071,7 @@ def stock_move(request):
                 from .erp_api import register_erp_stock_move
                 erp_ok = 0
                 erp_fail = 0
+                erp_errors = []
                 for item in erp_pending:
                     try:
                         ok, erp_no, err = register_erp_stock_move(
@@ -2080,12 +2081,15 @@ def stock_move(request):
                             erp_ok += 1
                         else:
                             erp_fail += 1
+                            erp_errors.append(f"{item['trx'].part.part_no}: {err}")
                     except Exception as e:
                         logger.warning(f"ERP 재고이동 등록 예외: {e}")
                         erp_fail += 1
+                        erp_errors.append(f"{item['trx'].part.part_no}: {e}")
 
                 if erp_fail > 0:
-                    messages.warning(request, f"ERP 연동: {erp_ok}건 성공, {erp_fail}건 실패 (SCM 재고이동은 정상 처리됨)")
+                    err_detail = ' / '.join(erp_errors[:3])
+                    messages.warning(request, f"ERP 연동: {erp_ok}건 성공, {erp_fail}건 실패 [{err_detail}] (SCM 재고이동은 정상 처리됨)")
 
             if success_count > 0:
                 messages.success(request, f"총 {success_count}건 이동 완료되었습니다.")
