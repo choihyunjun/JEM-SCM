@@ -437,6 +437,7 @@
     let qrScannedQty = null;
     let currentDetailTrxId = null;
     let isProcessingQR = false;  // QR 스캔 중복 방지 lock
+    let scannedQRSet = new Set();  // 이미 스캔된 QR 코드 추적
 
     // ============================================
     // QR 코드 스캔 처리
@@ -449,6 +450,15 @@
         }
         isProcessingQR = true;
         const qrInput = document.getElementById('qrScanInput');
+
+        // 동일 라벨 중복 스캔 방지
+        if (scannedQRSet.has(qrData)) {
+            alert('이미 스캔된 라벨입니다.');
+            qrInput.value = '';
+            qrInput.focus();
+            isProcessingQR = false;
+            return;
+        }
 
         const parts = qrData.split('|').map(p => p.trim());
         let partNo, qty, lotNo;
@@ -505,7 +515,7 @@
 
                 if (lotMatched) {
                     qrInput.value = '';
-                    await addRow();
+                    await addRow(qrData);
                 } else {
                     qrInput.value = '';
                     document.getElementById('selLot').focus();
@@ -640,7 +650,7 @@
     let selectedLabelIds = [];
 
     // 행 추가 로직 (LOT 정보 포함)
-    async function addRow() {
+    async function addRow(qrRawData) {
         const partNo = document.getElementById('inputPart').value.trim();
         const fromSel = document.getElementById('selFromLoc');
         const lotSel = document.getElementById('selLot');
@@ -723,13 +733,13 @@
                 partNo, fromVal, fromText, toVal, toText,
                 qty, stockId: currentLotData.stock_id,
                 lotNo: currentLotData.lot_no,
-                fifoReason
+                fifoReason, qrRawData
             };
             await showLabelSelectModal(partNo, currentLotData.lot_no, parseInt(qty));
             return;
         }
 
-        finalizeAddRow(partNo, fromVal, fromText, toVal, toText, qty, currentLotData.stock_id, currentLotData.lot_no, '[]', fifoReason);
+        finalizeAddRow(partNo, fromVal, fromText, toVal, toText, qty, currentLotData.stock_id, currentLotData.lot_no, '[]', fifoReason, qrRawData);
     }
 
     // 라벨 선택 모달 표시
@@ -832,13 +842,16 @@
         bootstrap.Modal.getInstance(document.getElementById('labelSelectModal')).hide();
 
         finalizeAddRow(data.partNo, data.fromVal, data.fromText, data.toVal, data.toText,
-                       data.qty, data.stockId, data.lotNo, labelIdsJson, data.fifoReason || '');
+                       data.qty, data.stockId, data.lotNo, labelIdsJson, data.fifoReason || '', data.qrRawData);
         pendingRowData = null;
     }
 
-    function finalizeAddRow(partNo, fromVal, fromText, toVal, toText, qty, stockId, lotNo, labelIdsJson, fifoReason) {
+    function finalizeAddRow(partNo, fromVal, fromText, toVal, toText, qty, stockId, lotNo, labelIdsJson, fifoReason, qrRawData) {
         const emptyRow = document.getElementById('emptyRow');
         if(emptyRow) emptyRow.remove();
+
+        // 스캔된 QR 코드 기록 (중복 스캔 방지)
+        if (qrRawData) scannedQRSet.add(qrRawData);
 
         const tbody = document.getElementById('tableBody');
         const tr = document.createElement('tr');
@@ -855,6 +868,8 @@
         let labelBadgeDetail = '';
         if (rmCount > 0) labelBadgeDetail += `<span class="badge bg-success text-white ms-1">RM ${rmCount}</span>`;
         if (tagCount > 0) labelBadgeDetail += `<span class="badge bg-info text-white ms-1">TAG ${tagCount}</span>`;
+
+        if (qrRawData) tr.dataset.qrData = qrRawData;
 
         tr.innerHTML = `
             <td class="fw-bold text-primary">
@@ -901,7 +916,9 @@
     }
 
     function removeRow(btn) {
-        btn.closest('tr').remove();
+        const tr = btn.closest('tr');
+        if (tr.dataset.qrData) scannedQRSet.delete(tr.dataset.qrData);
+        tr.remove();
         const tbody = document.getElementById('tableBody');
         if(tbody.children.length === 0) {
             tbody.innerHTML = `<tr id="emptyRow"><td colspan="7" class="text-muted py-4">이동할 항목을 상단에서 추가해주세요.</td></tr>`;
