@@ -235,7 +235,7 @@
                 </tr>
                 <tr>
                     <td class="label-header">수량</td>
-                    <td class="label-data" style="font-size: 11pt; color: #2c3e50;">{% if multi_mode %}{{ tag.quantity }} {{ tag.weight_unit|default:"EA" }}{% else %}{{ quantity }} {{ weight_unit|default:"EA" }}{% endif %}</td>
+                    <td class="label-data" style="font-size: 11pt; color: #2c3e50;">{% if multi_mode %}{{ tag.quantity }}{% if tag.weight_unit %} {{ tag.weight_unit }}{% endif %}{% else %}{{ quantity }}{% if weight_unit %} {{ weight_unit }}{% endif %}{% endif %}</td>
                 </tr>
                 <tr>
                     <td class="label-header">LOT</td>
