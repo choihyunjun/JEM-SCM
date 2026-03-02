@@ -686,7 +686,8 @@ function resetRefreshTimer() {
     refreshTimer = setTimeout(function() { location.reload(); }, 30000);
 }
 
-// 모달 열릴 때 새로고침 멈춤, 닫힐 때 재시작
+// 모달 열릴 때 새로고침 멈춤, 닫힐 때 재시작 (변경사항 있으면 즉시 리로드)
+let needReloadOnClose = false;
 const scanModal = document.getElementById('scanHistoryModal');
 scanModal.addEventListener('shown.bs.modal', function() {
     clearTimeout(refreshTimer);
@@ -694,7 +695,12 @@ scanModal.addEventListener('shown.bs.modal', function() {
 });
 scanModal.addEventListener('hidden.bs.modal', function() {
     document.getElementById('scanResult').style.display = 'none';
-    refreshTimer = setTimeout(function() { location.reload(); }, 30000);
+    if (needReloadOnClose) {
+        needReloadOnClose = false;
+        location.reload();
+    } else {
+        refreshTimer = setTimeout(function() { location.reload(); }, 30000);
+    }
 });
 
 // 감사모드 모달도 동일 처리
@@ -755,8 +761,7 @@ function doScan() {
             if (currentModalPartNo) {
                 loadScanHistory(currentModalPartNo);
             }
-            // 1.5초 후 페이지 리로드 (레이아웃 재고 갱신)
-            setTimeout(() => location.reload(), 1500);
+            needReloadOnClose = true;
         } else {
             const isFifo = data.error && data.error.includes('FIFO');
             scanResult.style.background = isFifo ? '#fef3c7' : '#fef2f2';
@@ -867,7 +872,7 @@ function cancelScan(tagId) {
             scanResult.style.color = '#92400e';
             scanResult.innerHTML = `<i class="bi bi-arrow-counterclockwise me-1"></i>${data.message}`;
             if (currentModalPartNo) loadScanHistory(currentModalPartNo);
-            setTimeout(() => location.reload(), 1500);
+            needReloadOnClose = true;
         } else {
             scanResult.style.background = '#fef2f2';
             scanResult.style.color = '#991b1b';
