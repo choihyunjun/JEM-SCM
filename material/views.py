@@ -1100,7 +1100,9 @@ def api_process_tag_scan(request):
 
     try:
         data = json.loads(request.body)
-        tag_id = data.get('tag_id', '').strip()
+        raw_tag = data.get('tag_id', '').strip()
+        # QR 데이터 형식: TAG_ID|품번|수량|LOT → 첫 번째 필드만 추출
+        tag_id = raw_tag.split('|')[0].strip() if '|' in raw_tag else raw_tag
         warehouse_id = data.get('warehouse_id')
 
         if not tag_id:
@@ -1239,6 +1241,8 @@ def api_process_tag_info(request, tag_id):
     """
     from .models import ProcessTag, ProcessTagScanLog
 
+    # QR 데이터 형식: TAG_ID|품번|수량|LOT → 첫 번째 필드만 추출
+    tag_id = tag_id.split('|')[0].strip() if '|' in tag_id else tag_id
     tag = ProcessTag.objects.filter(tag_id=tag_id).first()
 
     if not tag:
