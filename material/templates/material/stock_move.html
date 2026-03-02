@@ -1048,6 +1048,12 @@
                     'Content-Type': 'application/json',
                 },
             });
+            if (!res.ok) {
+                alert(`취소 실패: 서버 오류 (${res.status})`);
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-trash"></i>';
+                return;
+            }
             const data = await res.json();
             if (data.success) {
                 alert(data.message);
@@ -1058,7 +1064,7 @@
                 btn.innerHTML = '<i class="bi bi-trash"></i>';
             }
         } catch (e) {
-            alert('취소 처리 중 오류가 발생했습니다.');
+            alert('취소 처리 중 오류가 발생했습니다: ' + e.message);
             btn.disabled = false;
             btn.innerHTML = '<i class="bi bi-trash"></i>';
         }
@@ -1081,6 +1087,10 @@
                     'Content-Type': 'application/json',
                 },
             });
+            if (!res.ok) {
+                alert(`취소 실패: 서버 오류 (${res.status})`);
+                return;
+            }
             const data = await res.json();
             if (data.success) {
                 alert(data.message);
@@ -1090,7 +1100,7 @@
                 alert('취소 실패: ' + data.error);
             }
         } catch (e) {
-            alert('취소 처리 중 오류가 발생했습니다.');
+            alert('취소 처리 중 오류가 발생했습니다: ' + e.message);
         } finally {
             btn.disabled = false;
             btn.innerHTML = '<i class="bi bi-x-circle me-1"></i>이동 취소';

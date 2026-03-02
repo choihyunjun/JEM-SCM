@@ -5068,7 +5068,10 @@ def cancel_stock_move(request, trx_id):
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'POST만 허용'})
 
-    trx = get_object_or_404(MaterialTransaction, pk=trx_id, transaction_type__in=['TRANSFER', 'TRF_ERP'])
+    try:
+        trx = MaterialTransaction.objects.get(pk=trx_id, transaction_type__in=['TRANSFER', 'TRF_ERP'])
+    except MaterialTransaction.DoesNotExist:
+        return JsonResponse({'success': False, 'error': '해당 재고이동 건을 찾을 수 없습니다.'})
 
     if trx.transaction_type == 'TRF_ERP':
         return JsonResponse({'success': False, 'error': 'ERP에서 동기화된 재고이동 건은 SCM에서 취소할 수 없습니다. ERP(아마란스)에서 삭제해주세요.'})
