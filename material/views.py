@@ -1309,7 +1309,6 @@ def api_scan_history_by_part(request):
     return JsonResponse({'success': True, 'part_no': part_no, 'items': items})
 
 
-@require_http_methods(["POST"])
 @wms_permission_required('can_wms_stock_view')
 def api_process_tag_cancel_scan(request):
     """
