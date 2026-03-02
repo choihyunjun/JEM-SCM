@@ -67,9 +67,9 @@
             justify-content: space-between;
             align-items: center;
             font-weight: bold;
-            font-size: 12pt;
+            font-size: 10pt;
             border-bottom: 2px solid #000;
-            padding: 5px 8px;
+            padding: 3px 6px;
             background: #f0f0f0;
         }
         .label-part-group {
@@ -99,21 +99,19 @@
         .label-header {
             background: #f0f0f0;
             font-weight: bold;
-            font-size: 9pt;
-            width: 25%;
+            font-size: 8pt;
+            width: 17%;
         }
 
         .label-data {
             font-weight: bold;
-            font-size: 11pt;
+            font-size: 10pt;
             overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            max-width: 0;
+            word-break: break-word;
         }
 
         .qr-cell {
-            width: 30%;
+            width: 25%;
             padding: 3px !important;
         }
 
@@ -230,7 +228,7 @@
                 </tr>
                 <tr>
                     <td class="label-header">수량</td>
-                    <td class="label-data" style="font-size: 13pt; color: #2c3e50;">{% if multi_mode %}{{ tag.quantity }} {{ tag.weight_unit|default:"EA" }}{% else %}{{ quantity }} {{ weight_unit|default:"EA" }}{% endif %}</td>
+                    <td class="label-data" style="font-size: 11pt; color: #2c3e50;">{% if multi_mode %}{{ tag.quantity }} {{ tag.weight_unit|default:"EA" }}{% else %}{{ quantity }} {{ weight_unit|default:"EA" }}{% endif %}</td>
                 </tr>
                 <tr>
                     <td class="label-header">LOT</td>
@@ -258,9 +256,9 @@
 
         let qrSize = 90; // 기본 QR 크기 (픽셀)
 
-        if (sizeType === 'small') qrSize = 80;
-        else if (sizeType === 'medium') qrSize = 90;
-        else if (sizeType === 'large') qrSize = 140;
+        if (sizeType === 'small') qrSize = 70;
+        else if (sizeType === 'medium') qrSize = 80;
+        else if (sizeType === 'large') qrSize = 130;
 
         // 각 태그별 고유 QR 데이터 생성
         const multiMode = {% if multi_mode %}true{% else %}false{% endif %};
