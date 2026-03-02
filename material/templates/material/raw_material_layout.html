@@ -181,12 +181,6 @@
         font-size: 1.05rem;
         margin-top: 6px;
     }
-    .rack-scanned {
-        font-size: 0.7rem;
-        color: #dc2626;
-        font-weight: 600;
-        margin-top: 1px;
-    }
     .empty-dash {
         color: #cbd5e1;
         font-size: 1.4rem;
@@ -370,7 +364,6 @@
                     <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
                     <div class="rack-part-name">{{ cell.rack.part.part_name }}</div>
                     <div class="rack-stock">{{ cell.stock_qty|intcomma }}kg</div>
-                    {% if cell.scanned_qty %}<div class="rack-scanned">(투입: {{ cell.scanned_qty|intcomma }})</div>{% endif %}
                     {% else %}
                     <span class="empty-dash">—</span>
                     {% endif %}
@@ -385,7 +378,6 @@
                     <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
                     <div class="rack-part-name">{{ cell.rack.part.part_name }}</div>
                     <div class="rack-stock">{{ cell.stock_qty|intcomma }}kg</div>
-                    {% if cell.scanned_qty %}<div class="rack-scanned">(투입: {{ cell.scanned_qty|intcomma }})</div>{% endif %}
                     {% else %}
                     <span class="empty-dash">—</span>
                     {% endif %}
@@ -419,7 +411,6 @@
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
                                 <div class="rack-part-name">{{ cell.rack.part.part_name }}</div>
                                 <div class="rack-stock">{{ cell.stock_qty|intcomma }}kg</div>
-                    {% if cell.scanned_qty %}<div class="rack-scanned">(투입: {{ cell.scanned_qty|intcomma }})</div>{% endif %}
                                 {% else %}
                                 <span class="empty-dash">—</span>
                                 {% endif %}
@@ -436,7 +427,6 @@
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
                                 <div class="rack-part-name">{{ cell.rack.part.part_name }}</div>
                                 <div class="rack-stock">{{ cell.stock_qty|intcomma }}kg</div>
-                    {% if cell.scanned_qty %}<div class="rack-scanned">(투입: {{ cell.scanned_qty|intcomma }})</div>{% endif %}
                                 {% else %}
                                 <span class="empty-dash">—</span>
                                 {% endif %}
@@ -471,7 +461,6 @@
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
                                 <div class="rack-part-name">{{ cell.rack.part.part_name }}</div>
                                 <div class="rack-stock">{{ cell.stock_qty|intcomma }}kg</div>
-                    {% if cell.scanned_qty %}<div class="rack-scanned">(투입: {{ cell.scanned_qty|intcomma }})</div>{% endif %}
                                 {% else %}
                                 <span class="empty-dash">—</span>
                                 {% endif %}
@@ -488,7 +477,6 @@
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
                                 <div class="rack-part-name">{{ cell.rack.part.part_name }}</div>
                                 <div class="rack-stock">{{ cell.stock_qty|intcomma }}kg</div>
-                    {% if cell.scanned_qty %}<div class="rack-scanned">(투입: {{ cell.scanned_qty|intcomma }})</div>{% endif %}
                                 {% else %}
                                 <span class="empty-dash">—</span>
                                 {% endif %}
