@@ -608,6 +608,10 @@ def sync_erp_incoming(date_from=None, date_to=None):
                     except (ValueError, IndexError):
                         pass
 
+                # ZR 품목: LOT이 없으면 입고일자를 LOT으로 자동 배정
+                if not lot_date and item_cd.startswith('ZR'):
+                    lot_date = erp_date
+
                 detail_remark = detail.get('remarkDc', '') or ''
 
                 result_stock = 0  # 재고 미반영 (sync_stock_from_erp에서 일괄 처리)
