@@ -4850,17 +4850,23 @@ def raw_material_setting(request):
         messages.success(request, f'{part.part_no} 설정 저장 완료')
         return redirect('/wms/raw-material/setting/')
 
-    # 랙에 배치된 품목 목록
-    rack_parts = RawMaterialRack.objects.filter(
+    # 랙에 배치된 품목 ID
+    rack_part_ids = set(RawMaterialRack.objects.filter(
         part__isnull=False
-    ).values_list('part_id', flat=True).distinct()
+    ).values_list('part_id', flat=True).distinct())
 
+    # 이미 설정된 품목 (랙 배치 + 수동 추가 모두 포함)
     settings = RawMaterialSetting.objects.select_related('part').order_by('part__part_no')
-    parts = Part.objects.filter(id__in=rack_parts).order_by('part_no')
+
+    # 랙에 배치됐지만 아직 설정 안 된 품목은 드롭다운에 표시
+    existing_part_ids = set(settings.values_list('part_id', flat=True))
+    unsettled_rack_parts = Part.objects.filter(
+        id__in=rack_part_ids - existing_part_ids
+    ).order_by('part_no')
 
     context = {
         'settings': settings,
-        'parts': parts,
+        'unsettled_rack_parts': unsettled_rack_parts,
     }
 
     return render(request, 'material/raw_material_setting.html', context)
@@ -4928,11 +4934,13 @@ def raw_material_label_print(request):
 def api_part_search(request):
     """
     품목 검색 API - 품번/품명으로 검색
+    ?exclude_setting=1 → 이미 품목설정에 등록된 품목 제외
     """
     from django.http import JsonResponse
     from django.db.models import Q
 
     query = request.GET.get('q', '').strip()
+    exclude_setting = request.GET.get('exclude_setting', '')
 
     if len(query) < 2:
         return JsonResponse({'results': []})
@@ -4942,10 +4950,17 @@ def api_part_search(request):
         part__isnull=False
     ).values_list('part_id', flat=True))
 
-    # 품번 또는 품명으로 검색 (최대 30개)
-    parts = Part.objects.filter(
+    # 품번 또는 품명으로 검색
+    qs = Part.objects.filter(
         Q(part_no__icontains=query) | Q(part_name__icontains=query)
-    ).order_by('part_no')[:30]
+    )
+
+    # 이미 설정된 품목 제외
+    if exclude_setting == '1':
+        existing_ids = set(RawMaterialSetting.objects.values_list('part_id', flat=True))
+        qs = qs.exclude(id__in=existing_ids)
+
+    parts = qs.order_by('part_no')[:30]
 
     results = []
     for part in parts:

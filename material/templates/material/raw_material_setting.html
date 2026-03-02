@@ -19,16 +19,33 @@
                 <div class="card-body">
                     <form method="post">
                         {% csrf_token %}
+                        <input type="hidden" name="part_id" id="selectedPartId">
 
                         <div class="mb-3">
                             <label class="form-label fw-bold">품목 선택 <span class="text-danger">*</span></label>
-                            <select name="part_id" class="form-select" required>
-                                <option value="">-- 품목 선택 --</option>
-                                {% for part in parts %}
-                                <option value="{{ part.id }}">{{ part.part_no }} - {{ part.part_name }}</option>
+                            <!-- 랙 배치 품목 (미설정) 빠른 선택 -->
+                            {% if unsettled_rack_parts %}
+                            <select id="rackPartSelect" class="form-select mb-2" onchange="selectRackPart(this)">
+                                <option value="">-- 랙 배치 품목 빠른 선택 --</option>
+                                {% for part in unsettled_rack_parts %}
+                                <option value="{{ part.id }}" data-partno="{{ part.part_no }}" data-partname="{{ part.part_name }}">{{ part.part_no }} - {{ part.part_name|truncatechars:25 }}</option>
                                 {% endfor %}
                             </select>
-                            <div class="form-text">랙에 배치된 품목만 표시됩니다.</div>
+                            {% endif %}
+                            <!-- 검색으로 품목 추가 -->
+                            <div class="position-relative">
+                                <input type="text" id="partSearchInput" class="form-control"
+                                       placeholder="품번 또는 품명 검색..." autocomplete="off">
+                                <div id="partSearchResults" class="list-group position-absolute w-100 shadow"
+                                     style="z-index:1050; max-height:250px; overflow-y:auto; display:none;"></div>
+                            </div>
+                            <div id="selectedPartDisplay" class="mt-2" style="display:none;">
+                                <span class="badge bg-primary fs-6" id="selectedPartBadge"></span>
+                                <button type="button" class="btn btn-sm btn-outline-secondary ms-1" onclick="clearSelection()">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </div>
+                            <div class="form-text">랙 배치 품목 선택 또는 품번/품명 검색으로 추가</div>
                         </div>
 
                         <div class="mb-3">
@@ -59,7 +76,7 @@
                             <div class="form-text">라벨 발행 시 포대 수 계산에 사용</div>
                         </div>
 
-                        <button type="submit" class="btn btn-primary w-100">
+                        <button type="submit" class="btn btn-primary w-100" id="submitBtn" disabled>
                             <i class="bi bi-check-lg me-1"></i>저장
                         </button>
                     </form>
@@ -72,6 +89,7 @@
             <div class="card shadow-sm border-0">
                 <div class="card-header bg-white">
                     <strong>품목별 설정 현황</strong>
+                    <span class="badge bg-secondary ms-2">{{ settings|length }}건</span>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
@@ -88,7 +106,7 @@
                             </thead>
                             <tbody>
                                 {% for setting in settings %}
-                                <tr>
+                                <tr style="cursor:pointer;" onclick="loadSetting({{ setting.part.id }}, '{{ setting.part.part_no }}', '{{ setting.part.part_name|truncatechars:25 }}', {{ setting.safety_stock }}, {{ setting.warning_stock }}, {{ setting.shelf_life_days }}, {{ setting.unit_weight }})">
                                     <td class="fw-bold">{{ setting.part.part_no }}</td>
                                     <td>{{ setting.part.part_name|truncatechars:20 }}</td>
                                     <td class="text-end">{{ setting.safety_stock|intcomma }} kg</td>
@@ -111,4 +129,82 @@
         </div>
     </div>
 </div>
+
+<script>
+// 품목 검색
+let searchTimer = null;
+const searchInput = document.getElementById('partSearchInput');
+const searchResults = document.getElementById('partSearchResults');
+
+searchInput.addEventListener('input', function() {
+    clearTimeout(searchTimer);
+    const q = this.value.trim();
+    if (q.length < 2) { searchResults.style.display = 'none'; return; }
+
+    searchTimer = setTimeout(() => {
+        fetch(`{% url "material:api_part_search" %}?q=${encodeURIComponent(q)}&exclude_setting=1`)
+        .then(r => r.json())
+        .then(data => {
+            if (!data.results.length) {
+                searchResults.innerHTML = '<div class="list-group-item text-muted text-center py-2">검색 결과 없음</div>';
+                searchResults.style.display = 'block';
+                return;
+            }
+            let html = '';
+            data.results.forEach(p => {
+                html += `<button type="button" class="list-group-item list-group-item-action py-2"
+                    onclick="selectPart(${p.id}, '${p.part_no}', '${p.part_name.replace(/'/g, "\\'")}')">
+                    <strong>${p.part_no}</strong> <small class="text-muted">${p.part_name}</small>
+                </button>`;
+            });
+            searchResults.innerHTML = html;
+            searchResults.style.display = 'block';
+        });
+    }, 300);
+});
+
+// 검색 외부 클릭 시 닫기
+document.addEventListener('click', function(e) {
+    if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+        searchResults.style.display = 'none';
+    }
+});
+
+// 품목 선택 (검색)
+function selectPart(id, partNo, partName) {
+    document.getElementById('selectedPartId').value = id;
+    document.getElementById('selectedPartBadge').textContent = `${partNo} - ${partName}`;
+    document.getElementById('selectedPartDisplay').style.display = 'block';
+    document.getElementById('submitBtn').disabled = false;
+    searchResults.style.display = 'none';
+    searchInput.value = '';
+    const rackSelect = document.getElementById('rackPartSelect');
+    if (rackSelect) rackSelect.value = '';
+}
+
+// 품목 선택 (랙 드롭다운)
+function selectRackPart(sel) {
+    if (!sel.value) return;
+    const opt = sel.options[sel.selectedIndex];
+    selectPart(sel.value, opt.dataset.partno, opt.dataset.partname);
+}
+
+// 선택 해제
+function clearSelection() {
+    document.getElementById('selectedPartId').value = '';
+    document.getElementById('selectedPartDisplay').style.display = 'none';
+    document.getElementById('submitBtn').disabled = true;
+    const rackSelect = document.getElementById('rackPartSelect');
+    if (rackSelect) rackSelect.value = '';
+}
+
+// 기존 설정 클릭 → 폼에 로드 (수정용)
+function loadSetting(partId, partNo, partName, safety, warning, shelf, weight) {
+    selectPart(partId, partNo, partName);
+    document.querySelector('[name=safety_stock]').value = safety;
+    document.querySelector('[name=warning_stock]').value = warning;
+    document.querySelector('[name=shelf_life_days]').value = shelf;
+    document.querySelector('[name=unit_weight]').value = weight;
+}
+</script>
 {% endblock %}
