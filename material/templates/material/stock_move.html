@@ -940,7 +940,7 @@
     // ============================================
     async function openTransferDetail(trxId) {
         try {
-            const url = `/material/api/transfer-detail/${trxId}/`;
+            const url = `/wms/api/transfer-detail/${trxId}/`;
             const res = await fetch(url);
             const data = await res.json();
 
@@ -1041,7 +1041,7 @@
         btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
 
         try {
-            const res = await fetch(`/material/api/cancel-stock-move/${trxId}/`, {
+            const res = await fetch(`/wms/api/cancel-stock-move/${trxId}/`, {
                 method: 'POST',
                 headers: {
                     'X-CSRFToken': '{{ csrf_token }}',
@@ -1080,7 +1080,7 @@
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>처리 중...';
 
         try {
-            const res = await fetch(`/material/api/cancel-stock-move/${currentDetailTrxId}/`, {
+            const res = await fetch(`/wms/api/cancel-stock-move/${currentDetailTrxId}/`, {
                 method: 'POST',
                 headers: {
                     'X-CSRFToken': '{{ csrf_token }}',
