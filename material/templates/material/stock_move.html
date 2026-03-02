@@ -436,11 +436,18 @@
     let currentLotData = null;
     let qrScannedQty = null;
     let currentDetailTrxId = null;
+    let isProcessingQR = false;  // QR 스캔 중복 방지 lock
 
     // ============================================
     // QR 코드 스캔 처리
     // ============================================
     async function handleQRScan(qrData) {
+        // 중복 스캔 방지: 이미 처리 중이면 무시
+        if (isProcessingQR) {
+            console.log('QR 스캔 처리 중 - 중복 요청 무시');
+            return;
+        }
+        isProcessingQR = true;
         const qrInput = document.getElementById('qrScanInput');
 
         const parts = qrData.split('|').map(p => p.trim());
@@ -456,6 +463,7 @@
             alert('올바른 QR 코드 형식이 아닙니다.\n형식: ID|품번|수량|LOT 또는 품번|수량|LOT');
             qrInput.value = '';
             qrInput.focus();
+            isProcessingQR = false;
             return;
         }
 
@@ -463,6 +471,7 @@
             alert('품번 정보가 없습니다.');
             qrInput.value = '';
             qrInput.focus();
+            isProcessingQR = false;
             return;
         }
 
@@ -473,6 +482,7 @@
             alert('먼저 "보내는 창고"를 선택해주세요.');
             document.getElementById('selFromLoc').focus();
             qrInput.value = '';
+            isProcessingQR = false;
             return;
         }
 
@@ -480,27 +490,32 @@
             alert('먼저 "받는 창고"를 선택해주세요.');
             document.getElementById('selToLoc').focus();
             qrInput.value = '';
+            isProcessingQR = false;
             return;
         }
 
         document.getElementById('inputPart').value = partNo;
         qrScannedQty = parseInt(qty) || null;
 
-        await loadAvailableLots();
+        try {
+            await loadAvailableLots();
 
-        if (lotNo) {
-            const lotMatched = await autoSelectLotByDate(lotNo);
+            if (lotNo) {
+                const lotMatched = await autoSelectLotByDate(lotNo);
 
-            if (lotMatched) {
-                qrInput.value = '';
-                await addRow();
+                if (lotMatched) {
+                    qrInput.value = '';
+                    await addRow();
+                } else {
+                    qrInput.value = '';
+                    document.getElementById('selLot').focus();
+                }
             } else {
                 qrInput.value = '';
                 document.getElementById('selLot').focus();
             }
-        } else {
-            qrInput.value = '';
-            document.getElementById('selLot').focus();
+        } finally {
+            isProcessingQR = false;
         }
     }
 
@@ -647,6 +662,23 @@
         if (currentLotData && parseInt(qty) > currentLotData.max_qty) {
             alert(`선택한 LOT의 재고(${currentLotData.max_qty} EA)를 초과할 수 없습니다.`);
             return;
+        }
+
+        // 이미 추가된 동일 품번+LOT+출발창고 행의 수량 합산 검사
+        if (currentLotData) {
+            const existingRows = document.querySelectorAll('#tableBody input[name="stock_id[]"]');
+            let alreadyAdded = 0;
+            existingRows.forEach((input, idx) => {
+                if (input.value === String(currentLotData.stock_id)) {
+                    const qtyInput = document.querySelectorAll('#tableBody input[name="move_qty[]"]')[idx];
+                    alreadyAdded += parseInt(qtyInput.value) || 0;
+                }
+            });
+            if (alreadyAdded + parseInt(qty) > currentLotData.max_qty) {
+                const remaining = currentLotData.max_qty - alreadyAdded;
+                alert(`이미 이 LOT에서 ${alreadyAdded} EA가 추가되어 있습니다.\n잔여 이동 가능: ${remaining} EA`);
+                return;
+            }
         }
 
         // FIFO 위반 검증 (사유 입력 필수)
