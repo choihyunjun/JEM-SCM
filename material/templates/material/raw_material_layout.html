@@ -748,7 +748,14 @@ function doScan() {
         },
         body: JSON.stringify({ tag_id: tagId })
     })
-    .then(r => r.json())
+    .then(async r => {
+        if (!r.ok) {
+            let errMsg = `서버 오류 (${r.status})`;
+            try { const j = await r.json(); errMsg = j.error || errMsg; } catch(e) {}
+            throw new Error(errMsg);
+        }
+        return r.json();
+    })
     .then(data => {
         if (data.success) {
             scanResult.style.background = '#dcfce7';
@@ -771,10 +778,10 @@ function doScan() {
         scanInput.value = '';
         scanInput.focus();
     })
-    .catch(() => {
+    .catch(err => {
         scanResult.style.background = '#fef2f2';
         scanResult.style.color = '#991b1b';
-        scanResult.innerHTML = '<i class="bi bi-x-circle-fill me-1"></i>네트워크 오류';
+        scanResult.innerHTML = `<i class="bi bi-x-circle-fill me-1"></i>${err.message || '네트워크 오류'}`;
         scanInput.value = '';
         scanInput.focus();
     });
@@ -861,8 +868,12 @@ function cancelScan(tagId) {
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
         body: JSON.stringify({ tag_id: tagId })
     })
-    .then(r => {
-        if (!r.ok) return r.text().then(t => { throw new Error(`서버 오류 (${r.status}): ${t.substring(0, 100)}`); });
+    .then(async r => {
+        if (!r.ok) {
+            let errMsg = `서버 오류 (${r.status})`;
+            try { const j = await r.json(); errMsg = j.error || errMsg; } catch(e) {}
+            throw new Error(errMsg);
+        }
         return r.json();
     })
     .then(data => {
