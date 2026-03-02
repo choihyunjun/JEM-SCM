@@ -1076,10 +1076,8 @@ def lot_allocation_print(request):
 # =============================================================================
 
 from django.http import JsonResponse
-from django.views.decorators.http import require_http_methods
 import json
 
-@require_http_methods(["POST"])
 @wms_permission_required('can_wms_stock_view')
 def api_process_tag_scan(request):
     """
@@ -1232,7 +1230,6 @@ def api_process_tag_scan(request):
         }, status=500)
 
 
-@require_http_methods(["GET"])
 @wms_permission_required('can_wms_stock_view')
 def api_process_tag_info(request, tag_id):
     """
@@ -1279,7 +1276,6 @@ def api_process_tag_info(request, tag_id):
     })
 
 
-@require_http_methods(["GET"])
 @wms_permission_required('can_wms_stock_view')
 def api_scan_history_by_part(request):
     """
@@ -4341,7 +4337,6 @@ def raw_material_layout(request):
 # =============================================================================
 # 감사모드 API
 # =============================================================================
-@require_http_methods(["POST"])
 @wms_permission_required('can_wms_stock_edit')
 def api_audit_mode_toggle(request):
     """감사모드 ON/OFF 토글"""
@@ -4358,7 +4353,6 @@ def api_audit_mode_toggle(request):
     })
 
 
-@require_http_methods(["POST"])
 @wms_permission_required('can_wms_stock_edit')
 def api_audit_mode_set_override(request):
     """특정 랙의 오버라이드 값 설정 (델타 방식: 입력값 - 실재고 = 보정값)"""
@@ -4391,7 +4385,6 @@ def api_audit_mode_set_override(request):
     })
 
 
-@require_http_methods(["POST"])
 @wms_permission_required('can_wms_stock_edit')
 def api_audit_mode_clear_all(request):
     """모든 랙의 보정값 초기화"""
