@@ -252,7 +252,13 @@
                             <option value="large">대형 (A5)</option>
                         </select>
                     </div>
-                    <div class="text-end text-muted small" id="reprintSheetCount"></div>
+                    <div class="mb-2">
+                        <label class="small fw-bold mb-1">매수</label>
+                        <div class="d-flex align-items-center gap-2">
+                            <input type="number" id="reprintSheetInput" class="form-control form-control-sm" min="1" style="width:80px;">
+                            <span class="text-muted small" id="reprintSheetCount"></span>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer py-2">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button>
@@ -703,7 +709,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('reprintLotInfo').textContent = `${lotNo} / ${qty.toLocaleString()} EA`;
                 document.getElementById('reprintSnp').value = qty;
                 document.getElementById('reprintSnp').max = qty;
-                updateReprintSheetCount();
+                updateReprintSheetCount(true);
 
                 // 모달에 데이터 저장
                 const modal = document.getElementById('reprintModal');
@@ -838,14 +844,21 @@ function submitLotCorrect() {
 // ============================================
 // 현품표 재발행 모달 관련
 // ============================================
-function updateReprintSheetCount() {
+function updateReprintSheetCount(fromSnp) {
     const qty = parseInt(document.getElementById('reprintModal').dataset.qty) || 0;
     const snp = parseInt(document.getElementById('reprintSnp').value) || qty;
     const sheets = snp > 0 ? Math.ceil(qty / snp) : 1;
-    document.getElementById('reprintSheetCount').textContent = `${sheets}장 출력`;
+    const sheetInput = document.getElementById('reprintSheetInput');
+    if (fromSnp) {
+        sheetInput.value = sheets;
+        sheetInput.max = sheets;
+    }
+    const userSheets = parseInt(sheetInput.value) || sheets;
+    document.getElementById('reprintSheetCount').textContent = `(자동: ${sheets}장)`;
 }
 
-document.getElementById('reprintSnp').addEventListener('input', updateReprintSheetCount);
+document.getElementById('reprintSnp').addEventListener('input', function() { updateReprintSheetCount(true); });
+document.getElementById('reprintSheetInput').addEventListener('input', function() { updateReprintSheetCount(false); });
 
 document.getElementById('reprintConfirmBtn').addEventListener('click', function() {
     const modal = document.getElementById('reprintModal');
@@ -857,12 +870,15 @@ document.getElementById('reprintConfirmBtn').addEventListener('click', function(
     const printMode = document.getElementById('reprintModeSelect').value;
     const sizeType = document.getElementById('reprintSizeSelect').value;
 
+    const maxSheets = parseInt(document.getElementById('reprintSheetInput').value) || Math.ceil(qty / snpVal);
     const items = [];
     let remaining = qty;
-    while (remaining > 0) {
+    let count = 0;
+    while (remaining > 0 && count < maxSheets) {
         const tagQty = Math.min(snpVal, remaining);
         items.push({ part_no: partNo, part_name: partName, lot_no: lotNo, quantity: tagQty });
         remaining -= tagQty;
+        count++;
     }
 
     document.getElementById('reprintItems').value = JSON.stringify(items);
