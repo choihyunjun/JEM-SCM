@@ -1148,7 +1148,7 @@ def api_process_tag_scan(request):
                     if effective > 0 and lot < tag.lot_no:
                         return JsonResponse({
                             'success': False,
-                            'error': f'[FIFO 위반] LOT {lot} 에 {effective}개가 남아있습니다. 먼저 소진해주세요.',
+                            'error': f'[FIFO 위반] LOT {lot} 재고가 남아있습니다. 먼저 소진해주세요.',
                             'tag_info': {
                                 'tag_id': tag.tag_id,
                                 'part_no': tag.part_no,
