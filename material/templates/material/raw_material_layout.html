@@ -826,23 +826,20 @@ function loadScanHistory(partNo) {
             return;
         }
         let html = '<table class="table table-sm table-hover mb-0" style="font-size:0.85rem;">'
-            + '<thead><tr><th>태그ID</th><th>LOT</th><th class="text-end">수량</th><th>투입일시</th><th>상태</th><th></th></tr></thead><tbody>';
+            + '<thead><tr><th>태그ID</th><th>LOT</th><th>투입일시</th><th>상태</th></tr></thead><tbody>';
         data.items.forEach(item => {
-            let badge, cancelBtn;
+            let badge;
+            const canCancel = !item.stock_reflected;
             if (item.stock_reflected) {
                 badge = '<span class="badge bg-secondary">출고완료</span>';
-                cancelBtn = '';
             } else {
                 badge = '<span class="badge bg-success">투입</span>';
-                cancelBtn = `<button class="btn btn-outline-danger btn-sm py-0 px-1" style="font-size:0.7rem;" onclick="cancelScan('${item.tag_id}')">취소</button>`;
             }
-            html += `<tr>
+            html += `<tr${canCancel ? ` ondblclick="cancelScan('${item.tag_id}')" style="cursor:pointer;" title="더블클릭하여 취소"` : ''}>
                 <td><code style="font-size:0.75rem;">${item.tag_id}</code></td>
                 <td>${item.lot_no}</td>
-                <td class="text-end fw-bold">${item.quantity}</td>
                 <td>${item.used_at}</td>
                 <td>${badge}</td>
-                <td>${cancelBtn}</td>
             </tr>`;
         });
         html += '</tbody></table>';
