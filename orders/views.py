@@ -1561,7 +1561,8 @@ def delivery_note_print(request, order_id):
         'total_qty': items.aggregate(Sum('total_qty'))['total_qty__sum'] or 0,
         'total_box': items.aggregate(Sum('box_count'))['box_count__sum'] or 0,
         'print_date': timezone.localtime().date(),
-        'vendor': vendor
+        'vendor': vendor,
+        'weight_unit': part.weight_unit if part and part.weight_unit else 'EA',
     })
 
 # ==========================================

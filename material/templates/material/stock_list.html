@@ -227,7 +227,7 @@ function showLotDetails(partNo, warehouseCode) {
             html += '    </div>';
             html += '    <div class="row mt-2">';
             html += '      <div class="col-md-6"><strong>협력사:</strong> ' + escapeHtml(data.vendor_name) + '</div>';
-            html += '      <div class="col-md-6"><strong>전체 재고:</strong> <span class="text-primary fw-bold fs-5">' + Number(data.total_quantity).toLocaleString() + ' EA</span></div>';
+            html += '      <div class="col-md-6"><strong>전체 재고:</strong> <span class="text-primary fw-bold fs-5">' + Number(data.total_quantity).toLocaleString() + ' ' + (data.weight_unit || 'EA') + '</span></div>';
             html += '    </div>';
             html += '  </div>';
             html += '</div>';
@@ -270,7 +270,7 @@ function showLotDetails(partNo, warehouseCode) {
                     html += '<tr>';
                     html += '  <td><span class="badge bg-secondary me-1">' + escapeHtml(lot.warehouse_code) + '</span>' + escapeHtml(lot.warehouse) + '</td>';
                     html += '  <td class="text-center fw-bold text-primary">' + escapeHtml(lot.lot_no) + '</td>';
-                    html += '  <td class="text-end fw-bold">' + Number(lot.quantity).toLocaleString() + ' EA</td>';
+                    html += '  <td class="text-end fw-bold">' + Number(lot.quantity).toLocaleString() + ' ' + (data.weight_unit || 'EA') + '</td>';
                     html += '  <td class="text-center ' + daysClass + '">' + daysText + '</td>';
                     html += '</tr>';
                 });

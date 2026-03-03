@@ -159,7 +159,7 @@
                     <div class="content">
                         <div class="part-name">{{ label.part_name }}</div>
                         <div class="part-no">{{ label.part_no }}</div>
-                        <div class="snp-info">QTY: {{ label.snp }} EA</div>
+                        <div class="snp-info">QTY: {{ label.snp }} {{ label.weight_unit|default:"EA" }}</div>
                     </div>
 
                     <div class="barcode-area">

@@ -28,7 +28,7 @@
                 
                 <div class="col-md-3"><label class="text-muted small">입고일자</label><div>{{ inspection.inbound_transaction.date|date:"Y-m-d" }}</div></div>
                 <div class="col-md-3"><label class="text-muted small">LOT 번호</label><div class="fw-bold text-info">{{ inspection.inbound_transaction.lot_no|date:"Y-m-d"|default:"-" }}</div></div>
-                <div class="col-md-3"><label class="text-muted small">입고수량</label><div class="fw-bold text-primary">{{ inspection.inbound_transaction.quantity|intcomma }} EA</div></div>
+                <div class="col-md-3"><label class="text-muted small">입고수량</label><div class="fw-bold text-primary">{{ inspection.inbound_transaction.quantity|intcomma }} {{ inspection.inbound_transaction.part.weight_unit|default:"EA" }}</div></div>
                 <div class="col-md-3"><label class="text-muted small">현재위치</label><div>{{ inspection.inbound_transaction.warehouse_to.name }}</div></div>
             </div>
         </div>

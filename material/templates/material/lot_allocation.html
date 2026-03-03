@@ -46,7 +46,7 @@
                         <td class="fw-bold text-primary">{{ item.part_no }}</td>
                         <td class="text-start">{{ item.part_name }}</td>
                         <td><span class="badge bg-info text-dark">{{ item.lot_no }}</span></td>
-                        <td class="fw-bold">{{ item.quantity }}EA</td>
+                        <td class="fw-bold">{{ item.quantity }}{{ item.weight_unit|default:"EA" }}</td>
                         <td>
                             <input type="number" class="form-control form-control-sm text-center snp-input"
                                    data-idx="{{ forloop.counter0 }}" data-total="{{ item.quantity }}"
@@ -583,10 +583,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                     <div class="d-flex gap-2">
                         <span class="info-badge bg-warning bg-opacity-25 border border-warning" style="font-size:0.8rem;">
-                            NULL: <strong>${info.null_qty.toLocaleString()}</strong>EA
+                            NULL: <strong>${info.null_qty.toLocaleString()}</strong>${info.weight_unit || 'EA'}
                         </span>
                         <span class="info-badge bg-info bg-opacity-10 border border-info" style="font-size:0.8rem;">
-                            전체: <strong>${info.total_qty.toLocaleString()}</strong>EA
+                            전체: <strong>${info.total_qty.toLocaleString()}</strong>${info.weight_unit || 'EA'}
                         </span>
                         ${info.existing_lots.length > 0 ? `<span class="info-badge bg-success bg-opacity-10 border border-success" style="font-size:0.8rem;">기존LOT: ${info.existing_lots.length}건</span>` : ''}
                     </div>
@@ -618,7 +618,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         lots.map((l, idx) => `
                             <div class="d-flex align-items-center gap-2 mb-1 lot-item">
                                 <span class="badge bg-light text-dark border">${l.lot}</span>
-                                <span class="fw-bold">${l.qty.toLocaleString()} EA</span>
+                                <span class="fw-bold">${l.qty.toLocaleString()} ${info.weight_unit || 'EA'}</span>
                                 <input type="hidden" name="lot_nos_${pid}[]" value="${l.lot}">
                                 <input type="hidden" name="qty_${pid}[]" value="${l.qty}">
                                 <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1 btn-remove-lot"
@@ -644,7 +644,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <span class="lot-delta-label" data-stock-id="${l.id}" style="font-size:0.8rem;"></span>
                                 <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 btn-reprint-lot"
                                         data-part-no="${info.part_no}" data-part-name="${info.part_name}"
-                                        data-lot="${l.lot_no}" data-qty="${l.quantity}"
+                                        data-lot="${l.lot_no}" data-qty="${l.quantity}" data-unit="${info.weight_unit || 'EA'}"
                                         title="현품표 재발행" style="font-size:0.75rem;">
                                     <i class="bi bi-printer"></i>
                                 </button>
@@ -706,7 +706,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 const qty = parseInt(this.dataset.qty);
 
                 document.getElementById('reprintPartInfo').textContent = `${partNo} / ${partName}`;
-                document.getElementById('reprintLotInfo').textContent = `${lotNo} / ${qty.toLocaleString()} EA`;
+                const unit = this.dataset.unit || 'EA';
+                document.getElementById('reprintLotInfo').textContent = `${lotNo} / ${qty.toLocaleString()} ${unit}`;
                 document.getElementById('reprintSnp').value = qty;
                 document.getElementById('reprintSnp').max = qty;
                 updateReprintSheetCount(true);
@@ -795,7 +796,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 totalEa += lots.reduce((s, l) => s + l.qty, 0);
             }
         });
-        if (!confirm(`${totalParts}개 품목, ${totalLots}개 LOT에 총 ${totalEa.toLocaleString()}EA를 배분하시겠습니까?`)) {
+        if (!confirm(`${totalParts}개 품목, ${totalLots}개 LOT에 총 ${totalEa.toLocaleString()}개를 배분하시겠습니까?`)) {
             e.preventDefault();
         }
     });

@@ -92,7 +92,7 @@
                                 {% endif %}
                             </td>
                             <td>{{ item.inbound_transaction.part.vendor.name }}</td>
-                            <td class="fw-bold">{{ item.inbound_transaction.quantity|intcomma }} EA</td>
+                            <td class="fw-bold">{{ item.inbound_transaction.quantity|intcomma }} {{ item.inbound_transaction.part.weight_unit|default:"EA" }}</td>
                             <td>
                                 {% if item.inspector %}
                                     {{ item.inspector.username }}

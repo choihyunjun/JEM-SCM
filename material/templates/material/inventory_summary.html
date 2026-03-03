@@ -118,7 +118,7 @@
                                 {% if row.part %}{{ row.part.account_type|default:"원재료" }}{% else %}원재료{% endif %}
                             </td>
                             <td class="text-center small">
-                                {% if row.part %}{{ row.part.unit|default:"EA" }}{% else %}EA{% endif %}
+                                {% if row.part %}{{ row.part.weight_unit|default:"EA" }}{% else %}EA{% endif %}
                             </td>
                             <td class="text-center small">
                                 {% if row.part %}{{ row.part.part_group|default:"-" }}{% else %}-{% endif %}

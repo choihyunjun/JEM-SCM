@@ -102,7 +102,7 @@
                 <tr>
                     <td style="font-weight: bold;">{{ trx.part.part_no }}</td>
                     <td class="text-left">{{ trx.part.part_name }}</td>
-                    <td>EA</td>
+                    <td>{{ trx.part.weight_unit|default:"EA" }}</td>
                     <td style="font-weight: bold; font-size: 16px;">{{ trx.quantity }}</td>
                     <td>불량반품</td>
                 </tr>

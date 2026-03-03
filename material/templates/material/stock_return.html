@@ -26,7 +26,7 @@
                             <td class="fw-bold">{{ stock.part.part_no }}</td>
                             <td>{{ stock.part.part_name }}</td>
                             <td>{{ stock.part.vendor.name }}</td>
-                            <td class="text-danger fw-bold">{{ stock.quantity }} EA</td>
+                            <td class="text-danger fw-bold">{{ stock.quantity }} {{ stock.part.weight_unit|default:"EA" }}</td>
                             <td>
                                 <form method="post" class="d-flex gap-2">
                                     {% csrf_token %}

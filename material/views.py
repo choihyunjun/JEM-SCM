@@ -2188,7 +2188,8 @@ def get_lot_details(request, part_no):
             'lot_details': lot_data,
             'fifo_warning': fifo_warning,
             'oldest_lot': oldest_lot.strftime('%Y-%m-%d') if oldest_lot else None,
-            'oldest_days': (timezone.now().date() - oldest_lot).days if oldest_lot else 0
+            'oldest_days': (timezone.now().date() - oldest_lot).days if oldest_lot else 0,
+            'weight_unit': part.weight_unit or 'EA',
         })
 
     except Exception as e:
@@ -2461,6 +2462,7 @@ def lot_allocation(request):
                                 'part_group': p.part_group or '',
                                 'lot_no': ls,
                                 'quantity': int(qs),
+                                'weight_unit': p.weight_unit or 'EA',
                             })
                 if alloc_items_for_print:
                     request.session['lot_alloc_result'] = alloc_items_for_print
@@ -2544,6 +2546,7 @@ def api_null_stock_info(request):
                     'null_qty': null_qty,
                     'existing_lots': existing_lots,
                     'total_qty': total_qty,
+                    'weight_unit': part.weight_unit or 'EA',
                 })
 
             return JsonResponse({'success': True, 'items': items})
