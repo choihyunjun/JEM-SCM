@@ -146,14 +146,6 @@ def register_erp_incoming(trx, qty, warehouse_code, erp_order_no='', erp_order_s
         logger.info(f'ERP 입고등록 건너뜀: 거래처 ERP코드 없음 (trx={trx.transaction_no})')
         return False, None, None  # 에러가 아닌 건너뜀
 
-    # LOT 번호 포맷
-    lot_str = ''
-    if trx.lot_no:
-        if hasattr(trx.lot_no, 'strftime'):
-            lot_str = trx.lot_no.strftime('%y%m%d') + '-001'
-        else:
-            lot_str = str(trx.lot_no).replace('-', '')[:6] + '-001'
-
     # 입고일자
     if hasattr(trx.date, 'strftime'):
         key_dt = trx.date.strftime('%Y%m%d')
@@ -191,7 +183,7 @@ def register_erp_incoming(trx, qty, warehouse_code, erp_order_no='', erp_order_s
             'exchRt': 1,
             'exchUm': 0,
             'exchAm': 0,
-            'lotNb': lot_str,
+            'lotNb': '',
             'umFg': '',
             'lcCd': warehouse_code,
             'remarkDc': f'SCM ({trx.transaction_no})',
