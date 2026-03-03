@@ -1160,7 +1160,7 @@ def sync_erp_items():
 
         # 중량 정보
         weight_qty = item.get('weightQt') or 0
-        weight_unit = (item.get('weightUm') or '').strip()
+        weight_unit = (item.get('unitDc') or item.get('weightUm') or '').strip()
 
         try:
             part = Part.objects.filter(part_no=item_cd).first()
