@@ -634,19 +634,15 @@ def cancel_manual_incoming(request, trx_id):
                 quantity=F('quantity') - trx.quantity
             )
 
-            # ERP 입고 삭제
+            # ERP 입고 삭제 (실패 시 전체 롤백)
             erp_no = getattr(trx, 'erp_incoming_no', None)
             if erp_no:
-                try:
-                    from material.erp_api import delete_erp_incoming
-                    erp_ok, erp_err = delete_erp_incoming(erp_no)
-                    if erp_ok:
-                        messages.info(request, f'ERP 입고 삭제 완료: {erp_no}')
-                    else:
-                        messages.warning(request, f'ERP 입고 삭제 실패: {erp_err}')
-                except Exception as e:
-                    logger.error(f'ERP 입고삭제 예외: {e}')
-                    messages.warning(request, f'ERP 삭제 오류: {e}')
+                from material.erp_api import delete_erp_incoming
+                erp_ok, erp_err = delete_erp_incoming(erp_no)
+                if erp_ok:
+                    messages.info(request, f'ERP 입고 삭제 완료: {erp_no}')
+                else:
+                    raise Exception(f'ERP 입고 삭제 실패: {erp_err} (ERP번호: {erp_no})')
 
             # ImportInspection 삭제
             if ImportInspection:
