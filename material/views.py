@@ -409,6 +409,12 @@ def manual_incoming(request):
             if is_closed:
                 messages.warning(request, warning_msg)
 
+            # 입고 일자를 DateTimeField에 맞게 datetime 객체로 변환
+            if isinstance(date_str, str):
+                date_value = timezone.make_aware(datetime.strptime(date_str, '%Y-%m-%d'))
+            else:
+                date_value = timezone.now()
+
             success_count = 0
 
             with transaction.atomic():
@@ -454,7 +460,7 @@ def manual_incoming(request):
                     trx_obj = MaterialTransaction.objects.create(
                         transaction_no=trx_no,
                         transaction_type='IN_MANUAL',
-                        date=date_str,
+                        date=date_value,
                         part=part,
                         quantity=qty,
                         lot_no=lot_date,
@@ -5461,6 +5467,12 @@ def manual_outgoing(request):
             if is_closed:
                 messages.warning(request, warning_msg)
 
+            # 출고 일자를 DateTimeField에 맞게 datetime 객체로 변환
+            if isinstance(date_str, str):
+                date_value = timezone.make_aware(datetime.strptime(date_str, '%Y-%m-%d'))
+            else:
+                date_value = timezone.now()
+
             success_count = 0
 
             with transaction.atomic():
@@ -5511,7 +5523,7 @@ def manual_outgoing(request):
                     MaterialTransaction.objects.create(
                         transaction_no=trx_no,
                         transaction_type='OUT_MANUAL',
-                        date=date_str,
+                        date=date_value,
                         part=part,
                         quantity=-qty,
                         lot_no=lot_date,
