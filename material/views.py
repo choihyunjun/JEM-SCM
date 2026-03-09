@@ -3613,6 +3613,12 @@ def bom_register_demand(request):
         except (json.JSONDecodeError, TypeError):
             selected_vendors = None
 
+    # 거래처 필터용: Part 품번 → vendor.name 매핑 캐시
+    part_vendor_cache = {}
+    if selected_vendors is not None:
+        for p in Part.objects.select_related('vendor').filter(vendor__isnull=False):
+            part_vendor_cache[p.part_no] = p.vendor.name
+
     # 동일 자품번+필요일자 기준으로 필요수량 합산
     demand_map = {}  # key: (child_part_no, need_date), value: required_qty 합계
 
@@ -3637,14 +3643,14 @@ def bom_register_demand(request):
         for item in batch.get('items', []):
             child_part_no = item.get('child_part_no', '')
             required_qty = item.get('required_qty', 0)
-            vendor_name = item.get('vendor_name', '')
 
             if not child_part_no or required_qty <= 0:
                 continue
 
-            # 거래처 필터 적용
+            # 거래처 필터 적용: Part 마스터의 실제 vendor.name 기준으로 매칭
             if selected_vendors is not None:
-                if not vendor_name or vendor_name not in selected_vendors:
+                actual_vendor_name = part_vendor_cache.get(child_part_no, '')
+                if not actual_vendor_name or actual_vendor_name not in selected_vendors:
                     continue
 
             key = (child_part_no, need_date)
