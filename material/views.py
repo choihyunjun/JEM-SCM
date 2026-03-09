@@ -6018,9 +6018,9 @@ def api_check_open_orders(request):
     if not vendor_erp_code:
         return JsonResponse({'orders': [], 'message': '업체 ERP 코드 없음 (업체를 먼저 선택하세요)'})
 
-    # 최근 90일 발주 헤더 조회 (업체 코드 필수 → 해당 업체만 조회)
+    # 최근 6개월 발주 헤더 조회 (업체 코드 필수 → 해당 업체만 조회)
     today = timezone.localtime().date()
-    date_from = (today - datetime.timedelta(days=90)).strftime('%Y%m%d')
+    date_from = (today - datetime.timedelta(days=180)).strftime('%Y%m%d')
     date_to = today.strftime('%Y%m%d')
 
     headers = fetch_erp_po_headers(date_from, date_to, tr_cd=vendor_erp_code)
