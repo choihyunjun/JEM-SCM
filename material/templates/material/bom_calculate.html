@@ -320,7 +320,7 @@
                                 <td>{{ item.vendor_name|default:"-" }}</td>
                             </tr>
                             {% empty %}
-                            <tr class="table-warning">
+                            <tr class="table-warning" data-missing-partno="{{ batch.part_no }}">
                                 <td class="fw-bold">{{ batch.part_no }}</td>
                                 <td>-</td>
                                 <td class="text-center">{{ batch.qty }}</td>
@@ -331,6 +331,25 @@
                         {% endfor %}
                     </tbody>
                 </table>
+            </div>
+        </div>
+        <!-- BOM 누락 동기화 영역 -->
+        <div id="bomSyncArea" class="card-footer bg-warning-subtle" style="display:none;">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span>
+                    <i class="bi bi-exclamation-triangle text-warning me-1"></i>
+                    <strong>BOM 데이터 없음: <span id="missingBomCount">0</span>건</strong>
+                    <span class="text-muted ms-2">ERP에서 BOM을 가져올 수 있습니다.</span>
+                </span>
+                <button type="button" class="btn btn-sm btn-warning fw-bold" id="btnSyncMissingBom" onclick="syncMissingBom()">
+                    <i class="bi bi-cloud-download me-1"></i>ERP BOM 확인
+                </button>
+            </div>
+            <div id="bomSyncProgress" style="display:none;">
+                <div class="progress mb-2" style="height: 22px;">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" id="bomSyncBar" role="progressbar" style="width:0%">0 / 0</div>
+                </div>
+                <div id="bomSyncLog" class="small text-muted" style="max-height:120px; overflow-y:auto;"></div>
             </div>
         </div>
         <div class="card-footer">
@@ -593,6 +612,81 @@ document.getElementById('batchForm').addEventListener('submit', function() {
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>계산 중...';
 });
+
+// BOM 누락 품번 감지 및 동기화
+document.addEventListener('DOMContentLoaded', function() {
+    var missingRows = document.querySelectorAll('#batchResultTable tr[data-missing-partno]');
+    if (missingRows.length > 0) {
+        document.getElementById('bomSyncArea').style.display = '';
+        document.getElementById('missingBomCount').textContent = missingRows.length;
+    }
+});
+
+async function syncMissingBom() {
+    var missingRows = document.querySelectorAll('#batchResultTable tr[data-missing-partno]');
+    var partNos = [];
+    missingRows.forEach(function(tr) { partNos.push(tr.dataset.missingPartno); });
+
+    if (partNos.length === 0) { alert('동기화할 품번이 없습니다.'); return; }
+
+    var btn = document.getElementById('btnSyncMissingBom');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>동기화 중...';
+
+    var progressDiv = document.getElementById('bomSyncProgress');
+    var bar = document.getElementById('bomSyncBar');
+    var logDiv = document.getElementById('bomSyncLog');
+    progressDiv.style.display = '';
+    logDiv.innerHTML = '';
+
+    var total = partNos.length;
+    var synced = 0;
+    var failed = 0;
+    var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+    for (var i = 0; i < total; i++) {
+        var pno = partNos[i];
+        var pct = Math.round(((i + 1) / total) * 100);
+        bar.style.width = pct + '%';
+        bar.textContent = (i + 1) + ' / ' + total;
+
+        try {
+            var res = await fetch('{% url "material:bom_sync_missing" %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ part_no: pno })
+            });
+            var data = await res.json();
+            if (data.success) {
+                synced++;
+                logDiv.innerHTML += '<div class="text-success"><i class="bi bi-check-circle me-1"></i>' + pno + ': BOM ' + data.bom_count + '개 등록</div>';
+            } else {
+                failed++;
+                logDiv.innerHTML += '<div class="text-danger"><i class="bi bi-x-circle me-1"></i>' + pno + ': ' + data.error + '</div>';
+            }
+        } catch (e) {
+            failed++;
+            logDiv.innerHTML += '<div class="text-danger"><i class="bi bi-x-circle me-1"></i>' + pno + ': 요청 실패</div>';
+        }
+        logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    bar.classList.remove('progress-bar-animated');
+    bar.classList.add(failed === total ? 'bg-danger' : 'bg-success');
+    bar.textContent = '완료: 성공 ' + synced + '건, 실패 ' + failed + '건';
+
+    if (synced > 0) {
+        btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>페이지 새로고침';
+        btn.disabled = false;
+        btn.onclick = function() { location.reload(); };
+        logDiv.innerHTML += '<div class="text-primary fw-bold mt-1"><i class="bi bi-info-circle me-1"></i>' + synced + '건 동기화 완료. 새로고침 후 엑셀을 다시 업로드하면 BOM이 반영됩니다.</div>';
+    } else {
+        btn.innerHTML = 'ERP에 BOM 없음';
+    }
+}
 
 // SCM 소요량 등록 - 거래처 선택 모달
 var vendorSelectModal = null;

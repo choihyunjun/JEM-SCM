@@ -3536,6 +3536,46 @@ def api_bom_calculate(request):
 
 
 @wms_permission_required('can_wms_bom_edit')
+def bom_sync_missing(request):
+    """
+    [WMS] BOM 없는 품번을 ERP에서 개별 동기화하는 AJAX API
+    - POST: { part_no: '품번' }
+    - 한 건씩 호출하여 프론트에서 진행률 관리
+    """
+    from django.http import JsonResponse
+    import json
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST만 허용'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': '잘못된 요청'}, status=400)
+
+    part_no = data.get('part_no', '').strip()
+    if not part_no:
+        return JsonResponse({'success': False, 'error': '품번이 없습니다.'})
+
+    from material.erp_api import sync_single_bom
+    ok, count, err = sync_single_bom(part_no)
+
+    if ok:
+        return JsonResponse({
+            'success': True,
+            'part_no': part_no,
+            'bom_count': count,
+            'message': f'{part_no}: BOM {count}개 동기화 완료'
+        })
+    else:
+        return JsonResponse({
+            'success': False,
+            'part_no': part_no,
+            'error': err or 'ERP에 BOM 데이터 없음'
+        })
+
+
+@wms_permission_required('can_wms_bom_edit')
 def bom_register_demand(request):
     """
     [WMS] BOM 일괄 소요량 계산 결과를 SCM 소요량(Demand)으로 등록

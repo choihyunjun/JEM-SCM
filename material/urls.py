@@ -87,6 +87,7 @@ urlpatterns = [
     path('bom/detail/<str:part_no>/', views.bom_detail, name='bom_detail'),
     path('api/bom/calculate/', views.api_bom_calculate, name='api_bom_calculate'),
     path('bom/register-demand/', views.bom_register_demand, name='bom_register_demand'),
+    path('api/bom/sync-missing/', views.bom_sync_missing, name='bom_sync_missing'),
     path('bom/sync/', views.bom_sync, name='bom_sync'),
     path('bom/sync/<str:part_no>/', views.bom_sync_single, name='bom_sync_single'),
 
