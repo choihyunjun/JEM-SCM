@@ -3,6 +3,14 @@
 {% load auth_extras %}
 
 {% block content %}
+<style>
+    /* 과부족 페이지: 풀 와이드 */
+    #layoutSidenav_content .container-fluid {
+        max-width: 100% !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+    }
+</style>
 <div class="container-fluid p-0">
 
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-3 top-control">
