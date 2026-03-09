@@ -565,6 +565,11 @@ def manual_incoming(request):
         except Exception:
             item.inspection_status = None
         item.can_cancel = (item.label_count == 0)
+        item.can_edit = (
+            item.transaction_type in ('IN_MANUAL', 'IN_SCM')
+            and item.label_count == 0
+            and item.inspection_status in (None, 'PENDING')
+        )
 
     warehouses_qs = Warehouse.objects.filter(is_active=True).order_by('code')
 
@@ -666,6 +671,164 @@ def cancel_manual_incoming(request, trx_id):
         messages.error(request, f"취소 처리 중 오류 발생: {str(e)}")
 
     return redirect('material:manual_incoming')
+
+
+@wms_permission_required('can_wms_inout_edit')
+def edit_manual_incoming(request, trx_id):
+    """[WMS] 수기 입고 수정 - 수량/일자/LOT/비고 변경"""
+    from django.http import JsonResponse
+    import json
+    from datetime import datetime
+    from .models import RawMaterialLabel
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST만 허용'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': '잘못된 요청 형식입니다.'}, status=400)
+
+    trx = get_object_or_404(MaterialTransaction, pk=trx_id)
+
+    # === 검증 ===
+
+    # (1) 트랜잭션 타입
+    if trx.transaction_type not in ('IN_MANUAL', 'IN_SCM'):
+        return JsonResponse({'success': False, 'error': 'ERP 입고 건은 수정할 수 없습니다.'})
+
+    # (2) 라벨 발행 여부
+    label_count = RawMaterialLabel.objects.filter(
+        incoming_transaction=trx
+    ).exclude(status='CANCELLED').count()
+    if label_count > 0:
+        return JsonResponse({'success': False, 'error': f'라벨이 {label_count}장 발행된 입고 건은 수정할 수 없습니다.'})
+
+    # (3) 검사 상태
+    inspection = None
+    if ImportInspection:
+        try:
+            inspection = trx.inspection
+        except Exception:
+            inspection = None
+
+    if inspection and inspection.status in ('APPROVED', 'REJECTED'):
+        return JsonResponse({'success': False, 'error': '검사 판정이 완료된 입고 건은 수정할 수 없습니다.'})
+
+    # (4) 마감 기간 (기존 일자)
+    is_closed, warning_msg, _ = check_closing_date(
+        trx.date.date() if hasattr(trx.date, 'date') and callable(trx.date.date) else trx.date
+    )
+    if is_closed:
+        return JsonResponse({'success': False, 'error': f'마감된 기간의 입고 건은 수정할 수 없습니다. ({warning_msg})'})
+
+    # === 입력값 파싱 ===
+
+    # 수량
+    try:
+        new_qty = int(data.get('quantity', 0))
+        if new_qty <= 0:
+            raise ValueError
+    except (ValueError, TypeError):
+        return JsonResponse({'success': False, 'error': '수량은 1 이상의 정수여야 합니다.'})
+
+    # 일자
+    try:
+        new_date_str = data.get('date', '')
+        new_date = timezone.make_aware(datetime.strptime(new_date_str, '%Y-%m-%d'))
+    except (ValueError, TypeError):
+        return JsonResponse({'success': False, 'error': '올바른 날짜 형식이 아닙니다. (YYYY-MM-DD)'})
+
+    # (5) 마감 기간 (변경 일자)
+    is_closed_new, warning_msg_new, _ = check_closing_date(new_date.date())
+    if is_closed_new:
+        return JsonResponse({'success': False, 'error': f'변경하려는 날짜가 마감 기간에 속합니다. ({warning_msg_new})'})
+
+    # LOT
+    new_lot_date = None
+    new_lot_str = (data.get('lot_no') or '').strip()
+    if new_lot_str and new_lot_str != '-':
+        try:
+            new_lot_date = datetime.strptime(new_lot_str, '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            return JsonResponse({'success': False, 'error': 'LOT 번호 형식이 올바르지 않습니다. (YYYY-MM-DD)'})
+
+    new_remark = data.get('remark', '')
+
+    # === 변경 감지 ===
+    old_qty = trx.quantity
+    old_lot = trx.lot_no
+    warehouse = trx.warehouse_to
+    qty_changed = (new_qty != old_qty)
+    lot_changed = (new_lot_date != old_lot)
+
+    # === 재고 조정 + 저장 (atomic) ===
+    try:
+        with transaction.atomic():
+            if qty_changed or lot_changed:
+                # (A) 기존 재고 차감
+                old_stock = MaterialStock.objects.filter(
+                    warehouse=warehouse, part=trx.part, lot_no=old_lot
+                ).first()
+
+                if not old_stock or old_stock.quantity < old_qty:
+                    current = old_stock.quantity if old_stock else 0
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'현재 재고({current})가 기존 입고 수량({old_qty})보다 적어 수정할 수 없습니다.'
+                    })
+
+                MaterialStock.objects.filter(pk=old_stock.pk).update(
+                    quantity=F('quantity') - old_qty
+                )
+
+                # (B) 새 재고 증가
+                new_stock, _ = MaterialStock.objects.get_or_create(
+                    warehouse=warehouse, part=trx.part, lot_no=new_lot_date,
+                    defaults={'quantity': 0}
+                )
+                MaterialStock.objects.filter(pk=new_stock.pk).update(
+                    quantity=F('quantity') + new_qty
+                )
+                new_stock.refresh_from_db()
+                trx.result_stock = new_stock.quantity
+
+            # (C) 트랜잭션 업데이트
+            trx.quantity = new_qty
+            trx.date = new_date
+            trx.lot_no = new_lot_date
+            trx.remark = new_remark
+            trx.save(update_fields=['quantity', 'date', 'lot_no', 'remark', 'result_stock'])
+
+            # (D) 검사 LOT 업데이트 (PENDING)
+            if inspection and lot_changed:
+                inspection.lot_no = new_lot_date
+                inspection.save(update_fields=['lot_no'])
+
+            # (E) ERP 재등록 (무검사 + ERP 연동 건)
+            erp_no = trx.erp_incoming_no
+            if erp_no and (qty_changed or lot_changed):
+                from material.erp_api import delete_erp_incoming, register_erp_incoming
+                del_ok, del_err = delete_erp_incoming(erp_no)
+                if not del_ok:
+                    raise Exception(f'ERP 입고 삭제 실패: {del_err}')
+
+                trx.erp_incoming_no = None
+                trx.erp_sync_status = 'PENDING'
+                trx.save(update_fields=['erp_incoming_no', 'erp_sync_status'])
+
+                reg_ok, reg_no, reg_err = register_erp_incoming(trx, new_qty, warehouse.code)
+                if not reg_ok and reg_err:
+                    logger.warning(f'ERP 재등록 실패: {reg_err}')
+
+        return JsonResponse({
+            'success': True,
+            'message': f'입고 건 [{trx.transaction_no}] 수정 완료'
+        })
+
+    except Exception as e:
+        logger.error(f'입고 수정 오류: {e}', exc_info=True)
+        return JsonResponse({'success': False, 'error': f'수정 처리 중 오류: {str(e)}'})
 
 
 @login_required
@@ -3380,6 +3543,7 @@ def bom_register_demand(request):
     - part + due_date 기준으로 update_or_create (기존 데이터 업데이트)
     """
     from datetime import datetime
+    import json
 
     if request.method != 'POST':
         messages.error(request, "잘못된 요청입니다.")
@@ -3391,6 +3555,17 @@ def bom_register_demand(request):
     if not batch_results:
         messages.error(request, "계산 결과가 없습니다. 다시 계산해주세요.")
         return redirect('material:bom_calculate')
+
+    # 거래처 필터 파싱
+    selected_vendors_json = request.POST.get('selected_vendors', '')
+    selected_vendors = None
+    if selected_vendors_json:
+        try:
+            selected_vendors = json.loads(selected_vendors_json)
+            if not isinstance(selected_vendors, list):
+                selected_vendors = None
+        except (json.JSONDecodeError, TypeError):
+            selected_vendors = None
 
     # 동일 자품번+필요일자 기준으로 필요수량 합산
     demand_map = {}  # key: (child_part_no, need_date), value: required_qty 합계
@@ -3416,9 +3591,15 @@ def bom_register_demand(request):
         for item in batch.get('items', []):
             child_part_no = item.get('child_part_no', '')
             required_qty = item.get('required_qty', 0)
+            vendor_name = item.get('vendor_name', '')
 
             if not child_part_no or required_qty <= 0:
                 continue
+
+            # 거래처 필터 적용
+            if selected_vendors is not None:
+                if not vendor_name or vendor_name not in selected_vendors:
+                    continue
 
             key = (child_part_no, need_date)
             if key in demand_map:
@@ -3462,7 +3643,10 @@ def bom_register_demand(request):
                 updated_count += 1
 
     # 결과 메시지
-    result_msg = f"SCM 소요량 등록 완료: 신규 {registered_count}건, 업데이트 {updated_count}건"
+    vendor_info = ""
+    if selected_vendors:
+        vendor_info = f" [거래처: {', '.join(selected_vendors)}]"
+    result_msg = f"SCM 소요량 등록 완료{vendor_info}: 신규 {registered_count}건, 업데이트 {updated_count}건"
     if skipped_count > 0:
         result_msg += f", 스킵 {skipped_count}건 (품목마스터 미존재)"
         if len(skipped_parts) <= 5:

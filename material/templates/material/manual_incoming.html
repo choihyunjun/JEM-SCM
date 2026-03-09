@@ -253,7 +253,7 @@
                     <tbody>
                         {% for item in history_page %}
                         <tr style="cursor:pointer;"
-                            onclick="openHistoryDetail({{ item.id }}, '{{ item.transaction_no }}', '{{ item.date|date:"Y-m-d H:i" }}', '{{ item.part.part_no }}', '{{ item.part.part_name|escapejs }}', {{ item.quantity }}, '{{ item.lot_no|date:"Y-m-d"|default:"-" }}', '{{ item.warehouse_to.name|default:"-"|escapejs }}', '{{ item.vendor.name|default:"-"|escapejs }}', '{{ item.actor.username|default:"-" }}', '{{ item.remark|default:""|escapejs }}', {{ item.label_count }}, '{{ item.inspection_status|default:"" }}', {{ item.can_cancel|yesno:"true,false" }})"
+                            onclick="openHistoryDetail({{ item.id }}, '{{ item.transaction_no }}', '{{ item.date|date:"Y-m-d H:i" }}', '{{ item.part.part_no }}', '{{ item.part.part_name|escapejs }}', {{ item.quantity }}, '{{ item.lot_no|date:"Y-m-d"|default:"-" }}', '{{ item.warehouse_to.name|default:"-"|escapejs }}', '{{ item.vendor.name|default:"-"|escapejs }}', '{{ item.actor.username|default:"-" }}', '{{ item.remark|default:""|escapejs }}', {{ item.label_count }}, '{{ item.inspection_status|default:"" }}', {{ item.can_cancel|yesno:"true,false" }}, {{ item.can_edit|yesno:"true,false" }})"
                             class="">
                             <td class="small text-nowrap">{{ item.date|date:"Y-m-d H:i" }}</td>
                             <td class="small fw-bold text-primary text-nowrap">{{ item.transaction_no }}</td>
@@ -324,34 +324,73 @@
         </div>
     </div>
 
-    <!-- 입고 상세 모달 -->
+    <!-- 입고 상세 모달 (수정 기능 포함) -->
     <div class="modal fade" id="historyDetailModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header bg-light">
-                    <h5 class="modal-title fw-bold"><i class="bi bi-info-circle me-2"></i>입고 상세 정보</h5>
+                    <h5 class="modal-title fw-bold">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <span id="detailModalTitle">입고 상세 정보</span>
+                    </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
+                    <input type="hidden" id="editTrxId">
                     <table class="table table-borderless mb-0">
                         <tr><th class="text-muted" width="30%">수불번호</th><td id="detailTrxNo" class="fw-bold text-primary"></td></tr>
-                        <tr><th class="text-muted">입고일시</th><td id="detailDate"></td></tr>
+                        <tr>
+                            <th class="text-muted">입고일시</th>
+                            <td>
+                                <span id="detailDate" class="view-field"></span>
+                                <input type="date" id="editDate" class="form-control form-control-sm edit-field" style="display:none;">
+                            </td>
+                        </tr>
                         <tr><th class="text-muted">품번</th><td id="detailPartNo"></td></tr>
                         <tr><th class="text-muted">품명</th><td id="detailPartName"></td></tr>
-                        <tr><th class="text-muted">수량</th><td id="detailQty" class="fw-bold fs-5"></td></tr>
-                        <tr><th class="text-muted">LOT 번호</th><td id="detailLot"></td></tr>
+                        <tr>
+                            <th class="text-muted">수량</th>
+                            <td>
+                                <span id="detailQty" class="fw-bold fs-5 view-field"></span>
+                                <input type="number" id="editQty" class="form-control form-control-sm fw-bold edit-field" style="display:none;" min="1">
+                            </td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">LOT 번호</th>
+                            <td>
+                                <span id="detailLot" class="view-field"></span>
+                                <div class="input-group edit-field" style="display:none;">
+                                    <input type="text" id="editLot" class="form-control form-control-sm" placeholder="YYYY-MM-DD">
+                                    <button class="btn btn-outline-secondary btn-sm" type="button" id="btnEditLotCalendar"><i class="bi bi-calendar3"></i></button>
+                                    <input type="date" id="hiddenEditDatePicker" class="d-none">
+                                </div>
+                            </td>
+                        </tr>
                         <tr><th class="text-muted">입고 창고</th><td id="detailWarehouse"></td></tr>
                         <tr><th class="text-muted">공급처</th><td id="detailVendor"></td></tr>
                         <tr><th class="text-muted">처리자</th><td id="detailActor"></td></tr>
-                        <tr><th class="text-muted">비고</th><td id="detailRemark"></td></tr>
+                        <tr>
+                            <th class="text-muted">비고</th>
+                            <td>
+                                <span id="detailRemark" class="view-field"></span>
+                                <input type="text" id="editRemark" class="form-control form-control-sm edit-field" style="display:none;">
+                            </td>
+                        </tr>
                         <tr><th class="text-muted">라벨 발행</th><td id="detailLabel"></td></tr>
                         <tr><th class="text-muted">검사 상태</th><td id="detailInspection"></td></tr>
                     </table>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
-                    <button type="button" class="btn btn-danger" id="detailCancelBtn" style="display:none;">
+                    <button type="button" class="btn btn-secondary view-btn" data-bs-dismiss="modal">닫기</button>
+                    <button type="button" class="btn btn-primary view-btn" id="detailEditBtn" style="display:none;" onclick="enterEditMode()">
+                        <i class="bi bi-pencil me-1"></i>수정
+                    </button>
+                    <button type="button" class="btn btn-danger view-btn" id="detailCancelBtn" style="display:none;">
                         <i class="bi bi-trash me-1"></i>입고 삭제
+                    </button>
+                    <button type="button" class="btn btn-secondary edit-btn" style="display:none;" onclick="exitEditMode()">취소</button>
+                    <button type="button" class="btn btn-success edit-btn" style="display:none;" id="saveEditBtn" onclick="saveEdit()">
+                        <i class="bi bi-check-lg me-1"></i>저장
                     </button>
                 </div>
             </div>
@@ -747,7 +786,8 @@
         if (cancelEl) cancelConfirmModal = new bootstrap.Modal(cancelEl);
     });
 
-    function openHistoryDetail(id, trxNo, date, partNo, partName, qty, lot, warehouse, vendor, actor, remark, labelCount, inspStatus, canCancel) {
+    function openHistoryDetail(id, trxNo, date, partNo, partName, qty, lot, warehouse, vendor, actor, remark, labelCount, inspStatus, canCancel, canEdit) {
+        document.getElementById('editTrxId').value = id;
         document.getElementById('detailTrxNo').textContent = trxNo;
         document.getElementById('detailDate').textContent = date;
         document.getElementById('detailPartNo').textContent = partNo;
@@ -765,6 +805,13 @@
         var inspText = {'PENDING': '검사대기', 'APPROVED': '합격', 'REJECTED': '불합격'};
         document.getElementById('detailInspection').textContent = inspText[inspStatus] || '-';
 
+        // 수정 필드 초기값 설정
+        document.getElementById('editDate').value = date.substring(0, 10);
+        document.getElementById('editQty').value = qty;
+        document.getElementById('editLot').value = (lot !== '-') ? lot : '';
+        document.getElementById('editRemark').value = remark;
+
+        // 삭제 버튼
         var cancelBtn = document.getElementById('detailCancelBtn');
         if (canCancel) {
             cancelBtn.style.display = '';
@@ -776,7 +823,75 @@
             cancelBtn.style.display = 'none';
         }
 
+        // 수정 버튼
+        document.getElementById('detailEditBtn').style.display = canEdit ? '' : 'none';
+
+        // 항상 보기 모드로 열기
+        exitEditMode();
         if (historyDetailModal) historyDetailModal.show();
+    }
+
+    // --- 수정 모드 전환 ---
+    function enterEditMode() {
+        document.getElementById('detailModalTitle').textContent = '입고 정보 수정';
+        document.querySelectorAll('#historyDetailModal .view-field').forEach(function(el) { el.style.display = 'none'; });
+        document.querySelectorAll('#historyDetailModal .edit-field').forEach(function(el) { el.style.display = ''; });
+        document.querySelectorAll('#historyDetailModal .view-btn').forEach(function(el) { el.style.display = 'none'; });
+        document.querySelectorAll('#historyDetailModal .edit-btn').forEach(function(el) { el.style.display = ''; });
+    }
+
+    function exitEditMode() {
+        document.getElementById('detailModalTitle').textContent = '입고 상세 정보';
+        document.querySelectorAll('#historyDetailModal .view-field').forEach(function(el) { el.style.display = ''; });
+        document.querySelectorAll('#historyDetailModal .edit-field').forEach(function(el) { el.style.display = 'none'; });
+        document.querySelectorAll('#historyDetailModal .view-btn').forEach(function(el) { el.style.display = ''; });
+        document.querySelectorAll('#historyDetailModal .edit-btn').forEach(function(el) { el.style.display = 'none'; });
+    }
+
+    // --- 수정 저장 (AJAX) ---
+    async function saveEdit() {
+        var trxId = document.getElementById('editTrxId').value;
+        var newQty = document.getElementById('editQty').value;
+        var newDate = document.getElementById('editDate').value;
+        var newLot = document.getElementById('editLot').value;
+        var newRemark = document.getElementById('editRemark').value;
+
+        if (!newQty || parseInt(newQty) <= 0) { alert('수량은 1 이상이어야 합니다.'); return; }
+        if (!newDate) { alert('입고 일자를 입력해주세요.'); return; }
+        if (!confirm('이 입고 건을 수정하시겠습니까?')) return;
+
+        var saveBtn = document.getElementById('saveEditBtn');
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>저장 중...';
+
+        try {
+            var res = await fetch('/wms/inbound/manual/edit/' + trxId + '/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    quantity: newQty,
+                    date: newDate,
+                    lot_no: newLot || '',
+                    remark: newRemark || '',
+                })
+            });
+            var data = await res.json();
+            if (data.success) {
+                alert(data.message);
+                location.reload();
+            } else {
+                alert('수정 실패: ' + data.error);
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i>저장';
+            }
+        } catch (e) {
+            alert('수정 처리 중 오류가 발생했습니다: ' + e.message);
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i>저장';
+        }
     }
 
     function openCancelModal(trxId, trxNo, partNo, qty) {
@@ -794,6 +909,27 @@
         var btn = document.getElementById('erpSyncBtn');
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>동기화 중...';
+    });
+
+    // --- 수정 모달 LOT 달력 ---
+    document.addEventListener('DOMContentLoaded', function() {
+        var editCalBtn = document.getElementById('btnEditLotCalendar');
+        if (editCalBtn) {
+            editCalBtn.addEventListener('click', function() {
+                var picker = document.getElementById('hiddenEditDatePicker');
+                var currentVal = document.getElementById('editLot').value;
+                if (/^\d{4}-\d{2}-\d{2}$/.test(currentVal)) picker.value = currentVal;
+                picker.click();
+            });
+        }
+        var editDatePicker = document.getElementById('hiddenEditDatePicker');
+        if (editDatePicker) {
+            editDatePicker.addEventListener('change', function() {
+                if (this.value) document.getElementById('editLot').value = this.value;
+            });
+        }
+        var editLotInput = document.getElementById('editLot');
+        if (editLotInput) editLotInput.addEventListener('input', formatLotInput);
     });
 </script>
 {% endblock %}
