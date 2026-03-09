@@ -799,8 +799,8 @@ def inventory_list(request):
         parts = list(part_qs)
         part_ids = [p.id for p in parts]
 
-        # 2. 자재창고(2000, 3000, 4200, 4300) 조회
-        target_warehouses = Warehouse.objects.filter(code__in=['2000', '3000', '4200', '4300'])
+        # 2. 자재창고(2000, 4200) 조회
+        target_warehouses = Warehouse.objects.filter(code__in=['2000', '4200'])
         target_wh_ids = list(target_warehouses.values_list('id', flat=True))
 
         # 3. MaterialStock 일괄 조회 (part별 재고 합계)
@@ -949,7 +949,7 @@ def inventory_export(request):
     part_ids = [p.id for p in parts]
 
     # WMS 현재 재고 (시업재고)
-    target_wh_ids = list(Warehouse.objects.filter(code__in=['2000', '3000', '4200', '4300']).values_list('id', flat=True))
+    target_wh_ids = list(Warehouse.objects.filter(code__in=['2000', '4200']).values_list('id', flat=True))
     if target_wh_ids:
         stock_qs = MaterialStock.objects.filter(
             part_id__in=part_ids, warehouse_id__in=target_wh_ids
