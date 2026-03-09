@@ -281,7 +281,7 @@
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-hover mb-0">
+                <table class="table table-hover mb-0" id="batchResultTable">
                     <thead class="table-light">
                         <tr>
                             <th style="width:12%">모품번</th>
@@ -359,7 +359,44 @@
     <form id="demandRegisterForm" method="post" action="{% url 'material:bom_register_demand' %}" style="display:none;">
         {% csrf_token %}
         <input type="hidden" name="session_key" value="{{ session_key }}">
+        <input type="hidden" name="selected_vendors" id="selectedVendorsInput" value="">
     </form>
+
+    <!-- 거래처 선택 모달 -->
+    <div class="modal fade" id="vendorSelectModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title fw-bold">
+                        <i class="bi bi-funnel me-2"></i>거래처 선택 후 소요량 등록
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small mb-3">
+                        <i class="bi bi-info-circle me-1"></i>
+                        등록할 거래처를 선택하세요. 선택한 거래처의 품목만 SCM 소요량에 등록됩니다.
+                    </p>
+                    <div class="border-bottom pb-2 mb-2">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="vendorSelectAll" checked onchange="toggleAllVendors(this)">
+                            <label class="form-check-label fw-bold" for="vendorSelectAll">전체 선택</label>
+                            <span class="badge bg-secondary ms-1" id="vendorSelectedCount"></span>
+                        </div>
+                    </div>
+                    <div id="vendorCheckboxList" style="max-height: 350px; overflow-y: auto;">
+                        <!-- JS로 동적 생성 -->
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                    <button type="button" class="btn btn-warning fw-bold" id="vendorRegisterBtn" onclick="submitWithVendorFilter()">
+                        <i class="bi bi-upload me-1"></i>선택 거래처 소요량 등록
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
     {% endif %}
 
     {% if not result and not batch_results and request.method != 'POST' %}
@@ -557,16 +594,89 @@ document.getElementById('batchForm').addEventListener('submit', function() {
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>계산 중...';
 });
 
-// SCM 소요량 등록 확인
-function confirmRegisterDemand() {
-    const msg = 'BOM 계산 결과를 SCM 소요량으로 등록하시겠습니까?\n\n' +
-                '- 필요일자가 있는 항목만 등록됩니다.\n' +
-                '- 동일 품번+일자는 합산되어 기존 데이터를 업데이트합니다.\n' +
-                '- SCM 품목 마스터에 없는 자재는 제외됩니다.';
+// SCM 소요량 등록 - 거래처 선택 모달
+var vendorSelectModal = null;
 
-    if (confirm(msg)) {
-        document.getElementById('demandRegisterForm').submit();
+document.addEventListener('DOMContentLoaded', function() {
+    var el = document.getElementById('vendorSelectModal');
+    if (el) vendorSelectModal = new bootstrap.Modal(el);
+});
+
+function confirmRegisterDemand() {
+    // 배치 결과 테이블에서 거래처 목록 추출 (중복 제거)
+    var vendorSet = {};
+    document.querySelectorAll('#batchResultTable tbody tr td:last-child').forEach(function(td) {
+        var name = td.textContent.trim();
+        if (name && name !== '-') vendorSet[name] = (vendorSet[name] || 0) + 1;
+    });
+
+    var vendors = Object.keys(vendorSet).sort();
+
+    if (vendors.length === 0) {
+        alert('등록할 거래처 정보가 없습니다.');
+        return;
     }
+
+    // 체크박스 목록 생성
+    var listEl = document.getElementById('vendorCheckboxList');
+    listEl.innerHTML = '';
+    vendors.forEach(function(name, idx) {
+        var div = document.createElement('div');
+        div.className = 'form-check py-1';
+        div.innerHTML =
+            '<input class="form-check-input vendor-cb" type="checkbox" value="' + name + '" id="vendor_' + idx + '" checked onchange="updateVendorCount()">' +
+            '<label class="form-check-label" for="vendor_' + idx + '">' + name +
+            ' <span class="badge bg-light text-dark">' + vendorSet[name] + '건</span></label>';
+        listEl.appendChild(div);
+    });
+
+    document.getElementById('vendorSelectAll').checked = true;
+    updateVendorCount();
+    vendorSelectModal.show();
+}
+
+function toggleAllVendors(masterCb) {
+    document.querySelectorAll('.vendor-cb').forEach(function(cb) {
+        cb.checked = masterCb.checked;
+    });
+    updateVendorCount();
+}
+
+function updateVendorCount() {
+    var all = document.querySelectorAll('.vendor-cb');
+    var checked = document.querySelectorAll('.vendor-cb:checked');
+    document.getElementById('vendorSelectedCount').textContent = checked.length + ' / ' + all.length;
+    document.getElementById('vendorSelectAll').checked = (checked.length === all.length);
+    document.getElementById('vendorRegisterBtn').disabled = (checked.length === 0);
+}
+
+function submitWithVendorFilter() {
+    var selected = [];
+    document.querySelectorAll('.vendor-cb:checked').forEach(function(cb) {
+        selected.push(cb.value);
+    });
+
+    if (selected.length === 0) {
+        alert('최소 1개 이상의 거래처를 선택해주세요.');
+        return;
+    }
+
+    var allCount = document.querySelectorAll('.vendor-cb').length;
+    var filterText = (selected.length === allCount)
+        ? '전체 거래처'
+        : selected.join(', ');
+
+    var msg = '다음 거래처의 소요량을 SCM에 등록하시겠습니까?\n\n' +
+              '선택: ' + filterText + ' (' + selected.length + '개사)\n\n' +
+              '- 필요일자가 있는 항목만 등록됩니다.\n' +
+              '- 동일 품번+일자는 합산되어 기존 데이터를 업데이트합니다.\n' +
+              '- SCM 품목 마스터에 없는 자재는 제외됩니다.';
+
+    if (!confirm(msg)) return;
+
+    document.getElementById('selectedVendorsInput').value = JSON.stringify(selected);
+    vendorSelectModal.hide();
+    document.getElementById('demandRegisterForm').submit();
 }
 </script>
 {% endblock %}
