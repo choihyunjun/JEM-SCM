@@ -15,7 +15,7 @@ from functools import wraps
 logger = logging.getLogger(__name__)
 
 # SCM(Orders) 앱 모델
-from orders.models import Part, Vendor, Inventory as OldInventory, Demand, InventoryUploadLog, Order
+from orders.models import Part, Vendor, Inventory as OldInventory, Demand, InventoryUploadLog
 
 
 # =============================================================================
@@ -394,7 +394,8 @@ def manual_incoming(request):
             lot_nos = request.POST.getlist('lot_nos[]')
             quantities = request.POST.getlist('quantities[]')
             remarks = request.POST.getlist('remarks[]')
-            order_ids = request.POST.getlist('order_ids[]')  # 발주 연결 (선택사항)
+            erp_order_nos = request.POST.getlist('erp_order_nos[]')  # ERP 발주번호
+            erp_order_seqs = request.POST.getlist('erp_order_seqs[]')  # ERP 발주순번
 
             if not part_ids:
                 messages.error(request, "입고할 품목이 리스트에 없습니다.")
@@ -457,22 +458,13 @@ def manual_incoming(request):
                     stock.refresh_from_db()
 
                     # (2) 발주 연결 확인 → IN_SCM / IN_MANUAL 분기
-                    linked_order = None
-                    order_id_val = order_ids[i] if i < len(order_ids) else ''
-                    if order_id_val and order_id_val not in ('', '0', 'None'):
-                        try:
-                            linked_order = Order.objects.get(id=int(order_id_val))
-                        except (Order.DoesNotExist, ValueError):
-                            linked_order = None
+                    erp_no = erp_order_nos[i] if i < len(erp_order_nos) else ''
+                    erp_seq = erp_order_seqs[i] if i < len(erp_order_seqs) else ''
 
-                    if linked_order:
+                    if erp_no:
                         trx_type = 'IN_SCM'
                         trx_prefix = 'IN-SCM'
-                        erp_no = linked_order.erp_order_no or ''
-                        erp_seq = linked_order.erp_order_seq or ''
-                        order_info = f"[발주입고] 발주#{linked_order.id}"
-                        if erp_no:
-                            order_info += f" (ERP:{erp_no}-{erp_seq})"
+                        order_info = f"[발주입고] ERP:{erp_no}-{erp_seq}"
                         final_remark = f"{order_info} {final_remark}".strip()
                     else:
                         trx_type = 'IN_MANUAL'
@@ -5993,57 +5985,89 @@ def outgoing_history(request):
 @login_required
 @wms_permission_required('can_wms_inout_edit')
 def api_check_open_orders(request):
-    """품번 + 업체로 미마감 발주(Order) 조회"""
+    """
+    품번으로 ERP 미입고 발주 직접 조회
+    - ERP API에서 최근 90일 발주 헤더 → 디테일 조회
+    - 해당 품번의 잔량(발주수량 - 입고수량) > 0 인 건만 반환
+    """
     from django.http import JsonResponse
-    from orders.models import DeliveryOrderItem
+    from material.erp_api import fetch_erp_po_headers, fetch_erp_po_details
+    from django.conf import settings as conf_settings
+    import datetime
 
     part_no = request.GET.get('part_no', '').strip()
-    vendor_id = request.GET.get('vendor_id', '').strip()
 
     if not part_no:
         return JsonResponse({'orders': []})
 
-    qs = Order.objects.filter(
-        part_no=part_no,
-        is_closed=False,
-    ).order_by('due_date')
+    # ERP 연동 비활성화 시
+    if not getattr(conf_settings, 'ERP_ENABLED', False):
+        return JsonResponse({'orders': [], 'message': 'ERP 연동 비활성화'})
 
-    if vendor_id:
-        qs = qs.filter(vendor_id=vendor_id)
+    # 업체 ERP 코드 조회 (품번 → Part → Vendor → erp_code)
+    part_obj = Part.objects.filter(part_no=part_no).select_related('vendor').first()
+    vendor_erp_code = ''
+    if part_obj and part_obj.vendor and part_obj.vendor.erp_code:
+        vendor_erp_code = part_obj.vendor.erp_code
 
-    # 각 발주별 이미 입고된 수량 계산
+    # 최근 90일 발주 헤더 조회
+    today = timezone.localtime().date()
+    date_from = (today - datetime.timedelta(days=90)).strftime('%Y%m%d')
+    date_to = today.strftime('%Y%m%d')
+
+    headers = fetch_erp_po_headers(date_from, date_to, tr_cd=vendor_erp_code or None)
+    if not headers:
+        return JsonResponse({'orders': []})
+
     results = []
-    for o in qs:
-        # 납품서를 통해 입고된 수량
-        delivered_qty = 0
-        # linked_order 기준
-        linked_qty = DeliveryOrderItem.objects.filter(
-            linked_order=o,
-            order__status__in=['RECEIVED', 'APPROVED']
-        ).aggregate(total=Sum('total_qty'))['total'] or 0
-        delivered_qty = linked_qty
+    seen_keys = set()
 
-        # ERP 발주번호 기준 (linked_order가 없는 경우)
-        if delivered_qty == 0 and o.erp_order_no:
-            erp_qty = DeliveryOrderItem.objects.filter(
-                erp_order_no=o.erp_order_no,
-                order__status__in=['RECEIVED', 'APPROVED']
-            ).aggregate(total=Sum('total_qty'))['total'] or 0
-            delivered_qty = erp_qty
+    for header in headers:
+        po_nb = header.get('poNb', '')
+        po_dt = header.get('poDt', '')
+        vendor_name = header.get('attrNm', '')
 
-        remain_qty = o.quantity - delivered_qty
-        if remain_qty <= 0:
-            continue  # 이미 전량 입고된 발주는 제외
+        details = fetch_erp_po_details(po_nb)
+        for detail in details:
+            item_cd = detail.get('itemCd', '')
+            if item_cd != part_no:
+                continue
 
-        results.append({
-            'id': o.id,
-            'erp_order_no': o.erp_order_no or '',
-            'erp_order_seq': o.erp_order_seq or '',
-            'quantity': o.quantity,
-            'delivered_qty': delivered_qty,
-            'remain_qty': remain_qty,
-            'due_date': o.due_date.strftime('%Y-%m-%d') if o.due_date else '',
-            'vendor_name': o.vendor.name if o.vendor else '',
-        })
+            po_sq = str(detail.get('poSq', ''))
+            po_qt = int(detail.get('poQt', 0) or 0)
+            rcv_qt = int(detail.get('rcvQt', 0) or 0)
+            due_dt = detail.get('dueDt', '')
+            remain_qty = po_qt - rcv_qt
+
+            if remain_qty <= 0:
+                continue
+
+            key = f"{po_nb}-{po_sq}"
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
+
+            # 날짜 포맷
+            due_display = ''
+            if due_dt and len(due_dt) == 8:
+                due_display = f'{due_dt[:4]}-{due_dt[4:6]}-{due_dt[6:8]}'
+            po_display = ''
+            if po_dt and len(po_dt) == 8:
+                po_display = f'{po_dt[:4]}-{po_dt[4:6]}-{po_dt[6:8]}'
+
+            results.append({
+                'id': 0,  # ERP 발주는 SCM Order ID 없음
+                'erp_order_no': po_nb,
+                'erp_order_seq': po_sq,
+                'quantity': po_qt,
+                'delivered_qty': rcv_qt,
+                'remain_qty': remain_qty,
+                'due_date': due_display,
+                'po_date': po_display,
+                'vendor_name': vendor_name,
+            })
+
+    # 납기일순 정렬
+    results.sort(key=lambda x: x['due_date'])
 
     return JsonResponse({'orders': results})

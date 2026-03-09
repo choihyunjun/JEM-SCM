@@ -659,11 +659,9 @@
                         if (o.delivered_qty > 0) {
                             label += ` (기입고:${o.delivered_qty.toLocaleString()}, 잔량:${o.remain_qty.toLocaleString()})`;
                         }
-                        if (o.erp_order_no) {
-                            label += ` [ERP:${o.erp_order_no}-${o.erp_order_seq}]`;
-                        }
+                        label += ` [${o.erp_order_no}-${o.erp_order_seq}]`;
                         var opt = document.createElement('option');
-                        opt.value = o.id;
+                        opt.value = `${o.erp_order_no}|${o.erp_order_seq}`;
                         opt.textContent = label;
                         sel.appendChild(opt);
                     });
@@ -711,10 +709,16 @@
         var qty = document.getElementById('inputQty').value;
         var remark = document.getElementById('inputRemark').value;
 
-        // 발주 연결 정보
+        // 발주 연결 정보 (ERP 발주번호-순번)
         var selOrder = document.getElementById('selLinkedOrder');
-        var orderId = selOrder ? selOrder.value : '';
-        var orderText = (selOrder && orderId) ? selOrder.options[selOrder.selectedIndex].text : '';
+        var selectedVal = selOrder ? selOrder.value : '';  // "발주번호|순번" 형식
+        var orderText = (selOrder && selectedVal) ? selOrder.options[selOrder.selectedIndex].text : '';
+        var erpNo = '', erpSeq = '';
+        if (selectedVal) {
+            var parts = selectedVal.split('|');
+            erpNo = parts[0] || '';
+            erpSeq = parts[1] || '';
+        }
 
         if (!partId || !partNo) {
             alert("유효한 품목을 선택해주세요.");
@@ -736,7 +740,7 @@
         var lotDisplay = lotNo ? lotNo : '-';
 
         // 구분 표시
-        var typeBadge = orderId
+        var typeBadge = erpNo
             ? `<span class="badge bg-info text-dark">발주입고</span><div class="small text-muted mt-1" style="font-size:0.7rem;">${orderText}</div>`
             : `<span class="badge bg-secondary">예외입고</span>`;
 
@@ -756,7 +760,8 @@
             </td>
             <td class="text-center">
                 ${typeBadge}
-                <input type="hidden" name="order_ids[]" value="${orderId}">
+                <input type="hidden" name="erp_order_nos[]" value="${erpNo}">
+                <input type="hidden" name="erp_order_seqs[]" value="${erpSeq}">
             </td>
             <td class="text-muted small">
                 ${remark}
