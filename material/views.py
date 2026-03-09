@@ -5996,6 +5996,7 @@ def api_check_open_orders(request):
     import datetime
 
     part_no = request.GET.get('part_no', '').strip()
+    vendor_id = request.GET.get('vendor_id', '').strip()
 
     if not part_no:
         return JsonResponse({'orders': []})
@@ -6004,18 +6005,25 @@ def api_check_open_orders(request):
     if not getattr(conf_settings, 'ERP_ENABLED', False):
         return JsonResponse({'orders': [], 'message': 'ERP 연동 비활성화'})
 
-    # 업체 ERP 코드 조회 (품번 → Part → Vendor → erp_code)
-    part_obj = Part.objects.filter(part_no=part_no).select_related('vendor').first()
+    # 업체 ERP 코드 조회: 1) Part.vendor 2) Header에서 선택한 vendor_id
     vendor_erp_code = ''
+    part_obj = Part.objects.filter(part_no=part_no).select_related('vendor').first()
     if part_obj and part_obj.vendor and part_obj.vendor.erp_code:
         vendor_erp_code = part_obj.vendor.erp_code
+    elif vendor_id:
+        v = Vendor.objects.filter(id=vendor_id).first()
+        if v and v.erp_code:
+            vendor_erp_code = v.erp_code
 
-    # 최근 90일 발주 헤더 조회
+    if not vendor_erp_code:
+        return JsonResponse({'orders': [], 'message': '업체 ERP 코드 없음 (업체를 먼저 선택하세요)'})
+
+    # 최근 90일 발주 헤더 조회 (업체 코드 필수 → 해당 업체만 조회)
     today = timezone.localtime().date()
     date_from = (today - datetime.timedelta(days=90)).strftime('%Y%m%d')
     date_to = today.strftime('%Y%m%d')
 
-    headers = fetch_erp_po_headers(date_from, date_to, tr_cd=vendor_erp_code or None)
+    headers = fetch_erp_po_headers(date_from, date_to, tr_cd=vendor_erp_code)
     if not headers:
         return JsonResponse({'orders': []})
 
