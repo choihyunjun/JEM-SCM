@@ -304,7 +304,7 @@
                                     <span class="text-muted small">-</span>
                                 {% elif item.can_cancel %}
                                 <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1"
-                                        onclick="event.stopPropagation(); openCancelModal({{ item.id }}, '{{ item.transaction_no }}', '{{ item.part.part_no }}', {{ item.quantity }})"
+                                        onclick="event.stopPropagation(); openCancelModal({{ item.id }}, '{{ item.transaction_no }}', '{{ item.part.part_no }}', {{ item.quantity }}, '{{ item.inspection_status|default_if_none:"" }}')"
                                         title="입고 삭제">
                                     <i class="bi bi-trash"></i>
                                 </button>
@@ -420,22 +420,45 @@
 
     <!-- 취소 확인 모달 -->
     <div class="modal fade" id="cancelConfirmModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header bg-danger text-white">
-                    <h5 class="modal-title fw-bold"><i class="bi bi-exclamation-triangle me-2"></i>입고 삭제</h5>
+                    <h5 class="modal-title fw-bold"><i class="bi bi-exclamation-triangle me-2"></i>입고 취소</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body text-center">
-                    <p class="mb-1">다음 입고 건을 삭제하시겠습니까?</p>
-                    <p class="fw-bold text-danger" id="cancelTrxInfo"></p>
-                    <p class="small text-muted">재고가 차감되며, 이 작업은 되돌릴 수 없습니다.</p>
+                <div class="modal-body">
+                    <p class="mb-1 text-center">대상: <strong id="cancelTrxInfo" class="text-danger"></strong></p>
+
+                    <!-- 수입검사 없는 건: 기존처럼 단순 삭제 -->
+                    <div id="cancelSimple">
+                        <p class="small text-muted text-center">재고가 차감되며, 이 작업은 되돌릴 수 없습니다.</p>
+                    </div>
+
+                    <!-- 수입검사 있는 건: 선택지 표시 -->
+                    <div id="cancelWithInspection" style="display:none;">
+                        <hr class="my-2">
+                        <div class="form-check mb-2 p-3 border rounded bg-light">
+                            <input class="form-check-input" type="radio" name="cancel_action" id="radioIncomingOnly" value="cancel_incoming_only" checked>
+                            <label class="form-check-label" for="radioIncomingOnly">
+                                <strong class="text-warning">입고만 취소</strong>
+                                <br><small class="text-muted">재고 원복 + 검사 판정 초기화 → 품질팀에서 다시 판정</small>
+                            </label>
+                        </div>
+                        <div class="form-check mb-2 p-3 border rounded">
+                            <input class="form-check-input" type="radio" name="cancel_action" id="radioDeleteAll" value="delete_all">
+                            <label class="form-check-label" for="radioDeleteAll">
+                                <strong class="text-danger">전체 삭제</strong>
+                                <br><small class="text-muted">입고 + 수입검사 데이터 모두 삭제 (복구 불가)</small>
+                            </label>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer justify-content-center">
                     <form method="post" id="cancelForm">
                         {% csrf_token %}
+                        <input type="hidden" name="cancel_action" id="hiddenCancelAction" value="delete_all">
                         <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">아니오</button>
-                        <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>삭제 확인</button>
+                        <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>확인</button>
                     </form>
                 </div>
             </div>
@@ -930,7 +953,7 @@
             cancelBtn.style.display = '';
             cancelBtn.onclick = function() {
                 if (historyDetailModal) historyDetailModal.hide();
-                openCancelModal(id, trxNo, partNo, qty);
+                openCancelModal(id, trxNo, partNo, qty, inspStatus);
             };
         } else {
             cancelBtn.style.display = 'none';
@@ -1007,9 +1030,27 @@
         }
     }
 
-    function openCancelModal(trxId, trxNo, partNo, qty) {
+    function openCancelModal(trxId, trxNo, partNo, qty, inspStatus) {
         document.getElementById('cancelTrxInfo').textContent = trxNo + ' / ' + partNo + ' / ' + qty + '개';
         document.getElementById('cancelForm').action = '/wms/inbound/manual/cancel/' + trxId + '/';
+
+        var hasInspection = inspStatus && inspStatus !== '';
+        document.getElementById('cancelSimple').style.display = hasInspection ? 'none' : '';
+        document.getElementById('cancelWithInspection').style.display = hasInspection ? '' : 'none';
+
+        if (hasInspection) {
+            // 라디오 버튼 선택 → hidden field 연동
+            document.getElementById('radioIncomingOnly').checked = true;
+            document.getElementById('hiddenCancelAction').value = 'cancel_incoming_only';
+            document.querySelectorAll('input[name="cancel_action"][type="radio"]').forEach(function(radio) {
+                radio.addEventListener('change', function() {
+                    document.getElementById('hiddenCancelAction').value = this.value;
+                });
+            });
+        } else {
+            document.getElementById('hiddenCancelAction').value = 'delete_all';
+        }
+
         if (cancelConfirmModal) cancelConfirmModal.show();
     }
 

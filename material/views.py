@@ -613,7 +613,7 @@ def manual_incoming(request):
 
 @wms_permission_required('can_wms_inout_edit')
 def cancel_manual_incoming(request, trx_id):
-    """[WMS] 수기 입고 삭제 - 재고 차감 + 트랜잭션 삭제"""
+    """[WMS] 수기 입고 삭제 / 입고만 취소 (수입검사 판정 초기화)"""
     if request.method != 'POST':
         return redirect('material:manual_incoming')
 
@@ -636,28 +636,185 @@ def cancel_manual_incoming(request, trx_id):
         messages.error(request, f"마감된 기간의 입고 건은 삭제할 수 없습니다. ({warning_msg})")
         return redirect('material:manual_incoming')
 
+    cancel_action = request.POST.get('cancel_action', 'delete_all')
     trx_no = trx.transaction_no
     trx_qty = trx.quantity
 
+    # ── 입고만 취소 (수입검사 판정 초기화) ──
+    if cancel_action == 'cancel_incoming_only':
+        inspection = None
+        if ImportInspection:
+            try:
+                inspection = trx.inspection
+            except Exception:
+                pass
+
+        if not inspection:
+            messages.error(request, "수입검사 데이터가 없습니다. '전체 삭제'를 사용하세요.")
+            return redirect('material:manual_incoming')
+
+        try:
+            with transaction.atomic():
+                part = trx.part
+                lot_no = trx.lot_no
+
+                if inspection.status == 'APPROVED' or inspection.status == 'REJECTED':
+                    # 판정 완료 상태 → 목표 창고/부적합 창고 재고 원복 + 검사대기 복원
+
+                    # ERP 입고 삭제 (이동 트랜잭션 삭제 전에 처리)
+                    from material.erp_api import delete_erp_incoming as del_erp_cancel
+                    for erp_trx in MaterialTransaction.objects.filter(
+                        transaction_type='TRANSFER',
+                        part=part, lot_no=lot_no,
+                        warehouse_from=trx.warehouse_to,
+                        remark__startswith='[수입검사]',
+                        erp_incoming_no__isnull=False,
+                    ).exclude(erp_incoming_no=''):
+                        erp_ok, erp_err = del_erp_cancel(erp_trx.erp_incoming_no)
+                        if erp_ok:
+                            messages.info(request, f'ERP 입고 삭제 완료: {erp_trx.erp_incoming_no}')
+                        else:
+                            raise Exception(f'ERP 입고 삭제 실패: {erp_err} (ERP번호: {erp_trx.erp_incoming_no})')
+
+                    if inspection.qty_good > 0:
+                        target_code = inspection.target_warehouse_code or '2000'
+                        wh_good = Warehouse.objects.filter(code=target_code).first()
+                        if wh_good:
+                            good_stock = MaterialStock.objects.filter(
+                                warehouse=wh_good, part=part, lot_no=lot_no
+                            ).first()
+                            if good_stock and good_stock.quantity >= inspection.qty_good:
+                                MaterialStock.objects.filter(pk=good_stock.pk).update(
+                                    quantity=F('quantity') - inspection.qty_good
+                                )
+                            else:
+                                raise Exception(f"목표 창고({target_code}) 양품 재고가 부족하여 취소할 수 없습니다.")
+
+                    if inspection.qty_bad > 0:
+                        wh_bad = Warehouse.objects.filter(code='8200').first()
+                        if wh_bad:
+                            bad_stock = MaterialStock.objects.filter(
+                                warehouse=wh_bad, part=part, lot_no=lot_no
+                            ).first()
+                            if bad_stock and bad_stock.quantity >= inspection.qty_bad:
+                                MaterialStock.objects.filter(pk=bad_stock.pk).update(
+                                    quantity=F('quantity') - inspection.qty_bad
+                                )
+
+                    # 양품/불량 이동 트랜잭션 삭제
+                    MaterialTransaction.objects.filter(
+                        transaction_type='TRANSFER',
+                        part=part, lot_no=lot_no,
+                        warehouse_from=trx.warehouse_to,
+                        remark__startswith='[수입검사]',
+                    ).delete()
+
+                    # 검사대기 창고에 원래 수량 복원
+                    inspect_stock, _ = MaterialStock.objects.get_or_create(
+                        warehouse=trx.warehouse_to, part=part, lot_no=lot_no
+                    )
+                    MaterialStock.objects.filter(pk=inspect_stock.pk).update(
+                        quantity=F('quantity') + trx.quantity
+                    )
+
+                # PENDING이든 APPROVED이든 → 검사 판정 초기화
+                inspection.status = 'PENDING'
+                inspection.qty_good = 0
+                inspection.qty_bad = 0
+                inspection.inspector = None
+                inspection.inspected_at = None
+                inspection.check_report = False
+                inspection.check_visual = False
+                inspection.check_dimension = False
+                inspection.remark = ''
+                inspection.save()
+
+            messages.success(request, f"[{trx_no}] 입고만 취소 완료 — 수입검사가 대기 상태로 초기화되었습니다. 품질팀에서 다시 판정해주세요.")
+
+        except Exception as e:
+            messages.error(request, f"입고 취소 중 오류 발생: {str(e)}")
+
+        return redirect('material:manual_incoming')
+
+    # ── 전체 삭제 ──
     try:
         with transaction.atomic():
-            stock = MaterialStock.objects.filter(
-                warehouse=trx.warehouse_to,
-                part=trx.part,
-                lot_no=trx.lot_no
-            ).first()
+            part = trx.part
+            lot_no = trx.lot_no
 
-            if not stock:
-                messages.error(request, "해당 재고를 찾을 수 없습니다.")
-                return redirect('material:manual_incoming')
+            # 수입검사 판정 완료 상태면 → 목표/부적합 창고 재고도 원복
+            inspection = None
+            if ImportInspection:
+                try:
+                    inspection = trx.inspection
+                except Exception:
+                    pass
 
-            if stock.quantity < trx.quantity:
-                messages.error(request, f"현재 재고({stock.quantity})가 입고 수량({trx.quantity})보다 적어 삭제할 수 없습니다.")
-                return redirect('material:manual_incoming')
+            if inspection and inspection.status in ('APPROVED', 'REJECTED'):
+                if inspection.qty_good > 0:
+                    target_code = inspection.target_warehouse_code or '2000'
+                    wh_good = Warehouse.objects.filter(code=target_code).first()
+                    if wh_good:
+                        good_stock = MaterialStock.objects.filter(
+                            warehouse=wh_good, part=part, lot_no=lot_no
+                        ).first()
+                        if good_stock and good_stock.quantity >= inspection.qty_good:
+                            MaterialStock.objects.filter(pk=good_stock.pk).update(
+                                quantity=F('quantity') - inspection.qty_good
+                            )
+                        else:
+                            raise Exception(f"목표 창고({target_code}) 양품 재고가 부족하여 삭제할 수 없습니다.")
 
-            MaterialStock.objects.filter(pk=stock.pk).update(
-                quantity=F('quantity') - trx.quantity
-            )
+                if inspection.qty_bad > 0:
+                    wh_bad = Warehouse.objects.filter(code='8200').first()
+                    if wh_bad:
+                        bad_stock = MaterialStock.objects.filter(
+                            warehouse=wh_bad, part=part, lot_no=lot_no
+                        ).first()
+                        if bad_stock and bad_stock.quantity >= inspection.qty_bad:
+                            MaterialStock.objects.filter(pk=bad_stock.pk).update(
+                                quantity=F('quantity') - inspection.qty_bad
+                            )
+
+                # 판정 시 생성된 ERP 입고 삭제
+                from material.erp_api import delete_erp_incoming as del_erp_insp
+                for erp_trx in MaterialTransaction.objects.filter(
+                    transaction_type='TRANSFER',
+                    part=part, lot_no=lot_no,
+                    warehouse_from=trx.warehouse_to,
+                    remark__startswith='[수입검사]',
+                    erp_incoming_no__isnull=False,
+                ).exclude(erp_incoming_no=''):
+                    ok, err = del_erp_insp(erp_trx.erp_incoming_no)
+                    if ok:
+                        messages.info(request, f'ERP 입고 삭제 완료: {erp_trx.erp_incoming_no}')
+
+                # 양품/불량 이동 트랜잭션 삭제
+                MaterialTransaction.objects.filter(
+                    transaction_type='TRANSFER',
+                    part=part, lot_no=lot_no,
+                    warehouse_from=trx.warehouse_to,
+                    remark__startswith='[수입검사]',
+                ).delete()
+            else:
+                # PENDING 또는 검사 없음 → 검사대기(또는 입고) 창고에서 차감
+                stock = MaterialStock.objects.filter(
+                    warehouse=trx.warehouse_to,
+                    part=part,
+                    lot_no=lot_no
+                ).first()
+
+                if not stock:
+                    messages.error(request, "해당 재고를 찾을 수 없습니다.")
+                    return redirect('material:manual_incoming')
+
+                if stock.quantity < trx.quantity:
+                    messages.error(request, f"현재 재고({stock.quantity})가 입고 수량({trx.quantity})보다 적어 삭제할 수 없습니다.")
+                    return redirect('material:manual_incoming')
+
+                MaterialStock.objects.filter(pk=stock.pk).update(
+                    quantity=F('quantity') - trx.quantity
+                )
 
             # ERP 입고 삭제 (실패 시 전체 롤백)
             erp_no = getattr(trx, 'erp_incoming_no', None)
