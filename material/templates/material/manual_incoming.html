@@ -131,19 +131,24 @@
                         </button>
                     </div>
                 </div>
-                <div class="form-text mt-2 ms-1 text-success fw-bold" id="partNameDisplay" style="min-height: 20px;"></div>
-                <!-- 발주 매칭 알림 영역 -->
+                <div class="d-flex align-items-center mt-2 ms-1 gap-3">
+                    <div class="text-success fw-bold" id="partNameDisplay" style="min-height: 20px;"></div>
+                    <!-- 발주 매칭 상태 표시 (품번 옆) -->
+                    <div id="orderStatusBadge" style="display:none;"></div>
+                </div>
+                <!-- 발주 선택 영역 (발주 있을 때만 표시) -->
                 <div id="orderMatchArea" class="mt-2" style="display:none;">
-                    <div class="alert alert-info py-2 px-3 mb-0 d-flex align-items-center justify-content-between">
-                        <div>
-                            <i class="bi bi-bell-fill me-1 text-warning"></i>
-                            <strong>등록된 발주가 있습니다!</strong>
-                            <span class="small text-muted ms-1">발주 입고로 처리하려면 선택하세요.</span>
-                        </div>
-                        <div class="d-flex align-items-center gap-2">
-                            <select id="selLinkedOrder" class="form-select form-select-sm" style="min-width: 350px;">
-                                <option value="">예외 입고 (발주 미연결)</option>
-                            </select>
+                    <div class="alert alert-warning py-2 px-3 mb-0 border-warning" style="border-left: 4px solid #ffc107 !important;">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div>
+                                <i class="bi bi-bell-fill me-1 text-warning"></i>
+                                <strong>미마감 발주가 있습니다!</strong>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <select id="selLinkedOrder" class="form-select form-select-sm fw-bold" style="min-width: 400px;">
+                                    <option value="">선택 안 함 → 예외입고 처리</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -627,6 +632,7 @@
             document.getElementById('selectedPartName').value = '';
             document.getElementById('partNameDisplay').innerText = '';
             document.getElementById('orderMatchArea').style.display = 'none';
+            document.getElementById('orderStatusBadge').style.display = 'none';
         }
     });
 
@@ -634,6 +640,7 @@
     function checkOpenOrders(partNo) {
         var vendorId = document.getElementById('hiddenVendorId').value;
         var url = `{% url 'material:api_check_open_orders' %}?part_no=${encodeURIComponent(partNo)}&vendor_id=${vendorId}`;
+        var badge = document.getElementById('orderStatusBadge');
 
         fetch(url)
             .then(r => r.json())
@@ -642,12 +649,15 @@
                 var sel = document.getElementById('selLinkedOrder');
 
                 if (data.orders && data.orders.length > 0) {
-                    // 발주 있음 - 알림 표시
-                    sel.innerHTML = '<option value="">예외 입고 (발주 미연결)</option>';
+                    // 발주 있음 - 배지 + 선택 영역 표시
+                    badge.innerHTML = `<span class="badge bg-warning text-dark"><i class="bi bi-bell-fill me-1"></i>발주 ${data.orders.length}건</span>`;
+                    badge.style.display = 'inline';
+
+                    sel.innerHTML = '<option value="">선택 안 함 → 예외입고 처리</option>';
                     data.orders.forEach(o => {
                         var label = `납기:${o.due_date} | 발주:${o.quantity.toLocaleString()}개`;
                         if (o.delivered_qty > 0) {
-                            label += ` (입고:${o.delivered_qty.toLocaleString()}, 잔량:${o.remain_qty.toLocaleString()})`;
+                            label += ` (기입고:${o.delivered_qty.toLocaleString()}, 잔량:${o.remain_qty.toLocaleString()})`;
                         }
                         if (o.erp_order_no) {
                             label += ` [ERP:${o.erp_order_no}-${o.erp_order_seq}]`;
@@ -679,11 +689,15 @@
                         osc.stop(audioCtx.currentTime + 0.15);
                     } catch(e) {}
                 } else {
+                    // 발주 없음
+                    badge.innerHTML = `<span class="badge bg-secondary"><i class="bi bi-dash-circle me-1"></i>발주 없음 (예외입고)</span>`;
+                    badge.style.display = 'inline';
                     area.style.display = 'none';
                 }
             })
             .catch(err => {
                 console.error('발주 조회 실패:', err);
+                badge.style.display = 'none';
                 document.getElementById('orderMatchArea').style.display = 'none';
             });
     }
@@ -763,7 +777,8 @@
         document.getElementById('selectedPartName').value = '';
         document.getElementById('partNameDisplay').innerText = '';
         document.getElementById('orderMatchArea').style.display = 'none';
-        if (selOrder) { selOrder.innerHTML = '<option value="">예외 입고 (발주 미연결)</option>'; }
+        document.getElementById('orderStatusBadge').style.display = 'none';
+        if (selOrder) { selOrder.innerHTML = '<option value="">선택 안 함 → 예외입고 처리</option>'; }
         setTodayAsDefault();
         document.getElementById('inputQty').value = '';
         document.getElementById('inputRemark').value = '';
