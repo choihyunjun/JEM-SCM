@@ -132,19 +132,19 @@
                                 </thead>
                                 <tbody>
                                     <tr>
+                                        <td><code>날짜</code></td>
+                                        <td>필요일자 (YYYYMMDD)</td>
+                                        <td><span class="badge bg-danger">필수</span></td>
+                                    </tr>
+                                    <tr>
                                         <td><code>품번</code></td>
                                         <td>제품(모품) 품번</td>
                                         <td><span class="badge bg-danger">필수</span></td>
                                     </tr>
                                     <tr>
-                                        <td><code>수량</code></td>
+                                        <td><code>계획수량</code></td>
                                         <td>생산 수량</td>
                                         <td><span class="badge bg-danger">필수</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>필요일자</code></td>
-                                        <td>자재 필요 날짜</td>
-                                        <td><span class="badge bg-secondary">선택</span></td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -154,10 +154,10 @@
                             <h6 class="fw-bold mb-3">파일 예시</h6>
                             <div class="alert alert-secondary small mb-3">
                                 <code>
-                                품번,수량,필요일자<br>
-                                064133-0010,100,2025-01-25<br>
-                                064133-0020,50,2025-01-26<br>
-                                064133-0030,200,
+                                날짜,품번,계획수량<br>
+                                20250125,064133-0010,100<br>
+                                20250126,064133-0020,50<br>
+                                20250127,064133-0030,200
                                 </code>
                             </div>
 

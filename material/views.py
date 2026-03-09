@@ -3227,17 +3227,16 @@ def bom_calculate(request):
                         # 일괄 계산 수행
                         batch_results = []
                         for row in rows:
+                            # 새 형식: 날짜/품번/계획수량  |  구 형식: 품번/수량/필요일자
                             part_no = str(row.get('품번', '')).strip()
-                            qty = row.get('수량', 0)
-                            need_date = row.get('필요일자', '')
+                            qty = row.get('계획수량', None) or row.get('수량', 0)
+                            need_date = row.get('날짜', None) or row.get('필요일자', '')
 
                             # need_date 정규화 → 'YYYY-MM-DD' 문자열로 통일
                             if need_date and hasattr(need_date, 'strftime'):
-                                # datetime/date 객체
                                 need_date = need_date.strftime('%Y-%m-%d')
                             elif need_date:
                                 need_date = str(need_date).strip()
-                                # 숫자형 YYYYMMDD (예: 20260301, 20260301.0)
                                 need_date = need_date.replace('.0', '')
                                 if len(need_date) == 8 and need_date.isdigit():
                                     need_date = f'{need_date[:4]}-{need_date[4:6]}-{need_date[6:8]}'
@@ -3313,8 +3312,8 @@ def bom_calc_template(request):
     ws = wb.active
     ws.title = "소요량계산양식"
 
-    # 헤더
-    headers = ['품번', '수량', '필요일자']
+    # 헤더: 날짜, 품번, 계획수량
+    headers = ['날짜', '품번', '계획수량']
     for col, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col, value=header)
         cell.font = openpyxl.styles.Font(bold=True)
@@ -3322,24 +3321,24 @@ def bom_calc_template(request):
 
     # 예시 데이터 (오늘 기준으로 날짜 생성)
     today = datetime.now().date()
-    ws.cell(row=2, column=1, value="064133-0010")
-    ws.cell(row=2, column=2, value=100)
-    date_cell1 = ws.cell(row=2, column=3, value=today + timedelta(days=4))
-    date_cell1.number_format = 'YYYY-MM-DD'
+    date_cell1 = ws.cell(row=2, column=1, value=today + timedelta(days=4))
+    date_cell1.number_format = 'YYYYMMDD'
+    ws.cell(row=2, column=2, value="064133-0010")
+    ws.cell(row=2, column=3, value=100)
 
-    ws.cell(row=3, column=1, value="064133-0020")
-    ws.cell(row=3, column=2, value=50)
-    date_cell2 = ws.cell(row=3, column=3, value=today + timedelta(days=5))
-    date_cell2.number_format = 'YYYY-MM-DD'
+    date_cell2 = ws.cell(row=3, column=1, value=today + timedelta(days=5))
+    date_cell2.number_format = 'YYYYMMDD'
+    ws.cell(row=3, column=2, value="064133-0020")
+    ws.cell(row=3, column=3, value=50)
 
     # 컬럼 너비 조정
-    ws.column_dimensions['A'].width = 20
-    ws.column_dimensions['B'].width = 12
-    ws.column_dimensions['C'].width = 15
+    ws.column_dimensions['A'].width = 15
+    ws.column_dimensions['B'].width = 20
+    ws.column_dimensions['C'].width = 12
 
-    # C열(필요일자) 전체를 날짜 형식으로 지정
-    for row in range(2, 1000):  # 충분한 행 수 지정
-        ws.cell(row=row, column=3).number_format = 'YYYY-MM-DD'
+    # A열(날짜) 전체를 YYYYMMDD 형식으로 지정
+    for row in range(2, 1000):
+        ws.cell(row=row, column=1).number_format = 'YYYYMMDD'
 
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = 'attachment; filename="bom_calc_template.xlsx"'
