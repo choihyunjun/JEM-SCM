@@ -396,6 +396,9 @@
                         <i class="bi bi-info-circle me-1"></i>
                         등록할 거래처를 선택하세요. 선택한 거래처의 품목만 SCM 소요량에 등록됩니다.
                     </p>
+                    <div class="mb-2">
+                        <input type="text" class="form-control form-control-sm" id="vendorSearchInput" placeholder="거래처 검색..." oninput="filterVendorList()">
+                    </div>
                     <div class="border-bottom pb-2 mb-2">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="vendorSelectAll" checked onchange="toggleAllVendors(this)">
@@ -725,13 +728,19 @@ function confirmRegisterDemand() {
     });
 
     document.getElementById('vendorSelectAll').checked = true;
+    document.getElementById('vendorSearchInput').value = '';
+    filterVendorList();
     updateVendorCount();
     vendorSelectModal.show();
 }
 
 function toggleAllVendors(masterCb) {
+    // 검색 중이면 보이는 항목만, 아니면 전체
+    var keyword = (document.getElementById('vendorSearchInput').value || '').trim().toLowerCase();
     document.querySelectorAll('.vendor-cb').forEach(function(cb) {
-        cb.checked = masterCb.checked;
+        if (!keyword || cb.closest('.form-check').style.display !== 'none') {
+            cb.checked = masterCb.checked;
+        }
     });
     updateVendorCount();
 }
@@ -740,8 +749,16 @@ function updateVendorCount() {
     var all = document.querySelectorAll('.vendor-cb');
     var checked = document.querySelectorAll('.vendor-cb:checked');
     document.getElementById('vendorSelectedCount').textContent = checked.length + ' / ' + all.length;
-    document.getElementById('vendorSelectAll').checked = (checked.length === all.length);
+    document.getElementById('vendorSelectAll').checked = (checked.length === all.length && all.length > 0);
     document.getElementById('vendorRegisterBtn').disabled = (checked.length === 0);
+}
+
+function filterVendorList() {
+    var keyword = (document.getElementById('vendorSearchInput').value || '').trim().toLowerCase();
+    document.querySelectorAll('#vendorCheckboxList .form-check').forEach(function(div) {
+        var label = div.querySelector('label').textContent.toLowerCase();
+        div.style.display = (!keyword || label.includes(keyword)) ? '' : 'none';
+    });
 }
 
 function submitWithVendorFilter() {
