@@ -77,16 +77,6 @@
                         </select>
                     </div>
 
-                    <div class="col-12 col-lg" id="vendorCol">
-                        <label class="form-label small">공급처 (Vendor)</label>
-                        <div class="input-group">
-                            <input type="text" class="form-control bg-light" id="displayVendor" placeholder="업체 선택" readonly onclick="openVendorModal()" style="cursor: pointer;">
-                            <button class="btn btn-outline-secondary" type="button" onclick="openVendorModal()">
-                                <i class="bi bi-search"></i>
-                            </button>
-                        </div>
-                        <input type="hidden" name="vendor_id" id="hiddenVendorId" required>
-                    </div>
                 </div>
             </div>
         </div>
@@ -94,6 +84,16 @@
         <div class="card shadow-sm border-primary mb-4">
             <div class="card-body bg-light-blue">
                 <div class="row g-2 align-items-end">
+                    <div class="col-12 col-lg-2" id="vendorCol">
+                        <label class="small fw-bold mb-1 text-primary">공급처</label>
+                        <div class="input-group input-group-sm">
+                            <input type="text" class="form-control bg-light" id="displayVendor" placeholder="업체 선택" readonly onclick="openVendorModal()" style="cursor: pointer;">
+                            <button class="btn btn-outline-secondary" type="button" onclick="openVendorModal()">
+                                <i class="bi bi-search"></i>
+                            </button>
+                        </div>
+                        <input type="hidden" name="vendor_id" id="hiddenVendorId" required>
+                    </div>
                     <div class="col-12 col-lg-3">
                         <label class="small fw-bold mb-1 text-primary">입고 품목 검색</label>
                         <input class="form-control" list="partOptions" id="inputPart" placeholder="품번 또는 품명 검색..." autocomplete="off">
@@ -121,9 +121,9 @@
                         <label class="small fw-bold mb-1 text-primary">수량</label>
                         <input type="number" id="inputQty" class="form-control text-end fw-bold" placeholder="0" min="1">
                     </div>
-                    <div class="col-12 col-lg-4">
-                        <label class="small fw-bold mb-1">비고 (선택)</label>
-                        <input type="text" id="inputRemark" class="form-control" placeholder="특이사항 입력">
+                    <div class="col-12 col-lg-2">
+                        <label class="small fw-bold mb-1">비고</label>
+                        <input type="text" id="inputRemark" class="form-control" placeholder="특이사항">
                     </div>
                     <div class="col-12 col-lg-2">
                         <button type="button" class="btn btn-primary w-100 fw-bold" onclick="addItem()">
