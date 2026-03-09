@@ -819,15 +819,24 @@ def inventory_list(request):
 
         stock_map = {item['part_id']: item['total_qty'] or 0 for item in stock_qs}
 
-        # 4. Incoming 일괄 조회 (part별, 날짜별 입고량)
-        incoming_qs = Incoming.objects.filter(
-            part_id__in=part_ids,
-            in_date__range=[today, end_date]
-        ).values('part_id', 'in_date').annotate(total_qty=Sum('quantity'))
+        # 4. 입고예정 조회: PENDING 납품서 (등록됨 + QR 미스캔) 기반
+        #    - linked_order.due_date가 있으면 해당 날짜에 입고예정 반영
+        #    - 없으면 오늘 날짜로 반영
+        part_no_to_id = {p.part_no: p.id for p in parts}
+        pending_items = DeliveryOrderItem.objects.filter(
+            part_no__in=part_no_to_id.keys(),
+            order__status='PENDING'
+        ).select_related('linked_order')
 
         incoming_map = defaultdict(lambda: defaultdict(int))
-        for item in incoming_qs:
-            incoming_map[item['part_id']][item['in_date']] = item['total_qty'] or 0
+        for item in pending_items:
+            pid = part_no_to_id.get(item.part_no)
+            if pid:
+                # 입고예정일: 연결된 발주서 납기일 → 없으면 오늘
+                expected_date = item.linked_order.due_date if item.linked_order else today
+                if expected_date < today:
+                    expected_date = today  # 과거 날짜는 오늘로
+                incoming_map[pid][expected_date] += item.total_qty
 
         # 5. Demand 일괄 조회 (part별, 날짜별 소요량)
         demand_qs = Demand.objects.filter(
@@ -840,26 +849,23 @@ def inventory_list(request):
             demand_map[item['part_id']][item['due_date']] = item['total_qty'] or 0
 
         # ============================================
-        # 메모리에서 과부족 계산
+        # 과부족 계산 (매일 시업재고 기준)
+        # - 시업재고 = WMS 현재 재고 (MaterialStock)
+        # - 누적 계산: 시업재고에서 소요량 차감, 입고예정 가산
+        # - ERP 입고 동기화 불필요 (이미 MaterialStock에 반영됨)
         # ============================================
         for part in parts:
             daily_status = []
 
-            # WMS 현재 재고
-            current_wms_stock = stock_map.get(part.id, 0)
-
-            # 오늘 입고량 (WMS에 이미 반영된 금일 입고)
-            today_incoming = incoming_map[part.id].get(today, 0)
-
-            # 시업재고 = WMS 현재 재고 - 오늘 입고량
-            opening_stock = current_wms_stock - today_incoming
+            # 시업재고 = WMS 현재 재고 그대로 사용
+            opening_stock = stock_map.get(part.id, 0)
             temp_stock = opening_stock
 
             for dt in date_range:
                 dq = demand_map[part.id].get(dt, 0)
                 iq = incoming_map[part.id].get(dt, 0)
 
-                # 입고/소요 반영
+                # 소요량 차감, 입고예정 가산
                 temp_stock = temp_stock - dq + iq
 
                 daily_status.append({
@@ -867,7 +873,7 @@ def inventory_list(request):
                     'demand_qty': dq,
                     'in_qty': iq,
                     'stock': temp_stock,
-                    'is_danger': temp_stock < 200  # 안전재고 200개 미만 시 위험 표시
+                    'is_danger': temp_stock < 200
                 })
 
             inventory_data.append({
@@ -935,35 +941,72 @@ def inventory_export(request):
     end_date = max_due if max_due and max_due > (today + datetime.timedelta(days=31)) else (today + datetime.timedelta(days=31))
     dr = [today + datetime.timedelta(days=i) for i in range((end_date - today).days + 1)]
 
-    items = Inventory.objects.select_related('part', 'part__vendor').all()
+    # 품목 조회
+    from material.models import Warehouse
+    from collections import defaultdict
+
+    part_qs = Part.objects.select_related('vendor').filter(vendor__isnull=False)
     if (not user.is_superuser) and user_vendor:
-        items = items.filter(part__vendor=user_vendor)
+        part_qs = part_qs.filter(vendor=user_vendor)
+    parts = list(part_qs)
+    part_ids = [p.id for p in parts]
+
+    # WMS 현재 재고 (시업재고)
+    target_wh_ids = list(Warehouse.objects.filter(code__in=['2000', '4200']).values_list('id', flat=True))
+    if target_wh_ids:
+        stock_qs = MaterialStock.objects.filter(
+            part_id__in=part_ids, warehouse_id__in=target_wh_ids
+        ).values('part_id').annotate(total_qty=Sum('quantity'))
+    else:
+        stock_qs = MaterialStock.objects.filter(
+            part_id__in=part_ids
+        ).values('part_id').annotate(total_qty=Sum('quantity'))
+    stock_map = {item['part_id']: item['total_qty'] or 0 for item in stock_qs}
+
+    # 입고예정: PENDING 납품서 기반
+    part_no_to_id = {p.part_no: p.id for p in parts}
+    pending_items = DeliveryOrderItem.objects.filter(
+        part_no__in=part_no_to_id.keys(),
+        order__status='PENDING'
+    ).select_related('linked_order')
+
+    incoming_map = defaultdict(lambda: defaultdict(int))
+    for pi in pending_items:
+        pid = part_no_to_id.get(pi.part_no)
+        if pid:
+            expected_date = pi.linked_order.due_date if pi.linked_order else today
+            if expected_date < today:
+                expected_date = today
+            incoming_map[pid][expected_date] += pi.total_qty
+
+    # 소요량
+    demand_qs = Demand.objects.filter(
+        part_id__in=part_ids, due_date__range=[today, end_date]
+    ).values('part_id', 'due_date').annotate(total_qty=Sum('quantity'))
+    demand_map = defaultdict(lambda: defaultdict(int))
+    for item in demand_qs:
+        demand_map[item['part_id']][item['due_date']] = item['total_qty'] or 0
 
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.append(['협력사', '품번', '품명', '구분'] + [d.strftime('%m/%d') for d in dr])
 
-    for item in items:
-        ref = item.last_inventory_date or date(2000, 1, 1)
+    for part in parts:
+        opening_stock = stock_map.get(part.id, 0)
+        temp_stock = opening_stock
 
-        hist_dem = Demand.objects.filter(part=item.part, due_date__gt=ref, due_date__lt=today).aggregate(Sum('quantity'))['quantity__sum'] or 0
-        hist_in = Incoming.objects.filter(part=item.part, in_date__gt=ref, in_date__lt=today).aggregate(Sum('quantity'))['quantity__sum'] or 0
-
-        stock = item.base_stock - hist_dem + hist_in
-
-        r1 = [item.part.vendor.name, item.part.part_no, item.part.part_name, '소요량']
-        r2 = ['', '', '', '입고량']
-        r3 = ['', '', '', '재고']
+        r1 = [part.vendor.name if part.vendor else '(미연결)', part.part_no, part.part_name, '소요량']
+        r2 = ['', '', '', '입고예정']
+        r3 = ['', '', '', '과부족']
 
         for dt in dr:
-            dq = Demand.objects.filter(part=item.part, due_date=dt).aggregate(Sum('quantity'))['quantity__sum'] or 0
-            iq = Incoming.objects.filter(part=item.part, in_date=dt).aggregate(Sum('quantity'))['quantity__sum'] or 0
-
-            stock = stock - dq + iq
+            dq = demand_map[part.id].get(dt, 0)
+            iq = incoming_map[part.id].get(dt, 0)
+            temp_stock = temp_stock - dq + iq
 
             r1.append(dq)
             r2.append(iq)
-            r3.append(stock)
+            r3.append(temp_stock)
 
         ws.append(r1)
         ws.append(r2)

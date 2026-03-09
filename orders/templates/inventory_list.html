@@ -149,7 +149,7 @@
                             {% endfor %}
                         </tr>
                         <tr class="text-center">
-                            <td class="bg-light small">입고량</td>
+                            <td class="bg-light small">입고예정</td>
                             {% for day in item.daily_status %}
                             <td class="text-success date-cell" style="min-width: 85px;">
                                 {% if day.in_qty > 0 %}{{ day.in_qty|intcomma }}{% else %}-{% endif %}
