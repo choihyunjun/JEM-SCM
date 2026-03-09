@@ -132,6 +132,21 @@
                     </div>
                 </div>
                 <div class="form-text mt-2 ms-1 text-success fw-bold" id="partNameDisplay" style="min-height: 20px;"></div>
+                <!-- 발주 매칭 알림 영역 -->
+                <div id="orderMatchArea" class="mt-2" style="display:none;">
+                    <div class="alert alert-info py-2 px-3 mb-0 d-flex align-items-center justify-content-between">
+                        <div>
+                            <i class="bi bi-bell-fill me-1 text-warning"></i>
+                            <strong>등록된 발주가 있습니다!</strong>
+                            <span class="small text-muted ms-1">발주 입고로 처리하려면 선택하세요.</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <select id="selLinkedOrder" class="form-select form-select-sm" style="min-width: 350px;">
+                                <option value="">예외 입고 (발주 미연결)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -145,17 +160,18 @@
                     <table class="table table-hover mb-0 align-middle text-center">
                         <thead class="table-light">
                             <tr>
-                                <th style="width: 15%;">품번</th>
+                                <th style="width: 13%;">품번</th>
                                 <th class="text-start">품명</th>
-                                <th style="width: 12%;">LOT 번호</th>
-                                <th style="width: 12%;">수량</th>
-                                <th style="width: 20%;">비고</th>
-                                <th style="width: 10%;">관리</th>
+                                <th style="width: 10%;">LOT 번호</th>
+                                <th style="width: 10%;">수량</th>
+                                <th style="width: 10%;">구분</th>
+                                <th style="width: 18%;">비고</th>
+                                <th style="width: 8%;">관리</th>
                             </tr>
                         </thead>
                         <tbody id="listBody">
                             <tr id="emptyRow">
-                                <td colspan="6" class="text-muted py-5">
+                                <td colspan="7" class="text-muted py-5">
                                     상단에서 품목을 검색하여 <strong>[추가]</strong> 버튼을 눌러주세요.
                                 </td>
                             </tr>
@@ -593,7 +609,7 @@
         var val = this.value;
         var options = document.getElementById('partOptions').options;
         var found = false;
-        
+
         for (var i = 0; i < options.length; i++) {
             if (options[i].value === val) {
                 document.getElementById('selectedPartId').value = options[i].getAttribute('data-id');
@@ -601,6 +617,8 @@
                 document.getElementById('selectedPartName').value = fullText;
                 document.getElementById('partNameDisplay').innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> ${fullText}`;
                 found = true;
+                // 품번 매칭 시 발주 조회
+                checkOpenOrders(val);
                 break;
             }
         }
@@ -608,8 +626,67 @@
             document.getElementById('selectedPartId').value = '';
             document.getElementById('selectedPartName').value = '';
             document.getElementById('partNameDisplay').innerText = '';
+            document.getElementById('orderMatchArea').style.display = 'none';
         }
     });
+
+    // --- 발주 매칭 조회 ---
+    function checkOpenOrders(partNo) {
+        var vendorId = document.getElementById('hiddenVendorId').value;
+        var url = `{% url 'material:api_check_open_orders' %}?part_no=${encodeURIComponent(partNo)}&vendor_id=${vendorId}`;
+
+        fetch(url)
+            .then(r => r.json())
+            .then(data => {
+                var area = document.getElementById('orderMatchArea');
+                var sel = document.getElementById('selLinkedOrder');
+
+                if (data.orders && data.orders.length > 0) {
+                    // 발주 있음 - 알림 표시
+                    sel.innerHTML = '<option value="">예외 입고 (발주 미연결)</option>';
+                    data.orders.forEach(o => {
+                        var label = `납기:${o.due_date} | 발주:${o.quantity.toLocaleString()}개`;
+                        if (o.delivered_qty > 0) {
+                            label += ` (입고:${o.delivered_qty.toLocaleString()}, 잔량:${o.remain_qty.toLocaleString()})`;
+                        }
+                        if (o.erp_order_no) {
+                            label += ` [ERP:${o.erp_order_no}-${o.erp_order_seq}]`;
+                        }
+                        var opt = document.createElement('option');
+                        opt.value = o.id;
+                        opt.textContent = label;
+                        sel.appendChild(opt);
+                    });
+
+                    // 발주가 1건이면 자동 선택
+                    if (data.orders.length === 1) {
+                        sel.selectedIndex = 1;
+                    }
+
+                    area.style.display = 'block';
+
+                    // 알림음
+                    try {
+                        var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                        var osc = audioCtx.createOscillator();
+                        var gain = audioCtx.createGain();
+                        osc.connect(gain);
+                        gain.connect(audioCtx.destination);
+                        osc.frequency.value = 880;
+                        osc.type = 'sine';
+                        gain.gain.value = 0.15;
+                        osc.start();
+                        osc.stop(audioCtx.currentTime + 0.15);
+                    } catch(e) {}
+                } else {
+                    area.style.display = 'none';
+                }
+            })
+            .catch(err => {
+                console.error('발주 조회 실패:', err);
+                document.getElementById('orderMatchArea').style.display = 'none';
+            });
+    }
 
     // --- 리스트 추가 로직 ---
     function addItem() {
@@ -619,6 +696,11 @@
         var lotNo = document.getElementById('inputLotNo').value;
         var qty = document.getElementById('inputQty').value;
         var remark = document.getElementById('inputRemark').value;
+
+        // 발주 연결 정보
+        var selOrder = document.getElementById('selLinkedOrder');
+        var orderId = selOrder ? selOrder.value : '';
+        var orderText = (selOrder && orderId) ? selOrder.options[selOrder.selectedIndex].text : '';
 
         if (!partId || !partNo) {
             alert("유효한 품목을 선택해주세요.");
@@ -639,6 +721,11 @@
 
         var lotDisplay = lotNo ? lotNo : '-';
 
+        // 구분 표시
+        var typeBadge = orderId
+            ? `<span class="badge bg-info text-dark">발주입고</span><div class="small text-muted mt-1" style="font-size:0.7rem;">${orderText}</div>`
+            : `<span class="badge bg-secondary">예외입고</span>`;
+
         var html = `
             <td class="fw-bold text-primary">
                 ${partNo}
@@ -652,6 +739,10 @@
             <td class="fw-bold fs-5 text-end pe-4">
                 ${parseInt(qty).toLocaleString()}
                 <input type="hidden" name="quantities[]" value="${qty}">
+            </td>
+            <td class="text-center">
+                ${typeBadge}
+                <input type="hidden" name="order_ids[]" value="${orderId}">
             </td>
             <td class="text-muted small">
                 ${remark}
@@ -671,7 +762,9 @@
         document.getElementById('selectedPartId').value = '';
         document.getElementById('selectedPartName').value = '';
         document.getElementById('partNameDisplay').innerText = '';
-        setTodayAsDefault(); // LOT 번호를 오늘 날짜로 리셋
+        document.getElementById('orderMatchArea').style.display = 'none';
+        if (selOrder) { selOrder.innerHTML = '<option value="">예외 입고 (발주 미연결)</option>'; }
+        setTodayAsDefault();
         document.getElementById('inputQty').value = '';
         document.getElementById('inputRemark').value = '';
         document.getElementById('inputPart').focus();
@@ -683,7 +776,7 @@
         btn.closest('tr').remove();
         var tbody = document.getElementById('listBody');
         if (tbody.children.length === 0) {
-            tbody.innerHTML = `<tr id="emptyRow"><td colspan="6" class="text-muted py-5">상단에서 품목을 검색하여 <strong>[추가]</strong> 버튼을 눌러주세요.</td></tr>`;
+            tbody.innerHTML = `<tr id="emptyRow"><td colspan="7" class="text-muted py-5">상단에서 품목을 검색하여 <strong>[추가]</strong> 버튼을 눌러주세요.</td></tr>`;
         }
         updateCount();
     }

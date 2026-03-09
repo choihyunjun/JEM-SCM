@@ -18,6 +18,7 @@ urlpatterns = [
     path('inbound/manual/cancel/<int:trx_id>/', views.cancel_manual_incoming, name='cancel_manual_incoming'),
     path('inbound/manual/edit/<int:trx_id>/', views.edit_manual_incoming, name='edit_manual_incoming'),
     path('inbound/erp-sync/', views.erp_incoming_sync, name='erp_incoming_sync'),
+    path('api/check-open-orders/', views.api_check_open_orders, name='api_check_open_orders'),
 
     # [핵심] views.incoming_history 함수와 연결하고, name도 'incoming_history'로 설정
     path('inbound/history/', views.incoming_history, name='incoming_history'),

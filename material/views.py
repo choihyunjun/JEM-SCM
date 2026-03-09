@@ -15,7 +15,7 @@ from functools import wraps
 logger = logging.getLogger(__name__)
 
 # SCM(Orders) 앱 모델
-from orders.models import Part, Vendor, Inventory as OldInventory, Demand, InventoryUploadLog
+from orders.models import Part, Vendor, Inventory as OldInventory, Demand, InventoryUploadLog, Order
 
 
 # =============================================================================
@@ -394,6 +394,7 @@ def manual_incoming(request):
             lot_nos = request.POST.getlist('lot_nos[]')
             quantities = request.POST.getlist('quantities[]')
             remarks = request.POST.getlist('remarks[]')
+            order_ids = request.POST.getlist('order_ids[]')  # 발주 연결 (선택사항)
 
             if not part_ids:
                 messages.error(request, "입고할 품목이 리스트에 없습니다.")
@@ -455,11 +456,32 @@ def manual_incoming(request):
                     )
                     stock.refresh_from_db()
 
-                    # (2) 수불 이력 생성
-                    trx_no = f"IN-{timezone.now().strftime('%y%m%d%H%M%S')}-{request.user.id}-{i}"
+                    # (2) 발주 연결 확인 → IN_SCM / IN_MANUAL 분기
+                    linked_order = None
+                    order_id_val = order_ids[i] if i < len(order_ids) else ''
+                    if order_id_val and order_id_val not in ('', '0', 'None'):
+                        try:
+                            linked_order = Order.objects.get(id=int(order_id_val))
+                        except (Order.DoesNotExist, ValueError):
+                            linked_order = None
+
+                    if linked_order:
+                        trx_type = 'IN_SCM'
+                        trx_prefix = 'IN-SCM'
+                        erp_no = linked_order.erp_order_no or ''
+                        erp_seq = linked_order.erp_order_seq or ''
+                        order_info = f"[발주입고] 발주#{linked_order.id}"
+                        if erp_no:
+                            order_info += f" (ERP:{erp_no}-{erp_seq})"
+                        final_remark = f"{order_info} {final_remark}".strip()
+                    else:
+                        trx_type = 'IN_MANUAL'
+                        trx_prefix = 'IN-MAN'
+
+                    trx_no = f"{trx_prefix}-{timezone.now().strftime('%y%m%d%H%M%S')}-{request.user.id}-{i}"
                     trx_obj = MaterialTransaction.objects.create(
                         transaction_no=trx_no,
-                        transaction_type='IN_MANUAL',
+                        transaction_type=trx_type,
                         date=date_value,
                         part=part,
                         quantity=qty,
@@ -5962,3 +5984,66 @@ def outgoing_history(request):
         'vendors': vendors,
     }
     return render(request, 'material/outgoing_history.html', context)
+
+
+# =============================================================================
+# 입고 시 발주 매칭 API
+# =============================================================================
+
+@login_required
+@wms_permission_required('can_wms_inout_edit')
+def api_check_open_orders(request):
+    """품번 + 업체로 미마감 발주(Order) 조회"""
+    from django.http import JsonResponse
+    from orders.models import DeliveryOrderItem
+
+    part_no = request.GET.get('part_no', '').strip()
+    vendor_id = request.GET.get('vendor_id', '').strip()
+
+    if not part_no:
+        return JsonResponse({'orders': []})
+
+    qs = Order.objects.filter(
+        part_no=part_no,
+        is_closed=False,
+    ).order_by('due_date')
+
+    if vendor_id:
+        qs = qs.filter(vendor_id=vendor_id)
+
+    # 각 발주별 이미 입고된 수량 계산
+    results = []
+    for o in qs:
+        # 납품서를 통해 입고된 수량
+        delivered_qty = 0
+        # linked_order 기준
+        linked_qty = DeliveryOrderItem.objects.filter(
+            linked_order=o,
+            order__status__in=['RECEIVED', 'APPROVED']
+        ).aggregate(total=Sum('total_qty'))['total'] or 0
+        delivered_qty = linked_qty
+
+        # ERP 발주번호 기준 (linked_order가 없는 경우)
+        if delivered_qty == 0 and o.erp_order_no:
+            erp_qty = DeliveryOrderItem.objects.filter(
+                erp_order_no=o.erp_order_no,
+                order__status__in=['RECEIVED', 'APPROVED']
+            ).aggregate(total=Sum('total_qty'))['total'] or 0
+            delivered_qty = erp_qty
+
+        remain_qty = o.quantity - delivered_qty
+        if remain_qty <= 0:
+            continue  # 이미 전량 입고된 발주는 제외
+
+        results.append({
+            'id': o.id,
+            'erp_order_no': o.erp_order_no or '',
+            'erp_order_seq': o.erp_order_seq or '',
+            'quantity': o.quantity,
+            'delivered_qty': delivered_qty,
+            'remain_qty': remain_qty,
+            'due_date': o.due_date.strftime('%Y-%m-%d') if o.due_date else '',
+            'vendor_name': o.vendor.name if o.vendor else '',
+        })
+
+    return JsonResponse({'orders': results})
