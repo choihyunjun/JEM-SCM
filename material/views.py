@@ -3231,11 +3231,18 @@ def bom_calculate(request):
                             qty = row.get('수량', 0)
                             need_date = row.get('필요일자', '')
 
-                            # need_date가 datetime 객체인 경우 문자열로 변환
+                            # need_date 정규화 → 'YYYY-MM-DD' 문자열로 통일
                             if need_date and hasattr(need_date, 'strftime'):
+                                # datetime/date 객체
                                 need_date = need_date.strftime('%Y-%m-%d')
+                            elif need_date:
+                                need_date = str(need_date).strip()
+                                # 숫자형 YYYYMMDD (예: 20260301, 20260301.0)
+                                need_date = need_date.replace('.0', '')
+                                if len(need_date) == 8 and need_date.isdigit():
+                                    need_date = f'{need_date[:4]}-{need_date[4:6]}-{need_date[6:8]}'
                             else:
-                                need_date = str(need_date) if need_date else ''
+                                need_date = ''
 
                             if not part_no:
                                 continue
