@@ -112,5 +112,7 @@ urlpatterns = [
 
     # 성형 가동률
     path('molding/', views.molding_utilization, name='molding_utilization'),
-    path('molding/upload/', views.molding_upload, name='molding_upload'),
+    path('molding/erp-sync/', views.molding_erp_sync, name='molding_erp_sync'),
+    path('molding/settings/', views.molding_settings, name='molding_settings'),
+    path('api/molding/save-input/', views.api_molding_save_input, name='api_molding_save_input'),
 ]

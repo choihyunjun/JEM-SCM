@@ -820,6 +820,25 @@ class WMSConfig(models.Model):
 # 17. 성형 가동률 관리
 # =============================================================================
 
+MOLDING_LOSS_CATEGORIES = [
+    ('계획정지', '계획정지'),
+    ('생산종료', '생산종료'),
+    ('식사휴식', '식사/휴식'),
+    ('청소', '청소'),
+    ('인원부족', '인원부족'),
+    ('금형예열', '금형예열'),
+    ('금형수리', '금형수리'),
+    ('기종변경', '기종변경'),
+    ('기타', '기타'),
+    ('재료결품', '재료결품'),
+    ('재료건조', '재료건조'),
+    ('품질이상', '품질이상'),
+    ('설비고장', '설비고장'),
+    ('자재부족', '자재부족'),
+    ('TRY', 'TRY'),
+]
+
+
 class MoldingMachine(models.Model):
     """성형기 마스터"""
     code = models.CharField("호기", max_length=20, unique=True)  # M101
@@ -836,35 +855,74 @@ class MoldingMachine(models.Model):
         return f"{self.code} ({self.tonnage}t)"
 
 
-class MoldingDailyRecord(models.Model):
-    """성형기 일별 가동 기록"""
-    SHIFT_CHOICES = [('주간', '주간'), ('야간', '야간')]
+class MoldingWorkSetting(models.Model):
+    """월별 근무시간 기준 설정"""
+    year = models.IntegerField("년도")
+    month = models.IntegerField("월")
+    day_shift_minutes = models.IntegerField("주간 기준시간(분)", default=670)
+    night_shift_minutes = models.IntegerField("야간 기준시간(분)", default=770)
+    work_days = models.IntegerField("근무일수", default=20)
 
+    class Meta:
+        verbose_name = "성형 근무 설정"
+        verbose_name_plural = "17. 성형 근무 설정"
+        unique_together = ['year', 'month']
+
+    def __str__(self):
+        return f"{self.year}년 {self.month}월 (주간{self.day_shift_minutes}분/야간{self.night_shift_minutes}분)"
+
+    @classmethod
+    def get_setting(cls, year, month):
+        try:
+            return cls.objects.get(year=year, month=month)
+        except cls.DoesNotExist:
+            return cls(year=year, month=month)  # 기본값 반환 (미저장)
+
+
+class MoldingDailyRecord(models.Model):
+    """성형기 일별 가동 기록 (호기+일자 단위, 주야간 합산)"""
     machine = models.ForeignKey(MoldingMachine, on_delete=models.CASCADE, related_name='daily_records')
     date = models.DateField("일자")
-    shift = models.CharField("근무구분", max_length=10, choices=SHIFT_CHOICES)
     status = models.CharField("가동구분", max_length=10, default='비가동')  # 가동/비가동
     operating_minutes = models.IntegerField("가동시간(분)", default=0)
     loss_minutes = models.IntegerField("유실시간(분)", default=0)
-    utilization_rate = models.FloatField("설비가동률", default=0)  # 0~1
-    time_rate = models.FloatField("시간가동률", default=0)  # 0~1
-    product_part_no = models.CharField("생산품번", max_length=50, blank=True)
+    base_minutes = models.IntegerField("기준시간(분)", default=0)  # 부하시간 기준
+    utilization_rate = models.FloatField("설비가동률(%)", default=0)
+    time_rate = models.FloatField("시간가동률(%)", default=0)
+    product_part_no = models.CharField("생산품번", max_length=100, blank=True)
     product_qty = models.IntegerField("생산수량", default=0)
+    erp_synced = models.BooleanField("ERP동기화여부", default=False)
+    input_completed = models.BooleanField("입력완료", default=False)
+    input_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    input_at = models.DateTimeField("입력일시", null=True, blank=True)
 
     class Meta:
         verbose_name = "성형 일별 가동기록"
         verbose_name_plural = "17. 성형 일별 가동기록"
-        unique_together = ['machine', 'date', 'shift']
-        ordering = ['-date', 'machine', 'shift']
+        unique_together = ['machine', 'date']
+        ordering = ['-date', 'machine']
 
     def __str__(self):
-        return f"{self.machine.code} {self.date} {self.shift}"
+        return f"{self.machine.code} {self.date}"
+
+    def calculate_rates(self):
+        """유실시간 합계 → 설비가동률/시간가동률 자동 계산"""
+        self.loss_minutes = sum(d.minutes for d in self.loss_details.all())
+        net = self.operating_minutes - self.loss_minutes
+        if self.base_minutes > 0:
+            self.utilization_rate = round(net / self.base_minutes * 100, 1)
+        else:
+            self.utilization_rate = 0
+        if self.operating_minutes > 0:
+            self.time_rate = round(net / self.operating_minutes * 100, 1)
+        else:
+            self.time_rate = 0
 
 
 class MoldingLossDetail(models.Model):
     """성형기 유실 상세 (사유별)"""
     record = models.ForeignKey(MoldingDailyRecord, on_delete=models.CASCADE, related_name='loss_details')
-    category = models.CharField("유실사유", max_length=30)
+    category = models.CharField("유실사유", max_length=30, choices=MOLDING_LOSS_CATEGORIES)
     minutes = models.IntegerField("시간(분)", default=0)
 
     class Meta:
@@ -875,8 +933,27 @@ class MoldingLossDetail(models.Model):
         return f"{self.record} - {self.category}: {self.minutes}분"
 
 
+class MoldingERPSyncLog(models.Model):
+    """ERP 생산입고 동기화 이력"""
+    year = models.IntegerField("년도")
+    month = models.IntegerField("월")
+    synced_at = models.DateTimeField("동기화일시", auto_now_add=True)
+    synced_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    record_count = models.IntegerField("동기화건수", default=0)
+    machine_count = models.IntegerField("가동호기수", default=0)
+    message = models.TextField("메시지", blank=True)
+
+    class Meta:
+        verbose_name = "ERP 동기화 이력"
+        verbose_name_plural = "17. ERP 동기화 이력"
+        ordering = ['-synced_at']
+
+    def __str__(self):
+        return f"{self.year}년 {self.month}월 ({self.record_count}건)"
+
+
 class MoldingUploadLog(models.Model):
-    """엑셀 업로드 이력"""
+    """엑셀 업로드 이력 (레거시)"""
     year = models.IntegerField("년도")
     month = models.IntegerField("월")
     uploaded_at = models.DateTimeField("업로드일시", auto_now_add=True)

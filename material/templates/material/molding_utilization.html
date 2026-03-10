@@ -2,15 +2,20 @@
 {% load humanize %}
 
 {% block material_content %}
-<div class="container-fluid" style="max-width: 1600px;">
+<div class="container-fluid" style="max-width: 1800px;">
     <div class="d-flex justify-content-between align-items-center mb-4 pt-3">
         <div>
             <h3 class="fw-bold">성형 가동률</h3>
-            <span class="text-muted small">월별 성형기 가동률 현황을 조회합니다.</span>
+            <span class="text-muted small">ERP 생산입고 데이터 기반 성형기 가동률 관리</span>
         </div>
-        <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#uploadModal">
-            <i class="bi bi-upload me-1"></i> 엑셀 업로드
-        </button>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#settingModal">
+                <i class="bi bi-gear me-1"></i> 근무설정
+            </button>
+            <button class="btn btn-primary btn-sm" id="btnErpSync" onclick="syncERP()">
+                <i class="bi bi-cloud-download me-1"></i> ERP 동기화
+            </button>
+        </div>
     </div>
 
     <!-- 년/월 선택 -->
@@ -20,7 +25,6 @@
                 <div class="col-auto">
                     <label class="form-label mb-0 small fw-bold">년도</label>
                     <select name="year" class="form-select form-select-sm" style="width:100px;">
-                        {% for y in "2024,2025,2026,2027"|make_list %}{% endfor %}
                         <option value="2024" {% if year == 2024 %}selected{% endif %}>2024</option>
                         <option value="2025" {% if year == 2025 %}selected{% endif %}>2025</option>
                         <option value="2026" {% if year == 2026 %}selected{% endif %}>2026</option>
@@ -30,8 +34,6 @@
                 <div class="col-auto">
                     <label class="form-label mb-0 small fw-bold">월</label>
                     <select name="month" class="form-select form-select-sm" style="width:80px;">
-                        {% for m in "1,2,3,4,5,6,7,8,9,10,11,12" %}
-                        {% endfor %}
                         <option value="1" {% if month == 1 %}selected{% endif %}>1월</option>
                         <option value="2" {% if month == 2 %}selected{% endif %}>2월</option>
                         <option value="3" {% if month == 3 %}selected{% endif %}>3월</option>
@@ -48,6 +50,11 @@
                 </div>
                 <div class="col-auto d-flex align-items-end">
                     <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> 조회</button>
+                </div>
+                <div class="col-auto ms-3">
+                    <span class="badge bg-light text-dark border small">
+                        기준시간: 주간 {{ setting.day_shift_minutes }}분 / 야간 {{ setting.night_shift_minutes }}분 / 근무일 {{ setting.work_days }}일
+                    </span>
                 </div>
             </form>
         </div>
@@ -67,7 +74,7 @@
             <div class="card shadow-sm border-start border-success border-4">
                 <div class="card-body text-center">
                     <div class="text-muted small">시간가동률</div>
-                    <div class="fs-2 fw-bold text-success">{{ overall_time_rate|floatformat:1 }}%</div>
+                    <div class="fs-2 fw-bold text-success">{{ overall_time|floatformat:1 }}%</div>
                 </div>
             </div>
         </div>
@@ -116,7 +123,7 @@
                         <tr>
                             <th class="table-light">설비가동률</th>
                             {% for t in tonnage_list %}
-                            <td class="{% if t.avg_util >= 0.8 %}text-success{% elif t.avg_util >= 0.5 %}text-warning{% elif t.avg_util > 0 %}text-danger{% endif %} fw-bold">
+                            <td class="{% if t.avg_util >= 80 %}text-success{% elif t.avg_util >= 50 %}text-warning{% elif t.avg_util > 0 %}text-danger{% endif %} fw-bold">
                                 {% if t.avg_util > 0 %}{{ t.avg_util|floatformat:1 }}%{% else %}-{% endif %}
                             </td>
                             {% endfor %}
@@ -128,10 +135,19 @@
     </div>
     {% endif %}
 
+    <!-- 범례 -->
+    <div class="mb-2 small">
+        <span class="badge bg-secondary me-1">데이터 없음</span>
+        <span class="badge me-1" style="background:#fff3cd;color:#333;border:1px solid #ddd;">ERP 동기화 (미입력)</span>
+        <span class="badge bg-success me-1">입력완료 (90%+)</span>
+        <span class="badge bg-warning text-dark me-1">입력완료 (70~90%)</span>
+        <span class="badge bg-danger me-1">입력완료 (~70%)</span>
+    </div>
+
     <!-- 호기별 일별 가동 현황 -->
     <div class="card shadow-sm mb-4">
         <div class="card-header bg-white fw-bold">
-            <i class="bi bi-calendar3 me-1"></i> 호기별 일별 가동 현황
+            <i class="bi bi-calendar3 me-1"></i> 호기별 일별 가동 현황 <small class="text-muted fw-normal">(셀 클릭 시 상세 입력)</small>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -141,6 +157,7 @@
                             <th class="sticky-col" style="min-width:70px;">호기</th>
                             <th style="min-width:40px;">톤</th>
                             <th style="min-width:55px;">가동률</th>
+                            <th style="min-width:45px;">가동일</th>
                             {% for d in day_range %}
                             <th style="min-width:30px;">{{ d }}</th>
                             {% endfor %}
@@ -151,17 +168,24 @@
                         <tr>
                             <td class="fw-bold text-start sticky-col bg-white">{{ ms.machine.code }}</td>
                             <td class="text-muted">{{ ms.machine.tonnage }}</td>
-                            <td class="fw-bold {% if ms.avg_util >= 0.8 %}text-success{% elif ms.avg_util >= 0.5 %}text-warning{% elif ms.avg_util > 0 %}text-danger{% endif %}">
+                            <td class="fw-bold {% if ms.avg_util >= 90 %}text-success{% elif ms.avg_util >= 70 %}text-warning{% elif ms.avg_util > 0 %}text-danger{% endif %}">
                                 {% if ms.avg_util > 0 %}{{ ms.avg_util|floatformat:1 }}%{% else %}-{% endif %}
                             </td>
+                            <td>{{ ms.active_days }}</td>
                             {% for dd in ms.daily %}
-                            <td style="padding:2px;" class="{% if dd and dd.status == '가동' %}{% if dd.util >= 0.9 %}bg-success text-white{% elif dd.util >= 0.7 %}bg-warning{% else %}bg-danger text-white{% endif %}{% elif dd %}bg-light text-muted{% endif %}">
-                                {% if dd and dd.status == '가동' %}{{ dd.util|floatformat:0 }}{% elif dd %}-{% endif %}
+                            <td style="padding:2px;{% if dd %}cursor:pointer;{% endif %}"
+                                {% if dd %}
+                                onclick="openInput({{ dd.id }})"
+                                class="{% if dd.input_completed %}{% if dd.util >= 90 %}bg-success text-white{% elif dd.util >= 70 %}bg-warning{% else %}bg-danger text-white{% endif %}{% elif dd.erp_synced %}erp-synced{% endif %}"
+                                title="{% if dd.input_completed %}가동률: {{ dd.util|floatformat:1 }}%{% elif dd.erp_synced %}ERP동기화 (클릭하여 입력){% endif %}"
+                                {% endif %}
+                            >
+                                {% if dd and dd.input_completed %}{{ dd.util|floatformat:0 }}{% elif dd and dd.erp_synced %}<i class="bi bi-check-circle-fill" style="font-size:0.6rem;"></i>{% endif %}
                             </td>
                             {% endfor %}
                         </tr>
                         {% empty %}
-                        <tr><td colspan="100" class="text-muted py-4">데이터가 없습니다. 엑셀을 업로드하세요.</td></tr>
+                        <tr><td colspan="100" class="text-muted py-4">데이터가 없습니다. ERP 동기화를 실행하세요.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -169,25 +193,25 @@
         </div>
     </div>
 
-    <!-- 업로드 이력 -->
-    {% if upload_logs %}
+    <!-- 동기화 이력 -->
+    {% if sync_logs %}
     <div class="card shadow-sm mb-4">
         <div class="card-header bg-white fw-bold small">
-            <i class="bi bi-clock-history me-1"></i> 최근 업로드 이력
+            <i class="bi bi-clock-history me-1"></i> ERP 동기화 이력
         </div>
         <div class="card-body p-0">
             <table class="table table-sm mb-0">
                 <thead class="table-light">
-                    <tr><th>기간</th><th>파일명</th><th>등록건수</th><th>업로드자</th><th>일시</th></tr>
+                    <tr><th>기간</th><th>동기화건수</th><th>가동호기</th><th>실행자</th><th>일시</th></tr>
                 </thead>
                 <tbody>
-                    {% for log in upload_logs %}
+                    {% for log in sync_logs %}
                     <tr>
                         <td>{{ log.year }}년 {{ log.month }}월</td>
-                        <td class="small">{{ log.file_name }}</td>
                         <td>{{ log.record_count|intcomma }}건</td>
-                        <td>{{ log.uploaded_by }}</td>
-                        <td class="small text-muted">{{ log.uploaded_at|date:"Y-m-d H:i" }}</td>
+                        <td>{{ log.machine_count }}대</td>
+                        <td>{{ log.synced_by }}</td>
+                        <td class="small text-muted">{{ log.synced_at|date:"Y-m-d H:i" }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -197,27 +221,109 @@
     {% endif %}
 </div>
 
-<!-- 업로드 모달 -->
-<div class="modal fade" id="uploadModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
+<!-- 상세 입력 모달 -->
+<div class="modal fade" id="inputModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header bg-success text-white">
-                <h5 class="modal-title fw-bold"><i class="bi bi-upload me-2"></i>성형 가동률 엑셀 업로드</h5>
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-pencil-square me-2"></i>가동 상세 입력</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div class="alert alert-info small mb-3">
-                    <i class="bi bi-info-circle me-1"></i>
-                    "성형가동률 - 일별" 시트가 포함된 엑셀 파일을 업로드하세요.<br>
-                    기존 해당 월 데이터는 덮어씁니다.
+                <div class="row mb-3">
+                    <div class="col-md-3"><strong>호기:</strong> <span id="inp_machine"></span></div>
+                    <div class="col-md-3"><strong>일자:</strong> <span id="inp_date"></span></div>
+                    <div class="col-md-3"><strong>생산품번:</strong> <span id="inp_parts" class="small"></span></div>
+                    <div class="col-md-3"><strong>생산수량:</strong> <span id="inp_qty"></span></div>
                 </div>
-                <input type="file" id="moldingFile" class="form-control" accept=".xlsx,.xls">
+                <hr>
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">기준시간 (분)</label>
+                        <input type="number" class="form-control" id="inp_base_minutes" value="{{ setting.day_shift_minutes }}" oninput="calcRates()">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">가동시간 (분)</label>
+                        <input type="number" class="form-control" id="inp_operating" value="0" oninput="calcRates()">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">유실시간 합계 (분)</label>
+                        <input type="text" class="form-control bg-light" id="inp_loss_total" value="0" readonly>
+                    </div>
+                </div>
+
+                <div class="fw-bold mb-2">유실사유별 시간 (분)</div>
+                <div class="row g-2 mb-3">
+                    {% for cat in loss_categories %}
+                    <div class="col-md-3 col-6">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text" style="font-size:0.75rem;min-width:75px;">{{ cat }}</span>
+                            <input type="number" class="form-control loss-input" data-cat="{{ cat }}" value="0" min="0" oninput="calcRates()">
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="row bg-light rounded p-3">
+                    <div class="col-md-4 text-center">
+                        <div class="text-muted small">설비가동률</div>
+                        <div class="fs-3 fw-bold text-primary" id="calc_util">0.0%</div>
+                    </div>
+                    <div class="col-md-4 text-center">
+                        <div class="text-muted small">시간가동률</div>
+                        <div class="fs-3 fw-bold text-success" id="calc_time">0.0%</div>
+                    </div>
+                    <div class="col-md-4 text-center">
+                        <div class="text-muted small">순가동시간</div>
+                        <div class="fs-3 fw-bold text-info" id="calc_net">0분</div>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
-                <button type="button" class="btn btn-success" id="btnUpload" onclick="uploadMolding()">
-                    <i class="bi bi-upload me-1"></i> 업로드
+                <button type="button" class="btn btn-primary" id="btnSaveInput" onclick="saveInput()">
+                    <i class="bi bi-check-lg me-1"></i> 저장
                 </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 근무설정 모달 -->
+<div class="modal fade" id="settingModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-secondary text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-gear me-2"></i>근무시간 설정</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3">
+                    <div class="col-6">
+                        <label class="form-label fw-bold">년도</label>
+                        <input type="number" class="form-control" id="set_year" value="{{ year }}">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-bold">월</label>
+                        <input type="number" class="form-control" id="set_month" value="{{ month }}" min="1" max="12">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-bold">주간 기준시간 (분)</label>
+                        <input type="number" class="form-control" id="set_day" value="{{ setting.day_shift_minutes }}">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-bold">야간 기준시간 (분)</label>
+                        <input type="number" class="form-control" id="set_night" value="{{ setting.night_shift_minutes }}">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-bold">근무일수</label>
+                        <input type="number" class="form-control" id="set_days" value="{{ setting.work_days }}">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn btn-primary" onclick="saveSetting()">저장</button>
             </div>
         </div>
     </div>
@@ -225,27 +331,26 @@
 
 <style>
 .sticky-col { position: sticky; left: 0; z-index: 1; }
+.erp-synced { background: #fff3cd !important; }
+td[onclick] { transition: opacity 0.15s; }
+td[onclick]:hover { opacity: 0.7; }
 </style>
 
 <script>
-function uploadMolding() {
-    var fileInput = document.getElementById('moldingFile');
-    if (!fileInput.files.length) {
-        alert('파일을 선택하세요.');
-        return;
-    }
-    var btn = document.getElementById('btnUpload');
+var currentRecordId = null;
+
+function syncERP() {
+    if (!confirm('{{ year }}년 {{ month }}월 ERP 생산입고 데이터를 동기화합니다.\n기존 수동 입력은 유지됩니다.')) return;
+    var btn = document.getElementById('btnErpSync');
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>업로드 중...';
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>동기화 중...';
 
-    var formData = new FormData();
-    formData.append('file', fileInput.files[0]);
-    formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+    var fd = new FormData();
+    fd.append('year', '{{ year }}');
+    fd.append('month', '{{ month }}');
+    fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
 
-    fetch('{% url "material:molding_upload" %}', {
-        method: 'POST',
-        body: formData,
-    })
+    fetch('{% url "material:molding_erp_sync" %}', {method: 'POST', body: fd})
     .then(r => r.json())
     .then(data => {
         if (data.success) {
@@ -254,13 +359,107 @@ function uploadMolding() {
         } else {
             alert('오류: ' + data.error);
             btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-upload me-1"></i> 업로드';
+            btn.innerHTML = '<i class="bi bi-cloud-download me-1"></i> ERP 동기화';
         }
     })
     .catch(err => {
-        alert('업로드 실패: ' + err);
+        alert('동기화 실패: ' + err);
         btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-upload me-1"></i> 업로드';
+        btn.innerHTML = '<i class="bi bi-cloud-download me-1"></i> ERP 동기화';
+    });
+}
+
+function openInput(recordId) {
+    currentRecordId = recordId;
+    fetch('/wms/api/molding/save-input/?record_id=' + recordId, {
+        headers: {'X-Requested-With': 'XMLHttpRequest'}
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.record) {
+            var r = data.record;
+            document.getElementById('inp_machine').textContent = r.machine;
+            document.getElementById('inp_date').textContent = r.date;
+            document.getElementById('inp_parts').textContent = r.product_part_no || '-';
+            document.getElementById('inp_qty').textContent = r.product_qty || 0;
+            document.getElementById('inp_base_minutes').value = r.base_minutes || {{ setting.day_shift_minutes }};
+            document.getElementById('inp_operating').value = r.operating_minutes || 0;
+            document.querySelectorAll('.loss-input').forEach(function(el) { el.value = 0; });
+            if (r.loss_details) {
+                for (var cat in r.loss_details) {
+                    var el = document.querySelector('.loss-input[data-cat="' + cat + '"]');
+                    if (el) el.value = r.loss_details[cat];
+                }
+            }
+            calcRates();
+            new bootstrap.Modal(document.getElementById('inputModal')).show();
+        }
+    });
+}
+
+function calcRates() {
+    var operating = parseInt(document.getElementById('inp_operating').value) || 0;
+    var base = parseInt(document.getElementById('inp_base_minutes').value) || 0;
+    var lossTotal = 0;
+    document.querySelectorAll('.loss-input').forEach(function(el) {
+        lossTotal += parseInt(el.value) || 0;
+    });
+    document.getElementById('inp_loss_total').value = lossTotal;
+    var net = operating - lossTotal;
+    var util = base > 0 ? (net / base * 100) : 0;
+    var timeRate = operating > 0 ? (net / operating * 100) : 0;
+    document.getElementById('calc_util').textContent = util.toFixed(1) + '%';
+    document.getElementById('calc_time').textContent = timeRate.toFixed(1) + '%';
+    document.getElementById('calc_net').textContent = net + '분';
+    document.getElementById('calc_util').className = 'fs-3 fw-bold ' +
+        (util >= 90 ? 'text-success' : util >= 70 ? 'text-warning' : 'text-danger');
+}
+
+function saveInput() {
+    var lossDetails = {};
+    document.querySelectorAll('.loss-input').forEach(function(el) {
+        var v = parseInt(el.value) || 0;
+        if (v > 0) lossDetails[el.dataset.cat] = v;
+    });
+    var payload = {
+        record_id: currentRecordId,
+        operating_minutes: parseInt(document.getElementById('inp_operating').value) || 0,
+        base_minutes: parseInt(document.getElementById('inp_base_minutes').value) || 0,
+        loss_details: lossDetails,
+    };
+    var btn = document.getElementById('btnSaveInput');
+    btn.disabled = true;
+    fetch('{% url "material:api_molding_save_input" %}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+        body: JSON.stringify(payload),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('inputModal')).hide();
+            location.reload();
+        } else {
+            alert('저장 실패: ' + data.error);
+            btn.disabled = false;
+        }
+    })
+    .catch(err => { alert('저장 오류: ' + err); btn.disabled = false; });
+}
+
+function saveSetting() {
+    var fd = new FormData();
+    fd.append('year', document.getElementById('set_year').value);
+    fd.append('month', document.getElementById('set_month').value);
+    fd.append('day_shift_minutes', document.getElementById('set_day').value);
+    fd.append('night_shift_minutes', document.getElementById('set_night').value);
+    fd.append('work_days', document.getElementById('set_days').value);
+    fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+    fetch('{% url "material:molding_settings" %}', {method: 'POST', body: fd})
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) { alert(data.message); location.reload(); }
+        else { alert('오류: ' + data.error); }
     });
 }
 </script>

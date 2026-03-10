@@ -6243,68 +6243,59 @@ def api_check_open_orders(request):
 @wms_permission_required('can_wms_stock_view')
 def molding_utilization(request):
     """성형 가동률 대시보드"""
-    from .models import MoldingMachine, MoldingDailyRecord, MoldingUploadLog
-    from django.db.models import Avg, Count, Sum
+    from .models import (MoldingMachine, MoldingDailyRecord, MoldingERPSyncLog,
+                         MoldingWorkSetting, MOLDING_LOSS_CATEGORIES)
     import calendar
 
     year = int(request.GET.get('year', timezone.localtime().year))
     month = int(request.GET.get('month', timezone.localtime().month))
-
-    # 해당 월의 일수
     _, days_in_month = calendar.monthrange(year, month)
-    dates = [f"{year}-{month:02d}-{d:02d}" for d in range(1, days_in_month + 1)]
 
-    # 전체 호기 목록
     machines = MoldingMachine.objects.filter(is_active=True)
-
-    # 해당 월 가동 기록
     records = MoldingDailyRecord.objects.filter(
         date__year=year, date__month=month
-    ).select_related('machine')
+    ).select_related('machine').prefetch_related('loss_details')
+
+    setting = MoldingWorkSetting.get_setting(year, month)
 
     # 호기별 월간 집계
     machine_summary = []
     for m in machines:
         m_records = [r for r in records if r.machine_id == m.id]
-        total_operating = sum(r.operating_minutes for r in m_records)
-        total_loss = sum(r.loss_minutes for r in m_records)
-        active_days = len(set(r.date for r in m_records if r.status == '가동'))
-        avg_util = sum(r.utilization_rate for r in m_records if r.status == '가동')
-        active_count = len([r for r in m_records if r.status == '가동'])
-        avg_util = avg_util / active_count if active_count > 0 else 0
+        active_records = [r for r in m_records if r.status == '가동']
+        active_days = len(active_records)
+        avg_util = sum(r.utilization_rate for r in active_records) / active_days if active_days else 0
+        avg_time = sum(r.time_rate for r in active_records) / active_days if active_days else 0
 
-        # 일별 데이터 (주간 기준)
-        daily_data = {}
-        for r in m_records:
-            day_key = r.date.day
-            if day_key not in daily_data:
-                daily_data[day_key] = {'status': '비가동', 'util': 0, 'operating': 0, 'loss': 0}
-            if r.status == '가동':
-                daily_data[day_key]['status'] = '가동'
-            daily_data[day_key]['util'] = max(daily_data[day_key]['util'], r.utilization_rate)
-            daily_data[day_key]['operating'] += r.operating_minutes
-            daily_data[day_key]['loss'] += r.loss_minutes
-
+        daily_map = {r.date.day: r for r in m_records}
         daily_list = []
         for d in range(1, days_in_month + 1):
-            if d in daily_data:
-                daily_list.append(daily_data[d])
+            r = daily_map.get(d)
+            if r:
+                daily_list.append({
+                    'id': r.id,
+                    'status': r.status,
+                    'util': r.utilization_rate,
+                    'erp_synced': r.erp_synced,
+                    'input_completed': r.input_completed,
+                    'operating': r.operating_minutes,
+                    'loss': r.loss_minutes,
+                })
             else:
                 daily_list.append(None)
 
         machine_summary.append({
             'machine': m,
-            'total_operating': total_operating,
-            'total_loss': total_loss,
             'active_days': active_days,
-            'avg_util': avg_util * 100,
-            'daily': [{'status': dd['status'], 'util': dd['util'] * 100, 'operating': dd['operating'], 'loss': dd['loss']} if dd else None for dd in daily_list],
+            'avg_util': avg_util,
+            'avg_time': avg_time,
+            'daily': daily_list,
         })
 
-    # 전체 월간 요약
-    total_records = [r for r in records if r.status == '가동']
-    overall_util = (sum(r.utilization_rate for r in total_records) / len(total_records) * 100) if total_records else 0
-    overall_time_rate = (sum(r.time_rate for r in total_records) / len(total_records) * 100) if total_records else 0
+    # 전체 요약
+    all_active = [r for r in records if r.status == '가동']
+    overall_util = sum(r.utilization_rate for r in all_active) / len(all_active) if all_active else 0
+    overall_time = sum(r.time_rate for r in all_active) / len(all_active) if all_active else 0
 
     # 톤수별 집계
     tonnage_summary = {}
@@ -6317,217 +6308,229 @@ def molding_utilization(request):
         if m_active:
             tonnage_summary[t]['util_sum'] += sum(r.utilization_rate for r in m_active) / len(m_active)
             tonnage_summary[t]['active_count'] += 1
-    tonnage_list = []
-    for t in sorted(tonnage_summary.keys()):
-        s = tonnage_summary[t]
-        tonnage_list.append({
-            'tonnage': t,
-            'count': s['count'],
-            'avg_util': (s['util_sum'] / s['active_count'] * 100) if s['active_count'] > 0 else 0,
-        })
+    tonnage_list = sorted([
+        {'tonnage': t, 'count': s['count'],
+         'avg_util': s['util_sum'] / s['active_count'] if s['active_count'] else 0}
+        for t, s in tonnage_summary.items()
+    ], key=lambda x: x['tonnage'])
 
-    # 업로드 이력
-    upload_logs = MoldingUploadLog.objects.order_by('-uploaded_at')[:5]
+    sync_logs = MoldingERPSyncLog.objects.filter(year=year, month=month).order_by('-synced_at')[:5]
+    loss_categories = [c[0] for c in MOLDING_LOSS_CATEGORIES]
 
     context = {
-        'year': year,
-        'month': month,
+        'year': year, 'month': month,
         'days_in_month': days_in_month,
         'day_range': range(1, days_in_month + 1),
         'machines': machines,
         'machine_summary': machine_summary,
         'overall_util': overall_util,
-        'overall_time_rate': overall_time_rate,
+        'overall_time': overall_time,
         'tonnage_list': tonnage_list,
         'total_machines': machines.count(),
-        'upload_logs': upload_logs,
+        'sync_logs': sync_logs,
+        'setting': setting,
+        'loss_categories': loss_categories,
     }
     return render(request, 'material/molding_utilization.html', context)
 
 
 @login_required
 @wms_permission_required('can_wms_stock_view')
-def molding_upload(request):
-    """성형 가동률 엑셀 업로드"""
-    from .models import MoldingMachine, MoldingDailyRecord, MoldingLossDetail, MoldingUploadLog
-    from django.http import JsonResponse
-    import openpyxl
-    from datetime import date, datetime
+def molding_erp_sync(request):
+    """ERP 생산입고 데이터로 성형 가동 현황 동기화"""
+    from .models import MoldingMachine, MoldingDailyRecord, MoldingERPSyncLog, MoldingWorkSetting
+    from .erp_api import fetch_erp_receipt_list
+    from datetime import date as dt_date
+    import calendar
 
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'POST만 허용'})
 
-    file = request.FILES.get('file')
-    if not file:
-        return JsonResponse({'success': False, 'error': '파일을 선택하세요.'})
+    year = int(request.POST.get('year', timezone.localtime().year))
+    month = int(request.POST.get('month', timezone.localtime().month))
+    _, days_in_month = calendar.monthrange(year, month)
 
-    try:
-        wb = openpyxl.load_workbook(file, data_only=True)
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': f'엑셀 파일을 읽을 수 없습니다: {e}'})
+    date_from = f"{year}{month:02d}01"
+    date_to = f"{year}{month:02d}{days_in_month:02d}"
 
-    # "성형가동률 - 일별" 시트 찾기
-    daily_sheet = None
-    for sn in wb.sheetnames:
-        if '일별' in sn:
-            daily_sheet = wb[sn]
-            break
+    # ERP 생산입고 조회
+    ok, data, err = fetch_erp_receipt_list(date_from, date_to)
+    if not ok:
+        return JsonResponse({'success': False, 'error': f'ERP 조회 실패: {err}'})
 
-    if not daily_sheet:
-        return JsonResponse({'success': False, 'error': '"성형가동률 - 일별" 시트를 찾을 수 없습니다.'})
+    if not data:
+        return JsonResponse({'success': False, 'error': '해당 기간 생산입고 데이터가 없습니다.'})
+
+    setting = MoldingWorkSetting.get_setting(year, month)
 
     try:
         with transaction.atomic():
-            # Row 2에서 날짜 목록 파싱 (C2부터 날짜들)
-            row2 = list(daily_sheet.iter_rows(min_row=2, max_row=2, values_only=True))[0]
-            dates_in_sheet = []
-            for val in row2:
-                if isinstance(val, datetime):
-                    dates_in_sheet.append(val.date())
-                elif isinstance(val, date):
-                    dates_in_sheet.append(val)
+            # equipNm이 M으로 시작하는 성형기 데이터만 필터
+            molding_data = [r for r in data if (r.get('equipNm') or '').startswith('M')]
 
-            if len(dates_in_sheet) < 2:
-                return JsonResponse({'success': False, 'error': '날짜 정보를 파싱할 수 없습니다.'})
+            # 호기+일자별 집계
+            daily_agg = {}  # {(machine_code, date_str): {'parts': set, 'qty': 0}}
+            for r in molding_data:
+                machine_code = r['equipNm'].strip()
+                rcv_dt = r.get('rcvDt', '')
+                if len(rcv_dt) != 8:
+                    continue
 
-            # 첫 날짜에서 년/월 추출
-            target_year = dates_in_sheet[0].year
-            target_month = dates_in_sheet[0].month
+                key = (machine_code, rcv_dt)
+                if key not in daily_agg:
+                    daily_agg[key] = {'parts': set(), 'qty': 0, 'tonnage': 0}
+                daily_agg[key]['parts'].add(r.get('itemCd', ''))
+                daily_agg[key]['qty'] += int(r.get('rcvQt', 0) or 0)
 
-            # 기존 데이터 삭제 (해당 월)
-            MoldingDailyRecord.objects.filter(
-                date__year=target_year, date__month=target_month
-            ).delete()
-
-            # Row 4: 헤더 (No, 호기, TON, LINE, 구분, ...)
-            # Row 5+: 데이터
-            # 일별 데이터는 13열부터 시작, 5열씩 (가동구분, 설비가동률, 시간가동률, 가동시간, 유실시간)
-
+            # 호기 마스터 갱신 및 레코드 생성
             record_count = 0
-            for row in daily_sheet.iter_rows(min_row=5, values_only=True):
-                if row[0] is None:  # No 칼럼이 비어있으면 스킵
-                    continue
-
-                try:
-                    no = int(row[0])
-                except (ValueError, TypeError):
-                    continue
-
-                machine_code = str(row[1] or '').strip()
-                tonnage = int(row[2] or 0)
-                line = str(row[3] or '').strip()
-                shift = str(row[4] or '').strip()  # 주간/야간
-
-                if not machine_code or shift not in ('주간', '야간'):
-                    continue
-
+            machine_codes = set()
+            for (mc, dt_str), agg in daily_agg.items():
                 # 호기 get_or_create
                 machine, _ = MoldingMachine.objects.get_or_create(
-                    code=machine_code,
-                    defaults={'tonnage': tonnage, 'line': line}
+                    code=mc, defaults={'tonnage': 0}
                 )
-                if machine.tonnage != tonnage or machine.line != line:
-                    machine.tonnage = tonnage
-                    machine.line = line
-                    machine.save()
+                machine_codes.add(mc)
 
-                # 월간 누계: col 5~11 (설비가동률, 시간가동률, 부하율, 근무시간, 부하시간, 가동시간, 유실시간)
-                # 일별 데이터: col 12부터 5열씩 (가동구분, 설비가동률, 시간가동률, 가동시간, 유실시간)
-                col_offset = 12  # 0-indexed
-                for day_idx, d in enumerate(dates_in_sheet):
-                    if d.month != target_month:
-                        continue
+                # 날짜 변환
+                rec_date = dt_date(int(dt_str[:4]), int(dt_str[4:6]), int(dt_str[6:8]))
 
-                    base = col_offset + (day_idx * 5)
-                    if base + 4 >= len(row):
-                        break
+                # 기존 수동 입력 보존: erp 필드만 업데이트
+                record, created = MoldingDailyRecord.objects.get_or_create(
+                    machine=machine, date=rec_date,
+                    defaults={
+                        'status': '가동',
+                        'base_minutes': setting.day_shift_minutes,
+                        'erp_synced': True,
+                    }
+                )
+                record.status = '가동'
+                record.product_part_no = ', '.join(sorted(agg['parts']))[:100]
+                record.product_qty = agg['qty']
+                record.erp_synced = True
+                if not record.base_minutes:
+                    record.base_minutes = setting.day_shift_minutes
+                record.save()
+                record_count += 1
 
-                    status = str(row[base] or '비가동').strip()
-                    util_rate = float(row[base + 1] or 0)
-                    time_rate = float(row[base + 2] or 0)
-                    operating = int(row[base + 3] or 0)
-                    loss = int(row[base + 4] or 0)
-
-                    if status not in ('가동', '비가동'):
-                        status = '비가동'
-
-                    MoldingDailyRecord.objects.create(
-                        machine=machine,
-                        date=d,
-                        shift=shift,
-                        status=status,
-                        operating_minutes=operating,
-                        loss_minutes=loss,
-                        utilization_rate=util_rate,
-                        time_rate=time_rate,
-                    )
-                    record_count += 1
-
-            # 호기별유실현황 시트 파싱
-            loss_sheet = None
-            for sn in wb.sheetnames:
-                if '유실' in sn:
-                    loss_sheet = wb[sn]
-                    break
-
-            if loss_sheet:
-                # Row 2: 헤더 (생산설비, 품번, 실적일, 계획정지, ...)
-                loss_categories = []
-                for cell in loss_sheet[2]:
-                    if cell.value and cell.column >= 4:
-                        loss_categories.append((cell.column - 1, str(cell.value)))  # 0-indexed
-
-                for row in loss_sheet.iter_rows(min_row=3, values_only=True):
-                    if not row[1]:  # 생산설비
-                        continue
-                    machine_code = str(row[1]).strip()
-                    date_str = str(row[3] or '').strip()
-
-                    try:
-                        if '/' in date_str:
-                            loss_date = datetime.strptime(date_str, '%Y/%m/%d').date()
-                        else:
-                            loss_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-                    except (ValueError, TypeError):
-                        continue
-
-                    if loss_date.year != target_year or loss_date.month != target_month:
-                        continue
-
-                    # 해당 record 찾기 (주간 기준)
-                    daily_record = MoldingDailyRecord.objects.filter(
-                        machine__code=machine_code,
-                        date=loss_date,
-                        shift='주간',
-                    ).first()
-
-                    if not daily_record:
-                        continue
-
-                    for col_idx, cat_name in loss_categories:
-                        if col_idx < len(row):
-                            minutes = int(row[col_idx] or 0)
-                            if minutes > 0:
-                                MoldingLossDetail.objects.create(
-                                    record=daily_record,
-                                    category=cat_name,
-                                    minutes=minutes,
-                                )
-
-            # 업로드 이력
-            MoldingUploadLog.objects.create(
-                year=target_year,
-                month=target_month,
-                uploaded_by=request.user,
+            # 동기화 이력
+            MoldingERPSyncLog.objects.create(
+                year=year, month=month,
+                synced_by=request.user,
                 record_count=record_count,
-                file_name=file.name,
+                machine_count=len(machine_codes),
+                message=f'ERP 생산입고 {len(molding_data)}건 → {record_count}개 가동일 동기화 (호기 {len(machine_codes)}대)',
             )
 
         return JsonResponse({
             'success': True,
-            'message': f'{target_year}년 {target_month}월 데이터 {record_count}건 업로드 완료'
+            'message': f'{year}년 {month}월: {record_count}개 가동일 동기화 완료 (호기 {len(machine_codes)}대)'
         })
 
     except Exception as e:
-        logger.error(f'성형 가동률 업로드 오류: {e}', exc_info=True)
+        logger.error(f'성형 ERP 동기화 오류: {e}', exc_info=True)
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+@wms_permission_required('can_wms_stock_view')
+def molding_settings(request):
+    """성형 가동률 근무시간 설정"""
+    from .models import MoldingWorkSetting
+
+    if request.method == 'POST':
+        year = int(request.POST.get('year'))
+        month = int(request.POST.get('month'))
+        obj, _ = MoldingWorkSetting.objects.get_or_create(year=year, month=month)
+        obj.day_shift_minutes = int(request.POST.get('day_shift_minutes', 670))
+        obj.night_shift_minutes = int(request.POST.get('night_shift_minutes', 770))
+        obj.work_days = int(request.POST.get('work_days', 20))
+        obj.save()
+        return JsonResponse({'success': True, 'message': f'{year}년 {month}월 설정 저장 완료'})
+
+    return JsonResponse({'success': False, 'error': 'POST만 허용'})
+
+
+@login_required
+@wms_permission_required('can_wms_stock_view')
+def api_molding_save_input(request):
+    """성형 가동률 수동 입력 저장 (GET: 조회, POST: 저장)"""
+    from .models import MoldingDailyRecord, MoldingLossDetail, MOLDING_LOSS_CATEGORIES
+    import json
+
+    # GET: 레코드 상세 조회 (모달에서 사용)
+    if request.method == 'GET':
+        record_id = request.GET.get('record_id')
+        try:
+            rec = MoldingDailyRecord.objects.select_related('machine').prefetch_related('loss_details').get(id=record_id)
+        except MoldingDailyRecord.DoesNotExist:
+            return JsonResponse({'error': '레코드 없음'})
+        loss_details = {d.category: d.minutes for d in rec.loss_details.all()}
+        return JsonResponse({'record': {
+            'id': rec.id,
+            'machine': rec.machine.code,
+            'tonnage': rec.machine.tonnage,
+            'date': rec.date.strftime('%Y-%m-%d'),
+            'status': rec.status,
+            'operating_minutes': rec.operating_minutes,
+            'base_minutes': rec.base_minutes,
+            'loss_minutes': rec.loss_minutes,
+            'utilization_rate': rec.utilization_rate,
+            'time_rate': rec.time_rate,
+            'product_part_no': rec.product_part_no,
+            'product_qty': rec.product_qty,
+            'input_completed': rec.input_completed,
+            'loss_details': loss_details,
+        }})
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'GET/POST만 허용'})
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSON 파싱 오류'})
+
+    record_id = data.get('record_id')
+    operating_minutes = int(data.get('operating_minutes', 0))
+    base_minutes = int(data.get('base_minutes', 0))
+    loss_data = data.get('loss_details', {})  # {'계획정지': 30, '금형수리': 10, ...}
+
+    try:
+        record = MoldingDailyRecord.objects.get(id=record_id)
+    except MoldingDailyRecord.DoesNotExist:
+        return JsonResponse({'success': False, 'error': '레코드를 찾을 수 없습니다.'})
+
+    try:
+        with transaction.atomic():
+            record.operating_minutes = operating_minutes
+            if base_minutes > 0:
+                record.base_minutes = base_minutes
+
+            # 유실 상세 갱신
+            record.loss_details.all().delete()
+            valid_cats = [c[0] for c in MOLDING_LOSS_CATEGORIES]
+            for cat, mins in loss_data.items():
+                mins = int(mins or 0)
+                if mins > 0 and cat in valid_cats:
+                    MoldingLossDetail.objects.create(
+                        record=record, category=cat, minutes=mins
+                    )
+
+            # 가동률 자동 계산
+            record.calculate_rates()
+            record.input_completed = True
+            record.input_by = request.user
+            record.input_at = timezone.now()
+            record.save()
+
+        return JsonResponse({
+            'success': True,
+            'utilization_rate': record.utilization_rate,
+            'time_rate': record.time_rate,
+            'loss_minutes': record.loss_minutes,
+        })
+
+    except Exception as e:
+        logger.error(f'성형 가동률 입력 오류: {e}', exc_info=True)
         return JsonResponse({'success': False, 'error': str(e)})
