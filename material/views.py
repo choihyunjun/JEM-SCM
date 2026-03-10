@@ -204,12 +204,28 @@ def dashboard(request):
         transaction_type__in=['IN_SCM', 'IN_MANUAL', 'IN_ERP', 'RCV_ERP']
     ).order_by('-date')
 
-    recent_outbound = MaterialTransaction.objects.select_related(
+    recent_outbound = list(MaterialTransaction.objects.select_related(
         'part', 'part__vendor', 'warehouse_from', 'warehouse_to', 'vendor', 'actor'
     ).filter(
         date__date=today,
         transaction_type__in=['OUT_PROD', 'OUT_RETURN', 'OUT_MANUAL', 'OUT_ERP', 'ISU_ERP']
-    ).order_by('-date')
+    ).order_by('-date'))
+
+    # 거래처 표시: vendor → part.vendor → remark에서 추출
+    import re as _re
+    for tx in recent_outbound:
+        if tx.vendor:
+            tx.display_vendor = tx.vendor.name
+        elif tx.part and tx.part.vendor:
+            tx.display_vendor = tx.part.vendor.name
+        elif tx.remark and '\u2192' in tx.remark:
+            # remark 형식: "ERP출고(창고→거래처명) ..." → '→' 뒤에서 마지막 ')' 직전까지
+            after_arrow = tx.remark.split('\u2192', 1)[1]
+            # 마지막 ')' 이전까지 추출하고 뒤의 숫자/공백 제거
+            vendor_str = _re.sub(r'\)\s*[\d\s]*$', '', after_arrow).strip()
+            tx.display_vendor = vendor_str
+        else:
+            tx.display_vendor = ''
 
     # ========== 7. BOM 현황 ==========
     bom_stats = {
@@ -338,15 +354,22 @@ def dashboard_api(request):
     ).order_by('-date').values(
         'date', 'transaction_type', 'part__part_no', 'quantity',
         'warehouse_from__name', 'warehouse_to__name', 'vendor__name',
-        'part__vendor__name'
+        'part__vendor__name', 'remark'
     ))
 
     TX_DISPLAY = dict(MaterialTransaction.TYPE_CHOICES)
+    import re as _re_api
+
+    def _extract_vendor_from_remark(remark):
+        if remark and '\u2192' in remark:
+            after = remark.split('\u2192', 1)[1]
+            return _re_api.sub(r'\)\s*[\d\s]*$', '', after).strip()
+        return ''
 
     def fmt_tx(rows):
         result = []
         for r in rows:
-            vendor_name = r.get('vendor__name') or r.get('part__vendor__name') or ''
+            vendor_name = r.get('vendor__name') or r.get('part__vendor__name') or _extract_vendor_from_remark(r.get('remark', ''))
             result.append({
                 'date': r['date'].strftime('%m/%d %H:%M') if r['date'] else '',
                 'type': TX_DISPLAY.get(r['transaction_type'], r['transaction_type']),

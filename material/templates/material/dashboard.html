@@ -225,7 +225,7 @@
                                     <small>{{ tx.warehouse_from.name }}</small>
                                     {% else %}<small class="text-muted">-</small>{% endif %}
                                 </td>
-                                <td><small>{% if tx.vendor %}{{ tx.vendor.name }}{% elif tx.part.vendor %}{{ tx.part.vendor.name }}{% else %}-{% endif %}</small></td>
+                                <td><small>{{ tx.display_vendor|default:"-" }}</small></td>
                                 <td class="text-end"><span class="text-danger fw-bold">{{ tx.quantity|intcomma }}</span></td>
                             </tr>
                             {% empty %}
