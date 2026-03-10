@@ -1063,19 +1063,14 @@ def incoming_history(request):
         ng_wh = Warehouse.objects.filter(name__contains='부적합').first()
 
     # ✅ "입고 확정" 기준
-    # - 수기입고(IN_MANUAL): 그대로
-    # - SCM입고(수입검사 대상): 검사대기(8100)로 들어간 IN_SCM은 제외되고,
-    #   검사 완료 후 정상 창고로 이동된 TRANSFER(8100 -> 정상창고)는 'SCM입고'로 표시
+    # - 수기입고(IN_MANUAL/IN_SCM): 검사대기장(8100) 직행 건은 제외 (TRANSFER로 확정됨)
+    # - 수입검사 경유: 검사 완료 후 TRANSFER(8100→정상창고)만 최종 입고로 표시
+    # - ERP입고/생산입고: 그대로
     qs = MaterialTransaction.objects.filter(
         Q(transaction_type='IN_MANUAL')
         | Q(transaction_type='IN_ERP')
         | Q(transaction_type='RCV_ERP')
-        |
-        (
-            Q(transaction_type='IN_SCM')
-            & Q(quantity__gt=0)
-            & Q(warehouse_to__isnull=False)
-        )
+        | Q(transaction_type='IN_SCM')
         |
         (
             Q(transaction_type='TRANSFER')
@@ -1085,12 +1080,11 @@ def incoming_history(request):
         )
     ).select_related('part', 'warehouse_to', 'warehouse_from', 'actor', 'vendor').order_by('-date', '-id')
 
-    # ✅ 검사대기/부적합 제외
     if waiting_wh:
-        # (A) IN_SCM이 검사대기창고로 들어간 건 제외
-        qs = qs.exclude(transaction_type='IN_SCM', warehouse_to=waiting_wh)
+        # 검사대기장으로 입고된 건 제외 (IN_MANUAL, IN_SCM 모두)
+        qs = qs.exclude(warehouse_to=waiting_wh, transaction_type__in=['IN_MANUAL', 'IN_SCM'])
 
-        # (B) TRANSFER는 "검사대기창고 -> 다른창고"로 이동된 것만 '입고확정'으로 취급
+        # TRANSFER는 "검사대기장 → 다른창고"만 입고확정으로 취급
         qs = qs.filter(
             Q(transaction_type='IN_MANUAL') |
             Q(transaction_type='IN_ERP') |
@@ -1099,8 +1093,6 @@ def incoming_history(request):
             (Q(transaction_type='TRANSFER') & Q(warehouse_from=waiting_wh))
         )
     else:
-        # 확실하지 않음: 8100 식별이 안되면 TRANSFER를 입고확정으로 판정하기 어려움
-        # => 이 경우 TRANSFER를 제외하고 수기/SCM(비검사)만 보여줌
         qs = qs.exclude(transaction_type='TRANSFER')
 
     if ng_wh:
@@ -1141,32 +1133,35 @@ def incoming_history(request):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    # ✅ 템플릿에서 "구분/비고"를 요구사항대로 표시할 수 있도록 표시용 값만 붙임
+    # ✅ 구분/비고 표시값 세팅
     for item in page_obj:
+        remark = item.remark or ""
+
         if item.transaction_type == 'IN_MANUAL':
             item.display_type = "수기입고"
-            item.display_remark = item.remark or ""
+            # 비고에서 불필요한 태그 제거
+            remark = re.sub(r'\[수입검사 대상\]\s*', '', remark)
+            remark = re.sub(r'\[발주입고\]\s*ERP:\S*\s*', '', remark)
+            item.display_remark = remark.strip()
+        elif item.transaction_type == 'IN_SCM':
+            item.display_type = "발주입고"
+            remark = re.sub(r'\[수입검사 대상\]\s*', '', remark)
+            remark = re.sub(r'\[발주입고\]\s*ERP:\S*\s*', '', remark)
+            item.display_remark = remark.strip()
         elif item.transaction_type == 'IN_ERP':
             item.display_type = "ERP입고"
-            # 비고에서 'ERP입고(업체명)' 부분 제거 (입고처 칼럼으로 분리)
-            remark = item.remark or ""
-            item.display_remark = re.sub(r'^ERP입고\([^)]*\)\s*', '', remark)
-        elif item.transaction_type == 'ISU_ERP':
-            item.display_type = "ERP생산출고"
-            remark = item.remark or ""
-            item.display_remark = re.sub(r'^ERP생산출고\([^)]*\)\s*', '', remark)
+            # 'ERP입고(업체명)' 패턴 제거 (입고처 칼럼에 이미 표시)
+            item.display_remark = re.sub(r'^ERP입고\([^)]*\)\s*', '', remark).strip()
         elif item.transaction_type == 'RCV_ERP':
             item.display_type = "ERP생산입고"
-            remark = item.remark or ""
-            item.display_remark = re.sub(r'^ERP생산입고\([^)]*\)\s*', '', remark)
-        else:
-            # IN_SCM 또는 (검사완료 후) TRANSFER를 모두 "SCM입고"로 표시
-            item.display_type = "SCM입고"
-
-            # 비고는 "납품서 번호"가 원칙
-            # (중요) 현재 QMS에서 생성하는 TRANSFER에는 ref_delivery_order가 저장되지 않아
-            #        여기서는 ref_delivery_order가 있는 경우만 표시 가능 (없으면 빈값)
+            item.display_remark = re.sub(r'^ERP생산입고\([^)]*\)\s*', '', remark).strip()
+        elif item.transaction_type == 'TRANSFER':
+            # 수입검사 완료 후 이동 → "검사입고"로 표시
+            item.display_type = "검사입고"
             item.display_remark = item.ref_delivery_order or ""
+        else:
+            item.display_type = item.transaction_type
+            item.display_remark = remark
 
     # 모달 선택용 목록
     part_groups = list(
