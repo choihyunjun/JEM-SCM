@@ -102,6 +102,9 @@
         <a href="{% url 'material:stock_check_result' %}" class="submenu-item {% if request.resolver_match.url_name == 'stock_check_result' %}active{% endif %}">
             - 재고 조사 결과
         </a>
+        <a href="{% url 'material:molding_utilization' %}" class="submenu-item {% if request.resolver_match.url_name == 'molding_utilization' %}active{% endif %}">
+            - 성형 가동률
+        </a>
     </div>
     {% endif %}
 

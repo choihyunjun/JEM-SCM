@@ -109,4 +109,8 @@ urlpatterns = [
     path('api/audit-mode/toggle/', views.api_audit_mode_toggle, name='api_audit_mode_toggle'),
     path('api/audit-mode/set-override/', views.api_audit_mode_set_override, name='api_audit_mode_set_override'),
     path('api/audit-mode/clear-all/', views.api_audit_mode_clear_all, name='api_audit_mode_clear_all'),
+
+    # 성형 가동률
+    path('molding/', views.molding_utilization, name='molding_utilization'),
+    path('molding/upload/', views.molding_upload, name='molding_upload'),
 ]

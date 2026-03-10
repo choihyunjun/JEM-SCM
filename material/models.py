@@ -814,3 +814,79 @@ class WMSConfig(models.Model):
     def get_config(cls):
         config, _ = cls.objects.get_or_create(pk=1)
         return config
+
+
+# =============================================================================
+# 17. 성형 가동률 관리
+# =============================================================================
+
+class MoldingMachine(models.Model):
+    """성형기 마스터"""
+    code = models.CharField("호기", max_length=20, unique=True)  # M101
+    tonnage = models.IntegerField("톤수", default=0)  # 60, 110, 130...
+    line = models.CharField("라인", max_length=20, blank=True)  # 1 LINE
+    is_active = models.BooleanField("사용여부", default=True)
+
+    class Meta:
+        verbose_name = "성형기"
+        verbose_name_plural = "17. 성형기 마스터"
+        ordering = ['code']
+
+    def __str__(self):
+        return f"{self.code} ({self.tonnage}t)"
+
+
+class MoldingDailyRecord(models.Model):
+    """성형기 일별 가동 기록"""
+    SHIFT_CHOICES = [('주간', '주간'), ('야간', '야간')]
+
+    machine = models.ForeignKey(MoldingMachine, on_delete=models.CASCADE, related_name='daily_records')
+    date = models.DateField("일자")
+    shift = models.CharField("근무구분", max_length=10, choices=SHIFT_CHOICES)
+    status = models.CharField("가동구분", max_length=10, default='비가동')  # 가동/비가동
+    operating_minutes = models.IntegerField("가동시간(분)", default=0)
+    loss_minutes = models.IntegerField("유실시간(분)", default=0)
+    utilization_rate = models.FloatField("설비가동률", default=0)  # 0~1
+    time_rate = models.FloatField("시간가동률", default=0)  # 0~1
+    product_part_no = models.CharField("생산품번", max_length=50, blank=True)
+    product_qty = models.IntegerField("생산수량", default=0)
+
+    class Meta:
+        verbose_name = "성형 일별 가동기록"
+        verbose_name_plural = "17. 성형 일별 가동기록"
+        unique_together = ['machine', 'date', 'shift']
+        ordering = ['-date', 'machine', 'shift']
+
+    def __str__(self):
+        return f"{self.machine.code} {self.date} {self.shift}"
+
+
+class MoldingLossDetail(models.Model):
+    """성형기 유실 상세 (사유별)"""
+    record = models.ForeignKey(MoldingDailyRecord, on_delete=models.CASCADE, related_name='loss_details')
+    category = models.CharField("유실사유", max_length=30)
+    minutes = models.IntegerField("시간(분)", default=0)
+
+    class Meta:
+        verbose_name = "유실 상세"
+        verbose_name_plural = "17. 유실 상세"
+
+    def __str__(self):
+        return f"{self.record} - {self.category}: {self.minutes}분"
+
+
+class MoldingUploadLog(models.Model):
+    """엑셀 업로드 이력"""
+    year = models.IntegerField("년도")
+    month = models.IntegerField("월")
+    uploaded_at = models.DateTimeField("업로드일시", auto_now_add=True)
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    record_count = models.IntegerField("등록건수", default=0)
+    file_name = models.CharField("파일명", max_length=200, blank=True)
+
+    class Meta:
+        verbose_name = "가동률 업로드 이력"
+        verbose_name_plural = "17. 가동률 업로드 이력"
+
+    def __str__(self):
+        return f"{self.year}년 {self.month}월 ({self.record_count}건)"
