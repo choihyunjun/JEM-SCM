@@ -636,18 +636,19 @@
                             {% if user|has_perm:'can_wms_stock_view' %}
                             <a class="nav-link collapsed {% if request.resolver_match.url_name in 'process_tag_form,stock_check,stock_check_result' %}active{% endif %}"
                                href="#" data-bs-toggle="collapse" data-bs-target="#collapseSupport"
-                               aria-expanded="{% if request.resolver_match.url_name in 'process_tag_form,stock_check,stock_check_result' %}true{% else %}false{% endif %}"
+                               aria-expanded="{% if request.resolver_match.url_name in 'process_tag_form,stock_check,stock_check_result,molding_utilization' %}true{% else %}false{% endif %}"
                                aria-controls="collapseSupport">
                                 <div class="sb-nav-link-icon"><i class="bi bi-tools"></i></div>
                                 현장 지원
                                 <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
                             </a>
-                            <div class="collapse {% if request.resolver_match.url_name in 'process_tag_form,stock_check,stock_check_result' %}show{% endif %}"
+                            <div class="collapse {% if request.resolver_match.url_name in 'process_tag_form,stock_check,stock_check_result,molding_utilization' %}show{% endif %}"
                                  id="collapseSupport" data-bs-parent="#sidenavAccordion">
                                 <nav class="sb-sidenav-menu-nested nav">
                                     <a class="nav-link {% if request.resolver_match.url_name == 'process_tag_form' %}active{% endif %}" href="{% url 'material:process_tag_form' %}">공정 현품표 발행</a>
                                     <a class="nav-link {% if request.resolver_match.url_name == 'stock_check' %}active{% endif %}" href="{% url 'material:stock_check' %}">재고 조사 (QR)</a>
                                     <a class="nav-link {% if request.resolver_match.url_name == 'stock_check_result' %}active{% endif %}" href="{% url 'material:stock_check_result' %}">재고 조사 결과</a>
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'molding_utilization' %}active{% endif %}" href="{% url 'material:molding_utilization' %}">성형 가동률</a>
                                 </nav>
                             </div>
                             {% endif %}
