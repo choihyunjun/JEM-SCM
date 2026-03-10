@@ -205,7 +205,7 @@ def dashboard(request):
     ).order_by('-date')
 
     recent_outbound = MaterialTransaction.objects.select_related(
-        'part', 'warehouse_from', 'warehouse_to', 'vendor', 'actor'
+        'part', 'part__vendor', 'warehouse_from', 'warehouse_to', 'vendor', 'actor'
     ).filter(
         date__date=today,
         transaction_type__in=['OUT_PROD', 'OUT_RETURN', 'OUT_MANUAL', 'OUT_ERP', 'ISU_ERP']
@@ -337,7 +337,8 @@ def dashboard_api(request):
         transaction_type__in=['OUT_PROD', 'OUT_RETURN', 'OUT_MANUAL', 'OUT_ERP', 'ISU_ERP']
     ).order_by('-date').values(
         'date', 'transaction_type', 'part__part_no', 'quantity',
-        'warehouse_from__name', 'warehouse_to__name', 'vendor__name'
+        'warehouse_from__name', 'warehouse_to__name', 'vendor__name',
+        'part__vendor__name'
     ))
 
     TX_DISPLAY = dict(MaterialTransaction.TYPE_CHOICES)
@@ -345,13 +346,14 @@ def dashboard_api(request):
     def fmt_tx(rows):
         result = []
         for r in rows:
+            vendor_name = r.get('vendor__name') or r.get('part__vendor__name') or ''
             result.append({
                 'date': r['date'].strftime('%m/%d %H:%M') if r['date'] else '',
                 'type': TX_DISPLAY.get(r['transaction_type'], r['transaction_type']),
                 'part_no': r['part__part_no'] or '',
                 'wh_from': r['warehouse_from__name'] or '',
                 'wh_to': r['warehouse_to__name'] or '',
-                'vendor': r['vendor__name'] or '',
+                'vendor': vendor_name,
                 'qty': r['quantity'],
             })
         return result
