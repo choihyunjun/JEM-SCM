@@ -1178,6 +1178,9 @@ def incoming_history(request):
         .order_by('name')
     )
 
+    # 품번 자동완성용 목록
+    parts = Part.objects.values_list('part_no', 'part_name').order_by('part_no')
+
     context = {
         'page_obj': page_obj,
         'q': q,
@@ -1187,6 +1190,7 @@ def incoming_history(request):
         'end_date': end_date,
         'part_groups': part_groups,
         'vendors': vendors,
+        'parts': parts,
     }
     return render(request, 'material/incoming_history.html', context)
 
