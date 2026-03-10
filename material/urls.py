@@ -5,6 +5,7 @@ app_name = 'material'
 
 urlpatterns = [
     path('', views.dashboard, name='dashboard'),
+    path('api/dashboard/', views.dashboard_api, name='dashboard_api'),
     
     # 1. 재고/수불 관리
     path('stock/', views.stock_list, name='stock_list'),

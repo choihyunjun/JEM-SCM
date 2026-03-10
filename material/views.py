@@ -178,25 +178,9 @@ def dashboard(request):
         qty=Sum('quantity')
     )
 
-    # ========== 3. 창고별 재고 현황 ==========
-    warehouse_stats = MaterialStock.objects.filter(
-        quantity__gt=0
-    ).values(
-        'warehouse__id', 'warehouse__name', 'warehouse__code'
-    ).annotate(
-        part_count=Count('part', distinct=True),
-        total_qty=Sum('quantity')
-    ).order_by('warehouse__code')
+    # ========== 3. (삭제됨 - 창고별 재고 현황) ==========
 
-    # ========== 4. 품목군별 재고 현황 ==========
-    part_group_stats = MaterialStock.objects.filter(
-        quantity__gt=0
-    ).values(
-        'part__part_group'
-    ).annotate(
-        part_count=Count('part', distinct=True),
-        total_qty=Sum('quantity')
-    ).order_by('-total_qty')[:10]
+    # ========== 4. (삭제됨 - 품목군별 재고 현황) ==========
 
     # ========== 5. FIFO 경고 (30일 이상 된 LOT) ==========
     fifo_warning_date = today - timedelta(days=30)
@@ -212,12 +196,20 @@ def dashboard(request):
         lot_no__lt=fifo_warning_date
     ).count()
 
-    # ========== 6. 최근 입출고 이력 (내부 재고 보정 제외) ==========
-    recent_transactions = MaterialTransaction.objects.select_related(
-        'part', 'warehouse_from', 'warehouse_to', 'actor'
-    ).exclude(
-        transaction_type__in=['ADJ_ERP_IN', 'ADJ_ERP_OUT']
-    ).order_by('-date')[:15]
+    # ========== 6. 금일 입고/출고 이력 (이동·보정 제외, 하루치 누적) ==========
+    recent_inbound = MaterialTransaction.objects.select_related(
+        'part', 'warehouse_from', 'warehouse_to', 'vendor', 'actor'
+    ).filter(
+        date__date=today,
+        transaction_type__in=['IN_SCM', 'IN_MANUAL', 'IN_ERP', 'RCV_ERP']
+    ).order_by('-date')
+
+    recent_outbound = MaterialTransaction.objects.select_related(
+        'part', 'warehouse_from', 'warehouse_to', 'vendor', 'actor'
+    ).filter(
+        date__date=today,
+        transaction_type__in=['OUT_PROD', 'OUT_RETURN', 'OUT_MANUAL', 'OUT_ERP', 'ISU_ERP']
+    ).order_by('-date')
 
     # ========== 7. BOM 현황 ==========
     bom_stats = {
@@ -275,18 +267,13 @@ def dashboard(request):
         'month_out_count': month_out['count'] or 0,
         'month_out_qty': abs(month_out['qty'] or 0),
 
-        # 창고별 현황
-        'warehouse_stats': warehouse_stats,
-
-        # 품목군별 현황
-        'part_group_stats': part_group_stats,
-
         # FIFO 경고
         'fifo_warning_count': fifo_warning_count,
         'fifo_warnings': fifo_warnings,
 
-        # 최근 이력
-        'recent_transactions': recent_transactions,
+        # 최근 입고/출고 이력
+        'recent_inbound': recent_inbound,
+        'recent_outbound': recent_outbound,
 
         # BOM 현황
         'bom_stats': bom_stats,
@@ -302,6 +289,88 @@ def dashboard(request):
     }
 
     return render(request, 'material/dashboard.html', context)
+
+
+@wms_permission_required('can_wms_stock_view')
+def dashboard_api(request):
+    """대시보드 AJAX 폴링용 JSON API"""
+    from django.http import JsonResponse
+    from datetime import timedelta
+    from django.db.models import Count
+
+    today = timezone.now().date()
+    this_month_start = today.replace(day=1)
+
+    # KPI
+    total_parts = MaterialStock.objects.filter(quantity__gt=0).values('part').distinct().count()
+    total_qty = MaterialStock.objects.filter(quantity__gt=0).aggregate(total=Sum('quantity'))['total'] or 0
+
+    today_in = MaterialTransaction.objects.filter(
+        date__date=today, transaction_type__in=['IN_SCM', 'IN_MANUAL']
+    ).aggregate(count=Count('id'), qty=Sum('quantity'))
+    today_out = MaterialTransaction.objects.filter(
+        date__date=today, transaction_type__in=['OUT_PROD', 'OUT_RETURN']
+    ).aggregate(count=Count('id'), qty=Sum('quantity'))
+    month_in = MaterialTransaction.objects.filter(
+        date__date__gte=this_month_start, transaction_type__in=['IN_SCM', 'IN_MANUAL']
+    ).aggregate(count=Count('id'), qty=Sum('quantity'))
+    month_out = MaterialTransaction.objects.filter(
+        date__date__gte=this_month_start, transaction_type__in=['OUT_PROD', 'OUT_RETURN']
+    ).aggregate(count=Count('id'), qty=Sum('quantity'))
+
+    fifo_warning_date = today - timedelta(days=30)
+    fifo_warning_count = MaterialStock.objects.filter(
+        quantity__gt=0, lot_no__isnull=False, lot_no__lt=fifo_warning_date
+    ).count()
+
+    # 입고 이력 (금일 전체)
+    inbound = list(MaterialTransaction.objects.filter(
+        date__date=today,
+        transaction_type__in=['IN_SCM', 'IN_MANUAL', 'IN_ERP', 'RCV_ERP']
+    ).order_by('-date').values(
+        'date', 'transaction_type', 'part__part_no', 'quantity',
+        'warehouse_from__name', 'warehouse_to__name', 'vendor__name'
+    ))
+    # 출고 이력 (금일 전체)
+    outbound = list(MaterialTransaction.objects.filter(
+        date__date=today,
+        transaction_type__in=['OUT_PROD', 'OUT_RETURN', 'OUT_MANUAL', 'OUT_ERP', 'ISU_ERP']
+    ).order_by('-date').values(
+        'date', 'transaction_type', 'part__part_no', 'quantity',
+        'warehouse_from__name', 'warehouse_to__name', 'vendor__name'
+    ))
+
+    TX_DISPLAY = dict(MaterialTransaction.TYPE_CHOICES)
+
+    def fmt_tx(rows):
+        result = []
+        for r in rows:
+            result.append({
+                'date': r['date'].strftime('%m/%d %H:%M') if r['date'] else '',
+                'type': TX_DISPLAY.get(r['transaction_type'], r['transaction_type']),
+                'part_no': r['part__part_no'] or '',
+                'wh_from': r['warehouse_from__name'] or '',
+                'wh_to': r['warehouse_to__name'] or '',
+                'vendor': r['vendor__name'] or '',
+                'qty': r['quantity'],
+            })
+        return result
+
+    return JsonResponse({
+        'total_parts': total_parts,
+        'total_qty': total_qty,
+        'today_in_count': today_in['count'] or 0,
+        'today_in_qty': abs(today_in['qty'] or 0),
+        'today_out_count': today_out['count'] or 0,
+        'today_out_qty': abs(today_out['qty'] or 0),
+        'month_in_count': month_in['count'] or 0,
+        'month_in_qty': abs(month_in['qty'] or 0),
+        'month_out_count': month_out['count'] or 0,
+        'month_out_qty': abs(month_out['qty'] or 0),
+        'fifo_warning_count': fifo_warning_count,
+        'inbound': fmt_tx(inbound),
+        'outbound': fmt_tx(outbound),
+    })
 
 
 @wms_permission_required('can_wms_stock_view')
