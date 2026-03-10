@@ -1069,7 +1069,6 @@ def incoming_history(request):
     qs = MaterialTransaction.objects.filter(
         Q(transaction_type='IN_MANUAL')
         | Q(transaction_type='IN_ERP')
-        | Q(transaction_type='ISU_ERP')
         | Q(transaction_type='RCV_ERP')
         |
         (
@@ -1095,7 +1094,6 @@ def incoming_history(request):
         qs = qs.filter(
             Q(transaction_type='IN_MANUAL') |
             Q(transaction_type='IN_ERP') |
-            Q(transaction_type='ISU_ERP') |
             Q(transaction_type='RCV_ERP') |
             Q(transaction_type='IN_SCM') |
             (Q(transaction_type='TRANSFER') & Q(warehouse_from=waiting_wh))
