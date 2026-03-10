@@ -162,7 +162,7 @@
                     <span><i class="bi bi-arrow-down-square me-2 text-primary"></i>금일 입고 이력 <small class="text-muted fw-normal ms-2">({{ recent_inbound|length }}건)</small></span>
                     <a href="{% url 'material:incoming_history' %}" class="btn btn-sm btn-outline-secondary">전체보기</a>
                 </div>
-                <div class="card-body p-0" style="max-height: 480px; overflow-y: auto;">
+                <div class="card-body p-0" style="max-height: 560px; overflow-y: auto;">
                     <table class="table table-hover m-0" style="font-size: 0.85rem;" id="tbl-inbound">
                         <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
                             <tr>
@@ -202,7 +202,7 @@
                     <span><i class="bi bi-arrow-up-square me-2 text-danger"></i>금일 출고 이력 <small class="text-muted fw-normal ms-2">({{ recent_outbound|length }}건)</small></span>
                     <a href="{% url 'material:outgoing_history' %}" class="btn btn-sm btn-outline-secondary">전체보기</a>
                 </div>
-                <div class="card-body p-0" style="max-height: 480px; overflow-y: auto;">
+                <div class="card-body p-0" style="max-height: 560px; overflow-y: auto;">
                     <table class="table table-hover m-0" style="font-size: 0.85rem;" id="tbl-outbound">
                         <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
                             <tr>
