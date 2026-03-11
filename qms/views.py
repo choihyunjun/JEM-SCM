@@ -1350,6 +1350,13 @@ def import_inspection_detail(request, pk):
                                 erp_po_seq = doi.erp_order_seq or ''
                         except Exception:
                             pass
+                    # fallback: 수기입고 remark에서 발주번호 추출
+                    if not erp_po_no and origin_trx.remark:
+                        import re as _re
+                        m = _re.search(r'ERP:(\S+)-(\S+)', origin_trx.remark or '')
+                        if m:
+                            erp_po_no = m.group(1)
+                            erp_po_seq = m.group(2)
                     try:
                         from material.erp_api import register_erp_incoming
                         erp_ok, erp_no, erp_err = register_erp_incoming(
