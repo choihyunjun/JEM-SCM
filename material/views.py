@@ -610,9 +610,12 @@ def manual_incoming(request):
                         # ERP 입고등록 (무검사 - 전체수량)
                         try:
                             from material.erp_api import register_erp_incoming
-                            erp_ok, erp_no, erp_err = register_erp_incoming(trx_obj, qty, warehouse.code)
+                            erp_ok, erp_rcv_no, erp_err = register_erp_incoming(
+                                trx_obj, qty, warehouse.code,
+                                erp_order_no=erp_no, erp_order_seq=erp_seq
+                            )
                             if erp_ok:
-                                messages.info(request, f'ERP 입고등록 완료: {erp_no}')
+                                messages.info(request, f'ERP 입고등록 완료: {erp_rcv_no}')
                             elif erp_err:
                                 messages.warning(request, f'ERP 연동 실패: {erp_err}')
                             else:
