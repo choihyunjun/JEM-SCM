@@ -189,7 +189,7 @@ def register_erp_incoming(trx, qty, warehouse_code, erp_order_no='', erp_order_s
             'remarkDc': f'SCM ({trx.transaction_no})',
             'vatUm': 0,
             **(  # 발주입고 시 발주번호/순번 포함
-                {'poNb': erp_order_no, 'poSq': erp_order_seq}
+                {'poNb': erp_order_no, 'poSq': int(erp_order_seq) if str(erp_order_seq).isdigit() else erp_order_seq}
                 if erp_order_no else {}
             ),
         }]

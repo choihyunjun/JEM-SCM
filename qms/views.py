@@ -1351,9 +1351,10 @@ def import_inspection_detail(request, pk):
                         except Exception:
                             pass
                     # fallback: 수기입고 remark에서 발주번호 추출
+                    # 형식: [발주입고] ERP:PO2603000123-1
                     if not erp_po_no and origin_trx.remark:
                         import re as _re
-                        m = _re.search(r'ERP:(\S+)-(\S+)', origin_trx.remark or '')
+                        m = _re.search(r'ERP:(\S+)-(\d+)', origin_trx.remark or '')
                         if m:
                             erp_po_no = m.group(1)
                             erp_po_seq = m.group(2)
