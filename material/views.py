@@ -1113,14 +1113,14 @@ def reregister_erp_price(request, trx_id):
 
     trx = get_object_or_404(MaterialTransaction, pk=trx_id)
 
-    # TRANSFER(검사입고)인 경우 → 해당 트랜잭션에 ERP 번호가 있어야 함
-    # IN_MANUAL, IN_SCM 도 가능
-    erp_no = trx.erp_incoming_no
-    if not erp_no:
-        return JsonResponse({'success': False, 'error': 'ERP 입고번호가 없는 건은 단가 재반영이 불가합니다.'})
+    # ERP입고(아마란스에서 온 건)는 제외
+    if trx.transaction_type in ('IN_ERP', 'RCV_ERP'):
+        return JsonResponse({'success': False, 'error': 'ERP입고 건은 아마란스에서 직접 수정하세요.'})
 
     try:
         from material.erp_api import delete_erp_incoming, register_erp_incoming
+
+        erp_no = trx.erp_incoming_no
 
         # 창고 코드 결정
         wh = trx.warehouse_to
@@ -1128,7 +1128,6 @@ def reregister_erp_price(request, trx_id):
 
         # 발주번호 추출 (remark에서)
         erp_order_no, erp_order_seq = '', ''
-        # 원본 입고 트랜잭션에서 발주번호 추출 시도
         origin_trx = trx
         if trx.transaction_type == 'TRANSFER' and trx.remark and '수입검사' in trx.remark:
             # 검사입고인 경우 원본 입고 트랜잭션 찾기
@@ -1142,7 +1141,6 @@ def reregister_erp_price(request, trx_id):
             if insp:
                 origin_trx = insp.inbound_transaction
 
-        # remark에서 발주번호 추출
         import re as _re
         if origin_trx.remark:
             m = _re.search(r'ERP:(\S+)-(\d+)', origin_trx.remark or '')
@@ -1150,32 +1148,34 @@ def reregister_erp_price(request, trx_id):
                 erp_order_no = m.group(1)
                 erp_order_seq = m.group(2)
 
-        # 1) ERP 기존 입고 삭제
-        del_ok, del_err = delete_erp_incoming(erp_no)
-        if not del_ok:
-            return JsonResponse({'success': False, 'error': f'ERP 입고 삭제 실패: {del_err}'})
+        # 1) 기존 ERP 입고 삭제 (있는 경우만)
+        if erp_no:
+            del_ok, del_err = delete_erp_incoming(erp_no)
+            if not del_ok:
+                return JsonResponse({'success': False, 'error': f'ERP 입고 삭제 실패: {del_err}'})
 
-        # 삭제 후 상태 초기화
-        trx.erp_incoming_no = None
-        trx.erp_sync_status = 'PENDING'
-        trx.save(update_fields=['erp_incoming_no', 'erp_sync_status'])
+            trx.erp_incoming_no = None
+            trx.erp_sync_status = 'PENDING'
+            trx.save(update_fields=['erp_incoming_no', 'erp_sync_status'])
 
-        # 2) 최신 단가로 재등록
+        # 2) 최신 단가로 (재)등록
         reg_ok, reg_no, reg_err = register_erp_incoming(
             trx, trx.quantity, warehouse_code,
             erp_order_no=erp_order_no, erp_order_seq=erp_order_seq
         )
 
         if reg_ok:
+            action = '재반영' if erp_no else '등록'
             return JsonResponse({
                 'success': True,
-                'message': f'단가 재반영 완료 (ERP번호: {reg_no})',
+                'message': f'ERP 단가 {action} 완료 (ERP번호: {reg_no})',
                 'new_erp_no': reg_no
             })
         else:
+            err_detail = f' 기존 입고({erp_no})는 이미 삭제되었습니다.' if erp_no else ''
             return JsonResponse({
                 'success': False,
-                'error': f'ERP 재등록 실패: {reg_err}. 기존 입고({erp_no})는 이미 삭제되었습니다.'
+                'error': f'ERP 등록 실패: {reg_err}.{err_detail}'
             })
 
     except Exception as e:
@@ -1351,11 +1351,9 @@ def incoming_history(request):
         # 관리 가능 여부 판단
         item.can_edit = item.transaction_type in ('IN_MANUAL', 'IN_SCM')
         item.can_delete = item.transaction_type in ('IN_MANUAL', 'IN_SCM')
-        # ERP입고(IN_ERP/RCV_ERP)는 아마란스에서 직접 수정 가능하므로 제외
-        item.can_reregister = (
-            bool(item.erp_incoming_no) and
-            item.transaction_type not in ('IN_ERP', 'RCV_ERP')
-        )
+        # ERP입고(IN_ERP/RCV_ERP)는 아마란스에서 직접 수정 → 제외
+        # SCM 입고 건은 ERP 번호 유무와 관계없이 단가 재반영 가능
+        item.can_reregister = item.transaction_type not in ('IN_ERP', 'RCV_ERP')
         item.has_label = RawMaterialLabel.objects.filter(
             incoming_transaction=item
         ).exclude(status='CANCELLED').exists() if item.can_delete else False
