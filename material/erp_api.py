@@ -146,9 +146,11 @@ def register_erp_incoming(trx, qty, warehouse_code, erp_order_no='', erp_order_s
         logger.info(f'ERP 입고등록 건너뜀: 거래처 ERP코드 없음 (trx={trx.transaction_no})')
         return False, None, None  # 에러가 아닌 건너뜀
 
-    # 입고일자
+    # 입고일자 (UTC → KST 변환)
+    from django.utils import timezone as tz
     if hasattr(trx.date, 'strftime'):
-        key_dt = trx.date.strftime('%Y%m%d')
+        local_date = tz.localtime(trx.date) if tz.is_aware(trx.date) else trx.date
+        key_dt = local_date.strftime('%Y%m%d')
     else:
         key_dt = str(trx.date).replace('-', '')[:8]
 
@@ -2022,9 +2024,11 @@ def register_erp_stock_move(trx, qty, from_warehouse_code, to_warehouse_code):
     if not from_warehouse_code or not to_warehouse_code:
         return False, None, f'창고코드 누락 (from={from_warehouse_code}, to={to_warehouse_code})'
 
-    # 이동일자
+    # 이동일자 (UTC → KST 변환)
+    from django.utils import timezone as tz
     if hasattr(trx.date, 'strftime'):
-        key_dt = trx.date.strftime('%Y%m%d')
+        local_date = tz.localtime(trx.date) if tz.is_aware(trx.date) else trx.date
+        key_dt = local_date.strftime('%Y%m%d')
     else:
         key_dt = str(trx.date).replace('-', '')[:8]
 
