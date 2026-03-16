@@ -56,43 +56,41 @@
         </div>
     </div>
 
-    <div class="card shadow mb-4">
-        <div class="card-header py-2 d-flex justify-content-between align-items-center">
-            <span class="small text-muted" id="selectedCount">
-                {% with reregister_count=page_obj|length %}
-                <i class="fas fa-info-circle me-1"></i>체크박스가 있는 항목만 단가 재반영 가능 (SCM 입고 + ERP 등록 건)
-                {% endwith %}
-            </span>
-            <button class="btn btn-warning btn-sm" id="btnBatchReregister" onclick="batchReregister()" disabled>
+    <!-- 단가 재반영 액션 바 -->
+    <div class="card shadow-sm mb-3 border-warning" id="actionBar">
+        <div class="card-body py-2 d-flex justify-content-between align-items-center" style="background:#fffbeb;">
+            <div>
+                <input type="checkbox" id="checkAll" onclick="toggleCheckAll(this)" class="form-check-input me-2" style="cursor:pointer;">
+                <span class="small" id="selectedCount">전체 선택</span>
+            </div>
+            <button class="btn btn-warning btn-sm px-3" id="btnBatchReregister" onclick="batchReregister()" disabled>
                 <i class="fas fa-sync-alt me-1"></i>단가 재반영 (<span id="batchCount">0</span>건)
             </button>
         </div>
-        <div class="card-body">
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-bordered table-hover" width="100%" cellspacing="0">
+                <table class="table table-bordered table-hover mb-0" width="100%" cellspacing="0">
                     <thead class="table-light">
                         <tr>
-                            <th style="width:36px;" class="text-center">
-                                <input type="checkbox" id="checkAll" onclick="toggleCheckAll(this)" title="전체 선택">
-                            </th>
-                            <th>일자</th>
-                            <th>구분</th>
+                            <th style="width:32px;" class="text-center px-1"></th>
+                            <th class="text-nowrap">일자</th>
+                            <th class="text-nowrap">구분</th>
                             <th>입고처</th>
-                            <th>수불번호</th>
                             <th>품번</th>
                             <th>품명</th>
-                            <th class="text-end">수량</th>
-                            <th>LOT 번호</th>
+                            <th class="text-end text-nowrap">수량</th>
+                            <th class="text-center text-nowrap">LOT</th>
                             <th>입고 창고</th>
-                            <th>ERP</th>
-                            <th>처리자</th>
+                            <th class="text-center text-nowrap" style="width:40px;">ERP</th>
                             <th>비고</th>
-                            <th style="width:60px;">관리</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for item in page_obj %}
-                        <tr style="cursor:pointer;" onclick="openDetail(this)"
+                        <tr style="cursor:pointer;{% if item.can_reregister %}{% else %} opacity:0.7;{% endif %}" onclick="openDetail(this)"
                             data-id="{{ item.id }}"
                             data-type="{{ item.display_type }}"
                             data-trx-no="{{ item.transaction_no }}"
@@ -111,44 +109,35 @@
                             data-can-delete="{{ item.can_delete|yesno:'1,0' }}"
                             data-can-reregister="{{ item.can_reregister|yesno:'1,0' }}"
                             data-has-label="{{ item.has_label|yesno:'1,0' }}">
-                            <td class="text-center" onclick="event.stopPropagation();">
+                            <td class="text-center px-1" onclick="event.stopPropagation();">
                                 {% if item.can_reregister %}
-                                <input type="checkbox" class="row-check" value="{{ item.id }}" onclick="updateBatchCount()">
+                                <input type="checkbox" class="form-check-input row-check" value="{{ item.id }}" onclick="updateBatchCount()" style="cursor:pointer;">
                                 {% endif %}
                             </td>
-                            <td class="small text-nowrap">{{ item.date|date:"Y-m-d H:i" }}</td>
+                            <td class="small text-nowrap">{{ item.date|date:"Y-m-d" }}</td>
                             <td>
                                 <span class="badge bg-{{ item.badge_color }}">{{ item.display_type }}</span>
                             </td>
                             <td class="small">{{ item.vendor.name|default:"-" }}</td>
-                            <td class="small text-nowrap">{{ item.transaction_no }}</td>
-                            <td class="small fw-bold">{{ item.part.part_no }}</td>
+                            <td class="small fw-bold text-primary">{{ item.part.part_no }}</td>
                             <td class="small">{{ item.part.part_name }}</td>
-                            <td class="text-end fw-bold">{{ item.quantity|intcomma }} {{ item.part.unit|default:"" }}</td>
+                            <td class="text-end fw-bold">{{ item.quantity|intcomma }}</td>
                             <td class="text-center small">
-                                {% if item.lot_no %}{{ item.lot_no|date:"Y-m-d" }}{% else %}<span class="text-muted">-</span>{% endif %}
+                                {% if item.lot_no %}{{ item.lot_no|date:"Y-m-d" }}{% else %}-{% endif %}
                             </td>
                             <td class="small">{{ item.warehouse_to.name|default:"-" }}</td>
                             <td class="text-center">
                                 {% if item.erp_incoming_no %}
-                                <span class="badge bg-success" title="{{ item.erp_incoming_no }}"><i class="fas fa-check"></i></span>
+                                <i class="fas fa-check-circle text-success" title="{{ item.erp_incoming_no }}"></i>
                                 {% else %}
-                                <span class="text-muted">-</span>
+                                <i class="fas fa-minus-circle text-muted" style="opacity:0.3;"></i>
                                 {% endif %}
                             </td>
-                            <td class="small">{{ item.actor.username|default:"-" }}</td>
-                            <td class="small">{{ item.display_remark|default:"" }}</td>
-                            <td class="text-center" onclick="event.stopPropagation();">
-                                {% if item.can_delete and not item.has_label %}
-                                <button class="btn btn-outline-danger btn-sm py-0 px-1" title="삭제" onclick="deleteIncoming({{ item.id }}, '{{ item.transaction_no }}')">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                                {% endif %}
-                            </td>
+                            <td class="small text-muted">{{ item.display_remark|default:"" }}</td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="14" class="text-center py-4">조회된 입고 내역이 없습니다.</td>
+                            <td colspan="11" class="text-center py-4">조회된 입고 내역이 없습니다.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -354,9 +343,7 @@ function updateBatchCount() {
 
     countEl.textContent = count;
     btn.disabled = (count === 0);
-    infoEl.innerHTML = count > 0
-        ? `<i class="fas fa-check-square me-1 text-warning"></i><strong>${count}건</strong> 선택됨`
-        : '<i class="fas fa-info-circle me-1"></i>체크박스가 있는 항목만 단가 재반영 가능 (SCM 입고 + ERP 등록 건)';
+    infoEl.textContent = count > 0 ? `${count}건 선택됨` : '전체 선택';
 
     // 전체 선택 체크박스 상태 동기화
     const allChecks = document.querySelectorAll('.row-check');
