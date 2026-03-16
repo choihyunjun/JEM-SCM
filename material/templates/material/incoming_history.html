@@ -57,11 +57,20 @@
     </div>
 
     <div class="card shadow mb-4">
+        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+            <span class="small text-muted" id="selectedCount"></span>
+            <button class="btn btn-warning btn-sm d-none" id="btnBatchReregister" onclick="batchReregister()">
+                <i class="fas fa-sync-alt me-1"></i>단가 재반영 (<span id="batchCount">0</span>건)
+            </button>
+        </div>
         <div class="card-body">
             <div class="table-responsive">
                 <table class="table table-bordered table-hover" width="100%" cellspacing="0">
                     <thead class="table-light">
                         <tr>
+                            <th style="width:36px;" class="text-center">
+                                <input type="checkbox" id="checkAll" onclick="toggleCheckAll(this)" title="전체 선택">
+                            </th>
                             <th>일자</th>
                             <th>구분</th>
                             <th>입고처</th>
@@ -74,7 +83,7 @@
                             <th>ERP</th>
                             <th>처리자</th>
                             <th>비고</th>
-                            <th style="width:100px;">관리</th>
+                            <th style="width:60px;">관리</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -98,6 +107,11 @@
                             data-can-delete="{{ item.can_delete|yesno:'1,0' }}"
                             data-can-reregister="{{ item.can_reregister|yesno:'1,0' }}"
                             data-has-label="{{ item.has_label|yesno:'1,0' }}">
+                            <td class="text-center" onclick="event.stopPropagation();">
+                                {% if item.can_reregister %}
+                                <input type="checkbox" class="row-check" value="{{ item.id }}" onclick="updateBatchCount()">
+                                {% endif %}
+                            </td>
                             <td class="small text-nowrap">{{ item.date|date:"Y-m-d H:i" }}</td>
                             <td>
                                 <span class="badge bg-{{ item.badge_color }}">{{ item.display_type }}</span>
@@ -121,13 +135,8 @@
                             <td class="small">{{ item.actor.username|default:"-" }}</td>
                             <td class="small">{{ item.display_remark|default:"" }}</td>
                             <td class="text-center" onclick="event.stopPropagation();">
-                                {% if item.can_reregister %}
-                                <button class="btn btn-outline-warning btn-sm" title="단가 재반영" onclick="reregisterPrice({{ item.id }})">
-                                    <i class="fas fa-sync-alt"></i>
-                                </button>
-                                {% endif %}
                                 {% if item.can_delete and not item.has_label %}
-                                <button class="btn btn-outline-danger btn-sm" title="삭제" onclick="deleteIncoming({{ item.id }}, '{{ item.transaction_no }}')">
+                                <button class="btn btn-outline-danger btn-sm py-0 px-1" title="삭제" onclick="deleteIncoming({{ item.id }}, '{{ item.transaction_no }}')">
                                     <i class="fas fa-trash"></i>
                                 </button>
                                 {% endif %}
@@ -135,7 +144,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="13" class="text-center py-4">조회된 입고 내역이 없습니다.</td>
+                            <td colspan="14" class="text-center py-4">조회된 입고 내역이 없습니다.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -179,7 +188,6 @@
                 <input type="hidden" id="detailId">
                 <input type="hidden" id="detailCanEdit">
                 <input type="hidden" id="detailCanDelete">
-                <input type="hidden" id="detailCanReregister">
 
                 <table class="table table-sm mb-0">
                     <tr><th class="text-muted" style="width:100px;">구분</th><td><span id="detailType" class="badge"></span></td></tr>
@@ -211,9 +219,6 @@
             <div class="modal-footer border-top" id="detailFooter">
                 <!-- 보기 모드 -->
                 <div id="viewActions">
-                    <button class="btn btn-outline-warning btn-sm" id="btnReregister" onclick="reregisterFromModal()">
-                        <i class="fas fa-sync-alt me-1"></i>단가 재반영
-                    </button>
                     <button class="btn btn-outline-primary btn-sm" id="btnEdit" onclick="toggleEditMode(true)">
                         <i class="fas fa-edit me-1"></i>수정
                     </button>
@@ -330,13 +335,83 @@ function selectItem(value) {
 
 function clearField(fieldId) { document.getElementById(fieldId).value = ''; }
 
+// ─── 체크박스 ───
+function toggleCheckAll(el) {
+    document.querySelectorAll('.row-check').forEach(cb => { cb.checked = el.checked; });
+    updateBatchCount();
+}
+
+function updateBatchCount() {
+    const checked = document.querySelectorAll('.row-check:checked');
+    const count = checked.length;
+    const btn = document.getElementById('btnBatchReregister');
+    const countEl = document.getElementById('batchCount');
+    const infoEl = document.getElementById('selectedCount');
+
+    countEl.textContent = count;
+    btn.classList.toggle('d-none', count === 0);
+    infoEl.textContent = count > 0 ? `${count}건 선택됨` : '';
+
+    // 전체 선택 체크박스 상태 동기화
+    const allChecks = document.querySelectorAll('.row-check');
+    document.getElementById('checkAll').checked = allChecks.length > 0 && checked.length === allChecks.length;
+}
+
+// ─── 일괄 단가 재반영 ───
+function batchReregister() {
+    const ids = Array.from(document.querySelectorAll('.row-check:checked')).map(cb => cb.value);
+    if (ids.length === 0) return;
+
+    if (!confirm(`선택한 ${ids.length}건의 단가를 최신 통합단가로 재반영하시겠습니까?\n(ERP 입고 삭제 후 재등록됩니다)`)) return;
+
+    const btn = document.getElementById('btnBatchReregister');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>처리 중...';
+
+    let completed = 0;
+    let succeeded = 0;
+    let failed = [];
+
+    ids.forEach(id => {
+        fetch(`/material/inbound/history/reregister/${id}/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(r => r.json())
+        .then(data => {
+            completed++;
+            if (data.success) {
+                succeeded++;
+            } else {
+                failed.push(data.error);
+            }
+            if (completed === ids.length) {
+                let msg = `완료: ${succeeded}건 성공`;
+                if (failed.length > 0) msg += `, ${failed.length}건 실패\n\n실패 사유:\n${failed.join('\n')}`;
+                alert(msg);
+                location.reload();
+            }
+        })
+        .catch(err => {
+            completed++;
+            failed.push(String(err));
+            if (completed === ids.length) {
+                alert(`완료: ${succeeded}건 성공, ${failed.length}건 실패`);
+                location.reload();
+            }
+        });
+    });
+}
+
 // ─── 상세 모달 ───
 function openDetail(row) {
     const d = row.dataset;
     document.getElementById('detailId').value = d.id;
     document.getElementById('detailCanEdit').value = d.canEdit;
     document.getElementById('detailCanDelete').value = d.canDelete;
-    document.getElementById('detailCanReregister').value = d.canReregister;
 
     const typeEl = document.getElementById('detailType');
     typeEl.textContent = d.type;
@@ -366,7 +441,6 @@ function openDetail(row) {
     document.getElementById('detailRemarkInput').value = d.remark || '';
 
     // 버튼 표시/숨김
-    document.getElementById('btnReregister').classList.toggle('d-none', d.canReregister !== '1');
     document.getElementById('btnEdit').classList.toggle('d-none', d.canEdit !== '1');
     document.getElementById('btnDelete').classList.toggle('d-none', d.canDelete !== '1' || d.hasLabel === '1');
 
@@ -382,39 +456,6 @@ function toggleEditMode(editing) {
     });
     document.getElementById('viewActions').classList.toggle('d-none', editing);
     document.getElementById('editActions').classList.toggle('d-none', !editing);
-}
-
-// ─── 단가 재반영 ───
-function reregisterPrice(id) {
-    if (!confirm('이 입고 건의 단가를 최신 통합단가로 재반영하시겠습니까?\n(ERP 입고 삭제 후 재등록됩니다)')) return;
-    doReregister(id);
-}
-
-function reregisterFromModal() {
-    const id = document.getElementById('detailId').value;
-    if (!confirm('이 입고 건의 단가를 최신 통합단가로 재반영하시겠습니까?\n(ERP 입고 삭제 후 재등록됩니다)')) return;
-    bootstrap.Modal.getInstance(document.getElementById('detailModal')).hide();
-    doReregister(id);
-}
-
-function doReregister(id) {
-    fetch(`/material/inbound/history/reregister/${id}/`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': '{{ csrf_token }}',
-            'Content-Type': 'application/json'
-        }
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            alert(data.message);
-            location.reload();
-        } else {
-            alert('실패: ' + data.error);
-        }
-    })
-    .catch(err => alert('오류: ' + err));
 }
 
 // ─── 삭제 ───

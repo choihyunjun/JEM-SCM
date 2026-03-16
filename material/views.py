@@ -1351,7 +1351,11 @@ def incoming_history(request):
         # 관리 가능 여부 판단
         item.can_edit = item.transaction_type in ('IN_MANUAL', 'IN_SCM')
         item.can_delete = item.transaction_type in ('IN_MANUAL', 'IN_SCM')
-        item.can_reregister = bool(item.erp_incoming_no)  # ERP 번호 있으면 단가 재반영 가능
+        # ERP입고(IN_ERP/RCV_ERP)는 아마란스에서 직접 수정 가능하므로 제외
+        item.can_reregister = (
+            bool(item.erp_incoming_no) and
+            item.transaction_type not in ('IN_ERP', 'RCV_ERP')
+        )
         item.has_label = RawMaterialLabel.objects.filter(
             incoming_transaction=item
         ).exclude(status='CANCELLED').exists() if item.can_delete else False
