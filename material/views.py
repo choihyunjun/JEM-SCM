@@ -1334,11 +1334,11 @@ def incoming_history(request):
         elif item.transaction_type == 'IN_ERP':
             item.display_type = "ERP입고"
             item.badge_color = "info"
-            item.display_remark = re.sub(r'^ERP입고\([^)]*\)\s*', '', remark).strip()
+            item.display_remark = ""
         elif item.transaction_type == 'RCV_ERP':
             item.display_type = "ERP생산입고"
             item.badge_color = "info"
-            item.display_remark = re.sub(r'^ERP생산입고\([^)]*\)\s*', '', remark).strip()
+            item.display_remark = ""
         elif item.transaction_type == 'TRANSFER':
             item.display_type = "검사입고"
             item.badge_color = "warning"
