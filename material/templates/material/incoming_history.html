@@ -90,7 +90,7 @@
                     </thead>
                     <tbody>
                         {% for item in page_obj %}
-                        <tr style="cursor:pointer;{% if item.can_reregister %}{% else %} opacity:0.7;{% endif %}" onclick="openDetail(this)"
+                        <tr style="cursor:pointer;" onclick="openDetail(this)"
                             data-id="{{ item.id }}"
                             data-type="{{ item.display_type }}"
                             data-trx-no="{{ item.transaction_no }}"
@@ -114,18 +114,22 @@
                                 <input type="checkbox" class="form-check-input row-check" value="{{ item.id }}" onclick="updateBatchCount()" style="cursor:pointer;">
                                 {% endif %}
                             </td>
-                            <td class="small text-nowrap">{{ item.date|date:"Y-m-d" }}</td>
+                            <td class="text-nowrap">{{ item.date|date:"Y-m-d" }}</td>
                             <td>
-                                <span class="badge bg-{{ item.badge_color }}">{{ item.display_type }}</span>
+                                {% if item.transaction_type == 'IN_ERP' or item.transaction_type == 'RCV_ERP' %}
+                                <span class="badge border border-dark text-dark bg-transparent">{{ item.display_type }}</span>
+                                {% else %}
+                                <span class="badge border border-danger text-danger bg-transparent">{{ item.display_type }}</span>
+                                {% endif %}
                             </td>
-                            <td class="small">{{ item.vendor.name|default:"-" }}</td>
-                            <td class="small fw-bold text-primary">{{ item.part.part_no }}</td>
-                            <td class="small">{{ item.part.part_name }}</td>
+                            <td>{{ item.vendor.name|default:"-" }}</td>
+                            <td class="fw-bold">{{ item.part.part_no }}</td>
+                            <td>{{ item.part.part_name }}</td>
                             <td class="text-end fw-bold">{{ item.quantity|intcomma }}</td>
-                            <td class="text-center small">
+                            <td class="text-center">
                                 {% if item.lot_no %}{{ item.lot_no|date:"Y-m-d" }}{% else %}-{% endif %}
                             </td>
-                            <td class="small">{{ item.warehouse_to.name|default:"-" }}</td>
+                            <td>{{ item.warehouse_to.name|default:"-" }}</td>
                             <td class="text-center">
                                 {% if item.erp_incoming_no %}
                                 <i class="fas fa-check-circle text-success" title="{{ item.erp_incoming_no }}"></i>
@@ -133,7 +137,7 @@
                                 <i class="fas fa-minus-circle text-muted" style="opacity:0.3;"></i>
                                 {% endif %}
                             </td>
-                            <td class="small text-muted">{{ item.display_remark|default:"" }}</td>
+                            <td class="text-muted">{{ item.display_remark|default:"" }}</td>
                         </tr>
                         {% empty %}
                         <tr>
