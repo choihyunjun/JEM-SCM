@@ -1323,7 +1323,7 @@ def import_inspection_detail(request, pk):
                     trx_ok = MaterialTransaction.objects.create(
                         transaction_no=f"TRX-OK-{timezone.now().strftime('%y%m%d%H%M%S')}",
                         transaction_type="TRANSFER",
-                        date=timezone.now(),
+                        date=origin_trx.date,
                         part=part,
                         lot_no=lot_no,
                         quantity=qty_good,
