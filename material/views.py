@@ -709,27 +709,32 @@ def manual_incoming(request):
 @wms_permission_required('can_wms_inout_edit')
 def cancel_manual_incoming(request, trx_id):
     """[WMS] 수기 입고 삭제 / 입고만 취소 (수입검사 판정 초기화)"""
+    # 리다이렉트 대상 결정 (입고 내역 조회에서 호출 시)
+    redirect_to = request.POST.get('redirect_to', 'material:manual_incoming')
+    if redirect_to not in ('material:manual_incoming', 'material:incoming_history'):
+        redirect_to = 'material:manual_incoming'
+
     if request.method != 'POST':
-        return redirect('material:manual_incoming')
+        return redirect(redirect_to)
 
     trx = get_object_or_404(MaterialTransaction, pk=trx_id, transaction_type__in=['IN_MANUAL', 'IN_SCM', 'IN_ERP'])
 
     if trx.transaction_type == 'IN_ERP':
         messages.error(request, "ERP에서 동기화된 입고 건은 WMS에서 삭제할 수 없습니다. ERP(아마란스)에서 삭제해주세요.")
-        return redirect('material:manual_incoming')
+        return redirect(redirect_to)
 
     from .models import RawMaterialLabel
     label_count = RawMaterialLabel.objects.filter(incoming_transaction=trx).exclude(status='CANCELLED').count()
     if label_count > 0:
         messages.error(request, f"라벨이 {label_count}장 발행된 입고 건은 삭제할 수 없습니다. 라벨을 먼저 취소하세요.")
-        return redirect('material:manual_incoming')
+        return redirect(redirect_to)
 
     is_closed, warning_msg, _ = check_closing_date(
         trx.date.date() if hasattr(trx.date, 'date') and callable(trx.date.date) else trx.date
     )
     if is_closed:
         messages.error(request, f"마감된 기간의 입고 건은 삭제할 수 없습니다. ({warning_msg})")
-        return redirect('material:manual_incoming')
+        return redirect(redirect_to)
 
     cancel_action = request.POST.get('cancel_action', 'delete_all')
     trx_no = trx.transaction_no
@@ -746,7 +751,7 @@ def cancel_manual_incoming(request, trx_id):
 
         if not inspection:
             messages.error(request, "수입검사 데이터가 없습니다. '전체 삭제'를 사용하세요.")
-            return redirect('material:manual_incoming')
+            return redirect(redirect_to)
 
         try:
             with transaction.atomic():
@@ -829,7 +834,7 @@ def cancel_manual_incoming(request, trx_id):
         except Exception as e:
             messages.error(request, f"입고 취소 중 오류 발생: {str(e)}")
 
-        return redirect('material:manual_incoming')
+        return redirect(redirect_to)
 
     # ── 전체 삭제 ──
     try:
@@ -901,11 +906,11 @@ def cancel_manual_incoming(request, trx_id):
 
                 if not stock:
                     messages.error(request, "해당 재고를 찾을 수 없습니다.")
-                    return redirect('material:manual_incoming')
+                    return redirect(redirect_to)
 
                 if stock.quantity < trx.quantity:
                     messages.error(request, f"현재 재고({stock.quantity})가 입고 수량({trx.quantity})보다 적어 삭제할 수 없습니다.")
-                    return redirect('material:manual_incoming')
+                    return redirect(redirect_to)
 
                 MaterialStock.objects.filter(pk=stock.pk).update(
                     quantity=F('quantity') - trx.quantity
@@ -936,7 +941,7 @@ def cancel_manual_incoming(request, trx_id):
     except Exception as e:
         messages.error(request, f"취소 처리 중 오류 발생: {str(e)}")
 
-    return redirect('material:manual_incoming')
+    return redirect(redirect_to)
 
 
 @wms_permission_required('can_wms_inout_edit')
@@ -1099,6 +1104,87 @@ def edit_manual_incoming(request, trx_id):
 
 @login_required
 @wms_permission_required('can_wms_inout_edit')
+def reregister_erp_price(request, trx_id):
+    """[입고 내역] ERP 단가 재반영 - 기존 ERP 입고 삭제 후 최신 단가로 재등록"""
+    from django.http import JsonResponse
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST만 허용'}, status=405)
+
+    trx = get_object_or_404(MaterialTransaction, pk=trx_id)
+
+    # TRANSFER(검사입고)인 경우 → 해당 트랜잭션에 ERP 번호가 있어야 함
+    # IN_MANUAL, IN_SCM 도 가능
+    erp_no = trx.erp_incoming_no
+    if not erp_no:
+        return JsonResponse({'success': False, 'error': 'ERP 입고번호가 없는 건은 단가 재반영이 불가합니다.'})
+
+    try:
+        from material.erp_api import delete_erp_incoming, register_erp_incoming
+
+        # 창고 코드 결정
+        wh = trx.warehouse_to
+        warehouse_code = wh.code if wh else '2000'
+
+        # 발주번호 추출 (remark에서)
+        erp_order_no, erp_order_seq = '', ''
+        # 원본 입고 트랜잭션에서 발주번호 추출 시도
+        origin_trx = trx
+        if trx.transaction_type == 'TRANSFER' and trx.remark and '수입검사' in trx.remark:
+            # 검사입고인 경우 원본 입고 트랜잭션 찾기
+            from qms.models import ImportInspection as II
+            insp = II.objects.filter(
+                inbound_transaction__part=trx.part,
+                inbound_transaction__lot_no=trx.lot_no,
+                inbound_transaction__vendor=trx.vendor,
+                status='APPROVED'
+            ).select_related('inbound_transaction').order_by('-inspected_at').first()
+            if insp:
+                origin_trx = insp.inbound_transaction
+
+        # remark에서 발주번호 추출
+        import re as _re
+        if origin_trx.remark:
+            m = _re.search(r'ERP:(\S+)-(\d+)', origin_trx.remark or '')
+            if m:
+                erp_order_no = m.group(1)
+                erp_order_seq = m.group(2)
+
+        # 1) ERP 기존 입고 삭제
+        del_ok, del_err = delete_erp_incoming(erp_no)
+        if not del_ok:
+            return JsonResponse({'success': False, 'error': f'ERP 입고 삭제 실패: {del_err}'})
+
+        # 삭제 후 상태 초기화
+        trx.erp_incoming_no = None
+        trx.erp_sync_status = 'PENDING'
+        trx.save(update_fields=['erp_incoming_no', 'erp_sync_status'])
+
+        # 2) 최신 단가로 재등록
+        reg_ok, reg_no, reg_err = register_erp_incoming(
+            trx, trx.quantity, warehouse_code,
+            erp_order_no=erp_order_no, erp_order_seq=erp_order_seq
+        )
+
+        if reg_ok:
+            return JsonResponse({
+                'success': True,
+                'message': f'단가 재반영 완료 (ERP번호: {reg_no})',
+                'new_erp_no': reg_no
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': f'ERP 재등록 실패: {reg_err}. 기존 입고({erp_no})는 이미 삭제되었습니다.'
+            })
+
+    except Exception as e:
+        logger.error(f'단가 재반영 오류: {e}', exc_info=True)
+        return JsonResponse({'success': False, 'error': f'처리 중 오류: {str(e)}'})
+
+
+@login_required
+@wms_permission_required('can_wms_inout_edit')
 def erp_incoming_sync(request):
     """[WMS] ERP 입고 내역 역방향 동기화 - 백그라운드 스레드"""
     if request.method != 'POST':
@@ -1228,35 +1314,47 @@ def incoming_history(request):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    # ✅ 구분/비고 표시값 세팅
+    # ✅ 구분/비고 표시값 세팅 + 관리 가능 여부
+    from .models import RawMaterialLabel
     for item in page_obj:
         remark = item.remark or ""
 
         if item.transaction_type == 'IN_MANUAL':
             item.display_type = "수기입고"
-            # 비고에서 불필요한 태그 제거
+            item.badge_color = "success"
             remark = re.sub(r'\[수입검사 대상\]\s*', '', remark)
             remark = re.sub(r'\[발주입고\]\s*ERP:\S*\s*', '', remark)
             item.display_remark = remark.strip()
         elif item.transaction_type == 'IN_SCM':
             item.display_type = "발주입고"
+            item.badge_color = "primary"
             remark = re.sub(r'\[수입검사 대상\]\s*', '', remark)
             remark = re.sub(r'\[발주입고\]\s*ERP:\S*\s*', '', remark)
             item.display_remark = remark.strip()
         elif item.transaction_type == 'IN_ERP':
             item.display_type = "ERP입고"
-            # 'ERP입고(업체명)' 패턴 제거 (입고처 칼럼에 이미 표시)
+            item.badge_color = "info"
             item.display_remark = re.sub(r'^ERP입고\([^)]*\)\s*', '', remark).strip()
         elif item.transaction_type == 'RCV_ERP':
             item.display_type = "ERP생산입고"
+            item.badge_color = "info"
             item.display_remark = re.sub(r'^ERP생산입고\([^)]*\)\s*', '', remark).strip()
         elif item.transaction_type == 'TRANSFER':
-            # 수입검사 완료 후 이동 → "검사입고"로 표시
             item.display_type = "검사입고"
+            item.badge_color = "warning"
             item.display_remark = item.ref_delivery_order or ""
         else:
             item.display_type = item.transaction_type
+            item.badge_color = "secondary"
             item.display_remark = remark
+
+        # 관리 가능 여부 판단
+        item.can_edit = item.transaction_type in ('IN_MANUAL', 'IN_SCM')
+        item.can_delete = item.transaction_type in ('IN_MANUAL', 'IN_SCM')
+        item.can_reregister = bool(item.erp_incoming_no)  # ERP 번호 있으면 단가 재반영 가능
+        item.has_label = RawMaterialLabel.objects.filter(
+            incoming_transaction=item
+        ).exclude(status='CANCELLED').exists() if item.can_delete else False
 
     # 모달 선택용 목록
     part_groups = list(

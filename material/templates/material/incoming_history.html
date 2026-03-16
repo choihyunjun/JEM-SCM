@@ -23,12 +23,7 @@
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">품번/품명</label>
-                    <input type="text" name="q" class="form-control" list="partOptions" placeholder="품번 또는 품명 검색..." value="{{ q }}" autocomplete="off">
-                    <datalist id="partOptions">
-                        {% for part_no, part_name in parts %}
-                        <option value="{{ part_no }}">{{ part_name }}</option>
-                        {% endfor %}
-                    </datalist>
+                    <input type="text" name="q" class="form-control" placeholder="품번 또는 품명 입력" value="{{ q }}" autocomplete="off">
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">품목군</label>
@@ -73,57 +68,74 @@
                             <th>수불번호</th>
                             <th>품번</th>
                             <th>품명</th>
-                            <th>수량</th>
+                            <th class="text-end">수량</th>
                             <th>LOT 번호</th>
                             <th>입고 창고</th>
+                            <th>ERP</th>
                             <th>처리자</th>
                             <th>비고</th>
+                            <th style="width:100px;">관리</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for item in page_obj %}
-                        <tr>
-                            <td>{{ item.date|date:"Y-m-d H:i" }}</td>
-
+                        <tr style="cursor:pointer;" onclick="openDetail(this)"
+                            data-id="{{ item.id }}"
+                            data-type="{{ item.display_type }}"
+                            data-trx-no="{{ item.transaction_no }}"
+                            data-trx-type="{{ item.transaction_type }}"
+                            data-date="{{ item.date|date:'Y-m-d' }}"
+                            data-vendor="{{ item.vendor.name|default:'' }}"
+                            data-part-no="{{ item.part.part_no }}"
+                            data-part-name="{{ item.part.part_name }}"
+                            data-qty="{{ item.quantity }}"
+                            data-lot="{{ item.lot_no|date:'Y-m-d'|default:'' }}"
+                            data-warehouse="{{ item.warehouse_to.name|default:'' }}"
+                            data-erp-no="{{ item.erp_incoming_no|default:'' }}"
+                            data-remark="{{ item.display_remark|default:'' }}"
+                            data-actor="{{ item.actor.username|default:'' }}"
+                            data-can-edit="{{ item.can_edit|yesno:'1,0' }}"
+                            data-can-delete="{{ item.can_delete|yesno:'1,0' }}"
+                            data-can-reregister="{{ item.can_reregister|yesno:'1,0' }}"
+                            data-has-label="{{ item.has_label|yesno:'1,0' }}">
+                            <td class="small text-nowrap">{{ item.date|date:"Y-m-d H:i" }}</td>
                             <td>
-                                <span class="badge bg-success">{{ item.display_type }}</span>
+                                <span class="badge bg-{{ item.badge_color }}">{{ item.display_type }}</span>
                             </td>
-
-                            <td>{{ item.vendor.name|default:"-" }}</td>
-                            <td>{{ item.transaction_no }}</td>
-
-                            <td>{{ item.part.part_no }}</td>
-                            <td>{{ item.part.part_name }}</td>
-
-                            <td class="text-end fw-bold">{{ item.quantity|intcomma }}</td>
-
+                            <td class="small">{{ item.vendor.name|default:"-" }}</td>
+                            <td class="small text-nowrap">{{ item.transaction_no }}</td>
+                            <td class="small fw-bold">{{ item.part.part_no }}</td>
+                            <td class="small">{{ item.part.part_name }}</td>
+                            <td class="text-end fw-bold">{{ item.quantity|intcomma }} {{ item.part.unit|default:"" }}</td>
+                            <td class="text-center small">
+                                {% if item.lot_no %}{{ item.lot_no|date:"Y-m-d" }}{% else %}<span class="text-muted">-</span>{% endif %}
+                            </td>
+                            <td class="small">{{ item.warehouse_to.name|default:"-" }}</td>
                             <td class="text-center">
-                                {% if item.lot_no %}
-                                    {{ item.lot_no|date:"Y-m-d" }}
+                                {% if item.erp_incoming_no %}
+                                <span class="badge bg-success" title="{{ item.erp_incoming_no }}"><i class="fas fa-check"></i></span>
                                 {% else %}
-                                    <span class="text-muted">-</span>
+                                <span class="text-muted">-</span>
                                 {% endif %}
                             </td>
-
-                            <td>{{ item.warehouse_to.name|default:"-" }}</td>
-
-                            <td>{{ item.actor.username|default:"-" }}</td>
-
-                            <td>
-                                {% if item.display_type == "SCM입고" %}
-                                    {% if item.display_remark %}
-                                        <small class="text-muted">[납품: {{ item.display_remark }}]</small>
-                                    {% else %}
-                                        <small class="text-muted">-</small>
-                                    {% endif %}
-                                {% else %}
-                                    {{ item.display_remark|default:"" }}
+                            <td class="small">{{ item.actor.username|default:"-" }}</td>
+                            <td class="small">{{ item.display_remark|default:"" }}</td>
+                            <td class="text-center" onclick="event.stopPropagation();">
+                                {% if item.can_reregister %}
+                                <button class="btn btn-outline-warning btn-sm" title="단가 재반영" onclick="reregisterPrice({{ item.id }})">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                                {% endif %}
+                                {% if item.can_delete and not item.has_label %}
+                                <button class="btn btn-outline-danger btn-sm" title="삭제" onclick="deleteIncoming({{ item.id }}, '{{ item.transaction_no }}')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
                                 {% endif %}
                             </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="11" class="text-center py-4">조회된 입고 내역이 없습니다.</td>
+                            <td colspan="13" class="text-center py-4">조회된 입고 내역이 없습니다.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -138,11 +150,9 @@
                         <a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ q }}&q_group={{ q_group }}&q_vendor={{ q_vendor }}&start_date={{ start_date }}&end_date={{ end_date }}">이전</a>
                     </li>
                     {% endif %}
-
                     <li class="page-item disabled">
                         <span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
                     </li>
-
                     {% if page_obj.has_next %}
                     <li class="page-item">
                         <a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ q }}&q_group={{ q_group }}&q_vendor={{ q_vendor }}&start_date={{ start_date }}&end_date={{ end_date }}">다음</a>
@@ -154,6 +164,75 @@
         </div>
     </div>
 </div>
+
+<!-- 상세 모달 -->
+<div class="modal fade" id="detailModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 560px;">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 12px;">
+            <div class="modal-header border-bottom">
+                <h5 class="modal-title fw-bold">
+                    <i class="fas fa-box-open text-primary me-2"></i>입고 상세
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body px-4 py-3">
+                <input type="hidden" id="detailId">
+                <input type="hidden" id="detailCanEdit">
+                <input type="hidden" id="detailCanDelete">
+                <input type="hidden" id="detailCanReregister">
+
+                <table class="table table-sm mb-0">
+                    <tr><th class="text-muted" style="width:100px;">구분</th><td><span id="detailType" class="badge"></span></td></tr>
+                    <tr><th class="text-muted">수불번호</th><td id="detailTrxNo" class="fw-bold"></td></tr>
+                    <tr><th class="text-muted">입고일자</th><td>
+                        <span id="detailDateText"></span>
+                        <input type="date" id="detailDateInput" class="form-control form-control-sm d-none" style="width:160px;">
+                    </td></tr>
+                    <tr><th class="text-muted">입고처</th><td id="detailVendor"></td></tr>
+                    <tr><th class="text-muted">품번</th><td id="detailPartNo" class="fw-bold"></td></tr>
+                    <tr><th class="text-muted">품명</th><td id="detailPartName"></td></tr>
+                    <tr><th class="text-muted">수량</th><td>
+                        <span id="detailQtyText" class="fw-bold"></span>
+                        <input type="number" id="detailQtyInput" class="form-control form-control-sm d-none" style="width:120px;" min="1">
+                    </td></tr>
+                    <tr><th class="text-muted">LOT 번호</th><td>
+                        <span id="detailLotText"></span>
+                        <input type="date" id="detailLotInput" class="form-control form-control-sm d-none" style="width:160px;">
+                    </td></tr>
+                    <tr><th class="text-muted">입고 창고</th><td id="detailWarehouse"></td></tr>
+                    <tr><th class="text-muted">ERP 번호</th><td id="detailErpNo"></td></tr>
+                    <tr><th class="text-muted">처리자</th><td id="detailActor"></td></tr>
+                    <tr><th class="text-muted">비고</th><td>
+                        <span id="detailRemarkText"></span>
+                        <input type="text" id="detailRemarkInput" class="form-control form-control-sm d-none">
+                    </td></tr>
+                </table>
+            </div>
+            <div class="modal-footer border-top" id="detailFooter">
+                <!-- 보기 모드 -->
+                <div id="viewActions">
+                    <button class="btn btn-outline-warning btn-sm" id="btnReregister" onclick="reregisterFromModal()">
+                        <i class="fas fa-sync-alt me-1"></i>단가 재반영
+                    </button>
+                    <button class="btn btn-outline-primary btn-sm" id="btnEdit" onclick="toggleEditMode(true)">
+                        <i class="fas fa-edit me-1"></i>수정
+                    </button>
+                    <button class="btn btn-outline-danger btn-sm" id="btnDelete" onclick="deleteFromModal()">
+                        <i class="fas fa-trash me-1"></i>삭제
+                    </button>
+                </div>
+                <!-- 수정 모드 -->
+                <div id="editActions" class="d-none">
+                    <button class="btn btn-secondary btn-sm" onclick="toggleEditMode(false)">취소</button>
+                    <button class="btn btn-primary btn-sm" onclick="saveEdit()">
+                        <i class="fas fa-save me-1"></i>저장
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- 품목군/거래처 선택 모달 -->
 <div class="modal fade" id="selectModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" style="max-width: 420px;">
@@ -170,8 +249,7 @@
                     <i class="fas fa-search position-absolute text-muted" style="left: 12px; top: 50%; transform: translateY(-50%);"></i>
                     <input type="text" id="modalSearch" class="form-control ps-5" style="border-radius: 8px; background: #f8f9fa;" placeholder="검색..." oninput="filterModalList()">
                 </div>
-                <div id="modalList" style="max-height: 320px; overflow-y: auto;">
-                </div>
+                <div id="modalList" style="max-height: 320px; overflow-y: auto;"></div>
             </div>
         </div>
     </div>
@@ -195,6 +273,7 @@
 {{ vendors|json_script:"vendorsData" }}
 
 <script>
+// ─── 품목군/거래처 모달 ───
 let currentTarget = '';
 const partGroups = JSON.parse(document.getElementById('partGroupsData').textContent);
 const vendors = JSON.parse(document.getElementById('vendorsData').textContent);
@@ -205,7 +284,6 @@ function openModal(type) {
     const title = document.getElementById('selectModalTitle');
     const subtitle = document.getElementById('selectModalSubtitle');
     const searchInput = document.getElementById('modalSearch');
-
     if (type === 'group') {
         title.textContent = '품목군 선택';
         subtitle.textContent = '목록에서 품목군을 선택하세요';
@@ -224,23 +302,15 @@ function openModal(type) {
 function renderModalList(keyword) {
     const list = currentTarget === 'group' ? partGroups : vendors;
     const container = document.getElementById('modalList');
-
-    // 거래처: 검색어 없으면 안내만 표시
     if (currentTarget === 'vendor' && !keyword) {
         container.innerHTML = '<div class="text-center text-muted py-4"><i class="fas fa-search mb-2 d-block" style="font-size:1.5rem; opacity:0.3;"></i>거래처명을 입력하세요</div>';
         return;
     }
-
-    const filtered = keyword
-        ? list.filter(item => item.toLowerCase().includes(keyword.toLowerCase()))
-        : list;
-
+    const filtered = keyword ? list.filter(item => item.toLowerCase().includes(keyword.toLowerCase())) : list;
     if (filtered.length === 0) {
         container.innerHTML = '<div class="text-center text-muted py-4"><i class="fas fa-inbox mb-2 d-block" style="font-size:1.5rem; opacity:0.3;"></i>검색 결과 없음</div>';
         return;
     }
-
-    // 검색 키워드 하이라이트
     container.innerHTML = filtered.map(item => {
         let display = item;
         if (keyword) {
@@ -251,19 +321,165 @@ function renderModalList(keyword) {
     }).join('');
 }
 
-function filterModalList() {
-    const keyword = document.getElementById('modalSearch').value.trim();
-    renderModalList(keyword);
-}
+function filterModalList() { renderModalList(document.getElementById('modalSearch').value.trim()); }
 
 function selectItem(value) {
-    const targetId = currentTarget === 'group' ? 'q_group' : 'q_vendor';
-    document.getElementById(targetId).value = value;
+    document.getElementById(currentTarget === 'group' ? 'q_group' : 'q_vendor').value = value;
     bootstrap.Modal.getInstance(document.getElementById('selectModal')).hide();
 }
 
-function clearField(fieldId) {
-    document.getElementById(fieldId).value = '';
+function clearField(fieldId) { document.getElementById(fieldId).value = ''; }
+
+// ─── 상세 모달 ───
+function openDetail(row) {
+    const d = row.dataset;
+    document.getElementById('detailId').value = d.id;
+    document.getElementById('detailCanEdit').value = d.canEdit;
+    document.getElementById('detailCanDelete').value = d.canDelete;
+    document.getElementById('detailCanReregister').value = d.canReregister;
+
+    const typeEl = document.getElementById('detailType');
+    typeEl.textContent = d.type;
+    typeEl.className = 'badge bg-' + (
+        d.type === '수기입고' ? 'success' :
+        d.type === '발주입고' ? 'primary' :
+        d.type === 'ERP입고' || d.type === 'ERP생산입고' ? 'info' :
+        d.type === '검사입고' ? 'warning' : 'secondary'
+    );
+
+    document.getElementById('detailTrxNo').textContent = d.trxNo;
+    document.getElementById('detailDateText').textContent = d.date;
+    document.getElementById('detailDateInput').value = d.date;
+    document.getElementById('detailVendor').textContent = d.vendor || '-';
+    document.getElementById('detailPartNo').textContent = d.partNo;
+    document.getElementById('detailPartName').textContent = d.partName;
+    document.getElementById('detailQtyText').textContent = Number(d.qty).toLocaleString();
+    document.getElementById('detailQtyInput').value = d.qty;
+    document.getElementById('detailLotText').textContent = d.lot || '-';
+    document.getElementById('detailLotInput').value = d.lot || '';
+    document.getElementById('detailWarehouse').textContent = d.warehouse || '-';
+    document.getElementById('detailErpNo').innerHTML = d.erpNo
+        ? `<span class="badge bg-success">${d.erpNo}</span>`
+        : '<span class="text-muted">-</span>';
+    document.getElementById('detailActor').textContent = d.actor || '-';
+    document.getElementById('detailRemarkText').textContent = d.remark || '-';
+    document.getElementById('detailRemarkInput').value = d.remark || '';
+
+    // 버튼 표시/숨김
+    document.getElementById('btnReregister').classList.toggle('d-none', d.canReregister !== '1');
+    document.getElementById('btnEdit').classList.toggle('d-none', d.canEdit !== '1');
+    document.getElementById('btnDelete').classList.toggle('d-none', d.canDelete !== '1' || d.hasLabel === '1');
+
+    toggleEditMode(false);
+    new bootstrap.Modal(document.getElementById('detailModal')).show();
+}
+
+function toggleEditMode(editing) {
+    const fields = ['Date', 'Qty', 'Lot', 'Remark'];
+    fields.forEach(f => {
+        document.getElementById('detail' + f + 'Text').classList.toggle('d-none', editing);
+        document.getElementById('detail' + f + 'Input').classList.toggle('d-none', !editing);
+    });
+    document.getElementById('viewActions').classList.toggle('d-none', editing);
+    document.getElementById('editActions').classList.toggle('d-none', !editing);
+}
+
+// ─── 단가 재반영 ───
+function reregisterPrice(id) {
+    if (!confirm('이 입고 건의 단가를 최신 통합단가로 재반영하시겠습니까?\n(ERP 입고 삭제 후 재등록됩니다)')) return;
+    doReregister(id);
+}
+
+function reregisterFromModal() {
+    const id = document.getElementById('detailId').value;
+    if (!confirm('이 입고 건의 단가를 최신 통합단가로 재반영하시겠습니까?\n(ERP 입고 삭제 후 재등록됩니다)')) return;
+    bootstrap.Modal.getInstance(document.getElementById('detailModal')).hide();
+    doReregister(id);
+}
+
+function doReregister(id) {
+    fetch(`/material/inbound/history/reregister/${id}/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('실패: ' + data.error);
+        }
+    })
+    .catch(err => alert('오류: ' + err));
+}
+
+// ─── 삭제 ───
+function deleteIncoming(id, trxNo) {
+    if (!confirm(`[${trxNo}] 이 입고 건을 삭제하시겠습니까?\n재고가 차감되고 ERP 입고도 삭제됩니다.`)) return;
+    doDelete(id);
+}
+
+function deleteFromModal() {
+    const id = document.getElementById('detailId').value;
+    const trxNo = document.getElementById('detailTrxNo').textContent;
+    if (!confirm(`[${trxNo}] 이 입고 건을 삭제하시겠습니까?\n재고가 차감되고 ERP 입고도 삭제됩니다.`)) return;
+    bootstrap.Modal.getInstance(document.getElementById('detailModal')).hide();
+    doDelete(id);
+}
+
+function doDelete(id) {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `/material/inbound/history/cancel/${id}/`;
+    form.innerHTML = `<input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+                      <input type="hidden" name="cancel_action" value="delete_all">
+                      <input type="hidden" name="redirect_to" value="material:incoming_history">`;
+    document.body.appendChild(form);
+    form.submit();
+}
+
+// ─── 수정 저장 ───
+function saveEdit() {
+    const id = document.getElementById('detailId').value;
+    const body = {
+        quantity: document.getElementById('detailQtyInput').value,
+        date: document.getElementById('detailDateInput').value,
+        lot_no: document.getElementById('detailLotInput').value,
+        remark: document.getElementById('detailRemarkInput').value,
+    };
+
+    if (!body.quantity || parseInt(body.quantity) <= 0) {
+        alert('수량은 1 이상이어야 합니다.');
+        return;
+    }
+    if (!body.date) {
+        alert('입고 일자를 입력해주세요.');
+        return;
+    }
+    if (!confirm('이 입고 건을 수정하시겠습니까?')) return;
+
+    fetch(`/material/inbound/history/edit/${id}/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('실패: ' + data.error);
+        }
+    })
+    .catch(err => alert('오류: ' + err));
 }
 </script>
 {% endblock %}

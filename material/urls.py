@@ -23,6 +23,9 @@ urlpatterns = [
 
     # [핵심] views.incoming_history 함수와 연결하고, name도 'incoming_history'로 설정
     path('inbound/history/', views.incoming_history, name='incoming_history'),
+    path('inbound/history/reregister/<int:trx_id>/', views.reregister_erp_price, name='reregister_erp_price'),
+    path('inbound/history/cancel/<int:trx_id>/', views.cancel_manual_incoming, name='cancel_incoming_history'),
+    path('inbound/history/edit/<int:trx_id>/', views.edit_manual_incoming, name='edit_incoming_history'),
 
     # 3. 출고 관리
     path('outbound/create/', views.outbound_create, name='outbound_create'),
