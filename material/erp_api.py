@@ -152,6 +152,12 @@ def register_erp_incoming(trx, qty, warehouse_code, erp_order_no='', erp_order_s
     else:
         key_dt = str(trx.date).replace('-', '')[:8]
 
+    # 품목 단가 조회 (통합단가 API)
+    unit_price, vat_price = fetch_erp_item_price(trx.part.part_no, vendor.erp_code)
+    supply_amount = round(unit_price * qty)      # 공급가액
+    vat_amount = round(supply_amount * 0.1)      # 부가세 (10%)
+    total_amount = supply_amount + vat_amount     # 합계액
+
     body = {
         'coCd': settings.ERP_COMPANY_CODE,
         'trCd': vendor.erp_code,
@@ -175,19 +181,19 @@ def register_erp_incoming(trx, qty, warehouse_code, erp_order_no='', erp_order_s
             'itemCd': trx.part.part_no,
             'poQt': qty,
             'rcvQt': qty,
-            'rcvUm': 0,
-            'rcvgAm': 0,
-            'rcvvAm': 0,
-            'rcvhAm': 0,
+            'rcvUm': unit_price,
+            'rcvgAm': supply_amount,
+            'rcvvAm': vat_amount,
+            'rcvhAm': total_amount,
             'exchCd': 'KRW',
             'exchRt': 1,
-            'exchUm': 0,
-            'exchAm': 0,
+            'exchUm': unit_price,
+            'exchAm': supply_amount,
             'lotNb': '',
             'umFg': '',
             'lcCd': warehouse_code,
             'remarkDc': f'SCM ({trx.transaction_no})',
-            'vatUm': 0,
+            'vatUm': vat_price if vat_price else round(unit_price * 1.1),
             **(  # 발주입고 시 발주번호/순번 포함
                 {'poNb': erp_order_no, 'poSq': int(erp_order_seq) if str(erp_order_seq).isdigit() else erp_order_seq}
                 if erp_order_no else {}
@@ -1545,6 +1551,46 @@ def sync_erp_adjustments(date_from=None, date_to=None):
 
     logger.info(f'ERP 재고조정 동기화 완료: 신규 {synced}, 건너뜀 {skipped}, 오류 {errors}')
     return synced, skipped, errors, error_list
+
+
+# ── ERP 품목 단가 조회 API ─────────────────────────────────────────
+
+def fetch_erp_item_price(item_cd, tr_cd=''):
+    """
+    통합단가정보 조회 (api20A00S01801) - 구매단가 조회
+    - item_cd: 품번
+    - tr_cd: 거래처코드 (선택)
+    Returns: (unit_price, vat_price) or (0, 0)
+    """
+    from datetime import datetime
+    body = {
+        'coCd': settings.ERP_COMPANY_CODE,
+        'umTp': '0',  # 0=구매
+        'itemCd': item_cd,
+        'baseDt': datetime.now().strftime('%Y%m%d'),
+    }
+    if tr_cd:
+        body['trCd'] = tr_cd
+
+    success, data, error = call_erp_api('/apiproxy/api20A00S01801', body)
+    if success and data:
+        items = data.get('resultData', [])
+        if items:
+            # 사용중(useYn=1)인 것 중 첫 번째
+            for item in items:
+                if item.get('useYn') == '1':
+                    unit_um = float(item.get('unitUm', 0) or 0)
+                    vat_um = float(item.get('vatUm', 0) or 0)
+                    logger.info(f'ERP 단가 조회 성공: {item_cd} -> 단가={unit_um}, VAT포함={vat_um}')
+                    return unit_um, vat_um
+            # 사용중인 것이 없으면 첫 번째
+            item = items[0]
+            unit_um = float(item.get('unitUm', 0) or 0)
+            vat_um = float(item.get('vatUm', 0) or 0)
+            return unit_um, vat_um
+    if error:
+        logger.warning(f'ERP 단가 조회 실패 ({item_cd}): {error}')
+    return 0, 0
 
 
 # ── ERP 발주 조회 API ──────────────────────────────────────────────
