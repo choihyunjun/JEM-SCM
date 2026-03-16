@@ -44,7 +44,7 @@
                 <div class="row g-3 align-items-center">
                     <div class="col-6 col-lg-2">
                         <label class="form-label small">입고 일자</label>
-                        <input type="date" name="date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
+                        <input type="date" name="date" class="form-control" value="{{ today|date:'Y-m-d' }}" min="2020-01-01" max="2099-12-31" required>
                     </div>
 
                     <div class="col-6 col-lg-2">
