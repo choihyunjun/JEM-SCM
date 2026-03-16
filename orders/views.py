@@ -4242,6 +4242,7 @@ def api_part_search(request):
                 org_name = p.vendor.name
 
         results.append({
+            'id': p.id,
             'part_no': p.part_no,
             'part_name': p.part_name,
             'part_group': p.part_group,

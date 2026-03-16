@@ -94,16 +94,10 @@
                         </div>
                         <input type="hidden" name="vendor_id" id="hiddenVendorId" required>
                     </div>
-                    <div class="col-12 col-lg-3">
+                    <div class="col-12 col-lg-3" style="position:relative;">
                         <label class="small fw-bold mb-1 text-primary">입고 품목 검색</label>
-                        <input class="form-control" list="partOptions" id="inputPart" placeholder="품번 또는 품명 검색..." autocomplete="off">
-                        <datalist id="partOptions">
-                            {% for p in parts %}
-                                <option data-id="{{ p.id }}" value="{{ p.part_no }}">
-                                    {{ p.part_name }} ({{ p.vendor.name }})
-                                </option>
-                            {% endfor %}
-                        </datalist>
+                        <input class="form-control" id="inputPart" placeholder="품번 또는 품명 검색..." autocomplete="off">
+                        <div id="partSearchResults" class="border bg-white shadow-sm" style="display:none; position:absolute; z-index:1050; width:calc(100% - 24px); max-height:300px; overflow-y:auto;"></div>
                         <input type="hidden" id="selectedPartId">
                         <input type="hidden" id="selectedPartName">
                     </div>
@@ -476,7 +470,7 @@
             <div class="modal-body p-4">
                 <div class="input-group mb-3">
                     <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-                    <input type="text" class="form-control" id="vendorSearchInput" placeholder="업체명 또는 코드를 입력하세요..." onkeyup="filterVendors()">
+                    <input type="text" class="form-control" id="vendorSearchInput" placeholder="업체명 또는 코드를 입력하세요 (2자 이상)...">
                 </div>
                 <div class="border rounded" style="max-height: 400px; overflow-y: auto;">
                     <table class="table table-hover mb-0" id="vendorTable">
@@ -487,19 +481,8 @@
                                 <th width="15%" class="text-center">선택</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            {% for v in vendors %}
-                            <tr>
-                                <td class="ps-4">{{ v.code }}</td>
-                                <td class="vendor-name fw-bold text-dark">{{ v.name }}</td>
-                                <td class="text-center">
-                                    <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3" 
-                                            onclick="selectVendor('{{ v.id }}', '{{ v.name }}', '{{ v.code }}')">
-                                        선택
-                                    </button>
-                                </td>
-                            </tr>
-                            {% endfor %}
+                        <tbody id="vendorTableBody">
+                            <tr><td colspan="3" class="text-center text-muted py-4">검색어를 입력하세요</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -554,27 +537,38 @@
         });
     });
 
-    // --- 업체 필터링 ---
-    function filterVendors() {
-        const input = document.getElementById('vendorSearchInput');
-        const filter = input.value.toUpperCase();
-        const table = document.getElementById('vendorTable');
-        const tr = table.getElementsByTagName('tr');
-
-        for (let i = 1; i < tr.length; i++) {
-            let tdCode = tr[i].getElementsByTagName('td')[0];
-            let tdName = tr[i].getElementsByTagName('td')[1];
-            if (tdCode || tdName) {
-                let txtValueCode = tdCode.textContent || tdCode.innerText;
-                let txtValueName = tdName.textContent || tdName.innerText;
-                if (txtValueCode.toUpperCase().indexOf(filter) > -1 || txtValueName.toUpperCase().indexOf(filter) > -1) {
-                    tr[i].style.display = "";
-                } else {
-                    tr[i].style.display = "none";
-                }
-            }
+    // --- 업체 AJAX 검색 ---
+    var _vendorTimer = null;
+    document.getElementById('vendorSearchInput').addEventListener('input', function() {
+        clearTimeout(_vendorTimer);
+        var q = this.value.trim();
+        var tbody = document.getElementById('vendorTableBody');
+        if (q.length < 2) {
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-4">2자 이상 입력하세요</td></tr>';
+            return;
         }
-    }
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-4"><span class="spinner-border spinner-border-sm"></span> 검색 중...</td></tr>';
+        _vendorTimer = setTimeout(function() {
+            fetch('/api/vendors/search/?q=' + encodeURIComponent(q))
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.results || data.results.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-4">검색 결과가 없습니다</td></tr>';
+                        return;
+                    }
+                    tbody.innerHTML = data.results.map(v =>
+                        `<tr>
+                            <td class="ps-4">${v.code}</td>
+                            <td class="fw-bold text-dark">${v.name}</td>
+                            <td class="text-center">
+                                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3"
+                                        onclick="selectVendor('${v.id}', '${v.name.replace(/'/g, "\\'")}', '${v.code}')">선택</button>
+                            </td>
+                        </tr>`
+                    ).join('');
+                });
+        }, 300);
+    });
 
     // --- 수입검사 체크박스 효과 ---
     function toggleInspectionMode() {
@@ -632,32 +626,61 @@
         }
     }
 
-    // --- 품목 검색 및 매핑 ---
-    document.getElementById('inputPart').addEventListener('input', function() {
-        var val = this.value;
-        var options = document.getElementById('partOptions').options;
-        var found = false;
+    // --- 품목 AJAX 검색 ---
+    var _partTimer = null;
+    var _partResultsEl = document.getElementById('partSearchResults');
 
-        for (var i = 0; i < options.length; i++) {
-            if (options[i].value === val) {
-                document.getElementById('selectedPartId').value = options[i].getAttribute('data-id');
-                var fullText = options[i].innerText.trim();
-                document.getElementById('selectedPartName').value = fullText;
-                document.getElementById('partNameDisplay').innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> ${fullText}`;
-                found = true;
-                // 품번 매칭 시 발주 조회
-                checkOpenOrders(val);
-                break;
-            }
+    document.getElementById('inputPart').addEventListener('input', function() {
+        clearTimeout(_partTimer);
+        var q = this.value.trim();
+
+        // 선택 해제
+        document.getElementById('selectedPartId').value = '';
+        document.getElementById('selectedPartName').value = '';
+        document.getElementById('partNameDisplay').innerText = '';
+        document.getElementById('orderMatchArea').style.display = 'none';
+        document.getElementById('orderStatusBadge').style.display = 'none';
+
+        if (q.length < 2) {
+            _partResultsEl.style.display = 'none';
+            return;
         }
-        if (!found) {
-            document.getElementById('selectedPartId').value = '';
-            document.getElementById('selectedPartName').value = '';
-            document.getElementById('partNameDisplay').innerText = '';
-            document.getElementById('orderMatchArea').style.display = 'none';
-            document.getElementById('orderStatusBadge').style.display = 'none';
+        _partTimer = setTimeout(function() {
+            fetch('/api/parts/search/?q=' + encodeURIComponent(q))
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.results || data.results.length === 0) {
+                        _partResultsEl.innerHTML = '<div class="p-3 text-muted text-center">검색 결과 없음</div>';
+                        _partResultsEl.style.display = 'block';
+                        return;
+                    }
+                    _partResultsEl.innerHTML = data.results.map(p =>
+                        `<div class="px-3 py-2 border-bottom" style="cursor:pointer;"
+                              onmouseover="this.style.background='#e9ecef'" onmouseout="this.style.background=''"
+                              onclick="pickPart('${p.id}', '${p.part_no}', '${p.part_name.replace(/'/g, "\\'")}')">
+                            <strong>${p.part_no}</strong> <small class="text-muted ms-2">${p.part_name}</small>
+                        </div>`
+                    ).join('');
+                    _partResultsEl.style.display = 'block';
+                });
+        }, 300);
+    });
+
+    // 품목 드롭다운 외부 클릭 시 닫기
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('#inputPart') && !e.target.closest('#partSearchResults')) {
+            _partResultsEl.style.display = 'none';
         }
     });
+
+    function pickPart(id, partNo, partName) {
+        document.getElementById('inputPart').value = partNo;
+        document.getElementById('selectedPartId').value = id;
+        document.getElementById('selectedPartName').value = partName;
+        document.getElementById('partNameDisplay').innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> ${partName}`;
+        _partResultsEl.style.display = 'none';
+        checkOpenOrders(partNo);
+    }
 
     // --- 발주 매칭 조회 ---
     function checkOpenOrders(partNo) {

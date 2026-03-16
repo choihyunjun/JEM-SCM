@@ -693,8 +693,6 @@ def manual_incoming(request):
 
     context = {
         'warehouses': warehouses_qs,
-        'vendors': Vendor.objects.all().order_by('name'),
-        'parts': Part.objects.select_related('vendor').all().order_by('part_no'),
         'today': timezone.now().date(),
         'history_page': history_page,
         'history_q': history_q,
