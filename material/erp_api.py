@@ -1557,12 +1557,56 @@ def sync_erp_adjustments(date_from=None, date_to=None):
 
 def fetch_erp_item_price(item_cd, tr_cd=''):
     """
-    통합단가정보 조회 (api20A00S01801) - 구매단가 조회
-    - item_cd: 품번
-    - tr_cd: 거래처코드 (선택)
+    ERP 구매단가 조회 (3단계 fallback)
+    1) 거래처단가정보 (api20A00S01501) - 거래처별 구매단가
+    2) 품목단가정보 (api20A00S01401) - 품목 구매단가
+    3) 통합단가정보 (api20A00S01801) - 통합단가
     Returns: (unit_price, vat_price) or (0, 0)
     """
     from datetime import datetime
+
+    # 1) 거래처단가정보 조회 (거래처코드 필수)
+    if tr_cd:
+        body = {
+            'coCd': settings.ERP_COMPANY_CODE,
+            'trCd': tr_cd,
+            'itemCd': item_cd,
+            'useYn': '1',
+        }
+        success, data, error = call_erp_api('/apiproxy/api20A00S01501', body)
+        if success and data:
+            items = data.get('resultData', [])
+            for item in items:
+                purch_um = float(item.get('purchUm', 0) or 0)
+                purch_vat_um = float(item.get('purchvatUm', 0) or 0)
+                if purch_um > 0:
+                    logger.info(f'ERP 거래처단가 조회 성공: {item_cd}/{tr_cd} -> purchUm={purch_um}')
+                    return purch_um, purch_vat_um
+        logger.info(f'ERP 거래처단가 없음: {item_cd}/{tr_cd}')
+
+    # 2) 품목단가정보 조회
+    body = {
+        'coCd': settings.ERP_COMPANY_CODE,
+        'itemCd': item_cd,
+        'useYn': '1',
+    }
+    success, data, error = call_erp_api('/apiproxy/api20A00S01401', body)
+    if success and data:
+        items = data.get('resultData', [])
+        for item in items:
+            purch_um = float(item.get('purchUm', 0) or 0)
+            purch_vat_um = float(item.get('purchvatUm', 0) or 0)
+            if purch_um > 0:
+                logger.info(f'ERP 품목단가 조회 성공: {item_cd} -> purchUm={purch_um}')
+                return purch_um, purch_vat_um
+            # purchUm이 0이면 standardUm(표준원가) 시도
+            std_um = float(item.get('standardUm', 0) or 0)
+            if std_um > 0:
+                logger.info(f'ERP 표준원가 조회 성공: {item_cd} -> standardUm={std_um}')
+                return std_um, round(std_um * 1.1)
+    logger.info(f'ERP 품목단가 없음: {item_cd}')
+
+    # 3) 통합단가정보 조회
     body = {
         'coCd': settings.ERP_COMPANY_CODE,
         'umTp': '0',  # 0=구매
@@ -1571,25 +1615,18 @@ def fetch_erp_item_price(item_cd, tr_cd=''):
     }
     if tr_cd:
         body['trCd'] = tr_cd
-
     success, data, error = call_erp_api('/apiproxy/api20A00S01801', body)
     if success and data:
         items = data.get('resultData', [])
-        if items:
-            # 사용중(useYn=1)인 것 중 첫 번째
-            for item in items:
-                if item.get('useYn') == '1':
-                    unit_um = float(item.get('unitUm', 0) or 0)
-                    vat_um = float(item.get('vatUm', 0) or 0)
-                    logger.info(f'ERP 단가 조회 성공: {item_cd} -> 단가={unit_um}, VAT포함={vat_um}')
+        for item in items:
+            if item.get('useYn') == '1':
+                unit_um = float(item.get('unitUm', 0) or 0)
+                vat_um = float(item.get('vatUm', 0) or 0)
+                if unit_um > 0:
+                    logger.info(f'ERP 통합단가 조회 성공: {item_cd} -> unitUm={unit_um}')
                     return unit_um, vat_um
-            # 사용중인 것이 없으면 첫 번째
-            item = items[0]
-            unit_um = float(item.get('unitUm', 0) or 0)
-            vat_um = float(item.get('vatUm', 0) or 0)
-            return unit_um, vat_um
-    if error:
-        logger.warning(f'ERP 단가 조회 실패 ({item_cd}): {error}')
+
+    logger.warning(f'ERP 단가 조회 실패 (모든 API): {item_cd}/{tr_cd}')
     return 0, 0
 
 
