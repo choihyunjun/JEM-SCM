@@ -1606,12 +1606,11 @@ def fetch_erp_item_price(item_cd, tr_cd=''):
                 return std_um, round(std_um * 1.1)
     logger.info(f'ERP 품목단가 없음: {item_cd}')
 
-    # 3) 통합단가정보 조회
+    # 3) 통합단가정보 조회 (baseDt 제외 - 전체 조회)
     body = {
         'coCd': settings.ERP_COMPANY_CODE,
         'umTp': '0',  # 0=구매
         'itemCd': item_cd,
-        'baseDt': datetime.now().strftime('%Y%m%d'),
     }
     if tr_cd:
         body['trCd'] = tr_cd
