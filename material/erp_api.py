@@ -160,6 +160,10 @@ def register_erp_incoming(trx, qty, warehouse_code, erp_order_no='', erp_order_s
     vat_amount = round(supply_amount * 0.1)      # 부가세 (10%)
     total_amount = supply_amount + vat_amount     # 합계액
 
+    logger.info(f'ERP 입고등록 요청: trx={trx.transaction_no}, vendor={vendor.erp_code}, '
+                f'mapFg={"1" if erp_order_no else "0"}, poNb={erp_order_no}, poSq={erp_order_seq}, '
+                f'keyDt={key_dt}, qty={qty}, unitPrice={unit_price}')
+
     body = {
         'coCd': settings.ERP_COMPANY_CODE,
         'trCd': vendor.erp_code,

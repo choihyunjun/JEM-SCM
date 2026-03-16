@@ -1360,6 +1360,8 @@ def import_inspection_detail(request, pk):
                             erp_po_seq = m.group(2)
                     try:
                         from material.erp_api import register_erp_incoming
+                        logger.info(f'[수입검사] ERP 입고등록 시도: origin={origin_trx.transaction_no}, '
+                                    f'remark={origin_trx.remark!r}, erp_po_no={erp_po_no!r}, erp_po_seq={erp_po_seq!r}')
                         erp_ok, erp_no, erp_err = register_erp_incoming(
                             trx_ok, qty_good, target_code,
                             erp_order_no=erp_po_no, erp_order_seq=erp_po_seq
