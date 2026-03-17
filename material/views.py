@@ -5286,6 +5286,9 @@ def raw_material_incoming(request):
             insp.label_count = RawMaterialLabel.objects.filter(
                 incoming_transaction=trx, label_type='PACKAGE'
             ).count()
+            insp.pallet_count = RawMaterialLabel.objects.filter(
+                incoming_transaction=trx, label_type='PALLET'
+            ).exclude(status='CANCELLED').count()
             # 품목설정 데이터 (모달 기본값용)
             try:
                 setting = trx.part.raw_material_setting

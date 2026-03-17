@@ -97,8 +97,19 @@
                                         <span class="status-badge status-printed">
                                             <i class="bi bi-check"></i> {{ insp.label_count }}장 발행됨
                                         </span>
+                                        {% if insp.pallet_count > 0 %}
+                                        <br><span class="status-badge" style="background:#dbeafe;color:#1e40af;margin-top:2px;">
+                                            <i class="bi bi-box-seam"></i> 파렛트 {{ insp.pallet_count }}장
+                                        </span>
+                                        {% endif %}
+                                        {% else %}
+                                        {% if insp.pallet_count > 0 %}
+                                        <span class="status-badge" style="background:#dbeafe;color:#1e40af;">
+                                            <i class="bi bi-box-seam"></i> 파렛트 {{ insp.pallet_count }}장
+                                        </span>
                                         {% else %}
                                         <span class="status-badge status-approved">미발행</span>
+                                        {% endif %}
                                         {% endif %}
                                     </td>
                                     <td class="text-center">
