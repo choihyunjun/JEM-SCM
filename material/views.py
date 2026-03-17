@@ -669,7 +669,7 @@ def manual_incoming(request):
     from .models import RawMaterialLabel
     for item in history_page:
         item.label_count = RawMaterialLabel.objects.filter(
-            incoming_transaction=item
+            incoming_transaction=item, label_type='PACKAGE'
         ).exclude(status='CANCELLED').count()
         try:
             item.inspection_status = item.inspection.status
@@ -5284,7 +5284,7 @@ def raw_material_incoming(request):
             trx = insp.inbound_transaction
             insp.is_scm = (trx.transaction_type == 'IN_SCM')
             insp.label_count = RawMaterialLabel.objects.filter(
-                incoming_transaction=trx
+                incoming_transaction=trx, label_type='PACKAGE'
             ).count()
             # 품목설정 데이터 (모달 기본값용)
             try:
