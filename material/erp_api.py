@@ -1029,9 +1029,9 @@ def sync_erp_vendors():
     cache.set('erp_sync_progress', {'stage': f'거래처 {len(items)}건 처리 중...', 'percent': 10}, timeout=300)
 
     # 디버그: 처음 몇 건의 전체 필드 확인
-    for i, sample in enumerate(items[:5]):
-        logger.info(f'[거래처 동기화] sample[{i}] keys={list(sample.keys())}')
-        logger.info(f'[거래처 동기화] sample[{i}] data={sample}')
+    for i, sample in enumerate(items[:3]):
+        print(f'[거래처 동기화] sample[{i}] keys={list(sample.keys())}', flush=True)
+        print(f'[거래처 동기화] sample[{i}] data={sample}', flush=True)
 
     for idx, item in enumerate(items):
         tr_cd = (item.get('trCd') or '').strip()
@@ -1039,7 +1039,7 @@ def sync_erp_vendors():
 
         # 경신 관련 거래처 디버그
         if tr_cd in ('02103', '02355', '02705', '04447') or '경신' in tr_nm:
-            logger.info(f'[거래처 동기화] 경신관련: trCd={tr_cd}, trNm={tr_nm}, 전체={item}')
+            print(f'[거래처 동기화] 경신관련: trCd={tr_cd}, trNm={tr_nm}, 전체={item}', flush=True)
 
         if not tr_cd or not tr_nm:
             result['skipped'] += 1
