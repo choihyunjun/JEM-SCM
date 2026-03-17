@@ -110,16 +110,26 @@
                                                     onclick="openReprintModal('{{ insp.id }}', '{{ insp.inbound_transaction.part.part_no }}', '{{ insp.inbound_transaction.part.part_name|truncatechars:20 }}')" title="재출력">
                                                 <i class="bi bi-printer"></i> 재출력
                                             </button>
+                                            <button type="button" class="btn btn-outline-primary btn-print"
+                                                    onclick="createPalletLabel('{{ insp.id }}')" title="파렛트 라벨">
+                                                <i class="bi bi-box-seam"></i> 파렛트
+                                            </button>
                                             <button type="button" class="btn btn-outline-danger btn-print"
                                                     onclick="openLabelCancelModal('{{ insp.id }}', '{{ insp.inbound_transaction.part.part_no }}', {{ insp.label_count }})" title="라벨 취소">
                                                 <i class="bi bi-trash"></i> 취소
                                             </button>
                                         </div>
                                         {% else %}
-                                        <button type="button" class="btn btn-success btn-print"
-                                                onclick="openLabelModal('{{ insp.id }}', '{{ insp.inbound_transaction.part.part_no }}', '{{ insp.inbound_transaction.part.part_name|truncatechars:30 }}', {{ insp.inbound_transaction.quantity }}, {{ insp.has_setting|yesno:'true,false' }}, {{ insp.setting_unit_weight }}, {{ insp.setting_shelf_life }})">
-                                            <i class="bi bi-qr-code"></i> 라벨발행
-                                        </button>
+                                        <div class="btn-group btn-group-sm">
+                                            <button type="button" class="btn btn-success btn-print"
+                                                    onclick="openLabelModal('{{ insp.id }}', '{{ insp.inbound_transaction.part.part_no }}', '{{ insp.inbound_transaction.part.part_name|truncatechars:30 }}', {{ insp.inbound_transaction.quantity }}, {{ insp.has_setting|yesno:'true,false' }}, {{ insp.setting_unit_weight }}, {{ insp.setting_shelf_life }})">
+                                                <i class="bi bi-qr-code"></i> 라벨발행
+                                            </button>
+                                            <button type="button" class="btn btn-outline-primary btn-print"
+                                                    onclick="createPalletLabel('{{ insp.id }}')" title="파렛트 라벨">
+                                                <i class="bi bi-box-seam"></i> 파렛트
+                                            </button>
+                                        </div>
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -709,6 +719,39 @@ function printSelectedLabels() {
     const ids = Array.from(checked).map(chk => chk.value).join(',');
     window.open(`{% url 'material:raw_material_label_print' %}?ids=${ids}`, '_blank');
     bootstrap.Modal.getInstance(document.getElementById('reprintModal')).hide();
+}
+
+// ===== 파렛트 라벨 발행 =====
+function createPalletLabel(inspId) {
+    if (!confirm('파렛트 라벨을 발행하시겠습니까?\n전체 수량 1장의 A4 라벨이 발행됩니다.')) return;
+
+    fetch("{% url 'material:pallet_label_create' %}", {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: 'inspection_id=' + inspId
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            if (data.already_exists) {
+                if (confirm(data.message + '\n\n재출력하시겠습니까?')) {
+                    window.open("{% url 'material:pallet_label_print' %}?id=" + data.label_id, '_blank');
+                }
+            } else {
+                alert(data.message);
+                window.open("{% url 'material:pallet_label_print' %}?id=" + data.label_id, '_blank');
+            }
+        } else {
+            alert('오류: ' + data.error);
+        }
+    })
+    .catch(err => {
+        alert('통신 오류가 발생했습니다.');
+        console.error(err);
+    });
 }
 </script>
 {% endblock %}

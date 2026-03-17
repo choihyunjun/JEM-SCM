@@ -1,0 +1,276 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>파렛트 라벨 출력</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: "Malgun Gothic", sans-serif;
+            background: #555;
+        }
+
+        /* ===== 상단 툴바 ===== */
+        .no-print {
+            background: #2c3e50;
+            color: white;
+            padding: 15px 20px;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .print-info { font-size: 14pt; }
+        .print-info strong { color: #f39c12; }
+
+        .btn-group-actions { display: flex; gap: 10px; }
+
+        .btn {
+            padding: 10px 25px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 11pt;
+            transition: all 0.15s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+        }
+        .btn-print { background: #27ae60; color: #fff; }
+        .btn-print:hover { background: #219a52; }
+        .btn-back { background: #95a5a6; color: #fff; }
+        .btn-back:hover { background: #7f8c8d; }
+
+        /* ===== A4 라벨 ===== */
+        .pallet-label {
+            width: 190mm;
+            min-height: 277mm;
+            background: white;
+            margin: 20px auto;
+            padding: 15mm;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .label-header {
+            text-align: center;
+            border-bottom: 4px solid #000;
+            padding-bottom: 8mm;
+            margin-bottom: 8mm;
+        }
+
+        .label-header h1 {
+            font-size: 36pt;
+            font-weight: 900;
+            letter-spacing: 10px;
+            margin-bottom: 2mm;
+        }
+
+        .label-header .sub {
+            font-size: 12pt;
+            color: #666;
+        }
+
+        /* 정보 테이블 */
+        .info-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10mm;
+        }
+
+        .info-table td {
+            border: 2px solid #000;
+            padding: 5mm 6mm;
+            vertical-align: middle;
+        }
+
+        .info-table .lbl {
+            width: 25mm;
+            background: #f0f0f0;
+            font-weight: bold;
+            font-size: 14pt;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        .info-table .val {
+            font-size: 18pt;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+        }
+
+        .info-table .val.part-no {
+            font-size: 28pt;
+            font-family: 'Consolas', monospace;
+            letter-spacing: 1px;
+        }
+
+        .info-table .val.qty {
+            font-size: 32pt;
+            color: #c0392b;
+        }
+
+        /* QR 영역 */
+        .qr-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .qr-box {
+            border: 3px solid #000;
+            padding: 8mm;
+            display: inline-block;
+        }
+
+        .qr-data-text {
+            margin-top: 5mm;
+            font-family: 'Consolas', monospace;
+            font-size: 11pt;
+            color: #333;
+            letter-spacing: 0.5px;
+        }
+
+        .label-footer {
+            text-align: center;
+            border-top: 2px solid #999;
+            padding-top: 4mm;
+            margin-top: 8mm;
+        }
+
+        .label-footer .label-id {
+            font-family: 'Consolas', monospace;
+            font-size: 14pt;
+            font-weight: bold;
+            color: #333;
+            letter-spacing: 1px;
+        }
+
+        .label-footer .print-date {
+            font-size: 10pt;
+            color: #888;
+            margin-top: 2mm;
+        }
+
+        /* 빈 상태 */
+        .empty-state {
+            color: white;
+            text-align: center;
+            padding: 50px;
+            width: 100%;
+        }
+        .empty-state p { font-size: 18pt; margin-bottom: 15px; }
+        .empty-state a { color: #3498db; }
+
+        /* 인쇄 */
+        @media print {
+            body { background: white; margin: 0; padding: 0; }
+            .no-print { display: none !important; }
+            .pallet-label {
+                width: 100%;
+                min-height: auto;
+                margin: 0;
+                padding: 12mm;
+                box-shadow: none;
+                page-break-after: always;
+            }
+            .pallet-label:last-child { page-break-after: auto; }
+            @page { size: A4; margin: 5mm; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 상단 툴바 -->
+    <div class="no-print">
+        <div class="print-info">
+            📦 <strong>파렛트 라벨</strong>
+            {% if label %}
+            <span style="margin-left: 20px;">{{ label.part_no }} | {{ label.quantity }}{{ label.get_unit_display }}</span>
+            {% endif %}
+        </div>
+        <div class="btn-group-actions">
+            <button onclick="window.print()" class="btn btn-print">🖨️ 인쇄 (A4)</button>
+            <a href="{% url 'material:raw_material_incoming' %}" class="btn btn-back">← 돌아가기</a>
+        </div>
+    </div>
+
+    {% if label %}
+    <div class="pallet-label">
+        <!-- 헤더 -->
+        <div class="label-header">
+            <h1>파 렛 트 라 벨</h1>
+            <div class="sub">PALLET LABEL</div>
+        </div>
+
+        <!-- 정보 테이블 -->
+        <table class="info-table">
+            <tr>
+                <td class="lbl">품 번</td>
+                <td class="val part-no" colspan="3">{{ label.part_no }}</td>
+            </tr>
+            <tr>
+                <td class="lbl">품 명</td>
+                <td class="val" colspan="3">{{ label.part_name }}</td>
+            </tr>
+            <tr>
+                <td class="lbl">수 량</td>
+                <td class="val qty">{{ label.quantity }}{{ label.get_unit_display }}</td>
+                <td class="lbl">L O T</td>
+                <td class="val">{{ label.lot_no|date:"Y-m-d" }}</td>
+            </tr>
+            {% if label.vendor %}
+            <tr>
+                <td class="lbl">거래처</td>
+                <td class="val" colspan="3">{{ label.vendor.name }}</td>
+            </tr>
+            {% endif %}
+        </table>
+
+        <!-- QR 코드 -->
+        <div class="qr-section">
+            <div class="qr-box" id="qrCode"></div>
+            <div class="qr-data-text" id="qrDataText"></div>
+        </div>
+
+        <!-- 푸터 -->
+        <div class="label-footer">
+            <div class="label-id">{{ label.label_id }}</div>
+            <div class="print-date">발행일: {{ label.printed_at|date:"Y-m-d H:i" }}</div>
+        </div>
+    </div>
+
+    <script>
+        const qrData = "{{ label.label_id }}|{{ label.part_no }}|{{ label.quantity }}{{ label.get_unit_display }}|{{ label.lot_no|date:'Y-m-d' }}";
+        document.getElementById('qrDataText').textContent = qrData;
+
+        new QRCode(document.getElementById('qrCode'), {
+            text: qrData,
+            width: 200,
+            height: 200,
+            colorDark: "#000000",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.M
+        });
+    </script>
+
+    {% else %}
+    <div class="empty-state">
+        <p>출력할 파렛트 라벨이 없습니다.</p>
+        <a href="{% url 'material:raw_material_incoming' %}">입고 페이지로 이동</a>
+    </div>
+    {% endif %}
+
+</body>
+</html>

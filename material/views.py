@@ -5562,6 +5562,95 @@ def raw_material_label_print(request):
 
 
 @wms_permission_required('can_wms_stock_view')
+def pallet_label_create(request):
+    """
+    파렛트 라벨 발행 API
+    - 수입검사 합격 건에 대해 전체 수량 1장의 파렛트 라벨 발행
+    - QR 스캔 시 전체 수량 이동처리 용도
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST only'})
+
+    inspection_id = request.POST.get('inspection_id')
+    try:
+        inspection = ImportInspection.objects.get(id=inspection_id)
+        if inspection.status != 'APPROVED':
+            return JsonResponse({'success': False, 'error': '수입검사 합격 판정이 필요합니다.'})
+
+        trx = inspection.inbound_transaction
+        part = trx.part
+        qty = trx.quantity
+        lot = trx.lot_no or timezone.now().date()
+        vendor = trx.vendor
+        warehouse = trx.warehouse_to
+
+        # 이미 파렛트 라벨이 발행된 건인지 확인
+        existing_pallet = RawMaterialLabel.objects.filter(
+            incoming_transaction=trx, label_type='PALLET'
+        ).exclude(status='CANCELLED').first()
+        if existing_pallet:
+            return JsonResponse({
+                'success': True,
+                'already_exists': True,
+                'label_id': existing_pallet.id,
+                'message': f'이미 파렛트 라벨이 발행되었습니다. ({existing_pallet.label_id})'
+            })
+
+        # 단위 결정: 품목설정이 있으면 그 단위, 없으면 EA
+        try:
+            setting = part.raw_material_setting
+            unit = setting.unit_weight_unit if hasattr(setting, 'unit_weight_unit') else 'KG'
+        except Exception:
+            unit = 'EA'
+
+        with transaction.atomic():
+            label = RawMaterialLabel.objects.create(
+                label_id=RawMaterialLabel.generate_pallet_label_id(),
+                label_type='PALLET',
+                part=part,
+                part_no=part.part_no,
+                part_name=part.part_name,
+                lot_no=lot,
+                quantity=qty,
+                unit=unit,
+                incoming_transaction=trx,
+                vendor=vendor,
+                status='INSTOCK',
+                printed_by=request.user,
+            )
+
+        return JsonResponse({
+            'success': True,
+            'label_id': label.id,
+            'label_code': label.label_id,
+            'message': f'파렛트 라벨 발행 완료 ({part.part_no}, {qty}{unit})'
+        })
+
+    except ImportInspection.DoesNotExist:
+        return JsonResponse({'success': False, 'error': '해당 수입검사 건을 찾을 수 없습니다.'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@wms_permission_required('can_wms_stock_view')
+def pallet_label_print(request):
+    """
+    파렛트 라벨 출력 화면 (A4 크기)
+    """
+    label_id = request.GET.get('id', '')
+    label = None
+    if label_id.isdigit():
+        label = RawMaterialLabel.objects.filter(id=int(label_id), label_type='PALLET').select_related(
+            'part', 'vendor', 'incoming_transaction__warehouse_to'
+        ).first()
+
+    context = {
+        'label': label,
+    }
+    return render(request, 'material/pallet_label_print.html', context)
+
+
+@wms_permission_required('can_wms_stock_view')
 def api_part_search(request):
     """
     품목 검색 API - 품번/품명으로 검색

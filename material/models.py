@@ -702,8 +702,14 @@ class RawMaterialLabel(models.Model):
         ('DISPOSED', '폐기'),
     ]
 
+    LABEL_TYPE_CHOICES = [
+        ('PACKAGE', '포장'),
+        ('PALLET', '파렛트'),
+    ]
+
     # 고유 라벨 ID
-    label_id = models.CharField("라벨ID", max_length=30, unique=True, db_index=True)  # RM-20260207-0001
+    label_id = models.CharField("라벨ID", max_length=30, unique=True, db_index=True)  # RM-20260207-0001 / PLT-20260207-0001
+    label_type = models.CharField("라벨유형", max_length=10, choices=LABEL_TYPE_CHOICES, default='PACKAGE')
 
     # 품목 정보
     part = models.ForeignKey(Part, on_delete=models.CASCADE, verbose_name="품목")
@@ -763,6 +769,24 @@ class RawMaterialLabel(models.Model):
         """고유 라벨 ID 생성 (RM-YYYYMMDD-XXXX)"""
         today = timezone.now().strftime('%Y%m%d')
         prefix = f"RM-{today}-"
+
+        last_label = cls.objects.filter(label_id__startswith=prefix).order_by('-label_id').first()
+        if last_label:
+            try:
+                last_seq = int(last_label.label_id.split('-')[-1])
+                new_seq = last_seq + 1
+            except (ValueError, IndexError):
+                new_seq = 1
+        else:
+            new_seq = 1
+
+        return f"{prefix}{new_seq:04d}"
+
+    @classmethod
+    def generate_pallet_label_id(cls):
+        """파렛트 라벨 ID 생성 (PLT-YYYYMMDD-XXXX)"""
+        today = timezone.now().strftime('%Y%m%d')
+        prefix = f"PLT-{today}-"
 
         last_label = cls.objects.filter(label_id__startswith=prefix).order_by('-label_id').first()
         if last_label:
