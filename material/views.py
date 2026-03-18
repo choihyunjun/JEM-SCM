@@ -3582,10 +3582,47 @@ def bom_calculate(request):
                             headers = [cell.value or '' for cell in next(ws.iter_rows(min_row=1, max_row=1))]
                             headers = [str(h).strip() for h in headers]
 
-                            for row in ws.iter_rows(min_row=2, values_only=True):
-                                values = [v if v is not None else '' for v in row]
-                                if len(values) >= 2:
-                                    rows.append(dict(zip(headers, values)))
+                            # 피벗 형태 감지: 헤더에 날짜 패턴(YYYY-MM-DD)이 있으면 피벗
+                            import re
+                            date_pattern = re.compile(r'^(\d{4}-\d{2}-\d{2})')
+                            date_columns = []  # (col_index, date_str)
+                            part_no_col = None
+
+                            for idx, h in enumerate(headers):
+                                m = date_pattern.match(h)
+                                if m:
+                                    date_columns.append((idx, m.group(1)))
+                                elif h in ('\ud488\ubc88', '품번'):
+                                    part_no_col = idx
+
+                            if date_columns and part_no_col is not None:
+                                # 피벗 형태 → unpivot (품번 × 날짜 → 행)
+                                for row_data in ws.iter_rows(min_row=2, values_only=True):
+                                    values = list(row_data)
+                                    if len(values) <= part_no_col:
+                                        continue
+                                    pno = str(values[part_no_col] or '').strip()
+                                    if not pno or not re.search(r'[A-Za-z0-9]', pno):
+                                        continue  # 합계 행 등 제외
+                                    for col_idx, date_str in date_columns:
+                                        if col_idx < len(values):
+                                            qty_val = values[col_idx]
+                                            try:
+                                                qty_num = int(float(str(qty_val).replace(',', '')))
+                                            except (ValueError, TypeError):
+                                                qty_num = 0
+                                            if qty_num > 0:
+                                                rows.append({
+                                                    '\ud488\ubc88': pno,
+                                                    '\uacc4\ud68d\uc218\ub7c9': qty_num,
+                                                    '\ub0a0\uc9dc': date_str,
+                                                })
+                            else:
+                                # 기존 행 단위 형태
+                                for row in ws.iter_rows(min_row=2, values_only=True):
+                                    values = [v if v is not None else '' for v in row]
+                                    if len(values) >= 2:
+                                        rows.append(dict(zip(headers, values)))
 
                         # 일괄 계산 수행
                         batch_results = []

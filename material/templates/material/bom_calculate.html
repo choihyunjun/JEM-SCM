@@ -121,49 +121,39 @@
                             <i class="bi bi-question-circle me-2"></i>업로드 파일 형식
                         </div>
                         <div class="card-body">
-                            <h6 class="fw-bold mb-3">필수 컬럼</h6>
-                            <table class="table table-sm table-bordered">
+                            <h6 class="fw-bold mb-2">양식 1 - 행 단위</h6>
+                            <table class="table table-sm table-bordered mb-2">
                                 <thead class="table-light">
-                                    <tr>
-                                        <th>컬럼명</th>
-                                        <th>설명</th>
-                                        <th>필수</th>
-                                    </tr>
+                                    <tr><th>컬럼명</th><th>설명</th><th>필수</th></tr>
                                 </thead>
                                 <tbody>
-                                    <tr>
-                                        <td><code>날짜</code></td>
-                                        <td>필요일자 (YYYYMMDD)</td>
-                                        <td><span class="badge bg-danger">필수</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>품번</code></td>
-                                        <td>제품(모품) 품번</td>
-                                        <td><span class="badge bg-danger">필수</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>계획수량</code></td>
-                                        <td>생산 수량</td>
-                                        <td><span class="badge bg-danger">필수</span></td>
-                                    </tr>
+                                    <tr><td><code>날짜</code></td><td>필요일자 (YYYYMMDD)</td><td><span class="badge bg-danger">필수</span></td></tr>
+                                    <tr><td><code>품번</code></td><td>제품(모품) 품번</td><td><span class="badge bg-danger">필수</span></td></tr>
+                                    <tr><td><code>계획수량</code></td><td>생산 수량</td><td><span class="badge bg-danger">필수</span></td></tr>
                                 </tbody>
                             </table>
+                            <div class="alert alert-secondary small mb-3 py-2">
+                                <code>날짜,품번,계획수량<br>20250125,064133-0010,100<br>20250126,064133-0020,50</code>
+                            </div>
 
                             <hr>
 
-                            <h6 class="fw-bold mb-3">파일 예시</h6>
-                            <div class="alert alert-secondary small mb-3">
+                            <h6 class="fw-bold mb-2">양식 2 - 피벗 (생산계획표)</h6>
+                            <p class="small text-muted mb-2">품번이 행, 날짜가 열인 형태를 자동 인식합니다.</p>
+                            <div class="alert alert-secondary small mb-3 py-2">
                                 <code>
-                                날짜,품번,계획수량<br>
-                                20250125,064133-0010,100<br>
-                                20250126,064133-0020,50<br>
-                                20250127,064133-0030,200
+                                품번, 품명, ..., 2026-03-01(월), 2026-03-02(화), ...<br>
+                                8451-0040, BASE(...), ..., 543, 0, ...
                                 </code>
                             </div>
+                            <p class="small text-muted mb-3">
+                                <i class="bi bi-info-circle me-1"></i>
+                                헤더에 <code>YYYY-MM-DD</code> 형식 날짜가 있으면 자동으로 피벗 양식으로 처리됩니다.
+                            </p>
 
                             <div class="d-grid">
                                 <a href="{% url 'material:bom_calc_template' %}" class="btn btn-outline-primary">
-                                    <i class="bi bi-download me-2"></i>양식 다운로드
+                                    <i class="bi bi-download me-2"></i>양식 다운로드 (행 단위)
                                 </a>
                             </div>
                         </div>
