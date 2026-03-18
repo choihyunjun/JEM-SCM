@@ -3482,43 +3482,92 @@ def bom_upload(request):
 
 def _calculate_bom_requirements(part_no, production_qty):
     """
-    BOM 소요량 계산 공통 함수
+    BOM 소요량 계산 공통 함수 (다단계 BOM 재귀 전개)
+    - 자품번이 다른 Product의 모품번으로 등록되어 있으면 하위 BOM을 재귀 전개
+    - 최하위 원자재만 결과에 포함 (반제품은 전개 후 제외)
     """
     product = Product.objects.filter(part_no=part_no, is_active=True).first()
     if not product:
         return None, None, []
 
-    bom_items = product.bom_items.filter(is_active=True, is_bom_active=True).order_by('seq')
+    # 재귀 전개 결과를 품번별로 합산
+    aggregated = {}
+    _explode_bom(part_no, production_qty, aggregated, visited=set())
+
+    # 합산된 결과를 리스트로 변환
     result = []
-
-    for item in bom_items:
-        required_qty = item.required_qty * production_qty
-
-        # WMS 재고 조회 (자품번으로 Part 매칭)
+    seq = 1
+    for child_part_no, info in aggregated.items():
+        # WMS 재고 조회
         stock_qty = 0
-        part_obj = Part.objects.filter(part_no=item.child_part_no).first()
+        part_obj = Part.objects.filter(part_no=child_part_no).first()
         if part_obj:
             stock_qty = MaterialStock.objects.filter(
                 part=part_obj,
                 quantity__gt=0
             ).aggregate(total=Sum('quantity'))['total'] or 0
 
-        shortage = max(0, float(required_qty) - stock_qty)
+        shortage = max(0, info['required_qty'] - stock_qty)
 
         result.append({
-            'seq': item.seq,
-            'child_part_no': item.child_part_no,
-            'child_part_name': item.child_part_name,
-            'child_unit': item.child_unit,
-            'unit_qty': float(item.required_qty),
-            'required_qty': float(required_qty),
+            'seq': seq,
+            'child_part_no': child_part_no,
+            'child_part_name': info['child_part_name'],
+            'child_unit': info['child_unit'],
+            'unit_qty': info['unit_qty'],
+            'required_qty': info['required_qty'],
             'stock_qty': float(stock_qty),
             'shortage': float(shortage),
-            'supply_type': item.supply_type,
-            'vendor_name': item.vendor_name,
+            'supply_type': info['supply_type'],
+            'vendor_name': info['vendor_name'],
         })
+        seq += 1
 
     return product, product.part_name if product else None, result
+
+
+def _explode_bom(part_no, production_qty, aggregated, visited):
+    """
+    BOM 재귀 전개 내부 함수
+    - 자품번이 Product로 등록되어 있고 하위 BOM이 있으면 재귀 전개
+    - 없으면 최하위 원자재로 간주하여 aggregated에 합산
+    - visited로 순환 참조 방지
+    """
+    if part_no in visited:
+        return
+    visited.add(part_no)
+
+    product = Product.objects.filter(part_no=part_no, is_active=True).first()
+    if not product:
+        return
+
+    bom_items = product.bom_items.filter(is_active=True, is_bom_active=True).order_by('seq')
+
+    for item in bom_items:
+        required_qty = float(item.required_qty) * float(production_qty)
+
+        # 자품번이 Product로 등록되어 있고 하위 BOM이 있는지 확인
+        child_product = Product.objects.filter(part_no=item.child_part_no, is_active=True).first()
+        has_child_bom = False
+        if child_product:
+            has_child_bom = child_product.bom_items.filter(is_active=True, is_bom_active=True).exists()
+
+        if has_child_bom:
+            # 반제품 → 하위 BOM 재귀 전개 (소요량을 곱해서 전달)
+            _explode_bom(item.child_part_no, required_qty, aggregated, visited.copy())
+        else:
+            # 최하위 원자재 → 결과에 합산
+            if item.child_part_no in aggregated:
+                aggregated[item.child_part_no]['required_qty'] += required_qty
+            else:
+                aggregated[item.child_part_no] = {
+                    'child_part_name': item.child_part_name,
+                    'child_unit': item.child_unit,
+                    'unit_qty': float(item.required_qty),
+                    'required_qty': required_qty,
+                    'supply_type': item.supply_type,
+                    'vendor_name': item.vendor_name,
+                }
 
 
 @wms_permission_required('can_wms_bom_view')
@@ -3942,7 +3991,7 @@ def bom_calc_demand_export(request):
 @wms_permission_required('can_wms_bom_view')
 def api_bom_calculate(request):
     """
-    [API] 소요량 계산 AJAX 엔드포인트
+    [API] 소요량 계산 AJAX 엔드포인트 (다단계 BOM 전개)
     """
     part_no = request.GET.get('part_no', '').strip()
     production_qty = int(request.GET.get('qty', 0) or 0)
@@ -3950,39 +3999,15 @@ def api_bom_calculate(request):
     if not part_no or production_qty <= 0:
         return JsonResponse({'error': '품번과 생산수량을 입력하세요.'}, status=400)
 
-    product = Product.objects.filter(part_no=part_no, is_active=True).first()
+    product, part_name, result = _calculate_bom_requirements(part_no, production_qty)
+
     if not product:
         return JsonResponse({'error': '해당 품번의 BOM을 찾을 수 없습니다.'}, status=404)
 
-    bom_items = product.bom_items.filter(is_active=True, is_bom_active=True).order_by('seq')
-    result = []
-
-    for item in bom_items:
-        required_qty = float(item.required_qty) * production_qty
-
-        # WMS 재고 조회
-        stock_qty = 0
-        part_obj = Part.objects.filter(part_no=item.child_part_no).first()
-        if part_obj:
-            stock_qty = MaterialStock.objects.filter(
-                part=part_obj,
-                quantity__gt=0
-            ).aggregate(total=Sum('quantity'))['total'] or 0
-
-        shortage = max(0, required_qty - stock_qty)
-
-        result.append({
-            'seq': item.seq,
-            'child_part_no': item.child_part_no,
-            'child_part_name': item.child_part_name,
-            'child_unit': item.child_unit,
-            'unit_qty': float(item.required_qty),
-            'required_qty': required_qty,
-            'stock_qty': stock_qty,
-            'shortage': shortage,
-            'supply_type': item.supply_type,
-            'vendor_name': item.vendor_name or '-',
-        })
+    # vendor_name이 None인 경우 '-'로 변환
+    for item in result:
+        if not item.get('vendor_name'):
+            item['vendor_name'] = '-'
 
     return JsonResponse({
         'success': True,
