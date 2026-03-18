@@ -3878,6 +3878,45 @@ def bom_calc_batch_export(request):
     for col, width in enumerate(widths, 1):
         ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = width
 
+    # ── 소요량 변환 시트 (필요일자 / 모품번 / 자품번 / 필요수량) ──
+    ws2 = wb.create_sheet(title="소요량변환")
+    headers2 = ['필요일자', '모품번', '자품번', '자품명', '필요수량', '거래처']
+    header_fill = openpyxl.styles.PatternFill(start_color="2E75B6", end_color="2E75B6", fill_type="solid")
+    header_font = openpyxl.styles.Font(bold=True, color="FFFFFF")
+    for col, header in enumerate(headers2, 1):
+        cell = ws2.cell(row=1, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+
+    # 자품번별 합산 (동일 필요일자+자품번 → 수량 합산)
+    from collections import defaultdict
+    agg = defaultdict(lambda: {'child_part_name': '', 'required_qty': 0, 'vendor_name': '', 'parent_parts': set()})
+    for batch in batch_results:
+        for item in batch['items']:
+            key = (batch.get('need_date', '') or '', item['child_part_no'])
+            agg[key]['required_qty'] += float(item['required_qty'])
+            agg[key]['child_part_name'] = item['child_part_name']
+            agg[key]['vendor_name'] = item.get('vendor_name', '') or ''
+            agg[key]['parent_parts'].add(batch['part_no'])
+
+    # 정렬: 필요일자 → 자품번
+    sorted_keys = sorted(agg.keys())
+    row_idx2 = 2
+    for (need_date, child_part_no) in sorted_keys:
+        data = agg[(need_date, child_part_no)]
+        parent_str = ', '.join(sorted(data['parent_parts']))
+        ws2.cell(row=row_idx2, column=1, value=need_date)
+        ws2.cell(row=row_idx2, column=2, value=parent_str)
+        ws2.cell(row=row_idx2, column=3, value=child_part_no)
+        ws2.cell(row=row_idx2, column=4, value=data['child_part_name'])
+        ws2.cell(row=row_idx2, column=5, value=round(data['required_qty'], 2))
+        ws2.cell(row=row_idx2, column=6, value=data['vendor_name'] or '-')
+        row_idx2 += 1
+
+    widths2 = [14, 30, 18, 25, 12, 18]
+    for col, width in enumerate(widths2, 1):
+        ws2.column_dimensions[openpyxl.utils.get_column_letter(col)].width = width
+
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = 'attachment; filename="bom_calc_batch_result.xlsx"'
     wb.save(response)
