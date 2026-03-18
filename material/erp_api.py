@@ -340,16 +340,79 @@ def sync_single_bom(part_no):
     return True, len(items), None
 
 
-def sync_all_bom():
+def _sync_single_product(part_no, synced_set):
     """
-    ERP에서 전체 BOM 데이터를 동기화 (클린 동기화)
-    1. 기존 모품코드 목록 수집
-    2. BOMItem + Product 전체 삭제
-    3. 각 모품코드로 ERP 조회 → 새로 생성
-    Returns: (synced_count, skipped_count, error_count, errors)
+    단일 모품번을 ERP에서 조회하여 Product + BOMItem 생성 (내부 헬퍼)
+    이미 동기화된 part_no는 건너뜀.
+    Returns: ('synced', child_part_nos) | ('skipped', []) | ('error', [])
     """
     from material.models import Product, BOMItem
     from decimal import Decimal
+
+    if part_no in synced_set:
+        return 'exists', []
+
+    ok, items, err = fetch_erp_bom(part_no)
+
+    if not ok or not items:
+        return 'skipped', []
+
+    first = items[0]
+
+    parent_acct = '반제품' if first.get('itemparentCd', '').endswith('A') else '제품'
+
+    product = Product.objects.create(
+        part_no=part_no,
+        part_name=first.get('itemparentNm', part_no),
+        spec=first.get('itemparentDc', '') or '',
+        unit=first.get('itemparentUnitDc', 'EA'),
+        account_type=parent_acct,
+        procurement_type='생산',
+        is_bom_registered=True,
+        is_active=True,
+    )
+
+    child_part_nos = []
+    for item in items:
+        child_code = item.get('itemchildCd', '')
+        if not child_code:
+            continue
+
+        use_yn = item.get('useYn', '1') == '1'
+
+        BOMItem.objects.create(
+            product=product,
+            seq=item.get('bomSq', 1),
+            child_part_no=child_code,
+            child_part_name=item.get('itemchildNm', ''),
+            child_spec=item.get('itemchildDc', '') or '',
+            child_unit=item.get('itemchildUnitDc', 'EA'),
+            net_qty=Decimal(str(item.get('justQt', 0))),
+            loss_rate=Decimal(str(item.get('lossRt', 0))),
+            required_qty=Decimal(str(item.get('realQt', 0))),
+            supply_type='사급' if item.get('bomOdrFg') == '1' else '자재',
+            outsource_type='유상' if item.get('outFg') == '1' else '무상',
+            vendor_name=item.get('attrNm', '') or '',
+            drawing_no=item.get('designNb', '') or '',
+            is_active=use_yn,
+            is_bom_active=use_yn,
+        )
+        child_part_nos.append(child_code)
+
+    synced_set.add(part_no)
+    return 'synced', child_part_nos
+
+
+def sync_all_bom():
+    """
+    ERP에서 전체 BOM 데이터를 동기화 (클린 동기화 + 반제품 재귀 탐색)
+    1. 기존 모품코드 목록 수집
+    2. BOMItem + Product 전체 삭제
+    3. 각 모품코드로 ERP 조회 → 새로 생성
+    4. 자품번 중 ERP BOM이 있는 반제품을 추가 동기화
+    Returns: (synced_count, skipped_count, error_count, errors)
+    """
+    from material.models import Product, BOMItem
 
     # 1) 기존 모품코드 목록 수집
     part_nos = list(Product.objects.values_list('part_no', flat=True))
@@ -362,81 +425,61 @@ def sync_all_bom():
     Product.objects.all().delete()
     logger.info('기존 BOM 데이터 전체 삭제 완료')
 
-    # 계정구분 매핑
-    acct_map = {
-        '0': '원재료', '1': '부재료', '2': '제품',
-        '4': '부재료', '5': '상품', '6': '반제품', '7': '부산물', '8': '기타',
-    }
-
     synced = 0
     skipped = 0
     errors = 0
     error_list = []
+    synced_set = set()  # 이미 동기화된 모품번 추적
 
-    # 3) 각 모품코드로 ERP 조회 → 새로 생성
+    # 3) 기존 모품코드 동기화
+    pending_children = []  # 추가 탐색할 자품번 목록
+
     for part_no in part_nos:
         try:
-            ok, items, err = fetch_erp_bom(part_no)
+            result, children = _sync_single_product(part_no, synced_set)
 
-            if not ok or not items:
+            if result == 'synced':
+                synced += 1
+                pending_children.extend(children)
+            elif result == 'skipped':
                 skipped += 1
-                continue
 
-            first = items[0]
-
-            # 모품(Product) 생성
-            acct_fg = first.get('acctFg', '')
-            # 모품 자체의 계정은 응답에 직접 없으므로, 반제품 여부는 모품코드에 'A'가 붙거나 acctFgNm으로 판단
-            parent_acct = '반제품' if first.get('itemparentCd', '').endswith('A') else '제품'
-
-            product = Product.objects.create(
-                part_no=part_no,
-                part_name=first.get('itemparentNm', part_no),
-                spec=first.get('itemparentDc', '') or '',
-                unit=first.get('itemparentUnitDc', 'EA'),
-                account_type=parent_acct,
-                procurement_type='생산',
-                is_bom_registered=True,
-                is_active=True,
-            )
-
-            # BOMItem 생성
-            for item in items:
-                child_code = item.get('itemchildCd', '')
-                if not child_code:
-                    continue
-
-                use_yn = item.get('useYn', '1') == '1'
-
-                BOMItem.objects.create(
-                    product=product,
-                    seq=item.get('bomSq', 1),
-                    child_part_no=child_code,
-                    child_part_name=item.get('itemchildNm', ''),
-                    child_spec=item.get('itemchildDc', '') or '',
-                    child_unit=item.get('itemchildUnitDc', 'EA'),
-                    net_qty=Decimal(str(item.get('justQt', 0))),
-                    loss_rate=Decimal(str(item.get('lossRt', 0))),
-                    required_qty=Decimal(str(item.get('realQt', 0))),
-                    supply_type='사급' if item.get('bomOdrFg') == '1' else '자재',
-                    outsource_type='유상' if item.get('outFg') == '1' else '무상',
-                    vendor_name=item.get('attrNm', '') or '',
-                    drawing_no=item.get('designNb', '') or '',
-                    is_active=use_yn,
-                    is_bom_active=use_yn,
-                )
-
-            synced += 1
             done = synced + skipped + errors
             if done % 50 == 0 or done == total:
-                print(f'[BOM 동기화] {done}/{total} ({done*100//total}%) - 성공:{synced} 건너뜀:{skipped} 오류:{errors}', flush=True)
+                print(f'[BOM 동기화] 1단계 {done}/{total} ({done*100//total}%) - 성공:{synced} 건너뜀:{skipped} 오류:{errors}', flush=True)
 
         except Exception as e:
             errors += 1
             error_list.append(f'{part_no}: {str(e)}')
             logger.error(f'BOM 동기화 오류 ({part_no}): {e}')
 
-    print(f'[BOM 동기화] 완료! 성공:{synced} 건너뜀:{skipped} 오류:{errors}', flush=True)
+    # 4) 자품번 중 아직 동기화되지 않은 반제품 추가 탐색
+    sub_synced = 0
+    sub_checked = set()
+    while pending_children:
+        child_no = pending_children.pop(0)
+        if child_no in synced_set or child_no in sub_checked:
+            continue
+        sub_checked.add(child_no)
+
+        try:
+            result, grandchildren = _sync_single_product(child_no, synced_set)
+
+            if result == 'synced':
+                sub_synced += 1
+                synced += 1
+                pending_children.extend(grandchildren)
+                if sub_synced % 10 == 0:
+                    print(f'[BOM 동기화] 2단계(반제품 탐색) +{sub_synced}건 추가 동기화', flush=True)
+
+        except Exception as e:
+            errors += 1
+            error_list.append(f'{child_no}(반제품): {str(e)}')
+
+    if sub_synced > 0:
+        print(f'[BOM 동기화] 2단계 완료: 반제품 {sub_synced}건 추가 동기화', flush=True)
+
+    print(f'[BOM 동기화] 완료! 성공:{synced}(기존{synced-sub_synced}+반제품{sub_synced}) 건너뜀:{skipped} 오류:{errors}', flush=True)
     logger.info(f'BOM 동기화 완료: 성공 {synced}, 건너뜀 {skipped}, 오류 {errors}')
     return synced, skipped, errors, error_list
 
