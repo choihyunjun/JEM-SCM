@@ -3878,13 +3878,34 @@ def bom_calc_batch_export(request):
     for col, width in enumerate(widths, 1):
         ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = width
 
-    # ── 소요량 변환 시트 (필요일자 / 모품번 / 자품번 / 필요수량) ──
-    ws2 = wb.create_sheet(title="소요량변환")
-    headers2 = ['필요일자', '모품번', '자품번', '자품명', '필요수량', '거래처']
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = 'attachment; filename="bom_calc_batch_result.xlsx"'
+    wb.save(response)
+    return response
+
+
+@wms_permission_required('can_wms_bom_view')
+def bom_calc_demand_export(request):
+    """
+    [WMS] 소요량 변환 엑셀 다운로드 (필요일자/모품번/자품번/자품명/필요수량/거래처)
+    - 동일 필요일자+자품번은 수량 합산
+    """
+    session_key = request.GET.get('session_key', '')
+    batch_results = request.session.get(f'batch_calc_{session_key}')
+
+    if not batch_results:
+        messages.error(request, "계산 결과가 없습니다. 다시 계산해주세요.")
+        return redirect('material:bom_calculate')
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "소요량변환"
+
+    headers = ['필요일자', '모품번', '자품번', '자품명', '필요수량', '거래처']
     header_fill = openpyxl.styles.PatternFill(start_color="2E75B6", end_color="2E75B6", fill_type="solid")
     header_font = openpyxl.styles.Font(bold=True, color="FFFFFF")
-    for col, header in enumerate(headers2, 1):
-        cell = ws2.cell(row=1, column=col, value=header)
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
         cell.font = header_font
         cell.fill = header_fill
 
@@ -3901,24 +3922,24 @@ def bom_calc_batch_export(request):
 
     # 정렬: 필요일자 → 자품번
     sorted_keys = sorted(agg.keys())
-    row_idx2 = 2
+    row_idx = 2
     for (need_date, child_part_no) in sorted_keys:
         data = agg[(need_date, child_part_no)]
         parent_str = ', '.join(sorted(data['parent_parts']))
-        ws2.cell(row=row_idx2, column=1, value=need_date)
-        ws2.cell(row=row_idx2, column=2, value=parent_str)
-        ws2.cell(row=row_idx2, column=3, value=child_part_no)
-        ws2.cell(row=row_idx2, column=4, value=data['child_part_name'])
-        ws2.cell(row=row_idx2, column=5, value=round(data['required_qty'], 2))
-        ws2.cell(row=row_idx2, column=6, value=data['vendor_name'] or '-')
-        row_idx2 += 1
+        ws.cell(row=row_idx, column=1, value=need_date)
+        ws.cell(row=row_idx, column=2, value=parent_str)
+        ws.cell(row=row_idx, column=3, value=child_part_no)
+        ws.cell(row=row_idx, column=4, value=data['child_part_name'])
+        ws.cell(row=row_idx, column=5, value=round(data['required_qty'], 2))
+        ws.cell(row=row_idx, column=6, value=data['vendor_name'] or '-')
+        row_idx += 1
 
-    widths2 = [14, 30, 18, 25, 12, 18]
-    for col, width in enumerate(widths2, 1):
-        ws2.column_dimensions[openpyxl.utils.get_column_letter(col)].width = width
+    widths = [14, 30, 18, 25, 12, 18]
+    for col, width in enumerate(widths, 1):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = width
 
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    response['Content-Disposition'] = 'attachment; filename="bom_calc_batch_result.xlsx"'
+    response['Content-Disposition'] = 'attachment; filename="bom_demand_export.xlsx"'
     wb.save(response)
     return response
 

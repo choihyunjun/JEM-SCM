@@ -89,6 +89,7 @@ urlpatterns = [
     path('bom/calculate/template/', views.bom_calc_template, name='bom_calc_template'),
     path('bom/calculate/export/', views.bom_calc_export, name='bom_calc_export'),
     path('bom/calculate/batch-export/', views.bom_calc_batch_export, name='bom_calc_batch_export'),
+    path('bom/calculate/demand-export/', views.bom_calc_demand_export, name='bom_calc_demand_export'),
     path('bom/detail/<str:part_no>/', views.bom_detail, name='bom_detail'),
     path('api/bom/calculate/', views.api_bom_calculate, name='api_bom_calculate'),
     path('bom/register-demand/', views.bom_register_demand, name='bom_register_demand'),
