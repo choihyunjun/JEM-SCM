@@ -115,8 +115,6 @@ def qms_permission_required(permission_field):
                     'can_qms_4m_edit': ['can_qms_4m'],
                     'can_qms_inspection_view': ['can_qms_inspection'],
                     'can_qms_inspection_edit': ['can_qms_inspection'],
-                    'can_qms_voc_view': ['can_qms_inspection_view', 'can_qms_inspection'],
-                    'can_qms_voc_edit': ['can_qms_inspection_edit', 'can_qms_inspection'],
                     'can_qms_gauge_view': ['can_qms_inspection_view', 'can_qms_inspection'],
                     'can_qms_gauge_edit': ['can_qms_inspection_edit', 'can_qms_inspection'],
                     'can_qms_doc_view': ['can_qms_inspection_view', 'can_qms_inspection'],

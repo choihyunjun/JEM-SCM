@@ -3449,8 +3449,6 @@ def user_permission_manage(request):
             ('can_qms_isir_edit', '✏️ ISIR 등록/승인'),
             ('can_qms_rating_view', '📋 협력사평가 조회'),
             ('can_qms_rating_edit', '✏️ 협력사평가 등록'),
-            ('can_qms_voc_view', '📋 VOC 조회'),
-            ('can_qms_voc_edit', '✏️ VOC 등록/처리'),
             ('can_qms_gauge_view', '📋 계측기 조회'),
             ('can_qms_gauge_edit', '✏️ 계측기 등록/수정'),
             ('can_qms_doc_view', '📋 품질문서 조회'),

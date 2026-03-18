@@ -325,10 +325,6 @@ class UserProfile(models.Model):
     can_qms_rating_view = models.BooleanField(default=False, verbose_name="협력사평가 조회")
     can_qms_rating_edit = models.BooleanField(default=False, verbose_name="협력사평가 등록")
 
-    # VOC 관리
-    can_qms_voc_view = models.BooleanField(default=False, verbose_name="VOC 조회")
-    can_qms_voc_edit = models.BooleanField(default=False, verbose_name="VOC 등록/처리")
-
     # 계측기 관리
     can_qms_gauge_view = models.BooleanField(default=False, verbose_name="계측기 조회")
     can_qms_gauge_edit = models.BooleanField(default=False, verbose_name="계측기 등록/수정")
