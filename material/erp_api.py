@@ -353,7 +353,9 @@ def sync_all_bom():
 
     # 1) 기존 모품코드 목록 수집
     part_nos = list(Product.objects.values_list('part_no', flat=True))
-    logger.info(f'BOM 동기화 시작: 기존 모품 {len(part_nos)}건 대상')
+    total = len(part_nos)
+    print(f'[BOM 동기화] 시작: 기존 모품 {total}건 대상', flush=True)
+    logger.info(f'BOM 동기화 시작: 기존 모품 {total}건 대상')
 
     # 2) 기존 데이터 전체 삭제
     BOMItem.objects.all().delete()
@@ -425,12 +427,16 @@ def sync_all_bom():
                 )
 
             synced += 1
+            done = synced + skipped + errors
+            if done % 50 == 0 or done == total:
+                print(f'[BOM 동기화] {done}/{total} ({done*100//total}%) - 성공:{synced} 건너뜀:{skipped} 오류:{errors}', flush=True)
 
         except Exception as e:
             errors += 1
             error_list.append(f'{part_no}: {str(e)}')
             logger.error(f'BOM 동기화 오류 ({part_no}): {e}')
 
+    print(f'[BOM 동기화] 완료! 성공:{synced} 건너뜀:{skipped} 오류:{errors}', flush=True)
     logger.info(f'BOM 동기화 완료: 성공 {synced}, 건너뜀 {skipped}, 오류 {errors}')
     return synced, skipped, errors, error_list
 
