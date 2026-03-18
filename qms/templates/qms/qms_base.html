@@ -89,21 +89,21 @@
     {% endif %}
 
     {# VOC 관리 (고객의 소리) #}
-    {% if user|has_perm:'can_qms_inspection_view' or user|has_perm:'can_qms_inspection' %}
+    {% if user|has_perm:'can_qms_voc_view' or user|has_perm:'can_qms_inspection_view' or user|has_perm:'can_qms_inspection' %}
     <a href="{% url 'qms:voc_list' %}" class="nav-link {% if 'voc' in request.resolver_match.url_name %}active{% endif %}">
         <i class="bi bi-megaphone me-2"></i> VOC 관리
     </a>
     {% endif %}
 
     {# 계측기 관리 #}
-    {% if user|has_perm:'can_qms_inspection_view' or user|has_perm:'can_qms_inspection' %}
+    {% if user|has_perm:'can_qms_gauge_view' or user|has_perm:'can_qms_inspection_view' or user|has_perm:'can_qms_inspection' %}
     <a href="{% url 'qms:gauge_list' %}" class="nav-link {% if 'gauge' in request.resolver_match.url_name %}active{% endif %}">
         <i class="bi bi-speedometer me-2"></i> 계측기 관리
     </a>
     {% endif %}
 
     {# 품질문서 관리 #}
-    {% if user|has_perm:'can_qms_inspection_view' or user|has_perm:'can_qms_inspection' %}
+    {% if user|has_perm:'can_qms_doc_view' or user|has_perm:'can_qms_inspection_view' or user|has_perm:'can_qms_inspection' %}
     <a href="{% url 'qms:qdoc_list' %}" class="nav-link {% if 'qdoc' in request.resolver_match.url_name %}active{% endif %}">
         <i class="bi bi-file-earmark-text me-2"></i> 품질문서 관리
     </a>

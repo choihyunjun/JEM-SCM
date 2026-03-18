@@ -55,6 +55,10 @@ def wms_permission_required(permission_field):
                     'can_wms_inout_edit': ['can_wms_inout'],
                     'can_wms_bom_view': ['can_wms_bom'],
                     'can_wms_bom_edit': ['can_wms_bom'],
+                    'can_wms_label_view': ['can_wms_inout_view', 'can_wms_inout'],
+                    'can_wms_label_edit': ['can_wms_inout_edit', 'can_wms_inout'],
+                    'can_wms_field_view': ['can_wms_stock_view', 'can_wms_inout'],
+                    'can_wms_field_edit': ['can_wms_stock_edit', 'can_wms_adjustment'],
                 }
                 for legacy_field in legacy_map.get(permission_field, []):
                     if getattr(profile, legacy_field, False):

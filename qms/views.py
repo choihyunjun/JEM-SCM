@@ -115,6 +115,12 @@ def qms_permission_required(permission_field):
                     'can_qms_4m_edit': ['can_qms_4m'],
                     'can_qms_inspection_view': ['can_qms_inspection'],
                     'can_qms_inspection_edit': ['can_qms_inspection'],
+                    'can_qms_voc_view': ['can_qms_inspection_view', 'can_qms_inspection'],
+                    'can_qms_voc_edit': ['can_qms_inspection_edit', 'can_qms_inspection'],
+                    'can_qms_gauge_view': ['can_qms_inspection_view', 'can_qms_inspection'],
+                    'can_qms_gauge_edit': ['can_qms_inspection_edit', 'can_qms_inspection'],
+                    'can_qms_doc_view': ['can_qms_inspection_view', 'can_qms_inspection'],
+                    'can_qms_doc_edit': ['can_qms_inspection_edit', 'can_qms_inspection'],
                 }
                 for legacy_field in legacy_map.get(permission_field, []):
                     if getattr(profile, legacy_field, False):

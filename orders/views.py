@@ -16,7 +16,7 @@ import datetime
 from datetime import timedelta, date
 
 # SCM 모델 임포트 (ReturnLog, VendorMonthlyPerformance, Notice, QnA, UserProfile, InventoryUploadLog 추가)
-from .models import Order, Vendor, Part, Inventory, Incoming, LabelPrintLog, DeliveryOrder, DeliveryOrderItem, Demand, ReturnLog, VendorMonthlyPerformance, Notice, QnA, UserProfile, Organization, InventoryUploadLog
+from .models import Order, Vendor, Part, Inventory, Incoming, LabelPrintLog, DeliveryOrder, DeliveryOrderItem, Demand, ReturnLog, VendorMonthlyPerformance, Notice, QnA, UserProfile, Organization, InventoryUploadLog, RoleDefaultPermission
 
 # [신규] 타 앱(WMS, QMS) 모델 임포트 (연동용)
 try:
@@ -3431,6 +3431,10 @@ def user_permission_manage(request):
             ('can_wms_inout_edit', '✏️ 입출고 처리'),
             ('can_wms_bom_view', '📋 BOM 조회'),
             ('can_wms_bom_edit', '✏️ BOM 등록/수정'),
+            ('can_wms_label_view', '📋 입고라벨 조회'),
+            ('can_wms_label_edit', '✏️ 입고라벨 발행/취소'),
+            ('can_wms_field_view', '📋 현장 지원 조회'),
+            ('can_wms_field_edit', '✏️ 현장 지원 처리'),
         ],
         'QMS (품질관리)': [
             ('can_qms_4m_view', '📋 4M 변경 조회'),
@@ -3445,6 +3449,12 @@ def user_permission_manage(request):
             ('can_qms_isir_edit', '✏️ ISIR 등록/승인'),
             ('can_qms_rating_view', '📋 협력사평가 조회'),
             ('can_qms_rating_edit', '✏️ 협력사평가 등록'),
+            ('can_qms_voc_view', '📋 VOC 조회'),
+            ('can_qms_voc_edit', '✏️ VOC 등록/처리'),
+            ('can_qms_gauge_view', '📋 계측기 조회'),
+            ('can_qms_gauge_edit', '✏️ 계측기 등록/수정'),
+            ('can_qms_doc_view', '📋 품질문서 조회'),
+            ('can_qms_doc_edit', '✏️ 품질문서 등록/수정'),
         ],
     }
 
@@ -3518,6 +3528,28 @@ def user_permission_manage(request):
             messages.success(request, f'{selected_user.username} 사용자의 모든 권한이 해제되었습니다.')
             return redirect(f"{request.path}?user_id={selected_user_id}")
 
+    # POST: 역할별 기본 권한 저장 (사용자 선택 없이도 동작)
+    if request.method == 'POST' and request.POST.get('action') == 'save_role_defaults':
+        role_to_save = request.POST.get('default_role')
+        if role_to_save in ['ADMIN', 'STAFF', 'VENDOR']:
+            RoleDefaultPermission.objects.filter(role=role_to_save).delete()
+            for category, fields in PERMISSION_FIELDS.items():
+                for field_name, _ in fields:
+                    if request.POST.get(f'default_{field_name}') == 'on':
+                        RoleDefaultPermission.objects.create(role=role_to_save, permission_field=field_name)
+            role_label = dict(UserProfile.ROLE_CHOICES).get(role_to_save, role_to_save)
+            messages.success(request, f'"{role_label}" 역할의 기본 권한이 저장되었습니다.')
+        return redirect(f"{request.path}?tab=role_defaults{'&user_id=' + str(selected_user_id) if selected_user_id else ''}")
+
+    # 역할별 기본 권한 현황 조회
+    role_defaults = {}
+    for role_code, role_label in UserProfile.ROLE_CHOICES:
+        defaults_qs = RoleDefaultPermission.objects.filter(role=role_code).values_list('permission_field', flat=True)
+        role_defaults[role_code] = {
+            'label': role_label,
+            'fields': set(defaults_qs),
+        }
+
     context = {
         'users': users,
         'selected_user': selected_user,
@@ -3526,6 +3558,7 @@ def user_permission_manage(request):
         'role_filter': role_filter,
         'search_q': search_q,
         'role_choices': UserProfile.ROLE_CHOICES,
+        'role_defaults': role_defaults,
     }
     return render(request, 'user_permission_manage.html', context)
 

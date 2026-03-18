@@ -292,6 +292,14 @@ class UserProfile(models.Model):
     can_wms_bom_view = models.BooleanField(default=False, verbose_name="BOM 조회")
     can_wms_bom_edit = models.BooleanField(default=False, verbose_name="BOM 등록/수정")
 
+    # 입고라벨 관리
+    can_wms_label_view = models.BooleanField(default=False, verbose_name="입고라벨 조회")
+    can_wms_label_edit = models.BooleanField(default=False, verbose_name="입고라벨 발행/취소")
+
+    # 현장 지원
+    can_wms_field_view = models.BooleanField(default=False, verbose_name="현장 지원 조회")
+    can_wms_field_edit = models.BooleanField(default=False, verbose_name="현장 지원 처리")
+
     # ========== QMS 권한 (View/Edit 분리) ==========
     # 4M 변경점 관리
     can_qms_4m_view = models.BooleanField(default=False, verbose_name="4M 조회")
@@ -316,6 +324,18 @@ class UserProfile(models.Model):
     # 협력사 평가
     can_qms_rating_view = models.BooleanField(default=False, verbose_name="협력사평가 조회")
     can_qms_rating_edit = models.BooleanField(default=False, verbose_name="협력사평가 등록")
+
+    # VOC 관리
+    can_qms_voc_view = models.BooleanField(default=False, verbose_name="VOC 조회")
+    can_qms_voc_edit = models.BooleanField(default=False, verbose_name="VOC 등록/처리")
+
+    # 계측기 관리
+    can_qms_gauge_view = models.BooleanField(default=False, verbose_name="계측기 조회")
+    can_qms_gauge_edit = models.BooleanField(default=False, verbose_name="계측기 등록/수정")
+
+    # 품질문서 관리
+    can_qms_doc_view = models.BooleanField(default=False, verbose_name="품질문서 조회")
+    can_qms_doc_edit = models.BooleanField(default=False, verbose_name="품질문서 등록/수정")
 
     # ========== 레거시 필드 (호환성 유지) ==========
     can_view_orders = models.BooleanField(default=False, verbose_name="[구]발주 조회")
@@ -344,22 +364,41 @@ class UserProfile(models.Model):
         return self.account_type == "INTERNAL"
 
     def save(self, *args, **kwargs):
-        # 새로 생성되는 협력사 계정에 기본 권한 자동 부여
+        # 새로 생성되는 계정에 역할별 기본 권한 자동 부여
         is_new = self.pk is None
-        if is_new and (self.role == self.ROLE_VENDOR or self.account_type == "VENDOR"):
-            # 협력사 기본 권한: 발주 조회, 과부족 조회, 납품서 조회/등록, 4M 조회
-            self.can_scm_order_view = True
-            self.can_scm_inventory_view = True
-            self.can_scm_label_view = True
-            self.can_scm_label_edit = True
-            self.can_qms_4m_view = True
+        if is_new:
+            self._apply_role_defaults()
         super().save(*args, **kwargs)
+
+    def _apply_role_defaults(self):
+        """RoleDefaultPermission 테이블에서 역할별 기본 권한 조회 후 적용"""
+        try:
+            defaults = RoleDefaultPermission.objects.filter(role=self.role)
+            for d in defaults:
+                if hasattr(self, d.permission_field):
+                    setattr(self, d.permission_field, True)
+        except Exception:
+            pass  # 마이그레이션 전이면 무시
 
     def __str__(self):
         name = self.display_name or self.user.get_full_name() or self.user.username
         return f"{name} ({self.get_role_display()})"
 
-        # orders/models.py (파일 맨 아래에 추가)
+class RoleDefaultPermission(models.Model):
+    """역할별 기본 권한 설정 - 관리자가 UI에서 수정 가능"""
+    ROLE_CHOICES = UserProfile.ROLE_CHOICES
+
+    role = models.CharField(max_length=10, choices=ROLE_CHOICES, verbose_name="역할")
+    permission_field = models.CharField(max_length=50, verbose_name="권한 필드명")
+
+    class Meta:
+        verbose_name = "역할별 기본 권한"
+        verbose_name_plural = "역할별 기본 권한"
+        unique_together = ('role', 'permission_field')
+
+    def __str__(self):
+        return f"{self.get_role_display()} - {self.permission_field}"
+
 
 class ReturnLog(models.Model):
     """

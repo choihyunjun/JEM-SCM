@@ -18,6 +18,23 @@
 {% endfor %}
 {% endif %}
 
+<!-- 상단 탭 -->
+<ul class="nav nav-tabs mb-3" id="permTab" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="user-perm-tab" data-bs-toggle="tab" data-bs-target="#userPermPane" type="button">
+            <i class="bi bi-person-gear me-1"></i>사용자별 권한
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="role-default-tab" data-bs-toggle="tab" data-bs-target="#roleDefaultPane" type="button">
+            <i class="bi bi-shield-gear me-1"></i>역할별 기본 권한
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content">
+<!-- ========== 탭1: 사용자별 권한 ========== -->
+<div class="tab-pane fade show active" id="userPermPane" role="tabpanel">
 <div class="row">
     <!-- 왼쪽: 사용자 목록 -->
     <div class="col-lg-4">
@@ -150,7 +167,7 @@
                         </div>
                     </div>
 
-                    <!-- 권한 체크박스 (View/Edit 분리) -->
+                    <!-- 권한 체크박스 -->
                     <div class="row">
                         {% for category, fields in permission_fields.items %}
                         <div class="col-md-4 mb-3">
@@ -158,13 +175,9 @@
                                 <div class="card-header py-2
                                     {% if 'SCM' in category %}bg-success{% elif 'WMS' in category %}bg-info{% else %}bg-warning{% endif %} text-white">
                                     <strong>
-                                        {% if 'SCM' in category %}
-                                        <i class="bi bi-cart me-1"></i>
-                                        {% elif 'WMS' in category %}
-                                        <i class="bi bi-box-seam me-1"></i>
-                                        {% else %}
-                                        <i class="bi bi-clipboard-check me-1"></i>
-                                        {% endif %}
+                                        {% if 'SCM' in category %}<i class="bi bi-cart me-1"></i>
+                                        {% elif 'WMS' in category %}<i class="bi bi-box-seam me-1"></i>
+                                        {% else %}<i class="bi bi-clipboard-check me-1"></i>{% endif %}
                                         {{ category }}
                                     </strong>
                                 </div>
@@ -222,6 +235,118 @@
         {% endif %}
     </div>
 </div>
+</div>
+
+<!-- ========== 탭2: 역할별 기본 권한 ========== -->
+<div class="tab-pane fade" id="roleDefaultPane" role="tabpanel">
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle me-1"></i>
+        새 사용자 계정 생성 시 역할에 따라 아래 설정된 권한이 <strong>자동으로 부여</strong>됩니다.
+        각 역할의 기본 권한을 설정한 후 저장하세요.
+    </div>
+
+    <!-- 역할 선택 탭 -->
+    <ul class="nav nav-pills mb-3" id="roleTab" role="tablist">
+        {% for role_code, role_data in role_defaults.items %}
+        <li class="nav-item" role="presentation">
+            <button class="nav-link {% if role_code == 'STAFF' %}active{% endif %}"
+                    id="role-{{ role_code }}-tab" data-bs-toggle="pill"
+                    data-bs-target="#role-{{ role_code }}-pane" type="button">
+                {% if role_code == 'ADMIN' %}<span class="badge bg-danger me-1">A</span>관리자
+                {% elif role_code == 'STAFF' %}<span class="badge bg-primary me-1">S</span>직원
+                {% else %}<span class="badge bg-secondary me-1">V</span>협력업체{% endif %}
+            </button>
+        </li>
+        {% endfor %}
+    </ul>
+
+    <div class="tab-content" id="roleTabContent">
+        {% for role_code, role_data in role_defaults.items %}
+        <div class="tab-pane fade {% if role_code == 'STAFF' %}show active{% endif %}"
+             id="role-{{ role_code }}-pane" role="tabpanel">
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="save_role_defaults">
+                <input type="hidden" name="default_role" value="{{ role_code }}">
+
+                <div class="row">
+                    {% for category, fields in permission_fields.items %}
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100">
+                            <div class="card-header py-2
+                                {% if 'SCM' in category %}bg-success{% elif 'WMS' in category %}bg-info{% else %}bg-warning{% endif %} text-white d-flex justify-content-between align-items-center">
+                                <strong>
+                                    {% if 'SCM' in category %}<i class="bi bi-cart me-1"></i>
+                                    {% elif 'WMS' in category %}<i class="bi bi-box-seam me-1"></i>
+                                    {% else %}<i class="bi bi-clipboard-check me-1"></i>{% endif %}
+                                    {{ category }}
+                                </strong>
+                                <div>
+                                    <button type="button" class="btn btn-sm btn-outline-light py-0 px-1"
+                                            onclick="toggleCategory(this, true)" title="전체 선택">
+                                        <i class="bi bi-check-all"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-light py-0 px-1"
+                                            onclick="toggleCategory(this, false)" title="전체 해제">
+                                        <i class="bi bi-x"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body p-2">
+                                <table class="table table-sm table-borderless mb-0">
+                                    {% for field_name, label in fields %}
+                                    <tr class="{% if '_edit' in field_name %}border-bottom{% endif %}">
+                                        <td style="width: 30px;">
+                                            <input type="checkbox" name="default_{{ field_name }}"
+                                                   id="default_{{ role_code }}_{{ field_name }}"
+                                                   class="form-check-input"
+                                                   {% if field_name in role_data.fields %}checked{% endif %}>
+                                        </td>
+                                        <td>
+                                            <label class="form-check-label {% if '_edit' in field_name %}text-primary fw-bold{% else %}text-secondary{% endif %}"
+                                                   for="default_{{ role_code }}_{{ field_name }}" style="cursor: pointer;">
+                                                {{ label }}
+                                            </label>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="text-end mt-3">
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i class="bi bi-check-lg me-1"></i>{{ role_data.label }} 기본 권한 저장
+                    </button>
+                </div>
+            </form>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+</div>
 
 </div>
+
+<script>
+// 탭 유지 (URL 파라미터)
+document.addEventListener('DOMContentLoaded', function() {
+    var params = new URLSearchParams(window.location.search);
+    if (params.get('tab') === 'role_defaults') {
+        var tabEl = document.getElementById('role-default-tab');
+        if (tabEl) new bootstrap.Tab(tabEl).show();
+    }
+});
+
+// 카테고리 전체 선택/해제
+function toggleCategory(btn, checked) {
+    var card = btn.closest('.card');
+    card.querySelectorAll('input[type="checkbox"]').forEach(function(cb) {
+        cb.checked = checked;
+    });
+}
+</script>
 {% endblock %}

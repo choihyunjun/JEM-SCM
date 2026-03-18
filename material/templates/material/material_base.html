@@ -87,8 +87,18 @@
     </div>
     {% endif %}
 
-    {# 현장 지원 - can_wms_stock_view (기본 조회 권한) #}
-    {% if user|has_perm:'can_wms_stock_view' %}
+    {# 입고라벨 관리 - can_wms_label_view #}
+    {% if user|has_perm:'can_wms_label_view' or user|has_perm:'can_wms_inout_view' %}
+    <a class="nav-link dropdown-toggle collapsed" data-bs-toggle="collapse" href="#labelSubmenu" role="button" aria-expanded="false">
+        <i class="bi bi-upc-scan me-2"></i> 입고라벨 발행
+    </a>
+    <div class="collapse" id="labelSubmenu">
+        <a href="{% url 'material:raw_material_incoming' %}" class="submenu-item {% if request.resolver_match.url_name == 'raw_material_incoming' %}active{% endif %}">- 수입검사/라벨</a>
+    </div>
+    {% endif %}
+
+    {# 현장 지원 - can_wms_field_view #}
+    {% if user|has_perm:'can_wms_field_view' or user|has_perm:'can_wms_stock_view' %}
     <a class="nav-link dropdown-toggle collapsed" data-bs-toggle="collapse" href="#supportSubmenu" role="button" aria-expanded="false">
         <i class="bi bi-tools me-2"></i> 현장 지원
     </a>
