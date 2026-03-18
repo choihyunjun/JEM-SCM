@@ -149,7 +149,7 @@ def dashboard(request):
     # 금일 입고
     today_in = MaterialTransaction.objects.filter(
         date__date=today,
-        transaction_type__in=['IN_SCM', 'IN_MANUAL']
+        transaction_type__in=['IN_SCM', 'IN_MANUAL', 'IN_ERP', 'RCV_ERP']
     ).aggregate(
         count=Count('id'),
         qty=Sum('quantity')
@@ -158,7 +158,7 @@ def dashboard(request):
     # 금일 출고
     today_out = MaterialTransaction.objects.filter(
         date__date=today,
-        transaction_type__in=['OUT_PROD', 'OUT_RETURN']
+        transaction_type__in=['OUT_PROD', 'OUT_RETURN', 'OUT_MANUAL', 'OUT_ERP', 'ISU_ERP']
     ).aggregate(
         count=Count('id'),
         qty=Sum('quantity')
@@ -167,7 +167,7 @@ def dashboard(request):
     # 이번달 입고
     month_in = MaterialTransaction.objects.filter(
         date__date__gte=this_month_start,
-        transaction_type__in=['IN_SCM', 'IN_MANUAL']
+        transaction_type__in=['IN_SCM', 'IN_MANUAL', 'IN_ERP', 'RCV_ERP']
     ).aggregate(
         count=Count('id'),
         qty=Sum('quantity')
@@ -176,7 +176,7 @@ def dashboard(request):
     # 이번달 출고
     month_out = MaterialTransaction.objects.filter(
         date__date__gte=this_month_start,
-        transaction_type__in=['OUT_PROD', 'OUT_RETURN']
+        transaction_type__in=['OUT_PROD', 'OUT_RETURN', 'OUT_MANUAL', 'OUT_ERP', 'ISU_ERP']
     ).aggregate(
         count=Count('id'),
         qty=Sum('quantity')
@@ -326,16 +326,16 @@ def dashboard_api(request):
     total_qty = MaterialStock.objects.filter(quantity__gt=0).aggregate(total=Sum('quantity'))['total'] or 0
 
     today_in = MaterialTransaction.objects.filter(
-        date__date=today, transaction_type__in=['IN_SCM', 'IN_MANUAL']
+        date__date=today, transaction_type__in=['IN_SCM', 'IN_MANUAL', 'IN_ERP', 'RCV_ERP']
     ).aggregate(count=Count('id'), qty=Sum('quantity'))
     today_out = MaterialTransaction.objects.filter(
-        date__date=today, transaction_type__in=['OUT_PROD', 'OUT_RETURN']
+        date__date=today, transaction_type__in=['OUT_PROD', 'OUT_RETURN', 'OUT_MANUAL', 'OUT_ERP', 'ISU_ERP']
     ).aggregate(count=Count('id'), qty=Sum('quantity'))
     month_in = MaterialTransaction.objects.filter(
-        date__date__gte=this_month_start, transaction_type__in=['IN_SCM', 'IN_MANUAL']
+        date__date__gte=this_month_start, transaction_type__in=['IN_SCM', 'IN_MANUAL', 'IN_ERP', 'RCV_ERP']
     ).aggregate(count=Count('id'), qty=Sum('quantity'))
     month_out = MaterialTransaction.objects.filter(
-        date__date__gte=this_month_start, transaction_type__in=['OUT_PROD', 'OUT_RETURN']
+        date__date__gte=this_month_start, transaction_type__in=['OUT_PROD', 'OUT_RETURN', 'OUT_MANUAL', 'OUT_ERP', 'ISU_ERP']
     ).aggregate(count=Count('id'), qty=Sum('quantity'))
 
     fifo_warning_date = today - timedelta(days=30)
