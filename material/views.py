@@ -3901,7 +3901,7 @@ def bom_calc_demand_export(request):
     ws = wb.active
     ws.title = "소요량변환"
 
-    headers = ['필요일자', '모품번', '자품번', '자품명', '필요수량', '거래처']
+    headers = ['필요일자', '품번', '필요수량']
     header_fill = openpyxl.styles.PatternFill(start_color="2E75B6", end_color="2E75B6", fill_type="solid")
     header_font = openpyxl.styles.Font(bold=True, color="FFFFFF")
     for col, header in enumerate(headers, 1):
@@ -3911,30 +3911,21 @@ def bom_calc_demand_export(request):
 
     # 자품번별 합산 (동일 필요일자+자품번 → 수량 합산)
     from collections import defaultdict
-    agg = defaultdict(lambda: {'child_part_name': '', 'required_qty': 0, 'vendor_name': '', 'parent_parts': set()})
+    agg = defaultdict(float)
     for batch in batch_results:
         for item in batch['items']:
             key = (batch.get('need_date', '') or '', item['child_part_no'])
-            agg[key]['required_qty'] += float(item['required_qty'])
-            agg[key]['child_part_name'] = item['child_part_name']
-            agg[key]['vendor_name'] = item.get('vendor_name', '') or ''
-            agg[key]['parent_parts'].add(batch['part_no'])
+            agg[key] += float(item['required_qty'])
 
     # 정렬: 필요일자 → 자품번
-    sorted_keys = sorted(agg.keys())
     row_idx = 2
-    for (need_date, child_part_no) in sorted_keys:
-        data = agg[(need_date, child_part_no)]
-        parent_str = ', '.join(sorted(data['parent_parts']))
+    for (need_date, child_part_no) in sorted(agg.keys()):
         ws.cell(row=row_idx, column=1, value=need_date)
-        ws.cell(row=row_idx, column=2, value=parent_str)
-        ws.cell(row=row_idx, column=3, value=child_part_no)
-        ws.cell(row=row_idx, column=4, value=data['child_part_name'])
-        ws.cell(row=row_idx, column=5, value=round(data['required_qty'], 2))
-        ws.cell(row=row_idx, column=6, value=data['vendor_name'] or '-')
+        ws.cell(row=row_idx, column=2, value=child_part_no)
+        ws.cell(row=row_idx, column=3, value=round(agg[(need_date, child_part_no)], 2))
         row_idx += 1
 
-    widths = [14, 30, 18, 25, 12, 18]
+    widths = [14, 20, 14]
     for col, width in enumerate(widths, 1):
         ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = width
 
