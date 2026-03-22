@@ -6633,7 +6633,7 @@ def outgoing_history_excel(request):
             item.date.strftime("%Y-%m-%d %H:%M") if item.date else "",
             display_type,
             item.vendor.name if item.vendor else "-",
-            item.erp_slip_no or "-",
+            item.transaction_no or "-",
             item.part.part_no if item.part else "",
             item.part.part_name if item.part else "",
             display_qty,
