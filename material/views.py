@@ -6536,6 +6536,133 @@ def outgoing_history(request):
     return render(request, 'material/outgoing_history.html', context)
 
 
+@login_required
+@wms_permission_required('can_wms_inout_view')
+def outgoing_history_excel(request):
+    """[WMS] 출고 이력 엑셀 다운로드"""
+    import re
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+
+    qs = MaterialTransaction.objects.filter(
+        transaction_type__in=['OUT_MANUAL', 'OUT_ERP', 'OUT_PROD', 'OUT_RETURN']
+    ).select_related(
+        'part', 'warehouse_from', 'actor', 'vendor'
+    ).order_by('-date', '-id')
+
+    # 검색 필터 (outgoing_history와 동일)
+    q = (request.GET.get('q') or '').strip()
+    if q:
+        qs = qs.filter(
+            Q(part__part_no__icontains=q) |
+            Q(part__part_name__icontains=q)
+        )
+    q_group = (request.GET.get('q_group') or '').strip()
+    if q_group:
+        qs = qs.filter(part__part_group__icontains=q_group)
+    q_vendor = (request.GET.get('q_vendor') or '').strip()
+    if q_vendor:
+        qs = qs.filter(vendor__name__icontains=q_vendor)
+    start_date = (request.GET.get('start_date') or '').strip()
+    end_date = (request.GET.get('end_date') or '').strip()
+    if start_date in ('None', 'null', 'NULL'):
+        start_date = ''
+    if end_date in ('None', 'null', 'NULL'):
+        end_date = ''
+    if start_date:
+        qs = qs.filter(date__date__gte=start_date)
+    if end_date:
+        qs = qs.filter(date__date__lte=end_date)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "출고내역"
+
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+    thin_border = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin')
+    )
+
+    # 제목
+    period = ""
+    if start_date and end_date:
+        period = f" ({start_date} ~ {end_date})"
+    elif start_date:
+        period = f" ({start_date} ~)"
+    elif end_date:
+        period = f" (~ {end_date})"
+    ws.append([f"출고 내역 조회{period}"])
+    ws.merge_cells('A1:I1')
+    ws['A1'].font = Font(bold=True, size=14)
+    ws['A1'].alignment = Alignment(horizontal='center')
+    ws.append([])
+
+    # 헤더
+    headers = ['No', '일자', '구분', '거래처', '수불번호', '품번', '품명', '수량', 'LOT 번호', '출고 창고', '비고']
+    ws.append(headers)
+    for col_num, header in enumerate(headers, 1):
+        cell = ws.cell(row=3, column=col_num)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = thin_border
+        cell.alignment = Alignment(horizontal='center')
+
+    # 데이터
+    for idx, item in enumerate(qs.iterator(), 1):
+        display_qty = abs(item.quantity)
+        if item.transaction_type == 'OUT_MANUAL':
+            display_type = "수기출고"
+            display_remark = item.remark or ""
+        elif item.transaction_type == 'OUT_ERP':
+            display_type = "ERP출고"
+            remark = item.remark or ""
+            display_remark = re.sub(r'^ERP출고\([^)]*\)\s*', '', remark)
+        elif item.transaction_type == 'OUT_PROD':
+            display_type = "생산불출"
+            display_remark = item.remark or ""
+        elif item.transaction_type == 'OUT_RETURN':
+            display_type = "반품출고"
+            display_remark = item.remark or ""
+        else:
+            display_type = "출고"
+            display_remark = item.remark or ""
+
+        row = [
+            idx,
+            item.date.strftime("%Y-%m-%d %H:%M") if item.date else "",
+            display_type,
+            item.vendor.name if item.vendor else "-",
+            item.erp_slip_no or "-",
+            item.part.part_no if item.part else "",
+            item.part.part_name if item.part else "",
+            display_qty,
+            item.lot_no.strftime("%Y-%m-%d") if item.lot_no else "-",
+            f"{item.warehouse_from.name}" if item.warehouse_from else "-",
+            display_remark,
+        ]
+        ws.append(row)
+        for col_num in range(1, len(headers) + 1):
+            cell = ws.cell(row=idx + 3, column=col_num)
+            cell.border = thin_border
+            if col_num == 8:
+                cell.number_format = '#,##0'
+                cell.alignment = Alignment(horizontal='right')
+
+    # 열 너비
+    widths = [6, 18, 10, 20, 22, 16, 30, 12, 14, 16, 20]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
+
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    filename = f"출고내역_{timezone.now().strftime('%Y%m%d_%H%M')}.xlsx"
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    wb.save(response)
+    return response
+
+
 # =============================================================================
 # 입고 시 발주 매칭 API
 # =============================================================================
