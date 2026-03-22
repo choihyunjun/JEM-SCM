@@ -261,7 +261,7 @@ function clearField(fieldId) {
 function downloadExcel() {
     const params = new URLSearchParams(window.location.search);
     params.delete('page');
-    window.location.href = "{% url 'outgoing_history_excel' %}?" + params.toString();
+    window.location.href = "{% url 'material:outgoing_history_excel' %}?" + params.toString();
 }
 </script>
 {% endblock %}
