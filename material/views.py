@@ -6459,7 +6459,7 @@ def outgoing_history(request):
     import re
 
     qs = MaterialTransaction.objects.filter(
-        transaction_type__in=['OUT_MANUAL', 'OUT_ERP', 'OUT_PROD', 'OUT_RETURN']
+        transaction_type__in=['OUT_MANUAL', 'OUT_ERP', 'OUT_RETURN']
     ).select_related(
         'part', 'warehouse_from', 'actor', 'vendor'
     ).order_by('-date', '-id')
@@ -6504,9 +6504,6 @@ def outgoing_history(request):
             item.display_type = "ERP출고"
             remark = item.remark or ""
             item.display_remark = re.sub(r'^ERP출고\([^)]*\)\s*', '', remark)
-        elif item.transaction_type == 'OUT_PROD':
-            item.display_type = "생산불출"
-            item.display_remark = item.remark or ""
         elif item.transaction_type == 'OUT_RETURN':
             item.display_type = "반품출고"
             item.display_remark = item.remark or ""
@@ -6544,7 +6541,7 @@ def outgoing_history_excel(request):
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
     qs = MaterialTransaction.objects.filter(
-        transaction_type__in=['OUT_MANUAL', 'OUT_ERP', 'OUT_PROD', 'OUT_RETURN']
+        transaction_type__in=['OUT_MANUAL', 'OUT_ERP', 'OUT_RETURN']
     ).select_related(
         'part', 'warehouse_from', 'actor', 'vendor'
     ).order_by('-date', '-id')
@@ -6618,9 +6615,6 @@ def outgoing_history_excel(request):
             display_type = "ERP출고"
             remark = item.remark or ""
             display_remark = re.sub(r'^ERP출고\([^)]*\)\s*', '', remark)
-        elif item.transaction_type == 'OUT_PROD':
-            display_type = "생산불출"
-            display_remark = item.remark or ""
         elif item.transaction_type == 'OUT_RETURN':
             display_type = "반품출고"
             display_remark = item.remark or ""
