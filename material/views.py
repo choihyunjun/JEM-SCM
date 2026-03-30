@@ -3980,8 +3980,10 @@ def bom_calc_export(request):
 def bom_calc_batch_export(request):
     """
     [WMS] 일괄 소요량 계산 결과 엑셀 다운로드
+    mode=structured 이면 반제품 LEVEL/순번 포함
     """
     session_key = request.GET.get('session_key', '')
+    mode = request.GET.get('mode', 'flat')
     batch_results = request.session.get(f'batch_calc_{session_key}')
 
     if not batch_results:
@@ -3990,61 +3992,139 @@ def bom_calc_batch_export(request):
 
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "일괄소요량계산결과"
+    header_fill = openpyxl.styles.PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+    header_font = openpyxl.styles.Font(bold=True, color="FFFFFF")
+    semi_fill = openpyxl.styles.PatternFill(start_color="D9E2F3", end_color="D9E2F3", fill_type="solid")
+    semi_font = openpyxl.styles.Font(bold=True)
+    shortage_fill = openpyxl.styles.PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+    bom_missing_fill = openpyxl.styles.PatternFill(start_color="FFEB9C", end_color="FFEB9C", fill_type="solid")
 
-    # 헤더
-    headers = ['모품번', '모품명', '생산수량', '필요일자', '자품번', '자품명', '필요수량', '현재고', '부족수량', '거래처']
-    for col, header in enumerate(headers, 1):
-        cell = ws.cell(row=1, column=col, value=header)
-        cell.font = openpyxl.styles.Font(bold=True, color="FFFFFF")
-        cell.fill = openpyxl.styles.PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+    if mode == 'structured':
+        ws.title = "일괄소요량(BOM구조)"
+        headers = ['모품번', '모품명', '생산수량', '필요일자', 'LEVEL', '자품번', '자품명', '단위', '정미수량', '필요수량', '현재고', '부족수량', '거래처']
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
 
-    # 데이터
-    row_idx = 2
-    for batch in batch_results:
-        if batch['items']:
-            for item_idx, item in enumerate(batch['items']):
-                if item_idx == 0:
-                    ws.cell(row=row_idx, column=1, value=batch['part_no'])
-                    ws.cell(row=row_idx, column=2, value=batch['part_name'])
-                    ws.cell(row=row_idx, column=3, value=batch['qty'])
-                    ws.cell(row=row_idx, column=4, value=batch['need_date'] or '')
+        row_idx = 2
+        for batch in batch_results:
+            structured = batch.get('structured_items', [])
+            if structured:
+                first_row = True
+                for sitem in structured:
+                    if first_row:
+                        ws.cell(row=row_idx, column=1, value=batch['part_no'])
+                        ws.cell(row=row_idx, column=2, value=batch['part_name'])
+                        ws.cell(row=row_idx, column=3, value=batch['qty'])
+                        ws.cell(row=row_idx, column=4, value=batch.get('need_date') or '')
+                        first_row = False
 
-                ws.cell(row=row_idx, column=5, value=item['child_part_no'])
-                ws.cell(row=row_idx, column=6, value=item['child_part_name'])
-                ws.cell(row=row_idx, column=7, value=float(item['required_qty']))
-                ws.cell(row=row_idx, column=8, value=item['stock_qty'])
-                ws.cell(row=row_idx, column=9, value=item['shortage'])
-                ws.cell(row=row_idx, column=10, value=item['vendor_name'] or '-')
+                    ws.cell(row=row_idx, column=5, value=sitem.get('level', 1))
+                    ws.cell(row=row_idx, column=6, value=sitem['child_part_no'])
+                    ws.cell(row=row_idx, column=7, value=sitem['child_part_name'])
+                    ws.cell(row=row_idx, column=8, value=sitem.get('child_unit', ''))
+                    ws.cell(row=row_idx, column=9, value=sitem.get('unit_qty', ''))
+                    ws.cell(row=row_idx, column=10, value=sitem.get('required_qty', 0))
+                    ws.cell(row=row_idx, column=13, value=sitem.get('vendor_name') or '-')
 
-                # 부족분 강조
-                if item['shortage'] > 0:
-                    for col in range(1, 11):
-                        ws.cell(row=row_idx, column=col).fill = openpyxl.styles.PatternFill(
-                            start_color="FFC7CE", end_color="FFC7CE", fill_type="solid"
-                        )
+                    if sitem.get('is_semi'):
+                        ws.cell(row=row_idx, column=11, value='')
+                        ws.cell(row=row_idx, column=12, value='')
+                        for col in range(1, 14):
+                            ws.cell(row=row_idx, column=col).fill = semi_fill
+                            ws.cell(row=row_idx, column=col).font = semi_font
+                    else:
+                        ws.cell(row=row_idx, column=11, value=sitem.get('stock_qty', 0))
+                        ws.cell(row=row_idx, column=12, value=sitem.get('shortage', 0))
+                        if sitem.get('shortage', 0) > 0:
+                            for col in range(1, 14):
+                                ws.cell(row=row_idx, column=col).fill = shortage_fill
 
+                    row_idx += 1
+            elif batch['items']:
+                for item_idx, item in enumerate(batch['items']):
+                    if item_idx == 0:
+                        ws.cell(row=row_idx, column=1, value=batch['part_no'])
+                        ws.cell(row=row_idx, column=2, value=batch['part_name'])
+                        ws.cell(row=row_idx, column=3, value=batch['qty'])
+                        ws.cell(row=row_idx, column=4, value=batch.get('need_date') or '')
+                    ws.cell(row=row_idx, column=5, value=1)
+                    ws.cell(row=row_idx, column=6, value=item['child_part_no'])
+                    ws.cell(row=row_idx, column=7, value=item['child_part_name'])
+                    ws.cell(row=row_idx, column=8, value=item.get('child_unit', ''))
+                    ws.cell(row=row_idx, column=9, value=item.get('unit_qty', ''))
+                    ws.cell(row=row_idx, column=10, value=float(item['required_qty']))
+                    ws.cell(row=row_idx, column=11, value=item['stock_qty'])
+                    ws.cell(row=row_idx, column=12, value=item['shortage'])
+                    ws.cell(row=row_idx, column=13, value=item.get('vendor_name') or '-')
+                    if item['shortage'] > 0:
+                        for col in range(1, 14):
+                            ws.cell(row=row_idx, column=col).fill = shortage_fill
+                    row_idx += 1
+            else:
+                ws.cell(row=row_idx, column=1, value=batch['part_no'])
+                ws.cell(row=row_idx, column=2, value=batch['part_name'])
+                ws.cell(row=row_idx, column=3, value=batch['qty'])
+                ws.cell(row=row_idx, column=4, value=batch.get('need_date') or '')
+                ws.cell(row=row_idx, column=6, value='BOM 없음')
+                for col in range(1, 14):
+                    ws.cell(row=row_idx, column=col).fill = bom_missing_fill
                 row_idx += 1
-        else:
-            # BOM 없는 경우
-            ws.cell(row=row_idx, column=1, value=batch['part_no'])
-            ws.cell(row=row_idx, column=2, value=batch['part_name'])
-            ws.cell(row=row_idx, column=3, value=batch['qty'])
-            ws.cell(row=row_idx, column=4, value=batch['need_date'] or '')
-            ws.cell(row=row_idx, column=5, value='BOM 없음')
-            for col in range(1, 11):
-                ws.cell(row=row_idx, column=col).fill = openpyxl.styles.PatternFill(
-                    start_color="FFEB9C", end_color="FFEB9C", fill_type="solid"
-                )
-            row_idx += 1
 
-    # 컬럼 너비 조정
-    widths = [18, 20, 10, 12, 18, 20, 12, 12, 12, 15]
-    for col, width in enumerate(widths, 1):
-        ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = width
+        widths = [18, 20, 10, 12, 8, 18, 25, 8, 12, 12, 12, 12, 15]
+        for col, width in enumerate(widths, 1):
+            ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = width
+
+        filename = "bom_calc_batch_structured.xlsx"
+    else:
+        ws.title = "일괄소요량계산결과"
+        headers = ['모품번', '모품명', '생산수량', '필요일자', '자품번', '자품명', '필요수량', '현재고', '부족수량', '거래처']
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+
+        row_idx = 2
+        for batch in batch_results:
+            if batch['items']:
+                for item_idx, item in enumerate(batch['items']):
+                    if item_idx == 0:
+                        ws.cell(row=row_idx, column=1, value=batch['part_no'])
+                        ws.cell(row=row_idx, column=2, value=batch['part_name'])
+                        ws.cell(row=row_idx, column=3, value=batch['qty'])
+                        ws.cell(row=row_idx, column=4, value=batch.get('need_date') or '')
+
+                    ws.cell(row=row_idx, column=5, value=item['child_part_no'])
+                    ws.cell(row=row_idx, column=6, value=item['child_part_name'])
+                    ws.cell(row=row_idx, column=7, value=float(item['required_qty']))
+                    ws.cell(row=row_idx, column=8, value=item['stock_qty'])
+                    ws.cell(row=row_idx, column=9, value=item['shortage'])
+                    ws.cell(row=row_idx, column=10, value=item.get('vendor_name') or '-')
+
+                    if item['shortage'] > 0:
+                        for col in range(1, 11):
+                            ws.cell(row=row_idx, column=col).fill = shortage_fill
+
+                    row_idx += 1
+            else:
+                ws.cell(row=row_idx, column=1, value=batch['part_no'])
+                ws.cell(row=row_idx, column=2, value=batch['part_name'])
+                ws.cell(row=row_idx, column=3, value=batch['qty'])
+                ws.cell(row=row_idx, column=4, value=batch.get('need_date') or '')
+                ws.cell(row=row_idx, column=5, value='BOM 없음')
+                for col in range(1, 11):
+                    ws.cell(row=row_idx, column=col).fill = bom_missing_fill
+                row_idx += 1
+
+        widths = [18, 20, 10, 12, 18, 20, 12, 12, 12, 15]
+        for col, width in enumerate(widths, 1):
+            ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = width
+
+        filename = "bom_calc_batch_result.xlsx"
 
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    response['Content-Disposition'] = 'attachment; filename="bom_calc_batch_result.xlsx"'
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
     wb.save(response)
     return response
 
