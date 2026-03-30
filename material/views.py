@@ -3489,7 +3489,7 @@ def _calculate_bom_requirements(part_no, production_qty):
     """
     product = Product.objects.filter(part_no=part_no, is_active=True).first()
     if not product:
-        return None, None, []
+        return None, None, [], []
 
     # 재귀 전개 결과를 품번별로 합산 (flat)
     aggregated = {}
