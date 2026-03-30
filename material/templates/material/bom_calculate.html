@@ -318,28 +318,76 @@
                     </thead>
                     <tbody>
                         {% for batch in batch_results %}
-                            {% for item in batch.items %}
-                            <tr class="{% if item.shortage > 0 %}table-danger{% endif %}">
-                                {% if forloop.first %}
-                                <td rowspan="{{ batch.items|length }}" class="align-middle fw-bold">{{ batch.part_no }}</td>
-                                <td rowspan="{{ batch.items|length }}" class="align-middle">{{ batch.part_name }}</td>
-                                <td rowspan="{{ batch.items|length }}" class="align-middle text-center">{{ batch.qty }}</td>
-                                <td rowspan="{{ batch.items|length }}" class="align-middle">{{ batch.need_date|default:"-" }}</td>
-                                {% endif %}
-                                <td>{{ item.child_part_no }}</td>
-                                <td>{{ item.child_part_name }}</td>
-                                <td class="text-end">{{ item.required_qty|floatformat:2 }}</td>
-                                <td class="text-end">{{ item.stock_qty }}</td>
-                                <td class="text-end">
-                                    {% if item.shortage > 0 %}
-                                    <span class="badge bg-danger">{{ item.shortage|floatformat:0 }}</span>
-                                    {% else %}
-                                    <span class="badge bg-success">OK</span>
+                            {% if batch.structured_items %}
+                                {% for item in batch.structured_items %}
+                                {% if item.is_semi %}
+                                <tr class="table-primary">
+                                    {% if forloop.first %}
+                                    <td rowspan="{{ batch.structured_items|length }}" class="align-middle fw-bold">{{ batch.part_no }}</td>
+                                    <td rowspan="{{ batch.structured_items|length }}" class="align-middle">{{ batch.part_name }}</td>
+                                    <td rowspan="{{ batch.structured_items|length }}" class="align-middle text-center">{{ batch.qty }}</td>
+                                    <td rowspan="{{ batch.structured_items|length }}" class="align-middle">{{ batch.need_date|default:"-" }}</td>
                                     {% endif %}
-                                </td>
-                                <td>{{ item.vendor_name|default:"-" }}</td>
-                            </tr>
-                            {% empty %}
+                                    <td class="fw-bold">
+                                        <i class="bi bi-box-seam me-1"></i>{{ item.child_part_no }}
+                                        <span class="badge bg-warning text-dark ms-1">반제품</span>
+                                    </td>
+                                    <td class="fw-bold">{{ item.child_part_name }}</td>
+                                    <td class="text-end fw-bold">{{ item.required_qty|floatformat:2 }}</td>
+                                    <td class="text-end text-muted">-</td>
+                                    <td class="text-end text-muted">-</td>
+                                    <td>{{ item.vendor_name|default:"-" }}</td>
+                                </tr>
+                                {% else %}
+                                <tr class="{% if item.shortage > 0 %}table-danger{% endif %}">
+                                    {% if forloop.first %}
+                                    <td rowspan="{{ batch.structured_items|length }}" class="align-middle fw-bold">{{ batch.part_no }}</td>
+                                    <td rowspan="{{ batch.structured_items|length }}" class="align-middle">{{ batch.part_name }}</td>
+                                    <td rowspan="{{ batch.structured_items|length }}" class="align-middle text-center">{{ batch.qty }}</td>
+                                    <td rowspan="{{ batch.structured_items|length }}" class="align-middle">{{ batch.need_date|default:"-" }}</td>
+                                    {% endif %}
+                                    <td>
+                                        {% if item.level > 1 %}<span class="text-muted">└ </span>{% endif %}
+                                        {{ item.child_part_no }}
+                                    </td>
+                                    <td>{{ item.child_part_name }}</td>
+                                    <td class="text-end">{{ item.required_qty|floatformat:2 }}</td>
+                                    <td class="text-end">{{ item.stock_qty }}</td>
+                                    <td class="text-end">
+                                        {% if item.shortage > 0 %}
+                                        <span class="badge bg-danger">{{ item.shortage|floatformat:0 }}</span>
+                                        {% else %}
+                                        <span class="badge bg-success">OK</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ item.vendor_name|default:"-" }}</td>
+                                </tr>
+                                {% endif %}
+                                {% endfor %}
+                            {% elif batch.items %}
+                                {% for item in batch.items %}
+                                <tr class="{% if item.shortage > 0 %}table-danger{% endif %}">
+                                    {% if forloop.first %}
+                                    <td rowspan="{{ batch.items|length }}" class="align-middle fw-bold">{{ batch.part_no }}</td>
+                                    <td rowspan="{{ batch.items|length }}" class="align-middle">{{ batch.part_name }}</td>
+                                    <td rowspan="{{ batch.items|length }}" class="align-middle text-center">{{ batch.qty }}</td>
+                                    <td rowspan="{{ batch.items|length }}" class="align-middle">{{ batch.need_date|default:"-" }}</td>
+                                    {% endif %}
+                                    <td>{{ item.child_part_no }}</td>
+                                    <td>{{ item.child_part_name }}</td>
+                                    <td class="text-end">{{ item.required_qty|floatformat:2 }}</td>
+                                    <td class="text-end">{{ item.stock_qty }}</td>
+                                    <td class="text-end">
+                                        {% if item.shortage > 0 %}
+                                        <span class="badge bg-danger">{{ item.shortage|floatformat:0 }}</span>
+                                        {% else %}
+                                        <span class="badge bg-success">OK</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ item.vendor_name|default:"-" }}</td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
                             <tr class="table-warning" data-missing-partno="{{ batch.part_no }}">
                                 <td class="fw-bold">{{ batch.part_no }}</td>
                                 <td>-</td>
@@ -347,7 +395,7 @@
                                 <td>{{ batch.need_date|default:"-" }}</td>
                                 <td colspan="6" class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>BOM 데이터 없음</td>
                             </tr>
-                            {% endfor %}
+                            {% endif %}
                         {% endfor %}
                     </tbody>
                 </table>

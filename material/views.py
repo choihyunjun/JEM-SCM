@@ -3769,7 +3769,7 @@ def bom_calculate(request):
                             if qty <= 0:
                                 continue
 
-                            product_obj, part_name, items, _structured = _calculate_bom_requirements(part_no, qty)
+                            product_obj, part_name, items, structured_batch = _calculate_bom_requirements(part_no, qty)
 
                             batch_results.append({
                                 'part_no': part_no,
@@ -3777,6 +3777,7 @@ def bom_calculate(request):
                                 'qty': qty,
                                 'need_date': need_date,
                                 'items': items,
+                                'structured_items': structured_batch,
                             })
 
                             # 통계
