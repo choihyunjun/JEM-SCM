@@ -184,19 +184,13 @@
         </div>
         <div class="card-body p-0">
             <style>
-                .bom-semi-row { background-color: #1b4f72 !important; color: #fff; cursor: pointer; }
-                .bom-semi-row:hover { background-color: #154360 !important; }
-                .bom-semi-row td { border-color: #1b4f72 !important; }
-                .bom-semi-row .badge { font-size: 0.7rem; }
-                .bom-semi-l2 { background-color: #2874a6 !important; color: #fff; cursor: pointer; }
-                .bom-semi-l2:hover { background-color: #21618c !important; }
-                .bom-semi-l2 td { border-color: #2874a6 !important; }
-                .bom-semi-l3 { background-color: #3498db !important; color: #fff; cursor: pointer; }
-                .bom-semi-l3:hover { background-color: #2e86c1 !important; }
-                .bom-semi-l3 td { border-color: #3498db !important; }
-                .bom-child-row td:nth-child(4) { padding-left: 1.5rem; }
-                .bom-child-l2 td:nth-child(4) { padding-left: 2.5rem; }
-                .bom-child-l3 td:nth-child(4) { padding-left: 3.5rem; }
+                .bom-semi-row { background-color: #e9ecef !important; cursor: pointer; border-left: 3px solid #6c757d !important; }
+                .bom-semi-row:hover { background-color: #dee2e6 !important; }
+                .bom-semi-l2 { background-color: #f1f3f5 !important; border-left: 3px solid #adb5bd !important; }
+                .bom-semi-l2:hover { background-color: #e9ecef !important; }
+                .bom-semi-l3 { background-color: #f8f9fa !important; border-left: 3px solid #ced4da !important; }
+                .bom-semi-l3:hover { background-color: #f1f3f5 !important; }
+                .bom-semi-row.collapsed { opacity: 0.85; }
             </style>
             <div class="table-responsive">
                 <table class="table table-hover mb-0" style="font-size: 0.85rem;" id="bomStructuredTable">
@@ -218,22 +212,22 @@
                         {% for item in structured_items %}
                         {% if item.is_semi %}
                         <tr class="bom-semi-row {% if item.level == 2 %}bom-semi-l2{% elif item.level >= 3 %}bom-semi-l3{% endif %}" data-semi-id="semi-{{ forloop.counter }}" onclick="toggleSemiChildren(this)">
-                            <td>{{ forloop.counter }}</td>
-                            <td><span class="badge bg-light text-dark">{{ item.level }}</span></td>
+                            <td class="text-muted">{{ forloop.counter }}</td>
+                            <td><span class="badge bg-secondary">L{{ item.level }}</span></td>
                             <td style="padding-left: {{ item.level }}rem;">
-                                <i class="bi bi-chevron-down me-1 semi-toggle-icon"></i>
+                                <i class="bi bi-chevron-down me-1 semi-toggle-icon text-secondary"></i>
                                 <strong>{{ item.child_part_no }}</strong>
                             </td>
                             <td>
-                                <i class="bi bi-box-seam me-1"></i>{{ item.child_part_name }}
-                                <span class="badge bg-warning text-dark ms-1">반제품</span>
+                                {{ item.child_part_name }}
+                                <span class="badge bg-outline-secondary border text-muted ms-1" style="font-size:0.65rem;">반제품</span>
                             </td>
                             <td>{{ item.child_unit }}</td>
                             <td class="text-end">{{ item.unit_qty }}</td>
-                            <td class="text-end">{{ item.required_qty|floatformat:2 }}</td>
-                            <td class="text-end opacity-50">-</td>
-                            <td class="text-end opacity-50">-</td>
-                            <td>{{ item.vendor_name|default:"-" }}</td>
+                            <td class="text-end fw-bold">{{ item.required_qty|floatformat:2 }}</td>
+                            <td class="text-end text-muted">-</td>
+                            <td class="text-end text-muted">-</td>
+                            <td class="text-muted">{{ item.vendor_name|default:"-" }}</td>
                         </tr>
                         {% else %}
                         <tr class="{% if item.shortage > 0 %}table-danger{% endif %} bom-child-row {% if item.level == 2 %}bom-child-l2{% elif item.level >= 3 %}bom-child-l3{% endif %}" data-parent-level="{{ item.level }}">
@@ -878,13 +872,29 @@ function submitWithVendorFilter() {
 function toggleSemiChildren(semiRow) {
     var isCollapsed = semiRow.classList.contains('collapsed');
     var icon = semiRow.querySelector('.semi-toggle-icon');
+
+    // 이 반제품의 레벨을 파악 (badge 텍스트에서 L1 → 1)
+    var lvBadge = semiRow.querySelector('.badge');
+    var semiLevel = parseInt((lvBadge ? lvBadge.textContent : '').replace('L','')) || 1;
+
     var nextRow = semiRow.nextElementSibling;
 
-    // 이 반제품의 하위 행들을 찾기 (다음 반제품 행 또는 같거나 낮은 레벨의 행까지)
     while (nextRow) {
+        // 다음 행의 레벨 확인
+        var nextBadge = nextRow.querySelector('.badge');
+        var nextText = nextBadge ? nextBadge.textContent : '';
+        var nextLevel = null;
+
         if (nextRow.classList.contains('bom-semi-row')) {
-            break;  // 다음 반제품을 만나면 중지
+            nextLevel = parseInt(nextText.replace('L','')) || 1;
+            // 같거나 낮은 레벨의 반제품을 만나면 중지 (형제 또는 상위)
+            if (nextLevel <= semiLevel) break;
+        } else {
+            // 원자재 행의 레벨
+            var parentLevel = parseInt(nextRow.getAttribute('data-parent-level')) || 1;
+            if (parentLevel <= semiLevel) break;
         }
+
         if (isCollapsed) {
             nextRow.style.display = '';
         } else {
