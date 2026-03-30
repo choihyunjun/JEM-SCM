@@ -3527,20 +3527,19 @@ def _calculate_bom_requirements(part_no, production_qty):
         })
         seq += 1
 
-    # structured_items에 재고/부족 정보 추가
+    # flat result에서 품번별 재고/부족 정보를 가져와서 structured_items에 반영
+    flat_lookup = {item['child_part_no']: item for item in result}
     for sitem in structured_items:
         if sitem.get('is_semi'):
             continue  # 반제품 헤더는 재고 불필요
         cpno = sitem['child_part_no']
-        stock_qty = 0
-        part_obj = Part.objects.filter(part_no=cpno).first()
-        if part_obj:
-            stock_qty = MaterialStock.objects.filter(
-                part=part_obj,
-                quantity__gt=0
-            ).aggregate(total=Sum('quantity'))['total'] or 0
-        sitem['stock_qty'] = float(stock_qty)
-        sitem['shortage'] = float(max(0, sitem['required_qty'] - stock_qty))
+        flat_item = flat_lookup.get(cpno)
+        if flat_item:
+            sitem['stock_qty'] = flat_item['stock_qty']
+            sitem['shortage'] = flat_item['shortage']
+        else:
+            sitem['stock_qty'] = 0
+            sitem['shortage'] = float(sitem['required_qty'])
 
     return product, product.part_name if product else None, result, structured_items
 
