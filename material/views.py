@@ -3795,6 +3795,8 @@ def bom_calculate(request):
                             messages.warning(request, "유효한 데이터가 없습니다. 파일 형식을 확인해주세요.")
 
                     except Exception as e:
+                        import traceback
+                        print(f"[BOM CALC ERROR] {traceback.format_exc()}", flush=True)
                         messages.error(request, f"파일 처리 중 오류: {str(e)}")
 
     # 제품 목록 (자동완성용)
