@@ -173,7 +173,7 @@
                 <span class="badge bg-light text-dark ms-2">생산수량: {{ production_qty }}개</span>
             </span>
             <div>
-                <a href="{% url 'material:bom_calc_export' %}?part_no={{ product.part_no }}&qty={{ production_qty }}"
+                <a href="{% url 'material:bom_calc_export' %}?part_no={{ product.part_no }}&qty={{ production_qty }}{% if single_session_key %}&session_key={{ single_session_key }}{% endif %}"
                    class="btn btn-sm btn-outline-light me-2">
                     <i class="bi bi-file-excel me-1"></i>엑셀
                 </a>
@@ -184,25 +184,50 @@
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-hover table-striped mb-0">
+                <table class="table table-hover mb-0" style="font-size: 0.9rem;">
                     <thead class="table-light">
                         <tr>
-                            <th style="width:5%">순번</th>
+                            <th style="width:4%">No</th>
+                            <th style="width:5%">LEVEL</th>
+                            <th style="width:4%">순번</th>
                             <th style="width:12%">자품번</th>
-                            <th style="width:18%">자품명</th>
-                            <th style="width:6%">단위</th>
-                            <th style="width:10%">단위소요량</th>
-                            <th style="width:12%">필요수량</th>
-                            <th style="width:12%">현재고</th>
-                            <th style="width:12%">부족수량</th>
-                            <th style="width:13%">주거래처</th>
+                            <th style="width:17%">자품명</th>
+                            <th style="width:5%">단위</th>
+                            <th style="width:9%">정미수량</th>
+                            <th style="width:10%">필요수량</th>
+                            <th style="width:10%">현재고</th>
+                            <th style="width:10%">부족수량</th>
+                            <th style="width:14%">주거래처</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for item in result %}
-                        <tr class="{% if item.shortage > 0 %}table-danger{% endif %}">
-                            <td>{{ item.seq }}</td>
-                            <td><strong>{{ item.child_part_no }}</strong></td>
+                        {% for item in structured_items %}
+                        {% if item.is_semi %}
+                        <tr class="table-primary fw-bold">
+                            <td>{{ forloop.counter }}</td>
+                            <td><span class="badge bg-info text-white">{{ item.level }}</span></td>
+                            <td></td>
+                            <td>{{ item.child_part_no }}</td>
+                            <td>
+                                <i class="bi bi-box-seam me-1"></i>{{ item.child_part_name }}
+                                <span class="badge bg-warning text-dark ms-1">반제품</span>
+                            </td>
+                            <td>{{ item.child_unit }}</td>
+                            <td class="text-end">{{ item.unit_qty }}</td>
+                            <td class="text-end">{{ item.required_qty|floatformat:2 }}</td>
+                            <td class="text-end text-muted">-</td>
+                            <td class="text-end text-muted">-</td>
+                            <td>{{ item.vendor_name|default:"-" }}</td>
+                        </tr>
+                        {% else %}
+                        <tr class="{% if item.shortage > 0 %}table-danger{% endif %}" {% if item.level > 1 %}style="background-color: {% if item.shortage > 0 %}#f8d7da{% else %}#f8f9fa{% endif %};"{% endif %}>
+                            <td>{{ forloop.counter }}</td>
+                            <td>{{ item.level }}</td>
+                            <td>{{ forloop.counter }}</td>
+                            <td>
+                                {% if item.level > 1 %}<span class="text-muted ms-{{ item.level }}">└ </span>{% endif %}
+                                <strong>{{ item.child_part_no }}</strong>
+                            </td>
                             <td>{{ item.child_part_name }}</td>
                             <td>{{ item.child_unit }}</td>
                             <td class="text-end">{{ item.unit_qty }}</td>
@@ -223,6 +248,7 @@
                             </td>
                             <td>{{ item.vendor_name|default:"-" }}</td>
                         </tr>
+                        {% endif %}
                         {% endfor %}
                     </tbody>
                 </table>

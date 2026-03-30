@@ -3485,16 +3485,20 @@ def _calculate_bom_requirements(part_no, production_qty):
     BOM 소요량 계산 공통 함수 (다단계 BOM 재귀 전개)
     - 자품번이 다른 Product의 모품번으로 등록되어 있으면 하위 BOM을 재귀 전개
     - 최하위 원자재만 결과에 포함 (반제품은 전개 후 제외)
+    - structured_items: 반제품 구조 포함 계층형 결과 (화면/엑셀 표시용)
     """
     product = Product.objects.filter(part_no=part_no, is_active=True).first()
     if not product:
         return None, None, []
 
-    # 재귀 전개 결과를 품번별로 합산
+    # 재귀 전개 결과를 품번별로 합산 (flat)
     aggregated = {}
-    _explode_bom(part_no, production_qty, aggregated, visited=set())
+    # 계층형 결과 (반제품 구조 포함)
+    structured_items = []
+    _explode_bom(part_no, production_qty, aggregated, visited=set(),
+                 structured_items=structured_items, level=1, parent_info=None)
 
-    # 합산된 결과를 리스트로 변환
+    # 합산된 결과를 리스트로 변환 (flat - 기존 호환)
     result = []
     seq = 1
     for child_part_no, info in aggregated.items():
@@ -3523,15 +3527,32 @@ def _calculate_bom_requirements(part_no, production_qty):
         })
         seq += 1
 
-    return product, product.part_name if product else None, result
+    # structured_items에 재고/부족 정보 추가
+    for sitem in structured_items:
+        if sitem.get('is_semi'):
+            continue  # 반제품 헤더는 재고 불필요
+        cpno = sitem['child_part_no']
+        stock_qty = 0
+        part_obj = Part.objects.filter(part_no=cpno).first()
+        if part_obj:
+            stock_qty = MaterialStock.objects.filter(
+                part=part_obj,
+                quantity__gt=0
+            ).aggregate(total=Sum('quantity'))['total'] or 0
+        sitem['stock_qty'] = float(stock_qty)
+        sitem['shortage'] = float(max(0, sitem['required_qty'] - stock_qty))
+
+    return product, product.part_name if product else None, result, structured_items
 
 
-def _explode_bom(part_no, production_qty, aggregated, visited):
+def _explode_bom(part_no, production_qty, aggregated, visited,
+                 structured_items=None, level=1, parent_info=None):
     """
     BOM 재귀 전개 내부 함수
     - 자품번이 Product로 등록되어 있고 하위 BOM이 있으면 재귀 전개
     - 없으면 최하위 원자재로 간주하여 aggregated에 합산
     - visited로 순환 참조 방지
+    - structured_items: 계층형 결과 수집 (반제품 헤더 포함)
     """
     if part_no in visited:
         return
@@ -3553,8 +3574,23 @@ def _explode_bom(part_no, production_qty, aggregated, visited):
             has_child_bom = child_product.bom_items.filter(is_active=True, is_bom_active=True).exists()
 
         if has_child_bom:
+            # 반제품 헤더 추가 (structured_items)
+            if structured_items is not None:
+                structured_items.append({
+                    'is_semi': True,
+                    'level': level,
+                    'child_part_no': item.child_part_no,
+                    'child_part_name': item.child_part_name,
+                    'child_unit': item.child_unit,
+                    'unit_qty': float(item.required_qty),
+                    'required_qty': required_qty,
+                    'supply_type': item.supply_type,
+                    'vendor_name': item.vendor_name,
+                })
             # 반제품 → 하위 BOM 재귀 전개 (소요량을 곱해서 전달)
-            _explode_bom(item.child_part_no, required_qty, aggregated, visited.copy())
+            _explode_bom(item.child_part_no, required_qty, aggregated, visited.copy(),
+                         structured_items=structured_items, level=level + 1,
+                         parent_info={'part_no': item.child_part_no, 'part_name': item.child_part_name})
         else:
             # 최하위 원자재 → 결과에 합산
             if item.child_part_no in aggregated:
@@ -3568,6 +3604,20 @@ def _explode_bom(part_no, production_qty, aggregated, visited):
                     'supply_type': item.supply_type,
                     'vendor_name': item.vendor_name,
                 }
+            # structured_items에도 추가
+            if structured_items is not None:
+                structured_items.append({
+                    'is_semi': False,
+                    'level': level,
+                    'child_part_no': item.child_part_no,
+                    'child_part_name': item.child_part_name,
+                    'child_unit': item.child_unit,
+                    'unit_qty': float(item.required_qty),
+                    'required_qty': required_qty,
+                    'supply_type': item.supply_type,
+                    'vendor_name': item.vendor_name,
+                    'parent_part_no': parent_info['part_no'] if parent_info else None,
+                })
 
 
 @wms_permission_required('can_wms_bom_view')
@@ -3588,6 +3638,8 @@ def bom_calculate(request):
     total_shortage_count = 0
     total_sufficient_count = 0
     session_key = None
+    structured = []
+    single_session_key = None
 
     if request.method == 'POST':
         calc_type = request.POST.get('calc_type', 'single')
@@ -3598,12 +3650,23 @@ def bom_calculate(request):
             production_qty = int(request.POST.get('production_qty', 0) or 0)
 
             if part_no and production_qty > 0:
-                product, part_name, result = _calculate_bom_requirements(part_no, production_qty)
+                product, part_name, result, structured = _calculate_bom_requirements(part_no, production_qty)
 
                 if product and result:
                     shortage_count = sum(1 for item in result if item['shortage'] > 0)
                     sufficient_count = len(result) - shortage_count
+                    # structured_items를 세션에 저장 (엑셀 다운로드용)
+                    import uuid as _uuid
+                    single_session_key = str(_uuid.uuid4())
+                    request.session[f'single_calc_{single_session_key}'] = {
+                        'part_no': part_no,
+                        'part_name': product.part_name,
+                        'production_qty': production_qty,
+                        'structured_items': structured,
+                    }
                 else:
+                    structured = []
+                    single_session_key = None
                     messages.warning(request, f"품번 '{part_no}'에 해당하는 BOM이 없습니다.")
 
         elif calc_type == 'batch':
@@ -3707,7 +3770,7 @@ def bom_calculate(request):
                             if qty <= 0:
                                 continue
 
-                            product_obj, part_name, items = _calculate_bom_requirements(part_no, qty)
+                            product_obj, part_name, items, _structured = _calculate_bom_requirements(part_no, qty)
 
                             batch_results.append({
                                 'part_no': part_no,
@@ -3742,6 +3805,8 @@ def bom_calculate(request):
         'product': product,
         'production_qty': production_qty,
         'result': result,
+        'structured_items': structured if calc_type == 'single' else None,
+        'single_session_key': single_session_key if calc_type == 'single' else None,
         'calc_type': calc_type,
         'batch_results': batch_results,
         'shortage_count': shortage_count,
@@ -3811,7 +3876,17 @@ def bom_calc_export(request):
         messages.error(request, "품번과 수량이 필요합니다.")
         return redirect('material:bom_calculate')
 
-    product, part_name, items = _calculate_bom_requirements(part_no, qty)
+    # 세션에서 structured_items 가져오기
+    sk = request.GET.get('session_key', '')
+    session_data = request.session.get(f'single_calc_{sk}') if sk else None
+
+    if session_data and session_data.get('structured_items'):
+        structured_items = session_data['structured_items']
+    else:
+        # 세션 없으면 다시 계산
+        _, _, _, structured_items = _calculate_bom_requirements(part_no, qty)
+
+    product, part_name, items, _ = _calculate_bom_requirements(part_no, qty)
 
     if not product or not items:
         messages.error(request, "BOM 데이터가 없습니다.")
@@ -3822,39 +3897,74 @@ def bom_calc_export(request):
     ws.title = "소요량계산결과"
 
     # 제목
-    ws.merge_cells('A1:I1')
+    ws.merge_cells('A1:K1')
     ws['A1'] = f"소요량 계산 결과 - {part_no} ({part_name}) / 생산수량: {qty}개"
     ws['A1'].font = openpyxl.styles.Font(bold=True, size=14)
 
-    # 헤더
-    headers = ['순번', '자품번', '자품명', '단위', '단위소요량', '필요수량', '현재고', '부족수량', '주거래처']
+    # 헤더 (ERP 스타일)
+    headers = ['No', 'LEVEL', '순번', '자품번', '자품명', '단위', '정미수량', '필요수량', '현재고', '부족수량', '주거래처']
+    header_fill = openpyxl.styles.PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+    header_font = openpyxl.styles.Font(bold=True, color="FFFFFF")
     for col, header in enumerate(headers, 1):
         cell = ws.cell(row=3, column=col, value=header)
-        cell.font = openpyxl.styles.Font(bold=True)
-        cell.fill = openpyxl.styles.PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
-        cell.font = openpyxl.styles.Font(bold=True, color="FFFFFF")
+        cell.font = header_font
+        cell.fill = header_fill
 
-    # 데이터
-    for row_idx, item in enumerate(items, 4):
-        ws.cell(row=row_idx, column=1, value=item['seq'])
-        ws.cell(row=row_idx, column=2, value=item['child_part_no'])
-        ws.cell(row=row_idx, column=3, value=item['child_part_name'])
-        ws.cell(row=row_idx, column=4, value=item['child_unit'])
-        ws.cell(row=row_idx, column=5, value=float(item['unit_qty']))
-        ws.cell(row=row_idx, column=6, value=float(item['required_qty']))
-        ws.cell(row=row_idx, column=7, value=item['stock_qty'])
-        ws.cell(row=row_idx, column=8, value=item['shortage'])
-        ws.cell(row=row_idx, column=9, value=item['vendor_name'] or '-')
+    # 반제품 헤더 스타일
+    semi_fill = openpyxl.styles.PatternFill(start_color="D9E2F3", end_color="D9E2F3", fill_type="solid")
+    semi_font = openpyxl.styles.Font(bold=True)
+    shortage_fill = openpyxl.styles.PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
 
-        # 부족분 강조
-        if item['shortage'] > 0:
-            for col in range(1, 10):
-                ws.cell(row=row_idx, column=col).fill = openpyxl.styles.PatternFill(
-                    start_color="FFC7CE", end_color="FFC7CE", fill_type="solid"
-                )
+    # 데이터 (structured_items 기반)
+    row_idx = 4
+    seq_counter = {}  # level별 순번
+    no = 1
+    for sitem in structured_items:
+        level = sitem.get('level', 1)
+
+        if sitem.get('is_semi'):
+            # 반제품 헤더 행
+            ws.cell(row=row_idx, column=1, value=no)
+            ws.cell(row=row_idx, column=2, value=level)
+            ws.cell(row=row_idx, column=3, value='')
+            ws.cell(row=row_idx, column=4, value=sitem['child_part_no'])
+            ws.cell(row=row_idx, column=5, value=sitem['child_part_name'])
+            ws.cell(row=row_idx, column=6, value=sitem['child_unit'])
+            ws.cell(row=row_idx, column=7, value=sitem['unit_qty'])
+            ws.cell(row=row_idx, column=8, value=sitem['required_qty'])
+            ws.cell(row=row_idx, column=9, value='')
+            ws.cell(row=row_idx, column=10, value='')
+            ws.cell(row=row_idx, column=11, value=sitem.get('vendor_name') or '')
+            # 반제품 스타일
+            for col in range(1, 12):
+                ws.cell(row=row_idx, column=col).fill = semi_fill
+                ws.cell(row=row_idx, column=col).font = semi_font
+            seq_counter[level + 1] = 0
+        else:
+            # 원자재 행
+            seq_counter.setdefault(level, 0)
+            seq_counter[level] += 1
+            ws.cell(row=row_idx, column=1, value=no)
+            ws.cell(row=row_idx, column=2, value=level)
+            ws.cell(row=row_idx, column=3, value=seq_counter[level])
+            ws.cell(row=row_idx, column=4, value=sitem['child_part_no'])
+            ws.cell(row=row_idx, column=5, value=sitem['child_part_name'])
+            ws.cell(row=row_idx, column=6, value=sitem['child_unit'])
+            ws.cell(row=row_idx, column=7, value=sitem['unit_qty'])
+            ws.cell(row=row_idx, column=8, value=sitem['required_qty'])
+            ws.cell(row=row_idx, column=9, value=sitem.get('stock_qty', 0))
+            ws.cell(row=row_idx, column=10, value=sitem.get('shortage', 0))
+            ws.cell(row=row_idx, column=11, value=sitem.get('vendor_name') or '-')
+            # 부족분 강조
+            if sitem.get('shortage', 0) > 0:
+                for col in range(1, 12):
+                    ws.cell(row=row_idx, column=col).fill = shortage_fill
+
+        no += 1
+        row_idx += 1
 
     # 컬럼 너비 조정
-    widths = [8, 18, 25, 8, 12, 12, 12, 12, 15]
+    widths = [6, 8, 6, 18, 25, 8, 12, 12, 12, 12, 15]
     for col, width in enumerate(widths, 1):
         ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = width
 
@@ -3999,7 +4109,7 @@ def api_bom_calculate(request):
     if not part_no or production_qty <= 0:
         return JsonResponse({'error': '품번과 생산수량을 입력하세요.'}, status=400)
 
-    product, part_name, result = _calculate_bom_requirements(part_no, production_qty)
+    product, part_name, result, _structured = _calculate_bom_requirements(part_no, production_qty)
 
     if not product:
         return JsonResponse({'error': '해당 품번의 BOM을 찾을 수 없습니다.'}, status=404)
