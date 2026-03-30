@@ -183,31 +183,47 @@
             </div>
         </div>
         <div class="card-body p-0">
+            <style>
+                .bom-semi-row { background-color: #1b4f72 !important; color: #fff; cursor: pointer; }
+                .bom-semi-row:hover { background-color: #154360 !important; }
+                .bom-semi-row td { border-color: #1b4f72 !important; }
+                .bom-semi-row .badge { font-size: 0.7rem; }
+                .bom-semi-l2 { background-color: #2874a6 !important; color: #fff; cursor: pointer; }
+                .bom-semi-l2:hover { background-color: #21618c !important; }
+                .bom-semi-l2 td { border-color: #2874a6 !important; }
+                .bom-semi-l3 { background-color: #3498db !important; color: #fff; cursor: pointer; }
+                .bom-semi-l3:hover { background-color: #2e86c1 !important; }
+                .bom-semi-l3 td { border-color: #3498db !important; }
+                .bom-child-row td:nth-child(4) { padding-left: 1.5rem; }
+                .bom-child-l2 td:nth-child(4) { padding-left: 2.5rem; }
+                .bom-child-l3 td:nth-child(4) { padding-left: 3.5rem; }
+            </style>
             <div class="table-responsive">
-                <table class="table table-hover mb-0" style="font-size: 0.9rem;">
-                    <thead class="table-light">
+                <table class="table table-hover mb-0" style="font-size: 0.85rem;" id="bomStructuredTable">
+                    <thead class="table-dark">
                         <tr>
                             <th style="width:4%">No</th>
-                            <th style="width:5%">LEVEL</th>
-                            <th style="width:4%">순번</th>
+                            <th style="width:5%">LV</th>
                             <th style="width:12%">자품번</th>
-                            <th style="width:17%">자품명</th>
+                            <th style="width:20%">자품명</th>
                             <th style="width:5%">단위</th>
                             <th style="width:9%">정미수량</th>
                             <th style="width:10%">필요수량</th>
                             <th style="width:10%">현재고</th>
                             <th style="width:10%">부족수량</th>
-                            <th style="width:14%">주거래처</th>
+                            <th style="width:15%">주거래처</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for item in structured_items %}
                         {% if item.is_semi %}
-                        <tr class="table-primary fw-bold">
+                        <tr class="bom-semi-row {% if item.level == 2 %}bom-semi-l2{% elif item.level >= 3 %}bom-semi-l3{% endif %}" data-semi-id="semi-{{ forloop.counter }}" onclick="toggleSemiChildren(this)">
                             <td>{{ forloop.counter }}</td>
-                            <td><span class="badge bg-info text-white">{{ item.level }}</span></td>
-                            <td></td>
-                            <td>{{ item.child_part_no }}</td>
+                            <td><span class="badge bg-light text-dark">{{ item.level }}</span></td>
+                            <td style="padding-left: {{ item.level }}rem;">
+                                <i class="bi bi-chevron-down me-1 semi-toggle-icon"></i>
+                                <strong>{{ item.child_part_no }}</strong>
+                            </td>
                             <td>
                                 <i class="bi bi-box-seam me-1"></i>{{ item.child_part_name }}
                                 <span class="badge bg-warning text-dark ms-1">반제품</span>
@@ -215,17 +231,16 @@
                             <td>{{ item.child_unit }}</td>
                             <td class="text-end">{{ item.unit_qty }}</td>
                             <td class="text-end">{{ item.required_qty|floatformat:2 }}</td>
-                            <td class="text-end text-muted">-</td>
-                            <td class="text-end text-muted">-</td>
+                            <td class="text-end opacity-50">-</td>
+                            <td class="text-end opacity-50">-</td>
                             <td>{{ item.vendor_name|default:"-" }}</td>
                         </tr>
                         {% else %}
-                        <tr class="{% if item.shortage > 0 %}table-danger{% endif %}" {% if item.level > 1 %}style="background-color: {% if item.shortage > 0 %}#f8d7da{% else %}#f8f9fa{% endif %};"{% endif %}>
-                            <td>{{ forloop.counter }}</td>
-                            <td>{{ item.level }}</td>
-                            <td>{{ forloop.counter }}</td>
-                            <td>
-                                {% if item.level > 1 %}<span class="text-muted ms-{{ item.level }}">└ </span>{% endif %}
+                        <tr class="{% if item.shortage > 0 %}table-danger{% endif %} bom-child-row {% if item.level == 2 %}bom-child-l2{% elif item.level >= 3 %}bom-child-l3{% endif %}" data-parent-level="{{ item.level }}">
+                            <td class="text-muted">{{ forloop.counter }}</td>
+                            <td class="text-muted">{{ item.level }}</td>
+                            <td style="padding-left: {{ item.level }}rem;">
+                                <span class="text-muted me-1">├</span>
                                 <strong>{{ item.child_part_no }}</strong>
                             </td>
                             <td>{{ item.child_part_name }}</td>
@@ -234,19 +249,19 @@
                             <td class="text-end fw-bold">{{ item.required_qty|floatformat:2 }}</td>
                             <td class="text-end">
                                 {% if item.stock_qty > 0 %}
-                                <span class="text-success">{{ item.stock_qty }}</span>
+                                <span class="text-success fw-bold">{{ item.stock_qty }}</span>
                                 {% else %}
                                 <span class="text-muted">0</span>
                                 {% endif %}
                             </td>
                             <td class="text-end">
                                 {% if item.shortage > 0 %}
-                                <span class="badge bg-danger fs-6">{{ item.shortage|floatformat:0 }}</span>
+                                <span class="badge bg-danger">{{ item.shortage|floatformat:0 }}</span>
                                 {% else %}
                                 <span class="badge bg-success">충족</span>
                                 {% endif %}
                             </td>
-                            <td>{{ item.vendor_name|default:"-" }}</td>
+                            <td class="small">{{ item.vendor_name|default:"-" }}</td>
                         </tr>
                         {% endif %}
                         {% endfor %}
@@ -855,6 +870,36 @@ function submitWithVendorFilter() {
     document.getElementById('selectedVendorsInput').value = JSON.stringify(selected);
     vendorSelectModal.hide();
     document.getElementById('demandRegisterForm').submit();
+}
+</script>
+
+<!-- 반제품 접기/펼치기 -->
+<script>
+function toggleSemiChildren(semiRow) {
+    var isCollapsed = semiRow.classList.contains('collapsed');
+    var icon = semiRow.querySelector('.semi-toggle-icon');
+    var nextRow = semiRow.nextElementSibling;
+
+    // 이 반제품의 하위 행들을 찾기 (다음 반제품 행 또는 같거나 낮은 레벨의 행까지)
+    while (nextRow) {
+        if (nextRow.classList.contains('bom-semi-row')) {
+            break;  // 다음 반제품을 만나면 중지
+        }
+        if (isCollapsed) {
+            nextRow.style.display = '';
+        } else {
+            nextRow.style.display = 'none';
+        }
+        nextRow = nextRow.nextElementSibling;
+    }
+
+    if (isCollapsed) {
+        semiRow.classList.remove('collapsed');
+        if (icon) { icon.classList.remove('bi-chevron-right'); icon.classList.add('bi-chevron-down'); }
+    } else {
+        semiRow.classList.add('collapsed');
+        if (icon) { icon.classList.remove('bi-chevron-down'); icon.classList.add('bi-chevron-right'); }
+    }
 }
 </script>
 
