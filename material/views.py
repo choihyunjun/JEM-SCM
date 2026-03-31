@@ -1254,6 +1254,8 @@ def incoming_history(request):
     waiting_wh = Warehouse.objects.filter(code='8100').first()
     if not waiting_wh:
         waiting_wh = Warehouse.objects.filter(name__contains='수입검사').first()
+    # 수입검사 대기장(1000)도 중간 단계 창고
+    inspection_wh = Warehouse.objects.filter(code='1000').first()
 
     ng_wh = Warehouse.objects.filter(code='8200').first()
     if not ng_wh:
@@ -1281,13 +1283,20 @@ def incoming_history(request):
         # 검사대기장으로 입고된 건 제외 (IN_MANUAL, IN_SCM 모두)
         qs = qs.exclude(warehouse_to=waiting_wh, transaction_type__in=['IN_MANUAL', 'IN_SCM'])
 
-        # TRANSFER는 "검사대기장 → 다른창고"만 입고확정으로 취급
+        # 수입검사 대기장(1000)으로 입고된 건도 제외 (TRANSFER에서 최종 입고로 표시)
+        if inspection_wh:
+            qs = qs.exclude(warehouse_to=inspection_wh, transaction_type__in=['IN_MANUAL', 'IN_SCM'])
+
+        # TRANSFER는 "검사대기장/수입검사대기장 → 다른창고"만 입고확정으로 취급
+        transfer_q = Q(transaction_type='TRANSFER') & Q(warehouse_from=waiting_wh)
+        if inspection_wh:
+            transfer_q = transfer_q | (Q(transaction_type='TRANSFER') & Q(warehouse_from=inspection_wh))
         qs = qs.filter(
             Q(transaction_type='IN_MANUAL') |
             Q(transaction_type='IN_ERP') |
             Q(transaction_type='RCV_ERP') |
             Q(transaction_type='IN_SCM') |
-            (Q(transaction_type='TRANSFER') & Q(warehouse_from=waiting_wh))
+            transfer_q
         )
     else:
         qs = qs.exclude(transaction_type='TRANSFER')
