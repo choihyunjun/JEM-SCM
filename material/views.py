@@ -1366,8 +1366,13 @@ def incoming_history(request):
         item.can_edit = item.transaction_type in ('IN_MANUAL', 'IN_SCM')
         item.can_delete = item.transaction_type in ('IN_MANUAL', 'IN_SCM')
         # ERP입고(IN_ERP/RCV_ERP)는 아마란스에서 직접 수정 → 제외
-        # SCM 입고 건은 ERP 번호 유무와 관계없이 단가 재반영 가능
-        item.can_reregister = item.transaction_type not in ('IN_ERP', 'RCV_ERP')
+        # 수입검사 대기장(1000) 입고는 TRANSFER에서만 재반영 가능
+        if item.transaction_type in ('IN_ERP', 'RCV_ERP'):
+            item.can_reregister = False
+        elif item.warehouse_to and item.warehouse_to.code == '1000':
+            item.can_reregister = False
+        else:
+            item.can_reregister = True
         item.has_label = RawMaterialLabel.objects.filter(
             incoming_transaction=item
         ).exclude(status='CANCELLED').exists() if item.can_delete else False
