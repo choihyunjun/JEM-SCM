@@ -156,6 +156,8 @@ def register_erp_incoming(trx, qty, warehouse_code, erp_order_no='', erp_order_s
 
     # 품목 단가 조회 (통합단가 API)
     unit_price, vat_price = fetch_erp_item_price(trx.part.part_no, vendor.erp_code)
+    if unit_price <= 0:
+        return False, None, f'단가 미등록 ({trx.part.part_no}/{vendor.erp_code})'
     supply_amount = round(unit_price * qty)      # 공급가액
     vat_amount = round(supply_amount * 0.1)      # 부가세 (10%)
     total_amount = supply_amount + vat_amount     # 합계액
