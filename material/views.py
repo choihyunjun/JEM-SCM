@@ -1126,9 +1126,19 @@ def reregister_erp_price(request, trx_id):
 
         erp_no = trx.erp_incoming_no
 
-        # 창고 코드 결정
+        # 창고 코드 결정 — 수입검사 대기장(1000)이면 TRANSFER의 최종 창고 사용
         wh = trx.warehouse_to
         warehouse_code = wh.code if wh else '2000'
+        if warehouse_code == '1000':
+            transfer = MaterialTransaction.objects.filter(
+                part=trx.part, lot_no=trx.lot_no,
+                transaction_type='TRANSFER',
+                warehouse_from__code='1000',
+            ).order_by('-date').first()
+            if transfer and transfer.warehouse_to:
+                warehouse_code = transfer.warehouse_to.code
+            else:
+                warehouse_code = '2000'
 
         # 발주번호 추출 (remark에서)
         erp_order_no, erp_order_seq = '', ''
