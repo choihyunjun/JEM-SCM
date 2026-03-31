@@ -127,6 +127,20 @@ def call_erp_api(url, body):
         return False, None, f'ERP API 오류: {str(e)}'
 
 
+def _build_erp_remark(trx):
+    """트랜잭션 비고에서 내부 태그 제거 후 ERP 비고 생성"""
+    import re
+    remark = (trx.remark or '').strip()
+    # 내부 태그 제거
+    remark = re.sub(r'\[수입검사 대상\]\s*', '', remark)
+    remark = re.sub(r'\[발주입고\]\s*', '', remark)
+    remark = re.sub(r'ERP:\S+\s*', '', remark)
+    remark = remark.strip()
+    if remark:
+        return f'SCM 입고 - {remark}'
+    return 'SCM 입고'
+
+
 def register_erp_incoming(trx, qty, warehouse_code, erp_order_no='', erp_order_seq=''):
     """
     ERP 입고정보 등록
@@ -181,7 +195,7 @@ def register_erp_incoming(trx, qty, warehouse_code, erp_order_no='', erp_order_s
         'divCd': settings.ERP_DIVISION_CODE,
         'vatFg': '0',          # 매입과세
         'mapFg': '1' if erp_order_no else '0',  # 1=발주입고, 0=예외입고
-        'remarkDc': 'SCM 입고',
+        'remarkDc': _build_erp_remark(trx),
         'procFg': '1',         # 일괄
         'umvatFg': '0',        # 부가세미포함
         'detail': [{
@@ -200,7 +214,7 @@ def register_erp_incoming(trx, qty, warehouse_code, erp_order_no='', erp_order_s
             'lotNb': '',
             'umFg': '',
             'lcCd': warehouse_code,
-            'remarkDc': 'SCM 입고',
+            'remarkDc': _build_erp_remark(trx),
             'vatUm': vat_price if vat_price else round(unit_price * 1.1),
             **(  # 발주입고 시 발주번호/순번 포함
                 {'poNb': erp_order_no, 'poSq': int(erp_order_seq) if str(erp_order_seq).isdigit() else erp_order_seq}
