@@ -1372,6 +1372,20 @@ def incoming_history(request):
             incoming_transaction=item
         ).exclude(status='CANCELLED').exists() if item.can_delete else False
 
+        # 수입검사 대기장이면 최종 입고 창고 표시
+        if item.warehouse_to and item.warehouse_to.code == '1000':
+            final_transfer = MaterialTransaction.objects.filter(
+                part=item.part, lot_no=item.lot_no,
+                transaction_type='TRANSFER',
+                warehouse_from__code='1000',
+            ).select_related('warehouse_to').order_by('-date').first()
+            if final_transfer and final_transfer.warehouse_to:
+                item.display_warehouse = final_transfer.warehouse_to
+            else:
+                item.display_warehouse = item.warehouse_to
+        else:
+            item.display_warehouse = item.warehouse_to
+
     # 모달 선택용 목록
     part_groups = list(
         Part.objects.values_list('part_group', flat=True)

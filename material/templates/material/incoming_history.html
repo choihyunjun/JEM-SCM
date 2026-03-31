@@ -123,7 +123,7 @@
                             data-part-name="{{ item.part.part_name }}"
                             data-qty="{{ item.quantity }}"
                             data-lot="{{ item.lot_no|date:'Y-m-d'|default:'' }}"
-                            data-warehouse="{{ item.warehouse_to.name|default:'' }}"
+                            data-warehouse="{{ item.display_warehouse.name|default:'' }}"
                             data-erp-no="{{ item.erp_incoming_no|default:'' }}"
                             data-remark="{{ item.display_remark|default:'' }}"
                             data-actor="{{ item.actor.username|default:'' }}"
@@ -151,7 +151,7 @@
                             <td class="small">
                                 {% if item.lot_no %}{{ item.lot_no|date:"Y-m-d" }}{% else %}-{% endif %}
                             </td>
-                            <td class="small">{{ item.warehouse_to.name|default:"-" }}</td>
+                            <td class="small">{{ item.display_warehouse.name|default:"-" }}</td>
                             <td>
                                 {% if item.erp_incoming_no %}
                                 <i class="fas fa-check-circle text-success" title="{{ item.erp_incoming_no }}"></i>
