@@ -1173,10 +1173,12 @@ def reregister_erp_price(request, trx_id):
             trx.save(update_fields=['erp_incoming_no', 'erp_sync_status'])
 
         # 2) 최신 단가로 (재)등록
+        print(f'[단가재반영] trx={trx.id}, part={trx.part.part_no}, qty={trx.quantity}, wh={warehouse_code}, vendor={trx.vendor.erp_code if trx.vendor else None}', flush=True)
         reg_ok, reg_no, reg_err = register_erp_incoming(
             trx, trx.quantity, warehouse_code,
             erp_order_no=erp_order_no, erp_order_seq=erp_order_seq
         )
+        print(f'[단가재반영] 결과: ok={reg_ok}, no={reg_no}, err={reg_err}', flush=True)
 
         if reg_ok:
             action = '재반영' if erp_no else '등록'
