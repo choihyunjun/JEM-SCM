@@ -181,7 +181,7 @@ def register_erp_incoming(trx, qty, warehouse_code, erp_order_no='', erp_order_s
         'divCd': settings.ERP_DIVISION_CODE,
         'vatFg': '0',          # 매입과세
         'mapFg': '1' if erp_order_no else '0',  # 1=발주입고, 0=예외입고
-        'remarkDc': f'SCM 입고 ({trx.transaction_no})',
+        'remarkDc': 'SCM 입고',
         'procFg': '1',         # 일괄
         'umvatFg': '0',        # 부가세미포함
         'detail': [{
@@ -200,7 +200,7 @@ def register_erp_incoming(trx, qty, warehouse_code, erp_order_no='', erp_order_s
             'lotNb': '',
             'umFg': '',
             'lcCd': warehouse_code,
-            'remarkDc': f'SCM ({trx.transaction_no})',
+            'remarkDc': 'SCM 입고',
             'vatUm': vat_price if vat_price else round(unit_price * 1.1),
             **(  # 발주입고 시 발주번호/순번 포함
                 {'poNb': erp_order_no, 'poSq': int(erp_order_seq) if str(erp_order_seq).isdigit() else erp_order_seq}
