@@ -915,6 +915,7 @@ class MoldingDailyRecord(models.Model):
     time_rate = models.FloatField("시간가동률(%)", default=0)
     product_part_no = models.CharField("생산품번", max_length=100, blank=True)
     product_qty = models.IntegerField("생산수량", default=0)
+    shift = models.CharField("근무구분", max_length=10, choices=[('주간', '주간'), ('야간', '야간')], default='주간')
     erp_synced = models.BooleanField("ERP동기화여부", default=False)
     input_completed = models.BooleanField("입력완료", default=False)
     input_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
@@ -930,15 +931,17 @@ class MoldingDailyRecord(models.Model):
         return f"{self.machine.code} {self.date}"
 
     def calculate_rates(self):
-        """유실시간 합계 → 설비가동률/시간가동률 자동 계산"""
+        """유실시간 합계 → 가동시간 자동 산출 → 설비가동률/시간가동률 계산"""
         self.loss_minutes = sum(d.minutes for d in self.loss_details.all())
-        net = self.operating_minutes - self.loss_minutes
+        # 가동시간 = 기준시간 - 유실시간
+        self.operating_minutes = max(self.base_minutes - self.loss_minutes, 0)
+        net = self.operating_minutes  # 순가동시간 = 가동시간 (유실 이미 차감됨)
         if self.base_minutes > 0:
             self.utilization_rate = round(net / self.base_minutes * 100, 1)
         else:
             self.utilization_rate = 0
-        if self.operating_minutes > 0:
-            self.time_rate = round(net / self.operating_minutes * 100, 1)
+        if self.base_minutes > 0:
+            self.time_rate = round(net / self.base_minutes * 100, 1)
         else:
             self.time_rate = 0
 

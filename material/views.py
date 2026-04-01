@@ -7127,11 +7127,17 @@ def molding_erp_sync(request):
                 if len(rcv_dt) != 8:
                     continue
 
+                shift_nm = (r.get('wshftNm') or '').strip()
+                shift = '야간' if shift_nm == '야간' else '주간'
+
                 key = (machine_code, rcv_dt)
                 if key not in daily_agg:
-                    daily_agg[key] = {'parts': set(), 'qty': 0, 'tonnage': 0}
+                    daily_agg[key] = {'parts': set(), 'qty': 0, 'tonnage': 0, 'shift': shift}
                 daily_agg[key]['parts'].add(r.get('itemCd', ''))
                 daily_agg[key]['qty'] += int(r.get('rcvQt', 0) or 0)
+                # 야간이 하나라도 있으면 야간으로 (보수적)
+                if shift == '야간':
+                    daily_agg[key]['shift'] = '야간'
 
             # 호기 마스터 갱신 및 레코드 생성
             record_count = 0
@@ -7146,12 +7152,17 @@ def molding_erp_sync(request):
                 # 날짜 변환
                 rec_date = dt_date(int(dt_str[:4]), int(dt_str[4:6]), int(dt_str[6:8]))
 
+                # 주간/야간에 따라 기준시간 결정
+                shift = agg.get('shift', '주간')
+                base_min = setting.night_shift_minutes if shift == '야간' else setting.day_shift_minutes
+
                 # 기존 수동 입력 보존: erp 필드만 업데이트
                 record, created = MoldingDailyRecord.objects.get_or_create(
                     machine=machine, date=rec_date,
                     defaults={
                         'status': '가동',
-                        'base_minutes': setting.day_shift_minutes,
+                        'base_minutes': base_min,
+                        'shift': shift,
                         'erp_synced': True,
                     }
                 )
@@ -7159,8 +7170,9 @@ def molding_erp_sync(request):
                 record.product_part_no = ', '.join(sorted(agg['parts']))[:100]
                 record.product_qty = agg['qty']
                 record.erp_synced = True
-                if not record.base_minutes:
-                    record.base_minutes = setting.day_shift_minutes
+                record.shift = shift
+                if not record.input_completed:
+                    record.base_minutes = base_min
                 record.save()
                 record_count += 1
 
@@ -7231,6 +7243,7 @@ def api_molding_save_input(request):
             'product_part_no': rec.product_part_no,
             'product_qty': rec.product_qty,
             'input_completed': rec.input_completed,
+            'shift': rec.shift,
             'loss_details': loss_details,
         }})
 
@@ -7243,7 +7256,6 @@ def api_molding_save_input(request):
         return JsonResponse({'success': False, 'error': 'JSON 파싱 오류'})
 
     record_id = data.get('record_id')
-    operating_minutes = int(data.get('operating_minutes', 0))
     base_minutes = int(data.get('base_minutes', 0))
     loss_data = data.get('loss_details', {})  # {'계획정지': 30, '금형수리': 10, ...}
 
@@ -7254,7 +7266,6 @@ def api_molding_save_input(request):
 
     try:
         with transaction.atomic():
-            record.operating_minutes = operating_minutes
             if base_minutes > 0:
                 record.base_minutes = base_minutes
 

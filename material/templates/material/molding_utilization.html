@@ -238,15 +238,22 @@
                 </div>
                 <hr>
                 <div class="row mb-3">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">근무구분</label>
+                        <select class="form-select" id="inp_shift" onchange="onShiftChange()">
+                            <option value="주간">주간</option>
+                            <option value="야간">야간</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
                         <label class="form-label fw-bold">기준시간 (분)</label>
                         <input type="number" class="form-control" id="inp_base_minutes" value="{{ setting.day_shift_minutes }}" oninput="calcRates()">
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="form-label fw-bold">가동시간 (분)</label>
-                        <input type="number" class="form-control" id="inp_operating" value="0" oninput="calcRates()">
+                        <input type="text" class="form-control bg-light fw-bold text-primary" id="inp_operating" value="0" readonly>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="form-label fw-bold">유실시간 합계 (분)</label>
                         <input type="text" class="form-control bg-light" id="inp_loss_total" value="0" readonly>
                     </div>
@@ -369,6 +376,10 @@ function syncERP() {
     });
 }
 
+// 근무설정값 (shift 변경 시 기준시간 자동 적용)
+var DAY_SHIFT_MIN = {{ setting.day_shift_minutes }};
+var NIGHT_SHIFT_MIN = {{ setting.night_shift_minutes }};
+
 function openInput(recordId) {
     currentRecordId = recordId;
     fetch('/wms/api/molding/save-input/?record_id=' + recordId, {
@@ -382,8 +393,8 @@ function openInput(recordId) {
             document.getElementById('inp_date').textContent = r.date;
             document.getElementById('inp_parts').textContent = r.product_part_no || '-';
             document.getElementById('inp_qty').textContent = r.product_qty || 0;
-            document.getElementById('inp_base_minutes').value = r.base_minutes || {{ setting.day_shift_minutes }};
-            document.getElementById('inp_operating').value = r.operating_minutes || 0;
+            document.getElementById('inp_shift').value = r.shift || '주간';
+            document.getElementById('inp_base_minutes').value = r.base_minutes || DAY_SHIFT_MIN;
             document.querySelectorAll('.loss-input').forEach(function(el) { el.value = 0; });
             if (r.loss_details) {
                 for (var cat in r.loss_details) {
@@ -397,20 +408,26 @@ function openInput(recordId) {
     });
 }
 
+function onShiftChange() {
+    var shift = document.getElementById('inp_shift').value;
+    document.getElementById('inp_base_minutes').value = shift === '야간' ? NIGHT_SHIFT_MIN : DAY_SHIFT_MIN;
+    calcRates();
+}
+
 function calcRates() {
-    var operating = parseInt(document.getElementById('inp_operating').value) || 0;
     var base = parseInt(document.getElementById('inp_base_minutes').value) || 0;
     var lossTotal = 0;
     document.querySelectorAll('.loss-input').forEach(function(el) {
         lossTotal += parseInt(el.value) || 0;
     });
     document.getElementById('inp_loss_total').value = lossTotal;
-    var net = operating - lossTotal;
-    var util = base > 0 ? (net / base * 100) : 0;
-    var timeRate = operating > 0 ? (net / operating * 100) : 0;
+    // 가동시간 = 기준시간 - 유실시간 (자동 계산)
+    var operating = Math.max(base - lossTotal, 0);
+    document.getElementById('inp_operating').value = operating;
+    var util = base > 0 ? (operating / base * 100) : 0;
     document.getElementById('calc_util').textContent = util.toFixed(1) + '%';
-    document.getElementById('calc_time').textContent = timeRate.toFixed(1) + '%';
-    document.getElementById('calc_net').textContent = net + '분';
+    document.getElementById('calc_time').textContent = util.toFixed(1) + '%';
+    document.getElementById('calc_net').textContent = operating + '분';
     document.getElementById('calc_util').className = 'fs-3 fw-bold ' +
         (util >= 90 ? 'text-success' : util >= 70 ? 'text-warning' : 'text-danger');
 }
@@ -423,7 +440,6 @@ function saveInput() {
     });
     var payload = {
         record_id: currentRecordId,
-        operating_minutes: parseInt(document.getElementById('inp_operating').value) || 0,
         base_minutes: parseInt(document.getElementById('inp_base_minutes').value) || 0,
         loss_details: lossDetails,
     };
