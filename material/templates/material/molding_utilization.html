@@ -173,14 +173,20 @@
                             </td>
                             <td>{{ ms.active_days }}</td>
                             {% for dd in ms.daily %}
-                            <td style="padding:2px;{% if dd %}cursor:pointer;{% endif %}"
+                            <td style="padding:0px;" class="align-middle">
                                 {% if dd %}
-                                onclick="openInput({{ dd.id }})"
-                                class="{% if dd.input_completed %}{% if dd.util >= 90 %}bg-success text-white{% elif dd.util >= 70 %}bg-warning{% else %}bg-danger text-white{% endif %}{% elif dd.erp_synced %}erp-synced{% endif %}"
-                                title="{% if dd.input_completed %}가동률: {{ dd.util|floatformat:1 }}%{% elif dd.erp_synced %}ERP동기화 (클릭하여 입력){% endif %}"
+                                <div style="display:flex;flex-direction:column;gap:1px;">
+                                {% for entry in dd %}
+                                <div style="padding:1px 2px;cursor:pointer;font-size:0.65rem;line-height:1.2;{% if entry.input_completed %}{% if entry.util >= 90 %}background:#198754;color:#fff;{% elif entry.util >= 70 %}background:#ffc107;{% else %}background:#dc3545;color:#fff;{% endif %}{% elif entry.erp_synced %}background:#fff3cd;{% endif %}"
+                                    onclick="openInput({{ entry.id }})"
+                                    title="{{ entry.shift }}: {% if entry.input_completed %}가동률 {{ entry.util|floatformat:1 }}%{% elif entry.erp_synced %}ERP동기화 (클릭하여 입력){% endif %}"
+                                >
+                                    {% if entry.input_completed %}{{ entry.util|floatformat:0 }}{% elif entry.erp_synced %}<i class="bi bi-check-circle-fill" style="font-size:0.5rem;"></i>{% endif %}
+                                    {% if dd|length > 1 %}<span style="font-size:0.5rem;opacity:0.7;">{{ entry.shift|truncatechars:1 }}</span>{% endif %}
+                                </div>
+                                {% endfor %}
+                                </div>
                                 {% endif %}
-                            >
-                                {% if dd and dd.input_completed %}{{ dd.util|floatformat:0 }}{% elif dd and dd.erp_synced %}<i class="bi bi-check-circle-fill" style="font-size:0.6rem;"></i>{% endif %}
                             </td>
                             {% endfor %}
                         </tr>

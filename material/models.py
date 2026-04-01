@@ -924,7 +924,7 @@ class MoldingDailyRecord(models.Model):
     class Meta:
         verbose_name = "성형 일별 가동기록"
         verbose_name_plural = "17. 성형 일별 가동기록"
-        unique_together = ['machine', 'date']
+        unique_together = ['machine', 'date', 'shift']
         ordering = ['-date', 'machine']
 
     def __str__(self):
