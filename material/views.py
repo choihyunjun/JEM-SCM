@@ -7009,27 +7009,27 @@ def molding_utilization(request):
 
     setting = MoldingWorkSetting.get_setting(year, month)
 
-    # 호기별 월간 집계
+    # 호기별 월간 집계 (주간/야간 행 분리)
+    from collections import defaultdict
     machine_summary = []
     for m in machines:
         m_records = [r for r in records if r.machine_id == m.id]
-        active_records = [r for r in m_records if r.status == '가동']
-        active_days = len(active_records)
-        avg_util = sum(r.utilization_rate for r in active_records) / active_days if active_days else 0
-        avg_time = sum(r.time_rate for r in active_records) / active_days if active_days else 0
 
-        # 같은 날 주간/야간 복수 레코드 가능
-        from collections import defaultdict
-        daily_map = defaultdict(list)
-        for r in m_records:
-            daily_map[r.date.day].append(r)
-        daily_list = []
-        for d in range(1, days_in_month + 1):
-            recs = daily_map.get(d, [])
-            if recs:
-                entries = []
-                for r in recs:
-                    entries.append({
+        for shift in ['주간', '야간']:
+            s_records = [r for r in m_records if r.shift == shift]
+            if not s_records:
+                continue
+            active_records = [r for r in s_records if r.status == '가동']
+            active_days = len(active_records)
+            avg_util = sum(r.utilization_rate for r in active_records) / active_days if active_days else 0
+            avg_time = sum(r.time_rate for r in active_records) / active_days if active_days else 0
+
+            daily_map = {r.date.day: r for r in s_records}
+            daily_list = []
+            for d in range(1, days_in_month + 1):
+                r = daily_map.get(d)
+                if r:
+                    daily_list.append({
                         'id': r.id,
                         'status': r.status,
                         'util': r.utilization_rate,
@@ -7037,19 +7037,18 @@ def molding_utilization(request):
                         'input_completed': r.input_completed,
                         'operating': r.operating_minutes,
                         'loss': r.loss_minutes,
-                        'shift': r.shift,
                     })
-                daily_list.append(entries)
-            else:
-                daily_list.append(None)
+                else:
+                    daily_list.append(None)
 
-        machine_summary.append({
-            'machine': m,
-            'active_days': active_days,
-            'avg_util': avg_util,
-            'avg_time': avg_time,
-            'daily': daily_list,
-        })
+            machine_summary.append({
+                'machine': m,
+                'shift': shift,
+                'active_days': active_days,
+                'avg_util': avg_util,
+                'avg_time': avg_time,
+                'daily': daily_list,
+            })
 
     # 전체 요약
     all_active = [r for r in records if r.status == '가동']
