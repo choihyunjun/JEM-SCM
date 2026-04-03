@@ -913,7 +913,7 @@ class MoldingDailyRecord(models.Model):
     base_minutes = models.IntegerField("기준시간(분)", default=0)  # 부하시간 기준
     utilization_rate = models.FloatField("설비가동률(%)", default=0)
     time_rate = models.FloatField("시간가동률(%)", default=0)
-    product_part_no = models.CharField("생산품번", max_length=100, blank=True)
+    product_part_no = models.CharField("생산품번", max_length=500, blank=True)
     product_qty = models.IntegerField("생산수량", default=0)
     shift = models.CharField("근무구분", max_length=10, choices=[('주간', '주간'), ('야간', '야간')], default='주간')
     erp_synced = models.BooleanField("ERP동기화여부", default=False)

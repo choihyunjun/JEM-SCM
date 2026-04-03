@@ -7139,9 +7139,10 @@ def molding_erp_sync(request):
 
                 key = (machine_code, rcv_dt, shift)
                 if key not in daily_agg:
-                    daily_agg[key] = {'parts': set(), 'qty': 0, 'tonnage': 0}
-                daily_agg[key]['parts'].add(r.get('itemCd', ''))
-                daily_agg[key]['qty'] += int(r.get('rcvQt', 0) or 0)
+                    daily_agg[key] = {'part_qty': {}, 'tonnage': 0}
+                item_cd = r.get('itemCd', '')
+                qty = int(r.get('rcvQt', 0) or 0)
+                daily_agg[key]['part_qty'][item_cd] = daily_agg[key]['part_qty'].get(item_cd, 0) + qty
 
             # 호기 마스터 갱신 및 레코드 생성
             record_count = 0
@@ -7169,8 +7170,12 @@ def molding_erp_sync(request):
                     }
                 )
                 record.status = '가동'
-                record.product_part_no = ', '.join(sorted(agg['parts']))[:100]
-                record.product_qty = agg['qty']
+                # 품번별 수량 표시: "ZR700: 1000, ZR703: 2000"
+                part_qty = agg['part_qty']
+                record.product_part_no = ', '.join(
+                    f"{p}: {q:,}" for p, q in sorted(part_qty.items())
+                )[:500]
+                record.product_qty = sum(part_qty.values())
                 record.erp_synced = True
                 if not record.input_completed:
                     record.base_minutes = base_min
