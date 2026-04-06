@@ -143,8 +143,26 @@
                         <div class="form-control-plaintext" id="vendorBizItem">-</div>
                     </div>
                 </div>
-                <div class="alert alert-light text-muted mt-3 mb-0 small">
-                    <i class="bi bi-info-circle me-1"></i>거래처 정보 수정은 아마란스(ERP)에서 진행해주세요.
+                <hr>
+                <h6 class="fw-bold mb-3"><i class="bi bi-envelope me-1"></i>알림 수신 정보</h6>
+                <div class="row g-2" id="vendorContactSection">
+                    <div class="col-md-6">
+                        <label class="form-label text-muted">담당자명</label>
+                        <input type="text" class="form-control form-control-sm" id="vendorContactName">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label text-muted">담당자 연락처</label>
+                        <input type="text" class="form-control form-control-sm" id="vendorContactPhone">
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label text-muted">이메일</label>
+                        <input type="email" class="form-control form-control-sm" id="vendorEmail">
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <button class="btn btn-primary btn-sm w-100" onclick="saveVendorContact()">
+                            <i class="bi bi-check-lg me-1"></i>저장
+                        </button>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -203,8 +221,25 @@ function openEditModal(vendorId) {
             document.getElementById('vendorAddress').textContent = data.address || '-';
             document.getElementById('vendorBizType').textContent = data.biz_type || '-';
             document.getElementById('vendorBizItem').textContent = data.biz_item || '-';
+            document.getElementById('vendorContactName').value = data.contact_name || '';
+            document.getElementById('vendorContactPhone').value = data.contact_phone || '';
+            document.getElementById('vendorEmail').value = data.email || '';
+            document.getElementById('vendorContactSection').dataset.vendorId = data.id;
             new bootstrap.Modal(document.getElementById('vendorModal')).show();
         });
+}
+
+function saveVendorContact() {
+    var vendorId = document.getElementById('vendorContactSection').dataset.vendorId;
+    var fd = new FormData();
+    fd.append('vendor_id', vendorId);
+    fd.append('name', document.getElementById('vendorName').textContent);
+    fd.append('contact_name', document.getElementById('vendorContactName').value);
+    fd.append('contact_phone', document.getElementById('vendorContactPhone').value);
+    fd.append('email', document.getElementById('vendorEmail').value);
+    fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+    fetch('{% url "vendor_update" %}', {method: 'POST', body: fd})
+    .then(r => { if (r.ok) { alert('저장 완료'); location.reload(); } else { alert('저장 실패'); } });
 }
 
 function openLinkUserModal(vendorId, vendorName) {

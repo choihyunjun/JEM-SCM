@@ -3789,6 +3789,9 @@ def vendor_detail(request, vendor_id):
             'address': vendor.address,
             'biz_type': vendor.biz_type,
             'biz_item': vendor.biz_item,
+            'email': vendor.email or '',
+            'contact_name': vendor.contact_name or '',
+            'contact_phone': vendor.contact_phone or '',
         })
     except Vendor.DoesNotExist:
         return JsonResponse({'error': 'Not found'}, status=404)
@@ -3822,6 +3825,9 @@ def vendor_create(request):
             address=request.POST.get('address') or None,
             biz_type=request.POST.get('biz_type') or None,
             biz_item=request.POST.get('biz_item') or None,
+            email=request.POST.get('email') or None,
+            contact_name=request.POST.get('contact_name') or None,
+            contact_phone=request.POST.get('contact_phone') or None,
         )
         messages.success(request, f'협력사 "{name}"이(가) 등록되었습니다.')
     except Exception as e:
@@ -3840,12 +3846,20 @@ def vendor_update(request):
     vendor_id = request.POST.get('vendor_id')
     try:
         vendor = Vendor.objects.get(id=vendor_id)
-        vendor.name = request.POST.get('name', '').strip()
-        vendor.biz_registration_number = request.POST.get('biz_registration_number') or None
-        vendor.representative = request.POST.get('representative') or None
-        vendor.address = request.POST.get('address') or None
-        vendor.biz_type = request.POST.get('biz_type') or None
-        vendor.biz_item = request.POST.get('biz_item') or None
+        name = request.POST.get('name', '').strip()
+        if name:
+            vendor.name = name
+        # 기존 필드 (값이 전달된 경우에만 업데이트)
+        for field in ['biz_registration_number', 'representative', 'address', 'biz_type', 'biz_item']:
+            if field in request.POST:
+                setattr(vendor, field, request.POST.get(field) or None)
+        # 알림 수신 정보 (항상 업데이트)
+        if 'email' in request.POST:
+            vendor.email = request.POST.get('email') or None
+        if 'contact_name' in request.POST:
+            vendor.contact_name = request.POST.get('contact_name') or None
+        if 'contact_phone' in request.POST:
+            vendor.contact_phone = request.POST.get('contact_phone') or None
         vendor.save()
 
         # Organization 이름도 동기화
