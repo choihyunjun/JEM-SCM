@@ -534,6 +534,15 @@ function openInput(recordId) {
                 }
             }
             calcRates();
+            // 사유 미입력이지만 ERP 기반 유실시간이 있으면 표시
+            if (r.loss_minutes > 0 && parseInt(document.getElementById('inp_loss_total').value) === 0) {
+                document.getElementById('inp_loss_total').value = r.loss_minutes;
+                document.getElementById('inp_operating').value = Math.max((r.base_minutes || 0) - r.loss_minutes, 0);
+                var rate = r.base_minutes > 0 ? (((r.base_minutes - r.loss_minutes) / r.base_minutes) * 100) : 0;
+                document.getElementById('calc_util').textContent = rate.toFixed(1) + '%';
+                document.getElementById('calc_time').textContent = rate.toFixed(1) + '%';
+                document.getElementById('calc_net').textContent = Math.max(r.base_minutes - r.loss_minutes, 0) + '분';
+            }
             new bootstrap.Modal(document.getElementById('inputModal')).show();
         }
     });
