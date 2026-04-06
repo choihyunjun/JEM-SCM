@@ -298,7 +298,7 @@
                     </div>
                     <div class="col-md-3">
                         <label class="form-label fw-bold">유실시간 합계 (분)</label>
-                        <input type="number" class="form-control" id="inp_loss_total" value="0" min="0" oninput="calcRates()">
+                        <input type="text" class="form-control bg-light" id="inp_loss_total" value="0" readonly>
                         <div class="small mt-1">
                             <span class="text-muted">사유 입력: <strong id="detail_loss_sum" class="text-danger">0</strong>분</span>
                         </div>
@@ -526,11 +526,6 @@ function openInput(recordId) {
             document.getElementById('inp_shift').value = r.shift || '주간';
             document.getElementById('inp_base_minutes').value = r.base_minutes || DAY_SHIFT_MIN;
             currentWorkMinutes = r.work_minutes || 0;
-            // ERP 실가동시간 있으면 유실시간 자동 세팅
-            if (currentWorkMinutes > 0 && !r.input_completed) {
-                var erpLoss = Math.max((r.base_minutes || 0) - currentWorkMinutes, 0);
-                document.getElementById('inp_loss_total').value = erpLoss;
-            }
             document.querySelectorAll('.loss-input').forEach(function(el) { el.value = 0; });
             if (r.loss_details) {
                 for (var cat in r.loss_details) {
@@ -567,26 +562,15 @@ function calcRates() {
     document.getElementById('time_loss_total').textContent = timeLoss + '분';
     document.getElementById('detail_loss_sum').textContent = lossTotal;
 
-    // 유실시간: 사유 입력이 있으면 그 합계로 갱신 (수동 수정도 가능)
-    var manualLoss = parseInt(document.getElementById('inp_loss_total').value) || 0;
-    // 사유 입력 시 유실시간 합계 자동 갱신 (수동 수정 중이 아닐 때)
-    if (document.activeElement !== document.getElementById('inp_loss_total') && lossTotal > 0) {
-        manualLoss = lossTotal;
-        document.getElementById('inp_loss_total').value = manualLoss;
-    }
+    // 유실시간 = 사유 입력 합계
+    document.getElementById('inp_loss_total').value = lossTotal;
 
     // 가동시간 = 기준시간 - 유실시간
-    var operating = Math.max(base - manualLoss, 0);
+    var operating = Math.max(base - lossTotal, 0);
     document.getElementById('inp_operating').value = operating;
 
-    // 사유 입력 합계 vs 유실시간 비교
-    var detailEl = document.getElementById('detail_loss_sum');
-    detailEl.textContent = lossTotal;
-    if (manualLoss > 0 && lossTotal !== manualLoss) {
-        detailEl.className = 'text-danger fw-bold';
-    } else {
-        detailEl.className = 'text-success fw-bold';
-    }
+    // 사유 입력 합계 표시
+    document.getElementById('detail_loss_sum').textContent = lossTotal;
 
     // 일별: 설비가동률 = 시간가동률 = 가동시간 / 기준시간
     var rate = base > 0 ? (operating / base * 100) : 0;
@@ -605,13 +589,6 @@ function saveInput() {
         var v = parseInt(el.value) || 0;
         if (v > 0) { lossDetails[el.dataset.cat] = v; detailSum += v; }
     });
-    // 사유 합계 vs 유실시간 불일치 시 확인
-    var totalLoss = parseInt(document.getElementById('inp_loss_total').value) || 0;
-    if (totalLoss > 0 && detailSum !== totalLoss) {
-        if (!confirm('유실 사유 합계(' + detailSum + '분)가 유실시간(' + totalLoss + '분)과 일치하지 않습니다.\n\n그래도 저장하시겠습니까?')) {
-            return;
-        }
-    }
     var payload = {
         record_id: currentRecordId,
         base_minutes: parseInt(document.getElementById('inp_base_minutes').value) || 0,
