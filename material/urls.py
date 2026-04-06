@@ -123,4 +123,5 @@ urlpatterns = [
     path('molding/erp-sync/', views.molding_erp_sync, name='molding_erp_sync'),
     path('molding/settings/', views.molding_settings, name='molding_settings'),
     path('api/molding/save-input/', views.api_molding_save_input, name='api_molding_save_input'),
+    path('api/molding/machines/', views.api_molding_machines, name='api_molding_machines'),
 ]

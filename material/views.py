@@ -7137,6 +7137,7 @@ def molding_utilization(request):
         'time_loss_categories': time_loss_categories,
         'tonnage_groups': tonnage_groups,
         'show_all': show_all,
+        'no_tonnage_count': MoldingMachine.objects.filter(is_active=True, tonnage=0).count(),
     }
     return render(request, 'material/molding_utilization.html', context)
 
@@ -7352,3 +7353,68 @@ def api_molding_save_input(request):
     except Exception as e:
         logger.error(f'성형 가동률 입력 오류: {e}', exc_info=True)
         return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+@wms_permission_required('can_wms_stock_view')
+def api_molding_machines(request):
+    """성형기 마스터 CRUD API"""
+    from .models import MoldingMachine
+    import json
+
+    if request.method == 'GET':
+        machines = MoldingMachine.objects.all().order_by('tonnage', 'code')
+        data = [{
+            'id': m.id, 'code': m.code, 'tonnage': m.tonnage,
+            'line': m.line, 'is_active': m.is_active,
+        } for m in machines]
+        return JsonResponse({'machines': data})
+
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({'success': False, 'error': 'JSON 파싱 오류'})
+
+        action = data.get('action', '')
+
+        if action == 'add':
+            code = (data.get('code') or '').strip().upper()
+            if not code:
+                return JsonResponse({'success': False, 'error': '호기 코드를 입력하세요.'})
+            if MoldingMachine.objects.filter(code=code).exists():
+                return JsonResponse({'success': False, 'error': f'{code}는 이미 등록되어 있습니다.'})
+            MoldingMachine.objects.create(
+                code=code,
+                tonnage=int(data.get('tonnage', 0)),
+                line=(data.get('line') or '').strip(),
+                is_active=True,
+            )
+            return JsonResponse({'success': True, 'message': f'{code} 등록 완료'})
+
+        elif action == 'update':
+            try:
+                m = MoldingMachine.objects.get(id=data.get('id'))
+            except MoldingMachine.DoesNotExist:
+                return JsonResponse({'success': False, 'error': '호기를 찾을 수 없습니다.'})
+            if 'tonnage' in data:
+                m.tonnage = int(data['tonnage'])
+            if 'line' in data:
+                m.line = (data['line'] or '').strip()
+            if 'is_active' in data:
+                m.is_active = bool(data['is_active'])
+            m.save()
+            return JsonResponse({'success': True, 'message': f'{m.code} 수정 완료'})
+
+        elif action == 'delete':
+            try:
+                m = MoldingMachine.objects.get(id=data.get('id'))
+            except MoldingMachine.DoesNotExist:
+                return JsonResponse({'success': False, 'error': '호기를 찾을 수 없습니다.'})
+            code = m.code
+            m.delete()
+            return JsonResponse({'success': True, 'message': f'{code} 삭제 완료'})
+
+        return JsonResponse({'success': False, 'error': '알 수 없는 액션'})
+
+    return JsonResponse({'success': False, 'error': 'GET/POST만 허용'})

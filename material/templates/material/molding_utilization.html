@@ -9,6 +9,10 @@
             <span class="text-muted small">ERP 생산입고 데이터 기반 성형기 가동률 관리</span>
         </div>
         <div class="d-flex gap-2">
+            <button class="btn btn-outline-dark btn-sm" onclick="openMachineModal()">
+                <i class="bi bi-cpu me-1"></i> 성형기 관리
+                {% if no_tonnage_count %}<span class="badge bg-danger ms-1">{{ no_tonnage_count }}</span>{% endif %}
+            </button>
             <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#settingModal">
                 <i class="bi bi-gear me-1"></i> 근무설정
             </button>
@@ -132,6 +136,12 @@
                 </table>
             </div>
         </div>
+    </div>
+    {% endif %}
+
+    {% if no_tonnage_count %}
+    <div class="alert alert-warning py-2 small mb-2">
+        <i class="bi bi-exclamation-triangle me-1"></i> 톤수 미설정 호기가 <strong>{{ no_tonnage_count }}대</strong> 있습니다. <a href="#" onclick="openMachineModal(); return false;">성형기 관리</a>에서 톤수를 설정하세요.
     </div>
     {% endif %}
 
@@ -389,6 +399,61 @@
     </div>
 </div>
 
+<!-- 성형기 관리 모달 -->
+<div class="modal fade" id="machineModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-cpu me-2"></i>성형기 마스터 관리</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- 신규 추가 -->
+                <div class="card mb-3">
+                    <div class="card-body py-2">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold mb-0">호기코드</label>
+                                <input type="text" class="form-control form-control-sm" id="new_mc_code" placeholder="M999">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small fw-bold mb-0">톤수</label>
+                                <input type="number" class="form-control form-control-sm" id="new_mc_tonnage" placeholder="110">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold mb-0">라인</label>
+                                <input type="text" class="form-control form-control-sm" id="new_mc_line" placeholder="1 LINE">
+                            </div>
+                            <div class="col-md-4">
+                                <button class="btn btn-primary btn-sm w-100" onclick="addMachine()">
+                                    <i class="bi bi-plus-lg me-1"></i>호기 추가
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- 목록 -->
+                <div class="table-responsive" style="max-height:400px;">
+                    <table class="table table-sm table-hover mb-0" style="font-size:0.8rem;">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th>호기</th>
+                                <th style="width:80px;">톤수</th>
+                                <th>라인</th>
+                                <th style="width:70px;">상태</th>
+                                <th style="width:100px;">관리</th>
+                            </tr>
+                        </thead>
+                        <tbody id="machineListBody">
+                            <tr><td colspan="5" class="text-center text-muted">로딩 중...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <style>
 .sticky-col { position: sticky; left: 0; z-index: 1; }
 .erp-synced { background: #fff3cd !important; }
@@ -548,6 +613,80 @@ function saveSetting() {
     .then(data => {
         if (data.success) { alert(data.message); location.reload(); }
         else { alert('오류: ' + data.error); }
+    });
+}
+
+// ─── 성형기 관리 ───
+function openMachineModal() {
+    loadMachineList();
+    new bootstrap.Modal(document.getElementById('machineModal')).show();
+}
+
+function loadMachineList() {
+    fetch('{% url "material:api_molding_machines" %}')
+    .then(r => r.json())
+    .then(data => {
+        var tbody = document.getElementById('machineListBody');
+        if (!data.machines || data.machines.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">등록된 호기가 없습니다.</td></tr>';
+            return;
+        }
+        var html = '';
+        data.machines.forEach(function(m) {
+            var activeClass = m.is_active ? '' : 'text-decoration-line-through text-muted';
+            var tonBadge = m.tonnage === 0 ? '<span class="badge bg-danger">미설정</span>' : m.tonnage + 't';
+            html += '<tr class="' + activeClass + '">' +
+                '<td class="fw-bold">' + m.code + '</td>' +
+                '<td><input type="number" class="form-control form-control-sm" value="' + m.tonnage + '" style="width:70px;" onchange="updateMachine(' + m.id + ',\'tonnage\',this.value)"></td>' +
+                '<td><input type="text" class="form-control form-control-sm" value="' + (m.line||'') + '" style="width:100px;" onchange="updateMachine(' + m.id + ',\'line\',this.value)"></td>' +
+                '<td><div class="form-check form-switch"><input class="form-check-input" type="checkbox" ' + (m.is_active?'checked':'') + ' onchange="updateMachine(' + m.id + ',\'is_active\',this.checked)"></div></td>' +
+                '<td><button class="btn btn-outline-danger btn-sm" onclick="deleteMachine(' + m.id + ',\'' + m.code + '\')"><i class="bi bi-trash"></i></button></td>' +
+                '</tr>';
+        });
+        tbody.innerHTML = html;
+    });
+}
+
+function addMachine() {
+    var code = document.getElementById('new_mc_code').value.trim();
+    var tonnage = parseInt(document.getElementById('new_mc_tonnage').value) || 0;
+    var line = document.getElementById('new_mc_line').value.trim();
+    if (!code) { alert('호기코드를 입력하세요.'); return; }
+    fetch('{% url "material:api_molding_machines" %}', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token }}'},
+        body: JSON.stringify({action:'add', code:code, tonnage:tonnage, line:line})
+    }).then(r=>r.json()).then(data => {
+        if (data.success) {
+            document.getElementById('new_mc_code').value = '';
+            document.getElementById('new_mc_tonnage').value = '';
+            document.getElementById('new_mc_line').value = '';
+            loadMachineList();
+        } else { alert(data.error); }
+    });
+}
+
+function updateMachine(id, field, value) {
+    var payload = {action:'update', id:id};
+    payload[field] = value;
+    fetch('{% url "material:api_molding_machines" %}', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token }}'},
+        body: JSON.stringify(payload)
+    }).then(r=>r.json()).then(data => {
+        if (!data.success) alert(data.error);
+    });
+}
+
+function deleteMachine(id, code) {
+    if (!confirm(code + ' 호기를 삭제하시겠습니까?\n(비활성화를 권장합니다)')) return;
+    fetch('{% url "material:api_molding_machines" %}', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token }}'},
+        body: JSON.stringify({action:'delete', id:id})
+    }).then(r=>r.json()).then(data => {
+        if (data.success) loadMachineList();
+        else alert(data.error);
     });
 }
 </script>
