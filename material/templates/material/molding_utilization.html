@@ -297,10 +297,10 @@
                         <input type="text" class="form-control bg-light fw-bold text-primary" id="inp_operating" value="0" readonly>
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label fw-bold">유실시간 합계 (분)</label>
-                        <input type="text" class="form-control bg-light" id="inp_loss_total" value="0" readonly>
+                        <label class="form-label fw-bold">유실시간 (분)</label>
+                        <input type="number" class="form-control" id="inp_loss_total" value="0" min="0" oninput="onLossTotalEdit()">
                         <div class="small mt-1">
-                            <span class="text-muted">사유 입력: <strong id="detail_loss_sum" class="text-danger">0</strong>분</span>
+                            <span class="text-muted">사유 입력: <strong id="detail_loss_sum">0</strong> / <strong id="detail_loss_target">0</strong>분</span>
                         </div>
                     </div>
                 </div>
@@ -533,16 +533,11 @@ function openInput(recordId) {
                     if (el) el.value = r.loss_details[cat];
                 }
             }
-            calcRates();
-            // 사유 미입력이지만 ERP 기반 유실시간이 있으면 표시
-            if (r.loss_minutes > 0 && parseInt(document.getElementById('inp_loss_total').value) === 0) {
+            // ERP 기반 유실시간을 기준점으로 세팅
+            if (r.loss_minutes > 0) {
                 document.getElementById('inp_loss_total').value = r.loss_minutes;
-                document.getElementById('inp_operating').value = Math.max((r.base_minutes || 0) - r.loss_minutes, 0);
-                var rate = r.base_minutes > 0 ? (((r.base_minutes - r.loss_minutes) / r.base_minutes) * 100) : 0;
-                document.getElementById('calc_util').textContent = rate.toFixed(1) + '%';
-                document.getElementById('calc_time').textContent = rate.toFixed(1) + '%';
-                document.getElementById('calc_net').textContent = Math.max(r.base_minutes - r.loss_minutes, 0) + '분';
             }
+            calcRates();
             new bootstrap.Modal(document.getElementById('inputModal')).show();
         }
     });
@@ -556,39 +551,66 @@ function onShiftChange() {
 
 function calcRates() {
     var base = parseInt(document.getElementById('inp_base_minutes').value) || 0;
+    var targetLoss = parseInt(document.getElementById('inp_loss_total').value) || 0;
+
     var mgmtLoss = 0, timeLoss = 0;
     document.querySelectorAll('.loss-input').forEach(function(el) {
         var v = parseInt(el.value) || 0;
-        if (el.dataset.lossType === 'mgmt') {
-            mgmtLoss += v;
-        } else {
-            timeLoss += v;
-        }
+        if (el.dataset.lossType === 'mgmt') { mgmtLoss += v; } else { timeLoss += v; }
     });
-    var lossTotal = mgmtLoss + timeLoss;
-    document.getElementById('inp_loss_total').value = lossTotal;
+    var detailSum = mgmtLoss + timeLoss;
+
+    // 초과 입력 방지
+    if (targetLoss > 0 && detailSum > targetLoss) {
+        var focused = document.activeElement;
+        if (focused && focused.classList.contains('loss-input')) {
+            var over = detailSum - targetLoss;
+            focused.value = Math.max((parseInt(focused.value) || 0) - over, 0);
+        }
+        mgmtLoss = 0; timeLoss = 0;
+        document.querySelectorAll('.loss-input').forEach(function(el) {
+            var v = parseInt(el.value) || 0;
+            if (el.dataset.lossType === 'mgmt') { mgmtLoss += v; } else { timeLoss += v; }
+        });
+        detailSum = mgmtLoss + timeLoss;
+    }
+
     document.getElementById('mgmt_loss_total').textContent = mgmtLoss + '분';
     document.getElementById('time_loss_total').textContent = timeLoss + '분';
-    document.getElementById('detail_loss_sum').textContent = lossTotal;
+    document.getElementById('detail_loss_sum').textContent = detailSum;
+    document.getElementById('detail_loss_target').textContent = targetLoss;
 
-    // 유실시간 = 사유 입력 합계
-    document.getElementById('inp_loss_total').value = lossTotal;
+    // 색상: 일치=초록, 미달=빨강
+    var sumEl = document.getElementById('detail_loss_sum');
+    if (targetLoss > 0 && detailSum === targetLoss) {
+        sumEl.className = 'text-success fw-bold';
+    } else if (targetLoss > 0) {
+        sumEl.className = 'text-danger fw-bold';
+    } else {
+        sumEl.className = '';
+    }
 
-    // 가동시간 = 기준시간 - 유실시간
-    var operating = Math.max(base - lossTotal, 0);
+    // 가동시간/가동률은 유실시간(기준점) 기준
+    var operating = Math.max(base - targetLoss, 0);
     document.getElementById('inp_operating').value = operating;
-
-    // 사유 입력 합계 표시
-    document.getElementById('detail_loss_sum').textContent = lossTotal;
-
-    // 일별: 설비가동률 = 시간가동률 = 가동시간 / 기준시간
     var rate = base > 0 ? (operating / base * 100) : 0;
-
     document.getElementById('calc_util').textContent = rate.toFixed(1) + '%';
     document.getElementById('calc_time').textContent = rate.toFixed(1) + '%';
     document.getElementById('calc_net').textContent = operating + '분';
     document.getElementById('calc_util').className = 'fs-3 fw-bold ' +
         (rate >= 90 ? 'text-success' : rate >= 70 ? 'text-warning' : 'text-danger');
+
+    // 저장 버튼: 사유 합계 = 유실시간이면 활성화
+    var btn = document.getElementById('btnSaveInput');
+    if (targetLoss > 0 && detailSum !== targetLoss) {
+        btn.disabled = true; btn.className = 'btn btn-secondary';
+    } else {
+        btn.disabled = false; btn.className = 'btn btn-primary';
+    }
+}
+
+function onLossTotalEdit() {
+    calcRates();
 }
 
 function saveInput() {
