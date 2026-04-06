@@ -562,20 +562,27 @@ function calcRates() {
     document.getElementById('time_loss_total').textContent = timeLoss + '분';
     document.getElementById('detail_loss_sum').textContent = lossTotal;
 
-    // 가동시간: ERP 실가동시간이 있으면 사용, 없으면 기준-유실
-    var operating;
-    if (currentWorkMinutes > 0 && lossTotal === 0) {
-        // 유실 사유 미입력 시 ERP 기준으로 표시
-        operating = currentWorkMinutes;
-        var erpLoss = Math.max(base - currentWorkMinutes, 0);
-        document.getElementById('inp_loss_total').value = erpLoss;
-    } else if (lossTotal > 0) {
-        // 유실 사유 입력됨 → 입력 기준
-        operating = Math.max(base - lossTotal, 0);
+    // 유실시간 합계: ERP 실가동시간 있으면 고정, 없으면 사유 입력 기준
+    var totalLoss;
+    if (currentWorkMinutes > 0) {
+        totalLoss = Math.max(base - currentWorkMinutes, 0);
     } else {
-        operating = Math.max(base - lossTotal, 0);
+        totalLoss = lossTotal;
     }
+    document.getElementById('inp_loss_total').value = totalLoss;
+
+    // 가동시간 = 기준시간 - 유실시간
+    var operating = Math.max(base - totalLoss, 0);
     document.getElementById('inp_operating').value = operating;
+
+    // 사유 입력 합계 vs 유실시간 비교
+    var detailEl = document.getElementById('detail_loss_sum');
+    detailEl.textContent = lossTotal;
+    if (currentWorkMinutes > 0 && lossTotal !== totalLoss) {
+        detailEl.className = 'text-danger fw-bold';
+    } else {
+        detailEl.className = 'text-success fw-bold';
+    }
 
     // 일별: 설비가동률 = 시간가동률 = 가동시간 / 기준시간
     var rate = base > 0 ? (operating / base * 100) : 0;
@@ -589,10 +596,20 @@ function calcRates() {
 
 function saveInput() {
     var lossDetails = {};
+    var detailSum = 0;
     document.querySelectorAll('.loss-input').forEach(function(el) {
         var v = parseInt(el.value) || 0;
-        if (v > 0) lossDetails[el.dataset.cat] = v;
+        if (v > 0) { lossDetails[el.dataset.cat] = v; detailSum += v; }
     });
+    // ERP 실가동시간이 있으면 사유 합계 검증
+    if (currentWorkMinutes > 0) {
+        var base = parseInt(document.getElementById('inp_base_minutes').value) || 0;
+        var expectedLoss = Math.max(base - currentWorkMinutes, 0);
+        if (detailSum !== expectedLoss) {
+            alert('유실 사유 합계(' + detailSum + '분)가 유실시간(' + expectedLoss + '분)과 일치하지 않습니다.\n\n남은 ' + (expectedLoss - detailSum) + '분을 사유별로 배분해주세요.');
+            return;
+        }
+    }
     var payload = {
         record_id: currentRecordId,
         base_minutes: parseInt(document.getElementById('inp_base_minutes').value) || 0,
