@@ -7002,23 +7002,50 @@ def molding_utilization(request):
     month = int(request.GET.get('month', timezone.localtime().month))
     _, days_in_month = calendar.monthrange(year, month)
 
-    machines = MoldingMachine.objects.filter(is_active=True)
+    show_all = request.GET.get('show_all', '0') == '1'
+    machines = MoldingMachine.objects.filter(is_active=True).order_by('tonnage', 'code')
     records = MoldingDailyRecord.objects.filter(
         date__year=year, date__month=month
     ).select_related('machine').prefetch_related('loss_details')
 
     setting = MoldingWorkSetting.get_setting(year, month)
 
-    # 호기별 월간 집계 (주간/야간 행 분리)
-    from collections import defaultdict
-    machine_summary = []
+    # 실적 있는 호기 ID
+    active_machine_ids = set(r.machine_id for r in records)
+
+    # 호기별 월간 집계 (주간/야간 행 분리, 톤수별 그룹)
+    from collections import defaultdict, OrderedDict
+    tonnage_groups = OrderedDict()  # {톤수: {'rows': [...], 'summary': {...}}}
+
     for m in machines:
         m_records = [r for r in records if r.machine_id == m.id]
 
+        # 전체보기가 아니면 실적 있는 호기만
+        if not show_all and m.id not in active_machine_ids:
+            continue
+
+        tonnage = m.tonnage
+        if tonnage not in tonnage_groups:
+            tonnage_groups[tonnage] = {'rows': [], 'util_sum': 0, 'time_sum': 0, 'active_count': 0, 'total_days': 0}
+
+        has_shift_data = False
         for shift in ['주간', '야간']:
             s_records = [r for r in m_records if r.shift == shift]
-            if not s_records:
+            if not s_records and not show_all:
                 continue
+            if not s_records and show_all:
+                # 전체보기 시 빈 행도 표시 (주간만)
+                if shift == '야간':
+                    continue
+                daily_list = [None] * days_in_month
+                tonnage_groups[tonnage]['rows'].append({
+                    'machine': m, 'shift': shift,
+                    'active_days': 0, 'avg_util': 0, 'avg_time': 0,
+                    'daily': daily_list,
+                })
+                has_shift_data = True
+                continue
+
             active_records = [r for r in s_records if r.status == '가동']
             active_days = len(active_records)
             avg_util = sum(r.utilization_rate for r in active_records) / active_days if active_days else 0
@@ -7041,14 +7068,29 @@ def molding_utilization(request):
                 else:
                     daily_list.append(None)
 
-            machine_summary.append({
-                'machine': m,
-                'shift': shift,
-                'active_days': active_days,
-                'avg_util': avg_util,
-                'avg_time': avg_time,
+            tonnage_groups[tonnage]['rows'].append({
+                'machine': m, 'shift': shift,
+                'active_days': active_days, 'avg_util': avg_util, 'avg_time': avg_time,
                 'daily': daily_list,
             })
+            if active_days > 0:
+                tonnage_groups[tonnage]['util_sum'] += avg_util
+                tonnage_groups[tonnage]['time_sum'] += avg_time
+                tonnage_groups[tonnage]['active_count'] += 1
+                tonnage_groups[tonnage]['total_days'] += active_days
+            has_shift_data = True
+
+    # 소계 계산
+    for t, g in tonnage_groups.items():
+        g['avg_util'] = g['util_sum'] / g['active_count'] if g['active_count'] else 0
+        g['avg_time'] = g['time_sum'] / g['active_count'] if g['active_count'] else 0
+        g['machine_count'] = len(set(r['machine'].id for r in g['rows']))
+
+    # 기존 machine_summary 호환 (플랫 리스트)
+    machine_summary = []
+    for t, g in tonnage_groups.items():
+        for row in g['rows']:
+            machine_summary.append(row)
 
     # 전체 요약
     all_active = [r for r in records if r.status == '가동']
@@ -7093,6 +7135,8 @@ def molding_utilization(request):
         'loss_categories': loss_categories,
         'mgmt_loss_categories': mgmt_loss_categories,
         'time_loss_categories': time_loss_categories,
+        'tonnage_groups': tonnage_groups,
+        'show_all': show_all,
     }
     return render(request, 'material/molding_utilization.html', context)
 

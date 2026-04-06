@@ -146,8 +146,11 @@
 
     <!-- 호기별 일별 가동 현황 -->
     <div class="card shadow-sm mb-4">
-        <div class="card-header bg-white fw-bold">
-            <i class="bi bi-calendar3 me-1"></i> 호기별 일별 가동 현황 <small class="text-muted fw-normal">(셀 클릭 시 상세 입력)</small>
+        <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-calendar3 me-1"></i> 호기별 일별 가동 현황 <small class="text-muted fw-normal">(셀 클릭 시 상세 입력)</small></span>
+            <a href="?year={{ year }}&month={{ month }}&show_all={% if show_all %}0{% else %}1{% endif %}" class="btn btn-sm {% if show_all %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                <i class="bi bi-list-ul me-1"></i>{% if show_all %}실적만 보기{% else %}전체 호기 보기{% endif %}
+            </a>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -164,7 +167,8 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for ms in machine_summary %}
+                        {% for tonnage, group in tonnage_groups.items %}
+                        {% for ms in group.rows %}
                         <tr>
                             <td class="fw-bold text-start sticky-col bg-white">{{ ms.machine.code }} <span class="badge {% if ms.shift == '야간' %}bg-dark{% else %}bg-light text-dark border{% endif %}" style="font-size:0.6rem;">{{ ms.shift }}</span></td>
                             <td class="text-muted">{{ ms.machine.tonnage }}</td>
@@ -184,9 +188,30 @@
                             </td>
                             {% endfor %}
                         </tr>
+                        {% endfor %}
+                        <!-- 톤수별 소계 -->
+                        <tr class="table-secondary fw-bold" style="font-size:0.7rem;">
+                            <td class="text-start sticky-col" style="background:#e9ecef;">{{ tonnage }}t 소계</td>
+                            <td style="background:#e9ecef;">{{ group.machine_count }}대</td>
+                            <td style="background:#e9ecef;" class="{% if group.avg_util >= 90 %}text-success{% elif group.avg_util >= 70 %}text-warning{% elif group.avg_util > 0 %}text-danger{% endif %}">
+                                {% if group.avg_util > 0 %}{{ group.avg_util|floatformat:1 }}%{% else %}-{% endif %}
+                            </td>
+                            <td style="background:#e9ecef;">{{ group.total_days }}</td>
+                            {% for d in day_range %}<td style="background:#e9ecef;"></td>{% endfor %}
+                        </tr>
                         {% empty %}
                         <tr><td colspan="100" class="text-muted py-4">데이터가 없습니다. ERP 동기화를 실행하세요.</td></tr>
                         {% endfor %}
+                        <!-- 전체 합계 -->
+                        {% if tonnage_groups %}
+                        <tr class="table-dark fw-bold" style="font-size:0.75rem;">
+                            <td class="text-start sticky-col">합계</td>
+                            <td>{{ total_machines }}대</td>
+                            <td>{% if overall_util > 0 %}{{ overall_util|floatformat:1 }}%{% else %}-{% endif %}</td>
+                            <td></td>
+                            {% for d in day_range %}<td></td>{% endfor %}
+                        </tr>
+                        {% endif %}
                     </tbody>
                 </table>
             </div>
