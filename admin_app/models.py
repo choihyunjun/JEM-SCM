@@ -56,7 +56,10 @@ class NotificationRecipient(models.Model):
 class NotificationRule(models.Model):
     """알림 규칙 (이벤트 × 수신자 매핑)"""
     event_type = models.CharField("이벤트", max_length=30, choices=NOTIFICATION_EVENT_CHOICES)
-    recipients = models.ManyToManyField(NotificationRecipient, verbose_name="수신자", related_name='rules')
+    send_to_vendor = models.BooleanField("협력사 자동 발송", default=False,
+        help_text="해당 건의 협력사 이메일로 자동 발송")
+    recipients = models.ManyToManyField(NotificationRecipient, verbose_name="내부 수신자",
+        related_name='rules', blank=True)
     is_active = models.BooleanField("활성", default=True)
     description = models.CharField("설명", max_length=200, blank=True)
     created_at = models.DateTimeField("등록일", auto_now_add=True)

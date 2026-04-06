@@ -15,6 +15,9 @@ class Vendor(models.Model):
     address = models.CharField(max_length=255, blank=True, null=True, verbose_name="주소")
     biz_type = models.CharField(max_length=100, blank=True, null=True, verbose_name="업태")
     biz_item = models.CharField(max_length=100, blank=True, null=True, verbose_name="종목")
+    email = models.EmailField(blank=True, null=True, verbose_name="이메일")
+    contact_name = models.CharField(max_length=50, blank=True, null=True, verbose_name="담당자명")
+    contact_phone = models.CharField(max_length=20, blank=True, null=True, verbose_name="담당자 연락처")
 
     class Meta:
         verbose_name = "협력사"
