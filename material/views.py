@@ -7074,6 +7074,9 @@ def molding_utilization(request):
 
     sync_logs = MoldingERPSyncLog.objects.filter(year=year, month=month).order_by('-synced_at')[:5]
     loss_categories = [c[0] for c in MOLDING_LOSS_CATEGORIES]
+    from .models import MOLDING_MGMT_LOSS
+    mgmt_loss_categories = [c[0] for c in MOLDING_LOSS_CATEGORIES if c[0] in MOLDING_MGMT_LOSS]
+    time_loss_categories = [c[0] for c in MOLDING_LOSS_CATEGORIES if c[0] not in MOLDING_MGMT_LOSS]
 
     context = {
         'year': year, 'month': month,
@@ -7088,6 +7091,8 @@ def molding_utilization(request):
         'sync_logs': sync_logs,
         'setting': setting,
         'loss_categories': loss_categories,
+        'mgmt_loss_categories': mgmt_loss_categories,
+        'time_loss_categories': time_loss_categories,
     }
     return render(request, 'material/molding_utilization.html', context)
 

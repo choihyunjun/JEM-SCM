@@ -259,16 +259,44 @@
                     </div>
                 </div>
 
-                <div class="fw-bold mb-2">유실사유별 시간 (분)</div>
-                <div class="row g-2 mb-3">
-                    {% for cat in loss_categories %}
-                    <div class="col-md-3 col-6">
-                        <div class="input-group input-group-sm">
-                            <span class="input-group-text" style="font-size:0.75rem;min-width:75px;">{{ cat }}</span>
-                            <input type="number" class="form-control loss-input" data-cat="{{ cat }}" value="0" min="0" oninput="calcRates()">
-                        </div>
+                <div class="mb-3 p-2 border rounded" style="background:#fff8e1;">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="fw-bold" style="font-size:0.85rem;">
+                            <i class="bi bi-clipboard-check me-1"></i>관리LOSS
+                            <span class="text-muted fw-normal" style="font-size:0.7rem;">- 설비부하시간에서 차감</span>
+                        </span>
+                        <span class="badge bg-warning text-dark" id="mgmt_loss_total">0분</span>
                     </div>
-                    {% endfor %}
+                    <div class="row g-2">
+                        {% for cat in mgmt_loss_categories %}
+                        <div class="col-md-3 col-6">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text" style="font-size:0.75rem;min-width:75px;">{{ cat }}</span>
+                                <input type="number" class="form-control loss-input" data-cat="{{ cat }}" data-loss-type="mgmt" value="0" min="0" oninput="calcRates()">
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="mb-3 p-2 border rounded" style="background:#fce4ec;">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="fw-bold" style="font-size:0.85rem;">
+                            <i class="bi bi-gear me-1"></i>시간LOSS
+                            <span class="text-muted fw-normal" style="font-size:0.7rem;">- 가동시간에서 차감</span>
+                        </span>
+                        <span class="badge bg-danger" id="time_loss_total">0분</span>
+                    </div>
+                    <div class="row g-2">
+                        {% for cat in time_loss_categories %}
+                        <div class="col-md-3 col-6">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text" style="font-size:0.75rem;min-width:75px;">{{ cat }}</span>
+                                <input type="number" class="form-control loss-input" data-cat="{{ cat }}" data-loss-type="time" value="0" min="0" oninput="calcRates()">
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
                 </div>
 
                 <div class="row bg-light rounded p-3">
@@ -430,6 +458,8 @@ function calcRates() {
     });
     var lossTotal = mgmtLoss + timeLoss;
     document.getElementById('inp_loss_total').value = lossTotal;
+    document.getElementById('mgmt_loss_total').textContent = mgmtLoss + '분';
+    document.getElementById('time_loss_total').textContent = timeLoss + '분';
 
     // 설비부하시간 = 기준시간 - 관리LOSS
     var loadMin = Math.max(base - mgmtLoss, 0);
