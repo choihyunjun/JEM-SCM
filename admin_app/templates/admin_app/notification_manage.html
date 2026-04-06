@@ -78,8 +78,16 @@
                         </div>
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label small fw-bold mb-0">내부 수신자 (다중 선택)</label>
-                        <select class="form-select form-select-sm" id="new_rule_recipients" multiple size="3"></select>
+                        <label class="form-label small fw-bold mb-0">내부 수신자</label>
+                        <div class="d-flex gap-1">
+                            <div class="form-control form-control-sm bg-light flex-grow-1" id="selectedRecipientsDisplay" style="min-height:31px;font-size:0.8rem;overflow:auto;max-height:60px;">
+                                <span class="text-muted">선택 안 함</span>
+                            </div>
+                            <button class="btn btn-outline-secondary btn-sm" type="button" onclick="openRecipientModal()">
+                                <i class="bi bi-person-plus"></i>
+                            </button>
+                        </div>
+                        <input type="hidden" id="new_rule_recipients_ids" value="">
                     </div>
                     <div class="col-md-2">
                         <label class="form-label small fw-bold mb-0">설명</label>
@@ -117,12 +125,34 @@
     </div>
 </div>
 
+<!-- 수신자 선택 모달 -->
+<div class="modal fade" id="recipientSelectModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title fw-bold"><i class="bi bi-person-check me-1"></i>내부 수신자 선택</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" style="max-height:400px;overflow-y:auto;">
+                <div id="recipientCheckList"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="confirmRecipientSelection()">
+                    <i class="bi bi-check-lg me-1"></i>선택 완료
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 var csrfToken = '{{ csrf_token }}';
 
 // ─── 수신자 ───
 function loadRecipients() {
     fetch('{% url "admin_app:api_recipients" %}').then(r=>r.json()).then(data => {
+        allRecipients = data.recipients || [];
         var tb = document.getElementById('recipientBody');
         if (!data.recipients.length) { tb.innerHTML = '<tr><td colspan="7" class="text-center text-muted">등록된 수신자가 없습니다.</td></tr>'; return; }
         tb.innerHTML = data.recipients.map(r =>
@@ -136,11 +166,7 @@ function loadRecipients() {
             '<td><button class="btn btn-outline-danger btn-sm" onclick="deleteRecipient('+r.id+',\''+r.name+'\')"><i class="bi bi-trash"></i></button></td>' +
             '</tr>'
         ).join('');
-        // 규칙 탭 수신자 select도 갱신
-        var sel = document.getElementById('new_rule_recipients');
-        sel.innerHTML = data.recipients.filter(r=>r.is_active).map(r =>
-            '<option value="'+r.id+'">'+r.name+' ('+r.email+')</option>'
-        ).join('');
+        // allRecipients 캐시 갱신됨 (모달에서 사용)
     });
 }
 function addRecipient() {
@@ -184,16 +210,74 @@ function loadRules() {
         ).join('');
     });
 }
+// ─── 수신자 선택 모달 ───
+var allRecipients = [];
+var selectedRecipientIds = [];
+
+function openRecipientModal() {
+    var container = document.getElementById('recipientCheckList');
+    if (!allRecipients.length) {
+        container.innerHTML = '<p class="text-muted">등록된 수신자가 없습니다.</p>';
+        new bootstrap.Modal(document.getElementById('recipientSelectModal')).show();
+        return;
+    }
+    container.innerHTML = allRecipients.filter(function(r) { return r.is_active; }).map(function(r) {
+        var checked = selectedRecipientIds.includes(r.id) ? 'checked' : '';
+        return '<div class="form-check py-1 border-bottom">' +
+            '<input class="form-check-input" type="checkbox" value="' + r.id + '" id="rchk_' + r.id + '" ' + checked + '>' +
+            '<label class="form-check-label w-100" for="rchk_' + r.id + '">' +
+            '<span class="fw-bold">' + r.name + '</span>' +
+            '<span class="text-muted ms-2 small">' + (r.organization || '') + '</span>' +
+            '<span class="text-muted ms-2 small">' + r.email + '</span>' +
+            '</label></div>';
+    }).join('');
+    new bootstrap.Modal(document.getElementById('recipientSelectModal')).show();
+}
+
+function confirmRecipientSelection() {
+    selectedRecipientIds = [];
+    document.querySelectorAll('#recipientCheckList input:checked').forEach(function(el) {
+        selectedRecipientIds.push(parseInt(el.value));
+    });
+    updateRecipientDisplay();
+    bootstrap.Modal.getInstance(document.getElementById('recipientSelectModal')).hide();
+}
+
+function updateRecipientDisplay() {
+    var display = document.getElementById('selectedRecipientsDisplay');
+    document.getElementById('new_rule_recipients_ids').value = selectedRecipientIds.join(',');
+    if (!selectedRecipientIds.length) {
+        display.innerHTML = '<span class="text-muted">선택 안 함</span>';
+        return;
+    }
+    display.innerHTML = selectedRecipientIds.map(function(id) {
+        var r = allRecipients.find(function(x) { return x.id === id; });
+        return r ? '<span class="badge bg-info me-1 mb-1">' + r.name + ' <i class="bi bi-x" style="cursor:pointer;" onclick="removeRecipient(' + id + ')"></i></span>' : '';
+    }).join('');
+}
+
+function removeRecipient(id) {
+    selectedRecipientIds = selectedRecipientIds.filter(function(x) { return x !== id; });
+    updateRecipientDisplay();
+}
+
 function addRule() {
     var event_type = document.getElementById('new_rule_event').value;
     var send_to_vendor = document.getElementById('new_rule_vendor').checked;
-    var sel = document.getElementById('new_rule_recipients');
-    var ids = Array.from(sel.selectedOptions).map(o => parseInt(o.value));
+    var ids = selectedRecipientIds.slice();
     if (!send_to_vendor && !ids.length) { alert('협력사 발송 또는 내부 수신자 중 하나는 선택하세요.'); return; }
     fetch('{% url "admin_app:api_rules" %}', {
         method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},
         body: JSON.stringify({action:'add', event_type:event_type, send_to_vendor:send_to_vendor, recipient_ids:ids, description:document.getElementById('new_rule_desc').value.trim()})
-    }).then(r=>r.json()).then(d => { if (d.success) { document.getElementById('new_rule_desc').value=''; document.getElementById('new_rule_vendor').checked=false; loadRules(); } else alert(d.error); });
+    }).then(r=>r.json()).then(d => {
+        if (d.success) {
+            document.getElementById('new_rule_desc').value='';
+            document.getElementById('new_rule_vendor').checked=false;
+            selectedRecipientIds = [];
+            updateRecipientDisplay();
+            loadRules();
+        } else alert(d.error);
+    });
 }
 function updateRule(id, is_active) {
     fetch('{% url "admin_app:api_rules" %}', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken}, body:JSON.stringify({action:'update', id:id, is_active:is_active})}).then(r=>r.json()).then(d => { if (!d.success) alert(d.error); });
