@@ -70,11 +70,18 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label small fw-bold mb-0">수신자 (다중 선택)</label>
-                        <select class="form-select form-select-sm" id="new_rule_recipients" multiple size="3"></select>
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold mb-0">협력사 발송</label>
+                        <div class="form-check form-switch mt-1">
+                            <input class="form-check-input" type="checkbox" id="new_rule_vendor">
+                            <label class="form-check-label small" for="new_rule_vendor">해당 건 협력사에게</label>
+                        </div>
                     </div>
                     <div class="col-md-3">
+                        <label class="form-label small fw-bold mb-0">내부 수신자 (다중 선택)</label>
+                        <select class="form-select form-select-sm" id="new_rule_recipients" multiple size="3"></select>
+                    </div>
+                    <div class="col-md-2">
                         <label class="form-label small fw-bold mb-0">설명</label>
                         <input type="text" class="form-control form-control-sm" id="new_rule_desc">
                     </div>
@@ -89,9 +96,9 @@
         <div class="table-responsive">
             <table class="table table-sm table-hover" style="font-size:0.85rem;">
                 <thead class="table-light">
-                    <tr><th>이벤트</th><th>수신자</th><th>설명</th><th>상태</th><th>관리</th></tr>
+                    <tr><th>이벤트</th><th>협력사</th><th>내부 수신자</th><th>설명</th><th>상태</th><th>관리</th></tr>
                 </thead>
-                <tbody id="ruleBody"><tr><td colspan="5" class="text-center text-muted">로딩 중...</td></tr></tbody>
+                <tbody id="ruleBody"><tr><td colspan="6" class="text-center text-muted">로딩 중...</td></tr></tbody>
             </table>
         </div>
     </div>
@@ -164,10 +171,11 @@ function deleteRecipient(id, name) {
 function loadRules() {
     fetch('{% url "admin_app:api_rules" %}').then(r=>r.json()).then(data => {
         var tb = document.getElementById('ruleBody');
-        if (!data.rules.length) { tb.innerHTML = '<tr><td colspan="5" class="text-center text-muted">등록된 규칙이 없습니다.</td></tr>'; return; }
+        if (!data.rules.length) { tb.innerHTML = '<tr><td colspan="6" class="text-center text-muted">등록된 규칙이 없습니다.</td></tr>'; return; }
         tb.innerHTML = data.rules.map(r =>
             '<tr>' +
             '<td class="fw-bold">' + r.event_display + '</td>' +
+            '<td>' + (r.send_to_vendor ? '<span class="badge bg-warning text-dark">자동 발송</span>' : '<span class="text-muted">-</span>') + '</td>' +
             '<td class="small">' + (r.recipient_names||'-') + '</td>' +
             '<td class="small">' + (r.description||'-') + '</td>' +
             '<td><div class="form-check form-switch"><input class="form-check-input" type="checkbox" ' + (r.is_active?'checked':'') + ' onchange="updateRule('+r.id+',this.checked)"></div></td>' +
@@ -178,13 +186,14 @@ function loadRules() {
 }
 function addRule() {
     var event_type = document.getElementById('new_rule_event').value;
+    var send_to_vendor = document.getElementById('new_rule_vendor').checked;
     var sel = document.getElementById('new_rule_recipients');
     var ids = Array.from(sel.selectedOptions).map(o => parseInt(o.value));
-    if (!ids.length) { alert('수신자를 선택하세요.'); return; }
+    if (!send_to_vendor && !ids.length) { alert('협력사 발송 또는 내부 수신자 중 하나는 선택하세요.'); return; }
     fetch('{% url "admin_app:api_rules" %}', {
         method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},
-        body: JSON.stringify({action:'add', event_type:event_type, recipient_ids:ids, description:document.getElementById('new_rule_desc').value.trim()})
-    }).then(r=>r.json()).then(d => { if (d.success) { document.getElementById('new_rule_desc').value=''; loadRules(); } else alert(d.error); });
+        body: JSON.stringify({action:'add', event_type:event_type, send_to_vendor:send_to_vendor, recipient_ids:ids, description:document.getElementById('new_rule_desc').value.trim()})
+    }).then(r=>r.json()).then(d => { if (d.success) { document.getElementById('new_rule_desc').value=''; document.getElementById('new_rule_vendor').checked=false; loadRules(); } else alert(d.error); });
 }
 function updateRule(id, is_active) {
     fetch('{% url "admin_app:api_rules" %}', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken}, body:JSON.stringify({action:'update', id:id, is_active:is_active})}).then(r=>r.json()).then(d => { if (!d.success) alert(d.error); });
