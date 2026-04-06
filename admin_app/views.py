@@ -17,7 +17,7 @@ def admin_dashboard(request):
     from django.contrib.auth.models import User
 
     context = {
-        'vendor_count': Vendor.objects.filter(is_active=True).count(),
+        'vendor_count': Vendor.objects.count(),
         'part_count': Part.objects.count(),
         'user_count': User.objects.filter(is_active=True).count(),
         'rule_count': NotificationRule.objects.filter(is_active=True).count(),
