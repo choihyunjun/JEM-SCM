@@ -532,15 +532,12 @@ function onShiftChange() {
     calcRates();
 }
 
-// 관리LOSS 카테고리 (설비부하시간 산출 시 차감)
-var MGMT_LOSS = ['계획정지', '생산종료', '식사휴식', '청소'];
-
 function calcRates() {
     var base = parseInt(document.getElementById('inp_base_minutes').value) || 0;
     var mgmtLoss = 0, timeLoss = 0;
     document.querySelectorAll('.loss-input').forEach(function(el) {
         var v = parseInt(el.value) || 0;
-        if (MGMT_LOSS.includes(el.dataset.cat)) {
+        if (el.dataset.lossType === 'mgmt') {
             mgmtLoss += v;
         } else {
             timeLoss += v;
@@ -551,22 +548,18 @@ function calcRates() {
     document.getElementById('mgmt_loss_total').textContent = mgmtLoss + '분';
     document.getElementById('time_loss_total').textContent = timeLoss + '분';
 
-    // 설비부하시간 = 기준시간 - 관리LOSS
-    var loadMin = Math.max(base - mgmtLoss, 0);
-    // 가동시간 = 설비부하시간 - 시간LOSS
-    var operating = Math.max(loadMin - timeLoss, 0);
+    // 가동시간 = 기준시간 - 전체유실시간
+    var operating = Math.max(base - lossTotal, 0);
     document.getElementById('inp_operating').value = operating;
 
-    // 설비가동률 = 가동시간 ÷ 설비부하시간
-    var util = loadMin > 0 ? (operating / loadMin * 100) : 0;
-    // 시간가동률 = 가동시간 ÷ 근무시간(기준시간)
-    var timeRate = base > 0 ? (operating / base * 100) : 0;
+    // 일별: 설비가동률 = 시간가동률 = 가동시간 / 기준시간
+    var rate = base > 0 ? (operating / base * 100) : 0;
 
-    document.getElementById('calc_util').textContent = util.toFixed(1) + '%';
-    document.getElementById('calc_time').textContent = timeRate.toFixed(1) + '%';
+    document.getElementById('calc_util').textContent = rate.toFixed(1) + '%';
+    document.getElementById('calc_time').textContent = rate.toFixed(1) + '%';
     document.getElementById('calc_net').textContent = operating + '분';
     document.getElementById('calc_util').className = 'fs-3 fw-bold ' +
-        (util >= 90 ? 'text-success' : util >= 70 ? 'text-warning' : 'text-danger');
+        (rate >= 90 ? 'text-success' : rate >= 70 ? 'text-warning' : 'text-danger');
 }
 
 function saveInput() {

@@ -936,30 +936,21 @@ class MoldingDailyRecord(models.Model):
 
     def calculate_rates(self):
         """
-        유실시간 → 설비가동률/시간가동률 자동 계산
-        설비가동률(%) = (가동시간 - 시간LOSS) ÷ 설비부하시간 × 100
-        시간가동률(%) = (가동시간 - 시간LOSS) ÷ 근무시간(기준시간) × 100
-        설비부하시간 = 기준시간 - 관리LOSS
+        유실시간 → 가동률 자동 계산 (일별 단위)
+        일별: 설비가동률 = 시간가동률 = (기준시간 - 유실시간) / 기준시간
+        월 누계에서 차이 발생:
+          설비가동률 분모 = 부하시간 (가동일 × 기준시간)
+          시간가동률 분모 = 근무시간 (전체 근무일 × 기준시간)
         """
-        details = list(self.loss_details.all())
-        mgmt_loss = sum(d.minutes for d in details if d.category in MOLDING_MGMT_LOSS)
-        time_loss = sum(d.minutes for d in details if d.category not in MOLDING_MGMT_LOSS)
-        self.loss_minutes = mgmt_loss + time_loss
+        self.loss_minutes = sum(d.minutes for d in self.loss_details.all())
+        self.operating_minutes = max(self.base_minutes - self.loss_minutes, 0)
 
-        # 설비부하시간 = 기준시간 - 관리LOSS
-        load_minutes = max(self.base_minutes - mgmt_loss, 0)
-        # 가동시간 = 설비부하시간 - 시간LOSS
-        self.operating_minutes = max(load_minutes - time_loss, 0)
-
-        # 설비가동률 = 가동시간 ÷ 설비부하시간
-        if load_minutes > 0:
-            self.utilization_rate = round(self.operating_minutes / load_minutes * 100, 1)
+        if self.base_minutes > 0:
+            rate = round(self.operating_minutes / self.base_minutes * 100, 1)
+            self.utilization_rate = rate
+            self.time_rate = rate  # 일별로는 동일, 월 누계에서 뷰가 분모 다르게 계산
         else:
             self.utilization_rate = 0
-        # 시간가동률 = 가동시간 ÷ 근무시간(기준시간)
-        if self.base_minutes > 0:
-            self.time_rate = round(self.operating_minutes / self.base_minutes * 100, 1)
-        else:
             self.time_rate = 0
 
 
