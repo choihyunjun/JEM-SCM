@@ -7282,7 +7282,10 @@ def molding_settings(request):
     if request.method == 'POST':
         year = int(request.POST.get('year'))
         month = int(request.POST.get('month'))
-        obj, _ = MoldingWorkSetting.objects.get_or_create(year=year, month=month)
+        obj, _ = MoldingWorkSetting.objects.get_or_create(
+            year=year, month=month,
+            defaults={'work_days': MoldingWorkSetting.calc_weekdays(year, month)}
+        )
         obj.day_shift_minutes = int(request.POST.get('day_shift_minutes', 670))
         obj.night_shift_minutes = int(request.POST.get('night_shift_minutes', 770))
         obj.work_days = int(request.POST.get('work_days', 20))

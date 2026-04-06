@@ -397,7 +397,7 @@ class ProcessTag(models.Model):
     # 발행 정보
     printed_at = models.DateTimeField("발행일시", auto_now_add=True)
     printed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
-                                    related_name='tags_printed', verbose_name="발행자")
+                                    related_name='tags_printed', verbose_name="발행자")오케이 메일 들어온다. 
 
     # 사용(스캔) 정보
     used_at = models.DateTimeField("최초 사용일시", null=True, blank=True)
@@ -904,7 +904,14 @@ class MoldingWorkSetting(models.Model):
         try:
             return cls.objects.get(year=year, month=month)
         except cls.DoesNotExist:
-            return cls(year=year, month=month)  # 기본값 반환 (미저장)
+            return cls(year=year, month=month, work_days=cls.calc_weekdays(year, month))
+
+    @staticmethod
+    def calc_weekdays(year, month):
+        """해당 월의 평일(월~금) 수 계산"""
+        import calendar
+        cal = calendar.Calendar()
+        return sum(1 for d in cal.itermonthdays2(year, month) if d[0] != 0 and d[1] < 5)
 
 
 class MoldingDailyRecord(models.Model):
