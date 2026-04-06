@@ -7289,12 +7289,10 @@ def molding_erp_sync(request):
                 record.erp_synced = True
                 if not record.input_completed:
                     record.base_minutes = base_min
-                # 생산실적 API에서 실가동시간 반영
+                # 생산실적 API에서 실가동시간 저장 (참고용)
                 wt_key = (mc, dt_str, shift)
                 if wt_key in work_time_agg:
                     record.work_minutes = work_time_agg[wt_key]
-                    record.loss_minutes = max(base_min - record.work_minutes, 0)
-                    record.operating_minutes = record.work_minutes
                 record.save()
                 record_count += 1
 

@@ -950,14 +950,8 @@ class MoldingDailyRecord(models.Model):
           설비가동률 분모 = 부하시간 (가동일 × 기준시간)
           시간가동률 분모 = 근무시간 (전체 근무일 × 기준시간)
         """
-        detail_loss = sum(d.minutes for d in self.loss_details.all())
-        # ERP 실가동시간이 있으면 유실시간 = 기준시간 - 실가동시간
-        if self.work_minutes > 0:
-            self.loss_minutes = max(self.base_minutes - self.work_minutes, 0)
-            self.operating_minutes = self.work_minutes
-        else:
-            self.loss_minutes = detail_loss
-            self.operating_minutes = max(self.base_minutes - self.loss_minutes, 0)
+        self.loss_minutes = sum(d.minutes for d in self.loss_details.all())
+        self.operating_minutes = max(self.base_minutes - self.loss_minutes, 0)
 
         if self.base_minutes > 0:
             rate = round(self.operating_minutes / self.base_minutes * 100, 1)
