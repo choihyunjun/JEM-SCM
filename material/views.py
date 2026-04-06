@@ -7181,7 +7181,7 @@ def molding_utilization(request):
 def molding_erp_sync(request):
     """ERP 생산입고 데이터로 성형 가동 현황 동기화"""
     from .models import MoldingMachine, MoldingDailyRecord, MoldingERPSyncLog, MoldingWorkSetting
-    from .erp_api import fetch_erp_receipt_list
+    from .erp_api import fetch_erp_receipt_list, call_erp_api
     from datetime import date as dt_date
     import calendar
 
@@ -7204,6 +7204,31 @@ def molding_erp_sync(request):
         return JsonResponse({'success': False, 'error': '해당 기간 생산입고 데이터가 없습니다.'})
 
     setting = MoldingWorkSetting.get_setting(year, month)
+
+    # 생산실적 API 조회 (실가동시간 workTm)
+    from django.conf import settings as django_settings
+    wr_body = {
+        'coCd': django_settings.ERP_COMPANY_CODE,
+        'wrDtFrom': date_from,
+        'wrDtTo': date_to,
+    }
+    wr_ok, wr_data, wr_err = call_erp_api('/apiproxy/api20A03S00901', wr_body)
+    work_time_agg = {}  # {(machine_code, date_str, shift): work_minutes}
+    if wr_ok and wr_data:
+        import re as _re2
+        for r in wr_data.get('resultData', []) or []:
+            en = (r.get('equipNm') or '').strip()
+            if not _re2.match(r'^M\d', en):
+                continue
+            wr_dt = r.get('wrDt', '')
+            if len(wr_dt) != 8:
+                continue
+            shift_nm = (r.get('wshftNm') or '').strip()
+            shift = '야간' if shift_nm == '야간' else '주간'
+            key = (en, wr_dt, shift)
+            if key not in work_time_agg:
+                work_time_agg[key] = 0
+            work_time_agg[key] += int(float(r.get('workTm', 0) or 0))
 
     try:
         with transaction.atomic():
@@ -7264,6 +7289,12 @@ def molding_erp_sync(request):
                 record.erp_synced = True
                 if not record.input_completed:
                     record.base_minutes = base_min
+                # 생산실적 API에서 실가동시간 반영
+                wt_key = (mc, dt_str, shift)
+                if wt_key in work_time_agg:
+                    record.work_minutes = work_time_agg[wt_key]
+                    record.loss_minutes = max(base_min - record.work_minutes, 0)
+                    record.operating_minutes = record.work_minutes
                 record.save()
                 record_count += 1
 
@@ -7330,6 +7361,7 @@ def api_molding_save_input(request):
             'date': rec.date.strftime('%Y-%m-%d'),
             'status': rec.status,
             'operating_minutes': rec.operating_minutes,
+            'work_minutes': rec.work_minutes,
             'base_minutes': rec.base_minutes,
             'loss_minutes': rec.loss_minutes,
             'utilization_rate': rec.utilization_rate,

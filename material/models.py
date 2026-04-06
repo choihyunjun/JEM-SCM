@@ -397,7 +397,7 @@ class ProcessTag(models.Model):
     # 발행 정보
     printed_at = models.DateTimeField("발행일시", auto_now_add=True)
     printed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
-                                    related_name='tags_printed', verbose_name="발행자")오케이 메일 들어온다. 
+                                    related_name='tags_printed', verbose_name="발행자")
 
     # 사용(스캔) 정보
     used_at = models.DateTimeField("최초 사용일시", null=True, blank=True)
@@ -922,6 +922,7 @@ class MoldingDailyRecord(models.Model):
     operating_minutes = models.IntegerField("가동시간(분)", default=0)
     loss_minutes = models.IntegerField("유실시간(분)", default=0)
     base_minutes = models.IntegerField("기준시간(분)", default=0)  # 부하시간 기준
+    work_minutes = models.IntegerField("실가동시간(분)", default=0)  # ERP workTm 합산
     utilization_rate = models.FloatField("설비가동률(%)", default=0)
     time_rate = models.FloatField("시간가동률(%)", default=0)
     product_part_no = models.CharField("생산품번", max_length=500, blank=True)
@@ -949,8 +950,14 @@ class MoldingDailyRecord(models.Model):
           설비가동률 분모 = 부하시간 (가동일 × 기준시간)
           시간가동률 분모 = 근무시간 (전체 근무일 × 기준시간)
         """
-        self.loss_minutes = sum(d.minutes for d in self.loss_details.all())
-        self.operating_minutes = max(self.base_minutes - self.loss_minutes, 0)
+        detail_loss = sum(d.minutes for d in self.loss_details.all())
+        # ERP 실가동시간이 있으면 유실시간 = 기준시간 - 실가동시간
+        if self.work_minutes > 0:
+            self.loss_minutes = max(self.base_minutes - self.work_minutes, 0)
+            self.operating_minutes = self.work_minutes
+        else:
+            self.loss_minutes = detail_loss
+            self.operating_minutes = max(self.base_minutes - self.loss_minutes, 0)
 
         if self.base_minutes > 0:
             rate = round(self.operating_minutes / self.base_minutes * 100, 1)
