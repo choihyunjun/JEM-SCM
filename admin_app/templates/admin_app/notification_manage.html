@@ -133,8 +133,9 @@
                 <h6 class="modal-title fw-bold"><i class="bi bi-person-check me-1"></i>내부 수신자 선택</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body" style="max-height:400px;overflow-y:auto;">
-                <div id="recipientCheckList"></div>
+            <div class="modal-body">
+                <input type="text" class="form-control form-control-sm mb-2" id="recipientSearchInput" placeholder="이름, 소속, 이메일로 검색..." oninput="filterRecipientList()">
+                <div id="recipientCheckList" style="max-height:350px;overflow-y:auto;"></div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button>
@@ -215,23 +216,37 @@ var allRecipients = [];
 var selectedRecipientIds = [];
 
 function openRecipientModal() {
+    document.getElementById('recipientSearchInput').value = '';
+    renderRecipientCheckList('');
+    new bootstrap.Modal(document.getElementById('recipientSelectModal')).show();
+}
+
+function filterRecipientList() {
+    var q = document.getElementById('recipientSearchInput').value.trim().toLowerCase();
+    renderRecipientCheckList(q);
+}
+
+function renderRecipientCheckList(q) {
     var container = document.getElementById('recipientCheckList');
-    if (!allRecipients.length) {
-        container.innerHTML = '<p class="text-muted">등록된 수신자가 없습니다.</p>';
-        new bootstrap.Modal(document.getElementById('recipientSelectModal')).show();
+    var filtered = allRecipients.filter(function(r) {
+        if (!r.is_active) return false;
+        if (!q) return true;
+        return (r.name||'').toLowerCase().includes(q) || (r.organization||'').toLowerCase().includes(q) || (r.email||'').toLowerCase().includes(q);
+    });
+    if (!filtered.length) {
+        container.innerHTML = '<p class="text-muted py-2">검색 결과가 없습니다.</p>';
         return;
     }
-    container.innerHTML = allRecipients.filter(function(r) { return r.is_active; }).map(function(r) {
+    container.innerHTML = filtered.map(function(r) {
         var checked = selectedRecipientIds.includes(r.id) ? 'checked' : '';
-        return '<div class="form-check py-1 border-bottom">' +
+        return '<div class="form-check py-2 border-bottom">' +
             '<input class="form-check-input" type="checkbox" value="' + r.id + '" id="rchk_' + r.id + '" ' + checked + '>' +
             '<label class="form-check-label w-100" for="rchk_' + r.id + '">' +
             '<span class="fw-bold">' + r.name + '</span>' +
             '<span class="text-muted ms-2 small">' + (r.organization || '') + '</span>' +
-            '<span class="text-muted ms-2 small">' + r.email + '</span>' +
+            '<br><span class="text-muted small">' + r.email + '</span>' +
             '</label></div>';
     }).join('');
-    new bootstrap.Modal(document.getElementById('recipientSelectModal')).show();
 }
 
 function confirmRecipientSelection() {
