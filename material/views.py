@@ -7085,15 +7085,22 @@ def molding_utilization(request):
                 tonnage_groups[tonnage]['total_days'] += active_days
             has_shift_data = True
 
+    # 톤수별 전체 활성 호기 수 (비가동 포함)
+    tonnage_all_count = {}
+    for m in machines:
+        tonnage_all_count[m.tonnage] = tonnage_all_count.get(m.tonnage, 0) + 1
+
     # 소계 계산
+    work_per_machine = setting.work_days * (setting.day_shift_minutes + setting.night_shift_minutes)
     for t, g in tonnage_groups.items():
         net = g['load_sum'] - g['loss_sum']
         g['avg_util'] = (net / g['load_sum'] * 100) if g['load_sum'] else 0
-        # 시간가동률 분모 = 호기수 × (주간근무시간 + 야간근무시간)
+        # 시간가동률 분모 = 해당 톤수 전체 호기수 × 근무시간 (비가동 포함)
         g['machine_count'] = len(set(r['machine'].id for r in g['rows']))
-        work_per_machine = setting.work_days * (setting.day_shift_minutes + setting.night_shift_minutes)
-        total_work_all = g['machine_count'] * work_per_machine
+        all_count = tonnage_all_count.get(t, g['machine_count'])
+        total_work_all = all_count * work_per_machine
         g['avg_time'] = (net / total_work_all * 100) if total_work_all else 0
+        g['all_machine_count'] = all_count
 
     # 기존 machine_summary 호환 (플랫 리스트)
     machine_summary = []
