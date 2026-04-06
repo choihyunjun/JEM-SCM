@@ -7173,7 +7173,8 @@ def molding_erp_sync(request):
     try:
         with transaction.atomic():
             # equipNm이 M으로 시작하는 성형기 데이터만 필터
-            molding_data = [r for r in data if (r.get('equipNm') or '').startswith('M')]
+            import re as _re
+            molding_data = [r for r in data if _re.match(r'^M\d', (r.get('equipNm') or ''))]
 
             # 호기+일자별 집계
             daily_agg = {}  # {(machine_code, date_str): {'parts': set, 'qty': 0}}
