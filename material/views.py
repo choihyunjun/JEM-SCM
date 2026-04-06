@@ -7026,7 +7026,7 @@ def molding_utilization(request):
 
         tonnage = m.tonnage
         if tonnage not in tonnage_groups:
-            tonnage_groups[tonnage] = {'rows': [], 'load_sum': 0, 'loss_sum': 0, 'work_sum': 0, 'active_count': 0, 'total_days': 0}
+            tonnage_groups[tonnage] = {'rows': [], 'load_sum': 0, 'loss_sum': 0, 'active_count': 0, 'total_days': 0}
 
         has_shift_data = False
         for shift in ['주간', '야간']:
@@ -7052,9 +7052,8 @@ def molding_utilization(request):
             total_load = sum(r.base_minutes for r in active_records)
             total_loss = sum(r.loss_minutes for r in active_records)
             avg_util = ((total_load - total_loss) / total_load * 100) if total_load else 0
-            # 시간가동률 = (부하시간 - 유실시간) / 근무시간 (전체 근무일)
-            base_per_shift = setting.night_shift_minutes if shift == '야간' else setting.day_shift_minutes
-            total_work = setting.work_days * base_per_shift
+            # 시간가동률 = (부하시간 - 유실시간) / 근무시간 (주간+야간 전체)
+            total_work = setting.work_days * (setting.day_shift_minutes + setting.night_shift_minutes)
             avg_time = ((total_load - total_loss) / total_work * 100) if total_work else 0
 
             daily_map = {r.date.day: r for r in s_records}
@@ -7082,7 +7081,6 @@ def molding_utilization(request):
             if active_days > 0:
                 tonnage_groups[tonnage]['load_sum'] += total_load
                 tonnage_groups[tonnage]['loss_sum'] += total_loss
-                tonnage_groups[tonnage]['work_sum'] += total_work
                 tonnage_groups[tonnage]['active_count'] += 1
                 tonnage_groups[tonnage]['total_days'] += active_days
             has_shift_data = True
@@ -7091,8 +7089,11 @@ def molding_utilization(request):
     for t, g in tonnage_groups.items():
         net = g['load_sum'] - g['loss_sum']
         g['avg_util'] = (net / g['load_sum'] * 100) if g['load_sum'] else 0
-        g['avg_time'] = (net / g['work_sum'] * 100) if g['work_sum'] else 0
+        # 시간가동률 분모 = 호기수 × (주간근무시간 + 야간근무시간)
         g['machine_count'] = len(set(r['machine'].id for r in g['rows']))
+        work_per_machine = setting.work_days * (setting.day_shift_minutes + setting.night_shift_minutes)
+        total_work_all = g['machine_count'] * work_per_machine
+        g['avg_time'] = (net / total_work_all * 100) if total_work_all else 0
 
     # 기존 machine_summary 호환 (플랫 리스트)
     machine_summary = []
@@ -7103,10 +7104,12 @@ def molding_utilization(request):
     # 전체 요약
     total_load_all = sum(g['load_sum'] for g in tonnage_groups.values())
     total_loss_all = sum(g['loss_sum'] for g in tonnage_groups.values())
-    total_work_all = sum(g['work_sum'] for g in tonnage_groups.values())
     net_all = total_load_all - total_loss_all
     overall_util = (net_all / total_load_all * 100) if total_load_all else 0
-    overall_time = (net_all / total_work_all * 100) if total_work_all else 0
+    total_machines_count = machines.count()
+    work_per_machine = setting.work_days * (setting.day_shift_minutes + setting.night_shift_minutes)
+    overall_work = total_machines_count * work_per_machine
+    overall_time = (net_all / overall_work * 100) if overall_work else 0
 
     # 톤수별 집계
     tonnage_summary = {}
