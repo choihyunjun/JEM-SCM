@@ -210,8 +210,8 @@ ERP_AUTO_SYNC_INTERVAL_MINUTES = 10   # 동기화 주기 (분)
 # 이메일 설정 (SMTP)
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'mail.jem-techno.co.kr'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
+EMAIL_PORT = 25
+EMAIL_USE_TLS = False
 EMAIL_HOST_USER = 'jemscm@jem-techno.co.kr'
 EMAIL_HOST_PASSWORD = 'jem2718838!'
 DEFAULT_FROM_EMAIL = 'JEM SCM <jemscm@jem-techno.co.kr>'
