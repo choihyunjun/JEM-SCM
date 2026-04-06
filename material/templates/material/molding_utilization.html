@@ -414,19 +414,36 @@ function onShiftChange() {
     calcRates();
 }
 
+// 관리LOSS 카테고리 (설비부하시간 산출 시 차감)
+var MGMT_LOSS = ['계획정지', '생산종료', '식사휴식', '청소'];
+
 function calcRates() {
     var base = parseInt(document.getElementById('inp_base_minutes').value) || 0;
-    var lossTotal = 0;
+    var mgmtLoss = 0, timeLoss = 0;
     document.querySelectorAll('.loss-input').forEach(function(el) {
-        lossTotal += parseInt(el.value) || 0;
+        var v = parseInt(el.value) || 0;
+        if (MGMT_LOSS.includes(el.dataset.cat)) {
+            mgmtLoss += v;
+        } else {
+            timeLoss += v;
+        }
     });
+    var lossTotal = mgmtLoss + timeLoss;
     document.getElementById('inp_loss_total').value = lossTotal;
-    // 가동시간 = 기준시간 - 유실시간 (자동 계산)
-    var operating = Math.max(base - lossTotal, 0);
+
+    // 설비부하시간 = 기준시간 - 관리LOSS
+    var loadMin = Math.max(base - mgmtLoss, 0);
+    // 가동시간 = 설비부하시간 - 시간LOSS
+    var operating = Math.max(loadMin - timeLoss, 0);
     document.getElementById('inp_operating').value = operating;
-    var util = base > 0 ? (operating / base * 100) : 0;
+
+    // 설비가동률 = 가동시간 ÷ 설비부하시간
+    var util = loadMin > 0 ? (operating / loadMin * 100) : 0;
+    // 시간가동률 = 가동시간 ÷ 근무시간(기준시간)
+    var timeRate = base > 0 ? (operating / base * 100) : 0;
+
     document.getElementById('calc_util').textContent = util.toFixed(1) + '%';
-    document.getElementById('calc_time').textContent = util.toFixed(1) + '%';
+    document.getElementById('calc_time').textContent = timeRate.toFixed(1) + '%';
     document.getElementById('calc_net').textContent = operating + '분';
     document.getElementById('calc_util').className = 'fs-3 fw-bold ' +
         (util >= 90 ? 'text-success' : util >= 70 ? 'text-warning' : 'text-danger');

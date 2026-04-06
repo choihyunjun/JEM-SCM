@@ -862,6 +862,10 @@ MOLDING_LOSS_CATEGORIES = [
     ('TRY', 'TRY'),
 ]
 
+# 관리LOSS: 설비부하시간 산출 시 차감 (계획정지/생산종료/식사휴식/청소)
+MOLDING_MGMT_LOSS = {'계획정지', '생산종료', '식사휴식', '청소'}
+# 시간LOSS: 설비가동률 산출 시 차감 (나머지 전부)
+
 
 class MoldingMachine(models.Model):
     """성형기 마스터"""
@@ -931,17 +935,30 @@ class MoldingDailyRecord(models.Model):
         return f"{self.machine.code} {self.date}"
 
     def calculate_rates(self):
-        """유실시간 합계 → 가동시간 자동 산출 → 설비가동률/시간가동률 계산"""
-        self.loss_minutes = sum(d.minutes for d in self.loss_details.all())
-        # 가동시간 = 기준시간 - 유실시간
-        self.operating_minutes = max(self.base_minutes - self.loss_minutes, 0)
-        net = self.operating_minutes  # 순가동시간 = 가동시간 (유실 이미 차감됨)
-        if self.base_minutes > 0:
-            self.utilization_rate = round(net / self.base_minutes * 100, 1)
+        """
+        유실시간 → 설비가동률/시간가동률 자동 계산
+        설비가동률(%) = (가동시간 - 시간LOSS) ÷ 설비부하시간 × 100
+        시간가동률(%) = (가동시간 - 시간LOSS) ÷ 근무시간(기준시간) × 100
+        설비부하시간 = 기준시간 - 관리LOSS
+        """
+        details = list(self.loss_details.all())
+        mgmt_loss = sum(d.minutes for d in details if d.category in MOLDING_MGMT_LOSS)
+        time_loss = sum(d.minutes for d in details if d.category not in MOLDING_MGMT_LOSS)
+        self.loss_minutes = mgmt_loss + time_loss
+
+        # 설비부하시간 = 기준시간 - 관리LOSS
+        load_minutes = max(self.base_minutes - mgmt_loss, 0)
+        # 가동시간 = 설비부하시간 - 시간LOSS
+        self.operating_minutes = max(load_minutes - time_loss, 0)
+
+        # 설비가동률 = 가동시간 ÷ 설비부하시간
+        if load_minutes > 0:
+            self.utilization_rate = round(self.operating_minutes / load_minutes * 100, 1)
         else:
             self.utilization_rate = 0
+        # 시간가동률 = 가동시간 ÷ 근무시간(기준시간)
         if self.base_minutes > 0:
-            self.time_rate = round(net / self.base_minutes * 100, 1)
+            self.time_rate = round(self.operating_minutes / self.base_minutes * 100, 1)
         else:
             self.time_rate = 0
 
