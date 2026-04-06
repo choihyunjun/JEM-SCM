@@ -509,6 +509,7 @@ function syncERP() {
 // 근무설정값 (shift 변경 시 기준시간 자동 적용)
 var DAY_SHIFT_MIN = {{ setting.day_shift_minutes }};
 var NIGHT_SHIFT_MIN = {{ setting.night_shift_minutes }};
+var currentWorkMinutes = 0;
 
 function openInput(recordId) {
     currentRecordId = recordId;
@@ -525,11 +526,12 @@ function openInput(recordId) {
             document.getElementById('inp_qty').textContent = r.product_qty || 0;
             document.getElementById('inp_shift').value = r.shift || '주간';
             document.getElementById('inp_base_minutes').value = r.base_minutes || DAY_SHIFT_MIN;
-            // ERP 실가동시간 표시
-            if (r.work_minutes > 0) {
-                var erpLoss = Math.max((r.base_minutes || 0) - r.work_minutes, 0);
+            // ERP 실가동시간 → 유실시간 자동 표시
+            currentWorkMinutes = r.work_minutes || 0;
+            if (currentWorkMinutes > 0) {
+                var erpLoss = Math.max((r.base_minutes || 0) - currentWorkMinutes, 0);
                 document.getElementById('erp_loss_val').textContent = erpLoss;
-                document.getElementById('erp_work_val').textContent = r.work_minutes;
+                document.getElementById('erp_work_val').textContent = currentWorkMinutes;
                 document.getElementById('erp_loss_info').style.display = 'block';
             } else {
                 document.getElementById('erp_loss_info').style.display = 'none';
@@ -569,8 +571,19 @@ function calcRates() {
     document.getElementById('mgmt_loss_total').textContent = mgmtLoss + '분';
     document.getElementById('time_loss_total').textContent = timeLoss + '분';
 
-    // 가동시간 = 기준시간 - 전체유실시간
-    var operating = Math.max(base - lossTotal, 0);
+    // 가동시간: ERP 실가동시간이 있으면 사용, 없으면 기준-유실
+    var operating;
+    if (currentWorkMinutes > 0 && lossTotal === 0) {
+        // 유실 사유 미입력 시 ERP 기준으로 표시
+        operating = currentWorkMinutes;
+        var erpLoss = Math.max(base - currentWorkMinutes, 0);
+        document.getElementById('inp_loss_total').value = erpLoss;
+    } else if (lossTotal > 0) {
+        // 유실 사유 입력됨 → 입력 기준
+        operating = Math.max(base - lossTotal, 0);
+    } else {
+        operating = Math.max(base - lossTotal, 0);
+    }
     document.getElementById('inp_operating').value = operating;
 
     // 일별: 설비가동률 = 시간가동률 = 가동시간 / 기준시간
