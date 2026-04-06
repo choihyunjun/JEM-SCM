@@ -88,6 +88,40 @@
                     </select>
                 </div>
 
+                <div class="mb-3">
+                    <label class="form-label fw-bold">성형 옵션</label>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="swShift" name="use_shift" value="1">
+                                <label class="form-check-label" for="swShift">주간/야간 표시</label>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="swSerial" name="use_serial" value="1" onchange="toggleSerial()">
+                                <label class="form-check-label" for="swSerial">연번 적용</label>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 주야 선택 (스위치 ON 시) -->
+                    <div id="shiftOptions" class="mt-2" style="display:none;">
+                        <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="shift_type" id="shiftDay" value="주간" checked>
+                            <label class="btn btn-outline-dark btn-sm" for="shiftDay">주간</label>
+                            <input type="radio" class="btn-check" name="shift_type" id="shiftNight" value="야간">
+                            <label class="btn btn-outline-dark btn-sm" for="shiftNight">야간</label>
+                        </div>
+                    </div>
+                    <!-- 시작 연번 (스위치 ON 시) -->
+                    <div id="serialOptions" class="mt-2" style="display:none;">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text">시작 연번</span>
+                            <input type="number" class="form-control" name="serial_start" id="serialStart" value="1" min="1">
+                        </div>
+                    </div>
+                </div>
+
                 <div class="mb-0">
                     <label class="form-label fw-bold">발행 매수</label>
                     <div class="input-group">
@@ -276,6 +310,14 @@ function adjustCount(delta) {
     if (val < 1) val = 1;
     if (val > 50) val = 50;
     input.value = val;
+}
+
+// 주야/연번 스위치 토글
+document.getElementById('swShift').addEventListener('change', function() {
+    document.getElementById('shiftOptions').style.display = this.checked ? 'block' : 'none';
+});
+function toggleSerial() {
+    document.getElementById('serialOptions').style.display = document.getElementById('swSerial').checked ? 'block' : 'none';
 }
 
 // 폼 초기화

@@ -1451,6 +1451,10 @@ def process_tag_print(request):
         size_type = request.POST.get('size_type', 'medium')
         custom_width = request.POST.get('custom_width', 100)
         custom_height = request.POST.get('custom_height', 60)
+        use_shift = request.POST.get('use_shift') == '1'
+        shift_type = request.POST.get('shift_type', '주간') if use_shift else ''
+        use_serial = request.POST.get('use_serial') == '1'
+        serial_start = int(request.POST.get('serial_start', 1)) if use_serial else 0
 
         # A4 모아찍기 모드용 레이아웃 계산
         if print_mode == 'sheet':
@@ -1508,9 +1512,11 @@ def process_tag_print(request):
                 status='PRINTED',
                 printed_by=request.user if request.user.is_authenticated else None
             )
+            serial_no = serial_start + len(tag_list) if use_serial else 0
             tag_list.append({
                 'index': len(tag_list),
                 'tag_id': tag_id,
+                'serial_no': serial_no,
             })
 
         # 중량 정보
@@ -1538,6 +1544,10 @@ def process_tag_print(request):
             'label_h_mm': label_h_mm,
             'sheet_cols': sheet_cols,
             'per_page': per_page,
+            'use_shift': use_shift,
+            'shift_type': shift_type,
+            'use_serial': use_serial,
+            'serial_start': serial_start,
         }
         return render(request, 'material/process_tag_print.html', context)
 

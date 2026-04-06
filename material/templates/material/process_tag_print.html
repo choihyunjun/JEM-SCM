@@ -223,7 +223,7 @@
             </div>
             <table class="label-table">
                 <tr>
-                    <td class="qr-cell" rowspan="5">
+                    <td class="qr-cell" rowspan="{% if use_shift or use_serial %}6{% else %}5{% endif %}">
                         <div id="qr_{{ tag.index }}" class="qr-area"></div>
                     </td>
                     <td class="label-header">품번</td>
@@ -252,6 +252,20 @@
                     <td class="label-data" style="color: #8e44ad;">{{ weight_qty }} {{ weight_unit }}</td>
                 </tr>
                 {% endif %}{% endif %}
+                {% if use_shift or use_serial %}
+                <tr>
+                    {% if use_shift %}
+                    <td class="label-header">주/야</td>
+                    <td class="label-data" style="font-weight:bold;{% if shift_type == '야간' %}color:#1a237e;{% endif %}">
+                        {{ shift_type }}
+                        {% if use_serial %}<span style="float:right;color:#e65100;">No.{{ tag.serial_no }}</span>{% endif %}
+                    </td>
+                    {% elif use_serial %}
+                    <td class="label-header">연번</td>
+                    <td class="label-data" style="font-weight:bold;color:#e65100;">No.{{ tag.serial_no }}</td>
+                    {% endif %}
+                </tr>
+                {% endif %}
             </table>
         </div>
         {% endfor %}
