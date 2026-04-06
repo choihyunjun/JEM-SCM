@@ -1459,17 +1459,20 @@ def process_tag_print(request):
         # A4 모아찍기 모드용 레이아웃 계산
         if print_mode == 'sheet':
             # 라벨 사이즈에 따른 mm 단위 설정
+            extra_row = use_shift or use_serial
             if size_type == 'small':
-                label_w_mm, label_h_mm = 60, 70
+                label_w_mm, label_h_mm = 60, 70 if not extra_row else 80
             elif size_type == 'medium':
-                label_w_mm, label_h_mm = 95, 45  # A4 최적화: 2×6 = 12개
+                label_w_mm = 95
+                label_h_mm = 53 if extra_row else 45  # 12개→10개 (2×5)
             elif size_type == 'large':
                 label_w_mm, label_h_mm = 210, 148
             elif size_type == 'custom':
                 label_w_mm = int(custom_width)
                 label_h_mm = int(custom_height)
             else:
-                label_w_mm, label_h_mm = 95, 45
+                label_w_mm = 95
+                label_h_mm = 53 if extra_row else 45
 
             # A4 용지 크기 (210mm x 297mm)
             # 여백 고려: 좌우 5mm, 상하 5mm
