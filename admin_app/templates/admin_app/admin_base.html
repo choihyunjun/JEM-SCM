@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% load auth_extras %}
+
+{% block sidebar_material %}{% endblock %}
+{% block sidebar_qms %}{% endblock %}
+
+{% block content %}
+<style>
+    .admin-sidebar {
+        position: fixed; left: 0; top: 57px; bottom: 0; width: 220px;
+        background: #263238; overflow-y: auto; z-index: 100;
+    }
+    .admin-sidebar .nav-link {
+        color: #b0bec5; padding: 10px 20px; font-size: 0.9rem; display: block; text-decoration: none;
+    }
+    .admin-sidebar .nav-link:hover { color: #fff; background: #37474f; }
+    .admin-sidebar .nav-link.active { color: #fff; font-weight: bold; background: #455a64; border-left: 3px solid #4dd0e1; }
+    .admin-sidebar .nav-heading {
+        color: #78909c; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px;
+        padding: 15px 20px 5px; font-weight: bold;
+    }
+    .admin-content { margin-left: 220px; padding: 20px; }
+
+    /* 기존 사이드바 숨기기 */
+    #layoutSidenav_nav { display: none !important; }
+    #layoutSidenav_content { margin-left: 0 !important; padding-left: 0 !important; }
+</style>
+
+<div class="admin-sidebar">
+    <div class="nav-heading" style="padding-top:20px;">
+        <i class="bi bi-gear-wide-connected me-1"></i> 관리자 메뉴
+    </div>
+
+    <a href="{% url 'admin_app:dashboard' %}" class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+        <i class="bi bi-speedometer2 me-2"></i> 대시보드
+    </a>
+
+    <div class="nav-heading">시스템 관리</div>
+    <a href="{% url 'user_permission_manage' %}" class="nav-link {% if request.resolver_match.url_name == 'user_permission_manage' %}active{% endif %}">
+        <i class="bi bi-shield-lock me-2"></i> 권한 관리
+    </a>
+    <a href="{% url 'user_manage' %}" class="nav-link {% if request.resolver_match.url_name == 'user_manage' %}active{% endif %}">
+        <i class="bi bi-people me-2"></i> 사용자 관리
+    </a>
+
+    <div class="nav-heading">기준정보 관리</div>
+    <a href="{% url 'part_list' %}" class="nav-link {% if request.resolver_match.url_name == 'part_list' %}active{% endif %}">
+        <i class="bi bi-box me-2"></i> 품목 관리
+    </a>
+    <a href="{% url 'vendor_manage' %}" class="nav-link {% if request.resolver_match.url_name == 'vendor_manage' %}active{% endif %}">
+        <i class="bi bi-building me-2"></i> 거래처 관리
+    </a>
+
+    <div class="nav-heading">ERP 연동</div>
+    <a href="{% url 'erp_po_sync' %}" class="nav-link {% if request.resolver_match.url_name == 'erp_po_sync' %}active{% endif %}">
+        <i class="bi bi-arrow-left-right me-2"></i> ERP 발주 적용
+    </a>
+    <a href="{% url 'material:erp_stock_manage' %}" class="nav-link {% if request.resolver_match.url_name == 'erp_stock_manage' %}active{% endif %}">
+        <i class="bi bi-database me-2"></i> ERP 재고 관리
+    </a>
+    <a href="{% url 'material:erp_master_sync' %}" class="nav-link {% if request.resolver_match.url_name == 'erp_master_sync' %}active{% endif %}">
+        <i class="bi bi-cloud-download me-2"></i> ERP 마스터 동기화
+    </a>
+
+    <div class="nav-heading">알림 관리</div>
+    <a href="{% url 'admin_app:notification_manage' %}" class="nav-link {% if request.resolver_match.url_name == 'notification_manage' %}active{% endif %}">
+        <i class="bi bi-bell me-2"></i> 알림 설정
+    </a>
+</div>
+
+<div class="admin-content">
+    {% block admin_content %}{% endblock %}
+</div>
+{% endblock %}

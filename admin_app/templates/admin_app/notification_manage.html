@@ -1,0 +1,221 @@
+{% extends "admin_app/admin_base.html" %}
+
+{% block admin_content %}
+<h4 class="fw-bold mb-4"><i class="bi bi-bell me-2"></i>알림 관리</h4>
+
+<!-- 탭 -->
+<ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tabRecipients">수신자 관리</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabRules">알림 규칙</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabLogs">발송 이력</a></li>
+</ul>
+
+<div class="tab-content">
+    <!-- 수신자 관리 -->
+    <div class="tab-pane fade show active" id="tabRecipients">
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-body py-2">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold mb-0">이름</label>
+                        <input type="text" class="form-control form-control-sm" id="new_r_name">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold mb-0">소속</label>
+                        <input type="text" class="form-control form-control-sm" id="new_r_org">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold mb-0">직함</label>
+                        <input type="text" class="form-control form-control-sm" id="new_r_pos">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold mb-0">이메일</label>
+                        <input type="email" class="form-control form-control-sm" id="new_r_email">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold mb-0">구분</label>
+                        <select class="form-select form-select-sm" id="new_r_type">
+                            <option value="INTERNAL">내부 직원</option>
+                            <option value="VENDOR">협력사</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-primary btn-sm w-100" onclick="addRecipient()">
+                            <i class="bi bi-plus-lg me-1"></i>추가
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover" style="font-size:0.85rem;">
+                <thead class="table-light">
+                    <tr><th>이름</th><th>소속</th><th>직함</th><th>이메일</th><th>구분</th><th>상태</th><th>관리</th></tr>
+                </thead>
+                <tbody id="recipientBody"><tr><td colspan="7" class="text-center text-muted">로딩 중...</td></tr></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 알림 규칙 -->
+    <div class="tab-pane fade" id="tabRules">
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-body py-2">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold mb-0">이벤트</label>
+                        <select class="form-select form-select-sm" id="new_rule_event">
+                            {% for code, label in event_choices %}
+                            <option value="{{ code }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold mb-0">수신자 (다중 선택)</label>
+                        <select class="form-select form-select-sm" id="new_rule_recipients" multiple size="3"></select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold mb-0">설명</label>
+                        <input type="text" class="form-control form-control-sm" id="new_rule_desc">
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-primary btn-sm w-100" onclick="addRule()">
+                            <i class="bi bi-plus-lg me-1"></i>규칙 추가
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover" style="font-size:0.85rem;">
+                <thead class="table-light">
+                    <tr><th>이벤트</th><th>수신자</th><th>설명</th><th>상태</th><th>관리</th></tr>
+                </thead>
+                <tbody id="ruleBody"><tr><td colspan="5" class="text-center text-muted">로딩 중...</td></tr></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 발송 이력 -->
+    <div class="tab-pane fade" id="tabLogs">
+        <button class="btn btn-outline-secondary btn-sm mb-2" onclick="loadLogs()"><i class="bi bi-arrow-clockwise me-1"></i>새로고침</button>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover" style="font-size:0.85rem;">
+                <thead class="table-light">
+                    <tr><th>시각</th><th>이벤트</th><th>수신자</th><th>이메일</th><th>제목</th><th>상태</th><th>발송</th></tr>
+                </thead>
+                <tbody id="logBody"><tr><td colspan="7" class="text-center text-muted">탭 클릭 시 로딩됩니다.</td></tr></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+var csrfToken = '{{ csrf_token }}';
+
+// ─── 수신자 ───
+function loadRecipients() {
+    fetch('{% url "admin_app:api_recipients" %}').then(r=>r.json()).then(data => {
+        var tb = document.getElementById('recipientBody');
+        if (!data.recipients.length) { tb.innerHTML = '<tr><td colspan="7" class="text-center text-muted">등록된 수신자가 없습니다.</td></tr>'; return; }
+        tb.innerHTML = data.recipients.map(r =>
+            '<tr class="' + (r.is_active ? '' : 'text-muted text-decoration-line-through') + '">' +
+            '<td class="fw-bold">' + r.name + '</td>' +
+            '<td>' + (r.organization||'-') + '</td>' +
+            '<td>' + (r.position||'-') + '</td>' +
+            '<td>' + r.email + '</td>' +
+            '<td><span class="badge ' + (r.recipient_type=='VENDOR'?'bg-warning text-dark':'bg-info') + '">' + (r.recipient_type=='VENDOR'?'협력사':'내부') + '</span></td>' +
+            '<td><div class="form-check form-switch"><input class="form-check-input" type="checkbox" ' + (r.is_active?'checked':'') + ' onchange="updateRecipient('+r.id+',\'is_active\',this.checked)"></div></td>' +
+            '<td><button class="btn btn-outline-danger btn-sm" onclick="deleteRecipient('+r.id+',\''+r.name+'\')"><i class="bi bi-trash"></i></button></td>' +
+            '</tr>'
+        ).join('');
+        // 규칙 탭 수신자 select도 갱신
+        var sel = document.getElementById('new_rule_recipients');
+        sel.innerHTML = data.recipients.filter(r=>r.is_active).map(r =>
+            '<option value="'+r.id+'">'+r.name+' ('+r.email+')</option>'
+        ).join('');
+    });
+}
+function addRecipient() {
+    var name = document.getElementById('new_r_name').value.trim();
+    var email = document.getElementById('new_r_email').value.trim();
+    if (!name || !email) { alert('이름과 이메일을 입력하세요.'); return; }
+    fetch('{% url "admin_app:api_recipients" %}', {
+        method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},
+        body: JSON.stringify({action:'add', name:name, email:email,
+            organization: document.getElementById('new_r_org').value.trim(),
+            position: document.getElementById('new_r_pos').value.trim(),
+            recipient_type: document.getElementById('new_r_type').value})
+    }).then(r=>r.json()).then(d => {
+        if (d.success) { ['new_r_name','new_r_org','new_r_pos','new_r_email'].forEach(id => document.getElementById(id).value=''); loadRecipients(); }
+        else alert(d.error);
+    });
+}
+function updateRecipient(id, field, value) {
+    var p = {action:'update', id:id}; p[field] = value;
+    fetch('{% url "admin_app:api_recipients" %}', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken}, body:JSON.stringify(p)}).then(r=>r.json()).then(d => { if (!d.success) alert(d.error); });
+}
+function deleteRecipient(id, name) {
+    if (!confirm(name + '을(를) 삭제하시겠습니까?')) return;
+    fetch('{% url "admin_app:api_recipients" %}', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken}, body:JSON.stringify({action:'delete', id:id})}).then(r=>r.json()).then(d => { if (d.success) loadRecipients(); else alert(d.error); });
+}
+
+// ─── 규칙 ───
+function loadRules() {
+    fetch('{% url "admin_app:api_rules" %}').then(r=>r.json()).then(data => {
+        var tb = document.getElementById('ruleBody');
+        if (!data.rules.length) { tb.innerHTML = '<tr><td colspan="5" class="text-center text-muted">등록된 규칙이 없습니다.</td></tr>'; return; }
+        tb.innerHTML = data.rules.map(r =>
+            '<tr>' +
+            '<td class="fw-bold">' + r.event_display + '</td>' +
+            '<td class="small">' + (r.recipient_names||'-') + '</td>' +
+            '<td class="small">' + (r.description||'-') + '</td>' +
+            '<td><div class="form-check form-switch"><input class="form-check-input" type="checkbox" ' + (r.is_active?'checked':'') + ' onchange="updateRule('+r.id+',this.checked)"></div></td>' +
+            '<td><button class="btn btn-outline-danger btn-sm" onclick="deleteRule('+r.id+')"><i class="bi bi-trash"></i></button></td>' +
+            '</tr>'
+        ).join('');
+    });
+}
+function addRule() {
+    var event_type = document.getElementById('new_rule_event').value;
+    var sel = document.getElementById('new_rule_recipients');
+    var ids = Array.from(sel.selectedOptions).map(o => parseInt(o.value));
+    if (!ids.length) { alert('수신자를 선택하세요.'); return; }
+    fetch('{% url "admin_app:api_rules" %}', {
+        method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},
+        body: JSON.stringify({action:'add', event_type:event_type, recipient_ids:ids, description:document.getElementById('new_rule_desc').value.trim()})
+    }).then(r=>r.json()).then(d => { if (d.success) { document.getElementById('new_rule_desc').value=''; loadRules(); } else alert(d.error); });
+}
+function updateRule(id, is_active) {
+    fetch('{% url "admin_app:api_rules" %}', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken}, body:JSON.stringify({action:'update', id:id, is_active:is_active})}).then(r=>r.json()).then(d => { if (!d.success) alert(d.error); });
+}
+function deleteRule(id) {
+    if (!confirm('이 규칙을 삭제하시겠습니까?')) return;
+    fetch('{% url "admin_app:api_rules" %}', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken}, body:JSON.stringify({action:'delete', id:id})}).then(r=>r.json()).then(d => { if (d.success) loadRules(); else alert(d.error); });
+}
+
+// ─── 발송 이력 ───
+function loadLogs() {
+    fetch('{% url "admin_app:api_notification_logs" %}').then(r=>r.json()).then(data => {
+        var tb = document.getElementById('logBody');
+        if (!data.logs.length) { tb.innerHTML = '<tr><td colspan="7" class="text-center text-muted">발송 이력이 없습니다.</td></tr>'; return; }
+        tb.innerHTML = data.logs.map(l =>
+            '<tr>' +
+            '<td class="small">' + l.created_at + '</td>' +
+            '<td>' + l.event_display + '</td>' +
+            '<td>' + l.recipient_name + '</td>' +
+            '<td class="small">' + l.recipient_email + '</td>' +
+            '<td class="small">' + l.subject + '</td>' +
+            '<td><span class="badge ' + (l.status=='SENT'?'bg-success':l.status=='FAILED'?'bg-danger':'bg-warning text-dark') + '">' + l.status_display + '</span></td>' +
+            '<td class="small">' + l.sent_at + '</td>' +
+            '</tr>'
+        ).join('');
+    });
+}
+
+// 초기 로딩
+loadRecipients();
+loadRules();
+document.querySelector('a[href="#tabLogs"]').addEventListener('shown.bs.tab', loadLogs);
+</script>
+{% endblock %}

@@ -45,6 +45,7 @@
         body.is-scm .sb-topnav { background: linear-gradient(135deg, #a00000 0%, #6e0000 100%) !important; }
         body.is-qms .sb-topnav { background: linear-gradient(135deg, #2c3e50 0%, #1a252f 100%) !important; }
         body.is-wms .sb-topnav { background: linear-gradient(135deg, #134E5E 0%, #71B280 100%) !important; }
+        body.is-admin .sb-topnav { background: linear-gradient(135deg, #37474f 0%, #263238 100%) !important; }
 
         /* [Nav Links] 상단 메뉴 탭 */
         .navbar-nav .nav-link {
@@ -285,7 +286,7 @@
     </style>
 </head>
 
-<body class="sb-nav-fixed {% if request.resolver_match.app_name == 'qms' %}is-qms{% elif request.resolver_match.app_name == 'material' %}is-wms{% else %}is-scm{% endif %}">
+<body class="sb-nav-fixed {% if request.resolver_match.app_name == 'qms' %}is-qms{% elif request.resolver_match.app_name == 'material' %}is-wms{% elif request.resolver_match.app_name == 'admin_app' %}is-admin{% else %}is-scm{% endif %}">
     
     <nav class="sb-topnav navbar navbar-expand navbar-dark">
         <a class="navbar-brand ps-3" href="{% url 'home' %}">
@@ -331,6 +332,9 @@
                 </a>
                 <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="navbarDropdown">
                     <li><div class="px-3 py-2 text-muted small">접속 계정: <strong>{{ user.username }}</strong></div></li>
+                    {% if user.is_superuser or user|has_perm:'can_scm_admin' %}
+                    <li><a class="dropdown-item" href="{% url 'admin_app:dashboard' %}"><i class="bi bi-gear me-2"></i>관리자 페이지</a></li>
+                    {% endif %}
                     <li><hr class="dropdown-divider" /></li>
                     <li>
                         <form action="{% url 'logout' %}" method="post" class="px-2 py-1">

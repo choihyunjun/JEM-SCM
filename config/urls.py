@@ -139,6 +139,11 @@ urlpatterns = [
     # 6. 품질관리 (QMS)
     # ------------------------------------------------------------------
     path('qms/', include('qms.urls')),
+
+    # ------------------------------------------------------------------
+    # 7. 관리자 (Admin App)
+    # ------------------------------------------------------------------
+    path('system/', include('admin_app.urls')),
     
     path('return/confirm/<int:pk>/', views.confirm_return, name='confirm_return'), # ✅ [신규] 반출 확인
 ]

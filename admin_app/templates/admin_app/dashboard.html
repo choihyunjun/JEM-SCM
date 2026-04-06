@@ -1,0 +1,68 @@
+{% extends "admin_app/admin_base.html" %}
+
+{% block admin_content %}
+<h4 class="fw-bold mb-4"><i class="bi bi-speedometer2 me-2"></i>관리자 대시보드</h4>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body text-center">
+                <div class="text-muted small">활성 거래처</div>
+                <div class="fs-2 fw-bold text-primary">{{ vendor_count }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body text-center">
+                <div class="text-muted small">등록 품목</div>
+                <div class="fs-2 fw-bold text-success">{{ part_count }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body text-center">
+                <div class="text-muted small">활성 사용자</div>
+                <div class="fs-2 fw-bold text-info">{{ user_count }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body text-center">
+                <div class="text-muted small">알림 규칙</div>
+                <div class="fs-2 fw-bold text-warning">{{ rule_count }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white fw-bold">빠른 바로가기</div>
+            <div class="list-group list-group-flush">
+                <a href="{% url 'user_permission_manage' %}" class="list-group-item list-group-item-action"><i class="bi bi-shield-lock me-2"></i>권한 관리</a>
+                <a href="{% url 'admin_app:notification_manage' %}" class="list-group-item list-group-item-action"><i class="bi bi-bell me-2"></i>알림 설정</a>
+                <a href="{% url 'material:erp_master_sync' %}" class="list-group-item list-group-item-action"><i class="bi bi-cloud-download me-2"></i>ERP 마스터 동기화</a>
+                <a href="{% url 'vendor_manage' %}" class="list-group-item list-group-item-action"><i class="bi bi-building me-2"></i>거래처 관리</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white fw-bold">알림 현황</div>
+            <div class="card-body">
+                {% if pending_count > 0 %}
+                <div class="alert alert-warning py-2 mb-2">
+                    <i class="bi bi-clock me-1"></i> 대기 중 알림: <strong>{{ pending_count }}건</strong>
+                </div>
+                {% else %}
+                <p class="text-muted mb-0"><i class="bi bi-check-circle me-1"></i> 대기 중인 알림이 없습니다.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

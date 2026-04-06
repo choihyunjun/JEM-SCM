@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "django.contrib.humanize",
     "qms",
     "material",
+    "admin_app.apps.AdminAppConfig",
 ]
 
 MIDDLEWARE = [
