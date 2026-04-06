@@ -213,7 +213,7 @@
                             <td style="background:#e9ecef;" class="{% if group.avg_time >= 90 %}text-success{% elif group.avg_time >= 70 %}text-warning{% elif group.avg_time > 0 %}text-danger{% endif %}">
                                 {% if group.avg_time > 0 %}{{ group.avg_time|floatformat:1 }}%{% else %}-{% endif %}
                             </td>
-                            <td style="background:#e9ecef;">{{ group.total_days }}</td>
+                            <td style="background:#e9ecef;"></td>
                             {% for d in day_range %}<td style="background:#e9ecef;"></td>{% endfor %}
                         </tr>
                         {% empty %}
