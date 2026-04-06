@@ -299,9 +299,8 @@
                     <div class="col-md-3">
                         <label class="form-label fw-bold">유실시간 합계 (분)</label>
                         <input type="text" class="form-control bg-light" id="inp_loss_total" value="0" readonly>
-                        <div id="erp_loss_info" class="small mt-1" style="display:none;">
-                            <span class="text-info">ERP 기준: <strong id="erp_loss_val">0</strong>분</span>
-                            <span class="ms-1 text-muted">(실가동 <span id="erp_work_val">0</span>분)</span>
+                        <div class="small mt-1">
+                            <span class="text-muted">사유 입력: <strong id="detail_loss_sum" class="text-danger">0</strong>분</span>
                         </div>
                     </div>
                 </div>
@@ -526,16 +525,7 @@ function openInput(recordId) {
             document.getElementById('inp_qty').textContent = r.product_qty || 0;
             document.getElementById('inp_shift').value = r.shift || '주간';
             document.getElementById('inp_base_minutes').value = r.base_minutes || DAY_SHIFT_MIN;
-            // ERP 실가동시간 → 유실시간 자동 표시
             currentWorkMinutes = r.work_minutes || 0;
-            if (currentWorkMinutes > 0) {
-                var erpLoss = Math.max((r.base_minutes || 0) - currentWorkMinutes, 0);
-                document.getElementById('erp_loss_val').textContent = erpLoss;
-                document.getElementById('erp_work_val').textContent = currentWorkMinutes;
-                document.getElementById('erp_loss_info').style.display = 'block';
-            } else {
-                document.getElementById('erp_loss_info').style.display = 'none';
-            }
             document.querySelectorAll('.loss-input').forEach(function(el) { el.value = 0; });
             if (r.loss_details) {
                 for (var cat in r.loss_details) {
@@ -570,6 +560,7 @@ function calcRates() {
     document.getElementById('inp_loss_total').value = lossTotal;
     document.getElementById('mgmt_loss_total').textContent = mgmtLoss + '분';
     document.getElementById('time_loss_total').textContent = timeLoss + '분';
+    document.getElementById('detail_loss_sum').textContent = lossTotal;
 
     // 가동시간: ERP 실가동시간이 있으면 사용, 없으면 기준-유실
     var operating;
