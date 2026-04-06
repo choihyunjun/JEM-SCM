@@ -169,7 +169,8 @@
                         <tr>
                             <th class="sticky-col" style="min-width:70px;">호기</th>
                             <th style="min-width:40px;">톤</th>
-                            <th style="min-width:55px;">가동률</th>
+                            <th style="min-width:55px;">설비</th>
+                            <th style="min-width:55px;">시간</th>
                             <th style="min-width:45px;">가동일</th>
                             {% for d in day_range %}
                             <th style="min-width:30px;">{{ d }}</th>
@@ -184,6 +185,9 @@
                             <td class="text-muted">{{ ms.machine.tonnage }}</td>
                             <td class="fw-bold {% if ms.avg_util >= 90 %}text-success{% elif ms.avg_util >= 70 %}text-warning{% elif ms.avg_util > 0 %}text-danger{% endif %}">
                                 {% if ms.avg_util > 0 %}{{ ms.avg_util|floatformat:1 }}%{% else %}-{% endif %}
+                            </td>
+                            <td class="{% if ms.avg_time >= 90 %}text-success{% elif ms.avg_time >= 70 %}text-warning{% elif ms.avg_time > 0 %}text-danger{% endif %}">
+                                {% if ms.avg_time > 0 %}{{ ms.avg_time|floatformat:1 }}%{% else %}-{% endif %}
                             </td>
                             <td>{{ ms.active_days }}</td>
                             {% for dd in ms.daily %}
@@ -206,6 +210,9 @@
                             <td style="background:#e9ecef;" class="{% if group.avg_util >= 90 %}text-success{% elif group.avg_util >= 70 %}text-warning{% elif group.avg_util > 0 %}text-danger{% endif %}">
                                 {% if group.avg_util > 0 %}{{ group.avg_util|floatformat:1 }}%{% else %}-{% endif %}
                             </td>
+                            <td style="background:#e9ecef;" class="{% if group.avg_time >= 90 %}text-success{% elif group.avg_time >= 70 %}text-warning{% elif group.avg_time > 0 %}text-danger{% endif %}">
+                                {% if group.avg_time > 0 %}{{ group.avg_time|floatformat:1 }}%{% else %}-{% endif %}
+                            </td>
                             <td style="background:#e9ecef;">{{ group.total_days }}</td>
                             {% for d in day_range %}<td style="background:#e9ecef;"></td>{% endfor %}
                         </tr>
@@ -218,6 +225,7 @@
                             <td class="text-start sticky-col">합계</td>
                             <td>{{ total_machines }}대</td>
                             <td>{% if overall_util > 0 %}{{ overall_util|floatformat:1 }}%{% else %}-{% endif %}</td>
+                            <td>{% if overall_time > 0 %}{{ overall_time|floatformat:1 }}%{% else %}-{% endif %}</td>
                             <td></td>
                             {% for d in day_range %}<td></td>{% endfor %}
                         </tr>
