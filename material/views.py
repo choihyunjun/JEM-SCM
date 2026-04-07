@@ -7528,8 +7528,14 @@ def molding_analytics(request):
     total_loss = sum(r.loss_minutes for r in records_list)
     total_work = sum(r.work_minutes for r in records_list)
 
+    # 설비가동률 = operating / base (가동일 기준)
     kpi_utilization = round(total_operating / total_base * 100, 1) if total_base else 0
-    kpi_time_rate = round(total_work / total_operating * 100, 1) if total_operating else 0
+    # 시간가동률 = operating / 전체근무시간 (전체 호기 × 근무일 × 주야간)
+    setting = MoldingWorkSetting.get_setting(year, month)
+    all_machines = MoldingMachine.objects.filter(is_active=True).count()
+    work_per_machine = setting.work_days * (setting.day_shift_minutes + setting.night_shift_minutes)
+    total_work_capacity = all_machines * work_per_machine
+    kpi_time_rate = round(total_operating / total_work_capacity * 100, 1) if total_work_capacity else 0
     kpi_total_loss_hours = round(total_loss / 60, 1)
 
     # ─── 차트 1: 일별 설비가동률 추이 ───
@@ -7609,9 +7615,10 @@ def molding_analytics(request):
     for s in shift_labels:
         b = shift_data[s]['base']
         o = shift_data[s]['operating']
-        w = shift_data[s]['work']
+        base_per_shift = setting.day_shift_minutes if s == '주간' else setting.night_shift_minutes
+        total_shift_work = all_machines * setting.work_days * base_per_shift
         shift_utilization.append(round(o / b * 100, 1) if b else 0)
-        shift_time_rate.append(round(w / o * 100, 1) if o else 0)
+        shift_time_rate.append(round(o / total_shift_work * 100, 1) if total_shift_work else 0)
 
     # ─── 차트 6: 월별 트렌드 최근 6개월 ───
     current_date = date(year, month, 1)
