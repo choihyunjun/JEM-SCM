@@ -127,4 +127,12 @@ urlpatterns = [
 
     # 성형 가동률 분석 대시보드
     path('molding/analytics/', views.molding_analytics, name='molding_analytics'),
+
+    # 성형 마스터
+    path('molding/master/', views.molding_master_list, name='molding_master_list'),
+    path('molding/master/save/', views.molding_master_save, name='molding_master_save'),
+    path('molding/master/delete/', views.molding_master_delete, name='molding_master_delete'),
+    path('molding/master/upload/', views.molding_master_upload, name='molding_master_upload'),
+    path('molding/master/excel/', views.molding_master_excel, name='molding_master_excel'),
+    path('api/molding/master/<int:pk>/', views.api_molding_master_detail, name='api_molding_master_detail'),
 ]

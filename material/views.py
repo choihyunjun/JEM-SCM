@@ -7720,3 +7720,372 @@ def molding_analytics(request):
         'monthly_time_rate': json.dumps(monthly_time_rate),
     }
     return render(request, 'material/molding_analytics.html', context)
+
+
+# =============================================================================
+# 성형 마스터 (Molding Master)
+# =============================================================================
+
+@wms_permission_required('can_wms_stock_view')
+def molding_master_list(request):
+    """성형 마스터 목록 조회"""
+    from .models import MoldingMaster, MoldingMachine
+
+    q = request.GET.get('q', '').strip()
+    item_group = request.GET.get('item_group', '').strip()
+    material_part_no = request.GET.get('material_part_no', '').strip()
+    machine_code = request.GET.get('machine_code', '').strip()
+
+    qs = MoldingMaster.objects.select_related('machine').all()
+
+    if q:
+        qs = qs.filter(Q(part_no__icontains=q) | Q(part_name__icontains=q))
+    if item_group:
+        qs = qs.filter(item_group=item_group)
+    if material_part_no:
+        qs = qs.filter(material_part_no__icontains=material_part_no)
+    if machine_code:
+        qs = qs.filter(machine__code=machine_code)
+
+    total_count = qs.count()
+    paginator = Paginator(qs, 30)
+    page = request.GET.get('page', 1)
+    records = paginator.get_page(page)
+
+    # 필터용 데이터
+    item_groups = MoldingMaster.objects.values_list('item_group', flat=True).exclude(item_group='').distinct().order_by('item_group')
+    machines = MoldingMachine.objects.filter(is_active=True).order_by('code')
+
+    context = {
+        'records': records,
+        'total_count': total_count,
+        'q': q,
+        'item_group': item_group,
+        'material_part_no': material_part_no,
+        'machine_code': machine_code,
+        'item_groups': item_groups,
+        'machines': machines,
+    }
+    return render(request, 'material/molding_master_list.html', context)
+
+
+@wms_permission_required('can_wms_stock_view')
+def molding_master_save(request):
+    """성형 마스터 저장 (생성/수정)"""
+    from .models import MoldingMaster, MoldingMachine
+    from decimal import Decimal, InvalidOperation
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'POST only'}, status=405)
+
+    pk = request.POST.get('pk', '').strip()
+
+    def to_decimal(val, default='0'):
+        try:
+            return Decimal(val) if val else Decimal(default)
+        except (InvalidOperation, ValueError):
+            return Decimal(default)
+
+    def to_int(val, default=0):
+        try:
+            return int(val) if val else default
+        except (ValueError, TypeError):
+            return default
+
+    part_no = request.POST.get('part_no', '').strip()
+    material_type = request.POST.get('material_type', '').strip()
+
+    if not part_no:
+        messages.error(request, '품번은 필수 입력 항목입니다.')
+        return redirect('material:molding_master_list')
+
+    machine_code = request.POST.get('machine_code', '').strip()
+    machine_obj = None
+    if machine_code:
+        machine_obj = MoldingMachine.objects.filter(code=machine_code).first()
+
+    data = {
+        'part_name': request.POST.get('part_name', '').strip(),
+        'item_group': request.POST.get('item_group', '').strip(),
+        'mold_type': request.POST.get('mold_type', '').strip(),
+        'material_type': material_type,
+        'material_part_no': request.POST.get('material_part_no', '').strip(),
+        'material_name': request.POST.get('material_name', '').strip(),
+        'machine': machine_obj,
+        'machine_tonnage': to_int(request.POST.get('machine_tonnage')),
+        'cycle_time': to_decimal(request.POST.get('cycle_time')),
+        'cavity': to_int(request.POST.get('cavity')),
+        'shot_time': to_decimal(request.POST.get('shot_time')),
+        'gate_type': request.POST.get('gate_type', '').strip(),
+        'hot_runner_time': to_decimal(request.POST.get('hot_runner_time')),
+        'product_weight': to_decimal(request.POST.get('product_weight')),
+        'tolerance': to_decimal(request.POST.get('tolerance')),
+        'runner_weight': to_decimal(request.POST.get('runner_weight')),
+        'total_material': to_decimal(request.POST.get('total_material')),
+        'erp_qty': to_decimal(request.POST.get('erp_qty')),
+        'remark': request.POST.get('remark', '').strip(),
+        'updated_by': request.user,
+    }
+
+    try:
+        if pk:
+            obj = get_object_or_404(MoldingMaster, pk=pk)
+            for k, v in data.items():
+                setattr(obj, k, v)
+            obj.part_no = part_no
+            obj.save()
+            messages.success(request, f'{part_no} ({material_type}) 수정 완료')
+        else:
+            obj = MoldingMaster(part_no=part_no, **data)
+            obj.save()
+            messages.success(request, f'{part_no} ({material_type}) 등록 완료')
+    except Exception as e:
+        messages.error(request, f'저장 실패: {e}')
+
+    return redirect('material:molding_master_list')
+
+
+@wms_permission_required('can_wms_stock_view')
+def molding_master_delete(request):
+    """성형 마스터 삭제"""
+    from .models import MoldingMaster
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'POST only'}, status=405)
+
+    pk = request.POST.get('pk')
+    try:
+        obj = get_object_or_404(MoldingMaster, pk=pk)
+        label = str(obj)
+        obj.delete()
+        messages.success(request, f'{label} 삭제 완료')
+    except Exception as e:
+        messages.error(request, f'삭제 실패: {e}')
+
+    return redirect('material:molding_master_list')
+
+
+@wms_permission_required('can_wms_stock_view')
+def molding_master_upload(request):
+    """성형 마스터 엑셀 업로드"""
+    from .models import MoldingMaster, MoldingMachine
+    from decimal import Decimal, InvalidOperation
+
+    if request.method != 'POST':
+        return redirect('material:molding_master_list')
+
+    excel_file = request.FILES.get('excel_file')
+    if not excel_file:
+        messages.error(request, '파일을 선택해주세요.')
+        return redirect('material:molding_master_list')
+
+    try:
+        wb = openpyxl.load_workbook(excel_file, read_only=True, data_only=True)
+        ws = wb.active
+
+        # 헤더 매핑 (첫 행)
+        headers = [str(cell.value or '').strip() for cell in next(ws.iter_rows(min_row=1, max_row=1))]
+
+        col_map = {}
+        field_names = {
+            '품번': 'part_no', '품명': 'part_name', '품목': 'item_group',
+            '금형구분': 'mold_type', '재료구분': 'material_type',
+            '재료품번': 'material_part_no', '재료품명': 'material_name',
+            '설비호기': 'machine_code', '설비톤수': 'machine_tonnage',
+            'CT(초)': 'cycle_time', 'CT': 'cycle_time',
+            '캐비티수': 'cavity', '캐비티': 'cavity',
+            'ST': 'shot_time', '게이트': 'gate_type',
+            'HT': 'hot_runner_time',
+            '제품중량(g)': 'product_weight', '제품중량': 'product_weight',
+            '공차': 'tolerance',
+            '런너중량(g)': 'runner_weight', '런너중량': 'runner_weight',
+            '총소요량(g)': 'total_material', '총소요량': 'total_material',
+            'ERP수량(kg)': 'erp_qty', 'ERP수량': 'erp_qty',
+            '비고': 'remark',
+        }
+
+        for idx, h in enumerate(headers):
+            if h in field_names:
+                col_map[field_names[h]] = idx
+
+        if 'part_no' not in col_map:
+            messages.error(request, '엑셀에 "품번" 열이 없습니다.')
+            return redirect('material:molding_master_list')
+
+        # 설비호기 맵 미리 로딩
+        machine_map = {m.code: m for m in MoldingMachine.objects.all()}
+
+        def safe_decimal(val, default='0'):
+            if val is None or str(val).strip() == '':
+                return Decimal(default)
+            try:
+                return Decimal(str(val).strip())
+            except (InvalidOperation, ValueError):
+                return Decimal(default)
+
+        def safe_int(val, default=0):
+            if val is None or str(val).strip() == '':
+                return default
+            try:
+                return int(float(str(val).strip()))
+            except (ValueError, TypeError):
+                return default
+
+        def get_val(row_data, field):
+            idx = col_map.get(field)
+            if idx is not None and idx < len(row_data):
+                return row_data[idx]
+            return None
+
+        created = 0
+        updated = 0
+        errors = []
+
+        for row_num, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+            row_data = list(row)
+            part_no = str(get_val(row_data, 'part_no') or '').strip()
+            if not part_no:
+                continue
+
+            material_type = str(get_val(row_data, 'material_type') or '').strip()
+            machine_code_val = str(get_val(row_data, 'machine_code') or '').strip()
+            machine_obj = machine_map.get(machine_code_val)
+
+            defaults = {
+                'part_name': str(get_val(row_data, 'part_name') or '').strip(),
+                'item_group': str(get_val(row_data, 'item_group') or '').strip(),
+                'mold_type': str(get_val(row_data, 'mold_type') or '').strip(),
+                'material_part_no': str(get_val(row_data, 'material_part_no') or '').strip(),
+                'material_name': str(get_val(row_data, 'material_name') or '').strip(),
+                'machine': machine_obj,
+                'machine_tonnage': safe_int(get_val(row_data, 'machine_tonnage')),
+                'cycle_time': safe_decimal(get_val(row_data, 'cycle_time')),
+                'cavity': safe_int(get_val(row_data, 'cavity')),
+                'shot_time': safe_decimal(get_val(row_data, 'shot_time')),
+                'gate_type': str(get_val(row_data, 'gate_type') or '').strip(),
+                'hot_runner_time': safe_decimal(get_val(row_data, 'hot_runner_time')),
+                'product_weight': safe_decimal(get_val(row_data, 'product_weight')),
+                'tolerance': safe_decimal(get_val(row_data, 'tolerance')),
+                'runner_weight': safe_decimal(get_val(row_data, 'runner_weight')),
+                'total_material': safe_decimal(get_val(row_data, 'total_material')),
+                'erp_qty': safe_decimal(get_val(row_data, 'erp_qty')),
+                'remark': str(get_val(row_data, 'remark') or '').strip(),
+                'updated_by': request.user,
+            }
+
+            try:
+                obj, is_created = MoldingMaster.objects.update_or_create(
+                    part_no=part_no,
+                    material_type=material_type,
+                    defaults=defaults,
+                )
+                if is_created:
+                    created += 1
+                else:
+                    updated += 1
+            except Exception as e:
+                errors.append(f'행 {row_num}: {e}')
+
+        wb.close()
+        msg = f'업로드 완료 - 신규 {created}건, 수정 {updated}건'
+        if errors:
+            msg += f', 오류 {len(errors)}건'
+        messages.success(request, msg)
+
+    except Exception as e:
+        messages.error(request, f'엑셀 처리 오류: {e}')
+
+    return redirect('material:molding_master_list')
+
+
+@wms_permission_required('can_wms_stock_view')
+def molding_master_excel(request):
+    """성형 마스터 엑셀 다운로드"""
+    from .models import MoldingMaster
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = '성형마스터'
+
+    headers = [
+        '품번', '품명', '품목', '금형구분', '재료구분',
+        '재료품번', '재료품명', '설비호기', '설비톤수',
+        'CT(초)', '캐비티수', 'ST', '게이트', 'HT',
+        '제품중량(g)', '공차', '런너중량(g)', '총소요량(g)',
+        'ERP수량(kg)', '비고',
+    ]
+    ws.append(headers)
+
+    # 헤더 스타일
+    header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+    header_font = Font(bold=True, color='FFFFFF', size=10)
+    for cell in ws[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center')
+
+    qs = MoldingMaster.objects.select_related('machine').all()
+    for obj in qs:
+        ws.append([
+            obj.part_no, obj.part_name, obj.item_group, obj.mold_type, obj.material_type,
+            obj.material_part_no, obj.material_name,
+            obj.machine.code if obj.machine else '',
+            obj.machine_tonnage,
+            float(obj.cycle_time), obj.cavity, float(obj.shot_time),
+            obj.gate_type, float(obj.hot_runner_time),
+            float(obj.product_weight), float(obj.tolerance),
+            float(obj.runner_weight), float(obj.total_material),
+            float(obj.erp_qty), obj.remark,
+        ])
+
+    # 열 너비 자동 조절
+    for col in ws.columns:
+        max_length = 0
+        col_letter = col[0].column_letter
+        for cell in col:
+            try:
+                if cell.value:
+                    max_length = max(max_length, len(str(cell.value)))
+            except Exception:
+                pass
+        ws.column_dimensions[col_letter].width = min(max_length + 3, 30)
+
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = 'attachment; filename="molding_master.xlsx"'
+    wb.save(response)
+    return response
+
+
+@wms_permission_required('can_wms_stock_view')
+def api_molding_master_detail(request, pk):
+    """성형 마스터 상세 JSON API"""
+    from .models import MoldingMaster
+
+    obj = get_object_or_404(MoldingMaster, pk=pk)
+    data = {
+        'pk': obj.pk,
+        'part_no': obj.part_no,
+        'part_name': obj.part_name,
+        'item_group': obj.item_group,
+        'mold_type': obj.mold_type,
+        'material_type': obj.material_type,
+        'material_part_no': obj.material_part_no,
+        'material_name': obj.material_name,
+        'machine_code': obj.machine.code if obj.machine else '',
+        'machine_tonnage': obj.machine_tonnage,
+        'cycle_time': str(obj.cycle_time),
+        'cavity': obj.cavity,
+        'shot_time': str(obj.shot_time),
+        'gate_type': obj.gate_type,
+        'hot_runner_time': str(obj.hot_runner_time),
+        'product_weight': str(obj.product_weight),
+        'tolerance': str(obj.tolerance),
+        'runner_weight': str(obj.runner_weight),
+        'total_material': str(obj.total_material),
+        'erp_qty': str(obj.erp_qty),
+        'remark': obj.remark,
+    }
+    return JsonResponse(data)

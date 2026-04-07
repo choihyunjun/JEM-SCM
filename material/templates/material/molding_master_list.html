@@ -1,0 +1,391 @@
+{% extends 'material/material_base.html' %}
+{% load humanize %}
+
+{% block material_content %}
+<div class="container-fluid" style="max-width: 1900px;">
+    <!-- 헤더 -->
+    <div class="d-flex justify-content-between align-items-center mb-3 pt-3">
+        <div>
+            <h4 class="fw-bold mb-0">
+                성형 마스터
+                <span class="badge bg-secondary fs-6 ms-2">{{ total_count }}건</span>
+            </h4>
+            <small class="text-muted">사출 성형 생산조건 기준정보 관리</small>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-success btn-sm" data-bs-toggle="modal" data-bs-target="#uploadModal">
+                <i class="bi bi-upload me-1"></i> 엑셀 업로드
+            </button>
+            <a href="{% url 'material:molding_master_excel' %}" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-download me-1"></i> 엑셀 다운로드
+            </a>
+            <button class="btn btn-primary btn-sm" onclick="openAddModal()">
+                <i class="bi bi-plus-lg me-1"></i> 신규 등록
+            </button>
+        </div>
+    </div>
+
+    <!-- 검색 카드 -->
+    <div class="card shadow-sm mb-3">
+        <div class="card-body py-2">
+            <form method="get" class="row g-2 align-items-end">
+                <div class="col-md-3 col-lg-2">
+                    <label class="form-label mb-0 small fw-bold">품번/품명</label>
+                    <input type="text" name="q" class="form-control form-control-sm" value="{{ q }}" placeholder="품번 또는 품명 검색">
+                </div>
+                <div class="col-md-2 col-lg-2">
+                    <label class="form-label mb-0 small fw-bold">품목</label>
+                    <select name="item_group" class="form-select form-select-sm">
+                        <option value="">전체</option>
+                        {% for ig in item_groups %}
+                        <option value="{{ ig }}" {% if item_group == ig %}selected{% endif %}>{{ ig }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 col-lg-2">
+                    <label class="form-label mb-0 small fw-bold">재료품번</label>
+                    <input type="text" name="material_part_no" class="form-control form-control-sm" value="{{ material_part_no }}" placeholder="재료품번 검색">
+                </div>
+                <div class="col-md-2 col-lg-2">
+                    <label class="form-label mb-0 small fw-bold">설비호기</label>
+                    <select name="machine_code" class="form-select form-select-sm">
+                        <option value="">전체</option>
+                        {% for m in machines %}
+                        <option value="{{ m.code }}" {% if machine_code == m.code %}selected{% endif %}>{{ m.code }} ({{ m.tonnage }}t)</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> 조회</button>
+                    <a href="{% url 'material:molding_master_list' %}" class="btn btn-outline-secondary btn-sm">초기화</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 테이블 -->
+    <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover table-bordered mb-0" style="font-size: 0.78rem; white-space: nowrap;">
+                <thead class="table-dark">
+                    <tr class="text-center">
+                        <th style="min-width:40px;">#</th>
+                        <th style="min-width:110px;">품번</th>
+                        <th style="min-width:140px;">품명</th>
+                        <th style="min-width:70px;">품목</th>
+                        <th style="min-width:70px;">금형구분</th>
+                        <th style="min-width:70px;">재료구분</th>
+                        <th style="min-width:110px;">재료품번</th>
+                        <th style="min-width:120px;">재료품명</th>
+                        <th style="min-width:70px;">설비호기</th>
+                        <th style="min-width:60px;">설비톤수</th>
+                        <th style="min-width:60px;">CT(초)</th>
+                        <th style="min-width:50px;">캐비티</th>
+                        <th style="min-width:50px;">ST</th>
+                        <th style="min-width:60px;">게이트</th>
+                        <th style="min-width:50px;">HT</th>
+                        <th style="min-width:70px;">제품중량</th>
+                        <th style="min-width:60px;">공차</th>
+                        <th style="min-width:70px;">런너중량</th>
+                        <th style="min-width:70px;">총소요량</th>
+                        <th style="min-width:70px;">ERP수량</th>
+                        <th style="min-width:80px;">관리</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in records %}
+                    <tr>
+                        <td class="text-center text-muted">{{ forloop.counter0|add:records.start_index }}</td>
+                        <td class="fw-bold">{{ r.part_no }}</td>
+                        <td>{{ r.part_name }}</td>
+                        <td class="text-center">{{ r.item_group }}</td>
+                        <td class="text-center">
+                            {% if r.mold_type == '단일' %}
+                            <span class="badge bg-info text-dark">단일</span>
+                            {% elif r.mold_type == '패밀리' %}
+                            <span class="badge bg-warning text-dark">패밀리</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">{{ r.material_type }}</td>
+                        <td>{{ r.material_part_no }}</td>
+                        <td>{{ r.material_name }}</td>
+                        <td class="text-center">{{ r.machine.code|default:"-" }}</td>
+                        <td class="text-end">{{ r.machine_tonnage|default:"-" }}</td>
+                        <td class="text-end">{{ r.cycle_time }}</td>
+                        <td class="text-end">{{ r.cavity }}</td>
+                        <td class="text-end">{{ r.shot_time }}</td>
+                        <td class="text-center">{{ r.gate_type|default:"-" }}</td>
+                        <td class="text-end">{{ r.hot_runner_time }}</td>
+                        <td class="text-end">{{ r.product_weight }}</td>
+                        <td class="text-end">{{ r.tolerance }}</td>
+                        <td class="text-end">{{ r.runner_weight }}</td>
+                        <td class="text-end">{{ r.total_material }}</td>
+                        <td class="text-end">{{ r.erp_qty }}</td>
+                        <td class="text-center">
+                            <button class="btn btn-outline-primary btn-sm py-0 px-1" onclick="openEditModal({{ r.pk }})" title="수정">
+                                <i class="bi bi-pencil-square"></i>
+                            </button>
+                            <button class="btn btn-outline-danger btn-sm py-0 px-1" onclick="confirmDelete({{ r.pk }}, '{{ r.part_no }}')" title="삭제">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="21" class="text-center text-muted py-4">등록된 데이터가 없습니다.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 페이지네이션 -->
+    {% if records.has_other_pages %}
+    <nav class="mt-3 d-flex justify-content-center">
+        <ul class="pagination pagination-sm">
+            {% if records.has_previous %}
+            <li class="page-item"><a class="page-link" href="?page=1&q={{ q }}&item_group={{ item_group }}&material_part_no={{ material_part_no }}&machine_code={{ machine_code }}">처음</a></li>
+            <li class="page-item"><a class="page-link" href="?page={{ records.previous_page_number }}&q={{ q }}&item_group={{ item_group }}&material_part_no={{ material_part_no }}&machine_code={{ machine_code }}">&laquo;</a></li>
+            {% endif %}
+            {% for num in records.paginator.page_range %}
+                {% if records.number == num %}
+                <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                {% elif num > records.number|add:'-5' and num < records.number|add:'5' %}
+                <li class="page-item"><a class="page-link" href="?page={{ num }}&q={{ q }}&item_group={{ item_group }}&material_part_no={{ material_part_no }}&machine_code={{ machine_code }}">{{ num }}</a></li>
+                {% endif %}
+            {% endfor %}
+            {% if records.has_next %}
+            <li class="page-item"><a class="page-link" href="?page={{ records.next_page_number }}&q={{ q }}&item_group={{ item_group }}&material_part_no={{ material_part_no }}&machine_code={{ machine_code }}">&raquo;</a></li>
+            <li class="page-item"><a class="page-link" href="?page={{ records.paginator.num_pages }}&q={{ q }}&item_group={{ item_group }}&material_part_no={{ material_part_no }}&machine_code={{ machine_code }}">끝</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+
+<!-- 등록/수정 모달 -->
+<div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <form method="post" action="{% url 'material:molding_master_save' %}">
+                {% csrf_token %}
+                <input type="hidden" name="pk" id="editPk">
+                <div class="modal-header bg-primary text-white py-2">
+                    <h5 class="modal-title" id="editModalTitle">성형 마스터 등록</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-2">
+                        <!-- 기본 정보 -->
+                        <div class="col-12"><h6 class="fw-bold text-primary border-bottom pb-1 mb-2">기본 정보</h6></div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">품번 <span class="text-danger">*</span></label>
+                            <input type="text" name="part_no" id="editPartNo" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">품명</label>
+                            <input type="text" name="part_name" id="editPartName" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold">품목</label>
+                            <input type="text" name="item_group" id="editItemGroup" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold">금형구분</label>
+                            <select name="mold_type" id="editMoldType" class="form-select form-select-sm">
+                                <option value="">-</option>
+                                <option value="단일">단일</option>
+                                <option value="패밀리">패밀리</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold">재료구분</label>
+                            <select name="material_type" id="editMaterialType" class="form-select form-select-sm">
+                                <option value="">-</option>
+                                <option value="재료1">재료1</option>
+                                <option value="M/B">M/B</option>
+                                <option value="재료2">재료2</option>
+                            </select>
+                        </div>
+
+                        <!-- 재료 정보 -->
+                        <div class="col-12 mt-2"><h6 class="fw-bold text-primary border-bottom pb-1 mb-2">재료 정보</h6></div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">재료품번</label>
+                            <input type="text" name="material_part_no" id="editMaterialPartNo" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">재료품명</label>
+                            <input type="text" name="material_name" id="editMaterialName" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">설비호기</label>
+                            <select name="machine_code" id="editMachineCode" class="form-select form-select-sm">
+                                <option value="">-</option>
+                                {% for m in machines %}
+                                <option value="{{ m.code }}">{{ m.code }} ({{ m.tonnage }}t)</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">설비톤수</label>
+                            <input type="number" name="machine_tonnage" id="editMachineTonnage" class="form-control form-control-sm" value="0">
+                        </div>
+
+                        <!-- 생산조건 -->
+                        <div class="col-12 mt-2"><h6 class="fw-bold text-primary border-bottom pb-1 mb-2">생산조건</h6></div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold">CT(초)</label>
+                            <input type="number" step="0.01" name="cycle_time" id="editCycleTime" class="form-control form-control-sm" value="0">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold">캐비티수</label>
+                            <input type="number" name="cavity" id="editCavity" class="form-control form-control-sm" value="0">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold">ST</label>
+                            <input type="number" step="0.01" name="shot_time" id="editShotTime" class="form-control form-control-sm" value="0">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold">게이트</label>
+                            <select name="gate_type" id="editGateType" class="form-select form-select-sm">
+                                <option value="">-</option>
+                                <option value="자동">자동</option>
+                                <option value="분리">분리</option>
+                                <option value="수동(G/CUT)">수동(G/CUT)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold">HT</label>
+                            <input type="number" step="0.01" name="hot_runner_time" id="editHotRunnerTime" class="form-control form-control-sm" value="0">
+                        </div>
+
+                        <!-- 중량 정보 -->
+                        <div class="col-12 mt-2"><h6 class="fw-bold text-primary border-bottom pb-1 mb-2">중량 정보</h6></div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold">제품중량(g)</label>
+                            <input type="number" step="0.0001" name="product_weight" id="editProductWeight" class="form-control form-control-sm" value="0">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold">공차</label>
+                            <input type="number" step="0.0001" name="tolerance" id="editTolerance" class="form-control form-control-sm" value="0">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold">런너중량(g)</label>
+                            <input type="number" step="0.0001" name="runner_weight" id="editRunnerWeight" class="form-control form-control-sm" value="0">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold">총소요량(g)</label>
+                            <input type="number" step="0.0001" name="total_material" id="editTotalMaterial" class="form-control form-control-sm" value="0">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold">ERP수량(kg)</label>
+                            <input type="number" step="0.000001" name="erp_qty" id="editErpQty" class="form-control form-control-sm" value="0">
+                        </div>
+
+                        <!-- 비고 -->
+                        <div class="col-12 mt-2">
+                            <label class="form-label small fw-bold">비고</label>
+                            <textarea name="remark" id="editRemark" class="form-control form-control-sm" rows="2"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button>
+                    <button type="submit" class="btn btn-primary btn-sm">저장</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 엑셀 업로드 모달 -->
+<div class="modal fade" id="uploadModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{% url 'material:molding_master_upload' %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="modal-header bg-success text-white py-2">
+                    <h5 class="modal-title">엑셀 업로드</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info small py-2 mb-3">
+                        <strong>업로드 안내:</strong><br>
+                        - 첫 행은 헤더 (품번, 품명, 품목, 금형구분, 재료구분, 재료품번, 재료품명, 설비호기, 설비톤수, CT(초), 캐비티수, ST, 게이트, HT, 제품중량(g), 공차, 런너중량(g), 총소요량(g), ERP수량(kg), 비고)<br>
+                        - 품번 + 재료구분이 동일하면 기존 데이터를 수정합니다.<br>
+                        - .xlsx 파일만 지원됩니다.
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">엑셀 파일 선택</label>
+                        <input type="file" name="excel_file" class="form-control form-control-sm" accept=".xlsx,.xls" required>
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button>
+                    <button type="submit" class="btn btn-success btn-sm">업로드</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 삭제 폼 (히든) -->
+<form id="deleteForm" method="post" action="{% url 'material:molding_master_delete' %}" style="display:none;">
+    {% csrf_token %}
+    <input type="hidden" name="pk" id="deletePk">
+</form>
+
+<script>
+function openAddModal() {
+    document.getElementById('editPk').value = '';
+    document.getElementById('editModalTitle').textContent = '성형 마스터 등록';
+    // 폼 초기화
+    const form = document.querySelector('#editModal form');
+    form.querySelectorAll('input[type="text"], input[type="number"], textarea').forEach(el => {
+        if (el.type === 'number') el.value = '0';
+        else el.value = '';
+    });
+    form.querySelectorAll('select').forEach(el => el.selectedIndex = 0);
+    new bootstrap.Modal(document.getElementById('editModal')).show();
+}
+
+function openEditModal(pk) {
+    fetch(`/material/api/molding/master/${pk}/`)
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('editPk').value = data.pk;
+            document.getElementById('editModalTitle').textContent = '성형 마스터 수정';
+            document.getElementById('editPartNo').value = data.part_no;
+            document.getElementById('editPartName').value = data.part_name;
+            document.getElementById('editItemGroup').value = data.item_group;
+            document.getElementById('editMoldType').value = data.mold_type;
+            document.getElementById('editMaterialType').value = data.material_type;
+            document.getElementById('editMaterialPartNo').value = data.material_part_no;
+            document.getElementById('editMaterialName').value = data.material_name;
+            document.getElementById('editMachineCode').value = data.machine_code;
+            document.getElementById('editMachineTonnage').value = data.machine_tonnage;
+            document.getElementById('editCycleTime').value = data.cycle_time;
+            document.getElementById('editCavity').value = data.cavity;
+            document.getElementById('editShotTime').value = data.shot_time;
+            document.getElementById('editGateType').value = data.gate_type;
+            document.getElementById('editHotRunnerTime').value = data.hot_runner_time;
+            document.getElementById('editProductWeight').value = data.product_weight;
+            document.getElementById('editTolerance').value = data.tolerance;
+            document.getElementById('editRunnerWeight').value = data.runner_weight;
+            document.getElementById('editTotalMaterial').value = data.total_material;
+            document.getElementById('editErpQty').value = data.erp_qty;
+            document.getElementById('editRemark').value = data.remark;
+            new bootstrap.Modal(document.getElementById('editModal')).show();
+        });
+}
+
+function confirmDelete(pk, partNo) {
+    if (confirm(`"${partNo}" 을(를) 삭제하시겠습니까?`)) {
+        document.getElementById('deletePk').value = pk;
+        document.getElementById('deleteForm').submit();
+    }
+}
+</script>
+{% endblock %}

@@ -699,10 +699,11 @@
                                 성형팀
                                 <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
                             </a>
-                            <div class="collapse {% if request.resolver_match.url_name == 'molding_utilization' or request.resolver_match.url_name == 'molding_analytics' %}show{% endif %}" id="collapseMoldingTeam" data-bs-parent="#sidenavAccordion">
+                            <div class="collapse {% if request.resolver_match.url_name == 'molding_utilization' or request.resolver_match.url_name == 'molding_analytics' or request.resolver_match.url_name == 'molding_master_list' %}show{% endif %}" id="collapseMoldingTeam" data-bs-parent="#sidenavAccordion">
                                 <nav class="sb-sidenav-menu-nested nav">
                                     <a class="nav-link {% if request.resolver_match.url_name == 'molding_utilization' %}active{% endif %}" href="{% url 'material:molding_utilization' %}">성형 가동률 입력</a>
                                     <a class="nav-link {% if request.resolver_match.url_name == 'molding_analytics' %}active{% endif %}" href="{% url 'material:molding_analytics' %}">성형 가동률 조회</a>
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'molding_master_list' %}active{% endif %}" href="{% url 'material:molding_master_list' %}">성형 마스터</a>
                                 </nav>
                             </div>
                             {% endif %}

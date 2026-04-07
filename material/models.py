@@ -1010,3 +1010,46 @@ class MoldingUploadLog(models.Model):
 
     def __str__(self):
         return f"{self.year}년 {self.month}월 ({self.record_count}건)"
+
+
+# -----------------------------------------------------------------------------
+# 18. 성형 마스터 (Molding Master)
+# -----------------------------------------------------------------------------
+class MoldingMaster(models.Model):
+    """성형 마스터 - 사출 성형 생산조건 기준정보"""
+    MOLD_TYPE_CHOICES = [('단일', '단일'), ('패밀리', '패밀리')]
+    MATERIAL_TYPE_CHOICES = [('재료1', '재료1'), ('M/B', 'M/B'), ('재료2', '재료2')]
+    GATE_TYPE_CHOICES = [('자동', '자동'), ('분리', '분리'), ('수동(G/CUT)', '수동(G/CUT)')]
+
+    part_no = models.CharField("품번", max_length=50, db_index=True)
+    part_name = models.CharField("품명", max_length=200, blank=True)
+    item_group = models.CharField("품목", max_length=50, blank=True, db_index=True)
+    mold_type = models.CharField("금형구분", max_length=10, choices=MOLD_TYPE_CHOICES, blank=True)
+    material_type = models.CharField("재료구분", max_length=10, choices=MATERIAL_TYPE_CHOICES, blank=True)
+    material_part_no = models.CharField("재료품번", max_length=50, blank=True, db_index=True)
+    material_name = models.CharField("재료품명", max_length=200, blank=True)
+    machine = models.ForeignKey(MoldingMachine, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="설비호기", related_name='molding_masters')
+    machine_tonnage = models.IntegerField("설비톤수", default=0)
+    cycle_time = models.DecimalField("CT(초)", max_digits=8, decimal_places=2, default=0)
+    cavity = models.IntegerField("캐비티수", default=0)
+    shot_time = models.DecimalField("ST", max_digits=8, decimal_places=2, default=0)
+    gate_type = models.CharField("게이트", max_length=20, choices=GATE_TYPE_CHOICES, blank=True)
+    hot_runner_time = models.DecimalField("HT", max_digits=8, decimal_places=2, default=0)
+    product_weight = models.DecimalField("제품중량(g)", max_digits=10, decimal_places=4, default=0)
+    tolerance = models.DecimalField("공차", max_digits=10, decimal_places=4, default=0)
+    runner_weight = models.DecimalField("런너중량(g)", max_digits=10, decimal_places=4, default=0)
+    total_material = models.DecimalField("총소요량(g)", max_digits=10, decimal_places=4, default=0)
+    erp_qty = models.DecimalField("ERP수량(kg)", max_digits=12, decimal_places=6, default=0)
+    remark = models.TextField("비고", blank=True)
+    created_at = models.DateTimeField("등록일", auto_now_add=True)
+    updated_at = models.DateTimeField("수정일", auto_now=True)
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+
+    class Meta:
+        verbose_name = "성형 마스터"
+        verbose_name_plural = "17. 성형 마스터"
+        ordering = ['part_no', 'material_type']
+        unique_together = ['part_no', 'material_type']
+
+    def __str__(self):
+        return f"{self.part_no} ({self.material_type})"
