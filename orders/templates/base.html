@@ -678,6 +678,13 @@
                             {% endif %}
 
                         {# ====================================================== #}
+                        {# 2-1. 생산현장관리 메뉴 #}
+                        {# ====================================================== #}
+                        {% elif request.resolver_match.url_name in 'molding_utilization,molding_analytics,molding_master_list,process_tag_form,stock_check,stock_check_result' %}
+                            {# production_base.html의 sidebar_material 블록이 처리 #}
+                            {% block sidebar_production %}{% endblock %}
+
+                        {# ====================================================== #}
                         {# 3. SCM 메뉴 (기본) #}
                         {# ====================================================== #}
                         {% else %}
