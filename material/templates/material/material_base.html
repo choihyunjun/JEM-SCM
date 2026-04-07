@@ -137,9 +137,12 @@
     <a class="nav-link dropdown-toggle collapsed" data-bs-toggle="collapse" href="#moldingTeamSubmenu" role="button" aria-expanded="false">
         <i class="bi bi-gear me-2"></i> 성형팀
     </a>
-    <div class="collapse {% if request.resolver_match.url_name == 'molding_utilization' %}show{% endif %}" id="moldingTeamSubmenu">
+    <div class="collapse {% if request.resolver_match.url_name == 'molding_utilization' or request.resolver_match.url_name == 'molding_analytics' %}show{% endif %}" id="moldingTeamSubmenu">
         <a href="{% url 'material:molding_utilization' %}" class="submenu-item {% if request.resolver_match.url_name == 'molding_utilization' %}active{% endif %}">
-            - 성형 가동률
+            - 성형 가동률 입력
+        </a>
+        <a href="{% url 'material:molding_analytics' %}" class="submenu-item {% if request.resolver_match.url_name == 'molding_analytics' %}active{% endif %}">
+            - 성형 가동률 조회
         </a>
     </div>
     {% endif %}

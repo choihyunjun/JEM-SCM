@@ -124,4 +124,7 @@ urlpatterns = [
     path('molding/settings/', views.molding_settings, name='molding_settings'),
     path('api/molding/save-input/', views.api_molding_save_input, name='api_molding_save_input'),
     path('api/molding/machines/', views.api_molding_machines, name='api_molding_machines'),
+
+    # 성형 가동률 분석 대시보드
+    path('molding/analytics/', views.molding_analytics, name='molding_analytics'),
 ]

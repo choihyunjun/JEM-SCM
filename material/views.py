@@ -7492,3 +7492,179 @@ def api_molding_machines(request):
         return JsonResponse({'success': False, 'error': '알 수 없는 액션'})
 
     return JsonResponse({'success': False, 'error': 'GET/POST만 허용'})
+
+
+# =============================================================================
+# 성형 가동률 분석 대시보드
+# =============================================================================
+@login_required
+def molding_analytics(request):
+    """성형 가동률 분석 대시보드 (6가지 차트 + KPI)"""
+    from .models import (
+        MoldingMachine, MoldingDailyRecord, MoldingLossDetail,
+        MoldingWorkSetting, MOLDING_LOSS_CATEGORIES, MOLDING_MGMT_LOSS
+    )
+    from collections import defaultdict
+    from django.db.models import Avg, Sum, Count, F
+    import calendar
+    import json
+    from datetime import date
+    from dateutil.relativedelta import relativedelta
+
+    now = timezone.localtime()
+    year = int(request.GET.get('year', now.year))
+    month = int(request.GET.get('month', now.month))
+
+    # ─── 해당 월 레코드 조회 ───
+    records = MoldingDailyRecord.objects.filter(
+        date__year=year, date__month=month
+    ).select_related('machine').prefetch_related('loss_details')
+
+    records_list = list(records)
+
+    # ─── KPI 카드 ───
+    total_base = sum(r.base_minutes for r in records_list) or 1
+    total_operating = sum(r.operating_minutes for r in records_list)
+    total_loss = sum(r.loss_minutes for r in records_list)
+    total_work = sum(r.work_minutes for r in records_list)
+
+    kpi_utilization = round(total_operating / total_base * 100, 1) if total_base else 0
+    kpi_time_rate = round(total_work / total_operating * 100, 1) if total_operating else 0
+    kpi_total_loss_hours = round(total_loss / 60, 1)
+
+    # ─── 차트 1: 일별 설비가동률 추이 ───
+    _, days_in_month = calendar.monthrange(year, month)
+    daily_data = defaultdict(lambda: {'base': 0, 'operating': 0})
+    for r in records_list:
+        day = r.date.day
+        daily_data[day]['base'] += r.base_minutes
+        daily_data[day]['operating'] += r.operating_minutes
+
+    daily_labels = []
+    daily_rates = []
+    for d in range(1, days_in_month + 1):
+        if daily_data[d]['base'] > 0:
+            daily_labels.append(f"{d}일")
+            rate = round(daily_data[d]['operating'] / daily_data[d]['base'] * 100, 1)
+            daily_rates.append(rate)
+
+    # ─── 차트 2: 톤수별 가동률 비교 ───
+    tonnage_data = defaultdict(lambda: {'base': 0, 'operating': 0})
+    for r in records_list:
+        t = r.machine.tonnage
+        tonnage_data[t]['base'] += r.base_minutes
+        tonnage_data[t]['operating'] += r.operating_minutes
+
+    tonnage_labels = []
+    tonnage_rates = []
+    for t in sorted(tonnage_data.keys()):
+        tonnage_labels.append(f"{t}t")
+        b = tonnage_data[t]['base']
+        rate = round(tonnage_data[t]['operating'] / b * 100, 1) if b else 0
+        tonnage_rates.append(rate)
+
+    # ─── 차트 3: 유실 사유별 비율 (donut) ───
+    loss_details = MoldingLossDetail.objects.filter(
+        record__date__year=year, record__date__month=month
+    ).values('category').annotate(total=Sum('minutes')).order_by('-total')
+
+    loss_labels = [d['category'] for d in loss_details]
+    loss_values = [d['total'] for d in loss_details]
+
+    # ─── 차트 4: 호기별 가동률 랭킹 TOP/BOTTOM 5 ───
+    machine_data = defaultdict(lambda: {'base': 0, 'operating': 0, 'code': ''})
+    for r in records_list:
+        mid = r.machine_id
+        machine_data[mid]['base'] += r.base_minutes
+        machine_data[mid]['operating'] += r.operating_minutes
+        machine_data[mid]['code'] = r.machine.code
+
+    machine_ranking = []
+    for mid, d in machine_data.items():
+        if d['base'] > 0:
+            rate = round(d['operating'] / d['base'] * 100, 1)
+            machine_ranking.append({'code': d['code'], 'rate': rate})
+
+    machine_ranking.sort(key=lambda x: x['rate'], reverse=True)
+
+    top5 = machine_ranking[:5]
+    bottom5 = sorted(machine_ranking[-5:], key=lambda x: x['rate']) if len(machine_ranking) > 5 else []
+
+    ranking_top_labels = [m['code'] for m in top5]
+    ranking_top_rates = [m['rate'] for m in top5]
+    ranking_bottom_labels = [m['code'] for m in bottom5]
+    ranking_bottom_rates = [m['rate'] for m in bottom5]
+
+    # ─── 차트 5: 주간 vs 야간 비교 ───
+    shift_data = defaultdict(lambda: {'base': 0, 'operating': 0, 'work': 0})
+    for r in records_list:
+        s = r.shift
+        shift_data[s]['base'] += r.base_minutes
+        shift_data[s]['operating'] += r.operating_minutes
+        shift_data[s]['work'] += r.work_minutes
+
+    shift_labels = ['주간', '야간']
+    shift_utilization = []
+    shift_time_rate = []
+    for s in shift_labels:
+        b = shift_data[s]['base']
+        o = shift_data[s]['operating']
+        w = shift_data[s]['work']
+        shift_utilization.append(round(o / b * 100, 1) if b else 0)
+        shift_time_rate.append(round(w / o * 100, 1) if o else 0)
+
+    # ─── 차트 6: 월별 트렌드 최근 6개월 ───
+    current_date = date(year, month, 1)
+    monthly_labels = []
+    monthly_utilization = []
+    monthly_time_rate = []
+
+    for i in range(5, -1, -1):
+        target = current_date - relativedelta(months=i)
+        m_records = MoldingDailyRecord.objects.filter(
+            date__year=target.year, date__month=target.month
+        )
+        m_base = m_records.aggregate(total=Sum('base_minutes'))['total'] or 0
+        m_operating = m_records.aggregate(total=Sum('operating_minutes'))['total'] or 0
+        m_work = m_records.aggregate(total=Sum('work_minutes'))['total'] or 0
+
+        monthly_labels.append(f"{target.year}.{target.month:02d}")
+        monthly_utilization.append(round(m_operating / m_base * 100, 1) if m_base else 0)
+        monthly_time_rate.append(round(m_work / m_operating * 100, 1) if m_operating else 0)
+
+    # ─── 년도 목록 ───
+    year_range = list(range(2024, now.year + 2))
+
+    context = {
+        'year': year,
+        'month': month,
+        'year_range': year_range,
+        # KPI
+        'kpi_utilization': kpi_utilization,
+        'kpi_time_rate': kpi_time_rate,
+        'kpi_total_loss_hours': kpi_total_loss_hours,
+        'total_records': len(records_list),
+        # Chart 1: Daily trend
+        'daily_labels': json.dumps(daily_labels, ensure_ascii=False),
+        'daily_rates': json.dumps(daily_rates),
+        # Chart 2: Tonnage comparison
+        'tonnage_labels': json.dumps(tonnage_labels, ensure_ascii=False),
+        'tonnage_rates': json.dumps(tonnage_rates),
+        # Chart 3: Loss breakdown
+        'loss_labels': json.dumps(loss_labels, ensure_ascii=False),
+        'loss_values': json.dumps(loss_values),
+        # Chart 4: Machine ranking
+        'ranking_top_labels': json.dumps(ranking_top_labels, ensure_ascii=False),
+        'ranking_top_rates': json.dumps(ranking_top_rates),
+        'ranking_bottom_labels': json.dumps(ranking_bottom_labels, ensure_ascii=False),
+        'ranking_bottom_rates': json.dumps(ranking_bottom_rates),
+        # Chart 5: Shift comparison
+        'shift_labels': json.dumps(shift_labels, ensure_ascii=False),
+        'shift_utilization': json.dumps(shift_utilization),
+        'shift_time_rate': json.dumps(shift_time_rate),
+        # Chart 6: Monthly trend
+        'monthly_labels': json.dumps(monthly_labels, ensure_ascii=False),
+        'monthly_utilization': json.dumps(monthly_utilization),
+        'monthly_time_rate': json.dumps(monthly_time_rate),
+    }
+    return render(request, 'material/molding_analytics.html', context)
