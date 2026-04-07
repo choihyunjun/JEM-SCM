@@ -29,9 +29,10 @@
     <div class="card shadow-sm mb-3">
         <div class="card-body py-2">
             <form method="get" class="row g-2 align-items-end">
-                <div class="col-md-3 col-lg-2">
+                <div class="col-md-3 col-lg-2" style="position:relative;">
                     <label class="form-label mb-0 small fw-bold">품번/품명</label>
-                    <input type="text" name="q" class="form-control form-control-sm" value="{{ q }}" placeholder="품번 또는 품명 검색">
+                    <input type="text" name="q" class="form-control form-control-sm" value="{{ q }}" placeholder="품번 또는 품명 검색" id="searchPartNo" autocomplete="off">
+                    <div id="partNoDropdown" class="autocomplete-dropdown"></div>
                 </div>
                 <div class="col-md-2 col-lg-2">
                     <label class="form-label mb-0 small fw-bold">품목</label>
@@ -42,9 +43,10 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-2 col-lg-2">
+                <div class="col-md-2 col-lg-2" style="position:relative;">
                     <label class="form-label mb-0 small fw-bold">재료품번</label>
-                    <input type="text" name="material_part_no" class="form-control form-control-sm" value="{{ material_part_no }}" placeholder="재료품번 검색">
+                    <input type="text" name="material_part_no" class="form-control form-control-sm" value="{{ material_part_no }}" placeholder="재료품번 검색" id="searchMaterialNo" autocomplete="off">
+                    <div id="materialNoDropdown" class="autocomplete-dropdown"></div>
                 </div>
                 <div class="col-md-2 col-lg-2">
                     <label class="form-label mb-0 small fw-bold">설비호기</label>
@@ -387,5 +389,61 @@ function confirmDelete(pk, partNo) {
         document.getElementById('deleteForm').submit();
     }
 }
+
+// ─── 자동완성 ───
+var partNos = {{ part_nos_json|safe }};
+var materialNos = {{ material_nos_json|safe }};
+
+function setupAutocomplete(inputId, dropdownId, dataList) {
+    var input = document.getElementById(inputId);
+    var dropdown = document.getElementById(dropdownId);
+    if (!input || !dropdown) return;
+
+    input.addEventListener('input', function() {
+        var val = this.value.trim().toLowerCase();
+        dropdown.innerHTML = '';
+        if (val.length < 1) { dropdown.style.display = 'none'; return; }
+        var matches = dataList.filter(function(item) {
+            return item.toLowerCase().includes(val);
+        }).slice(0, 10);
+        if (!matches.length) { dropdown.style.display = 'none'; return; }
+        matches.forEach(function(item) {
+            var div = document.createElement('div');
+            div.className = 'autocomplete-item';
+            div.textContent = item;
+            div.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                input.value = item;
+                dropdown.style.display = 'none';
+            });
+            dropdown.appendChild(div);
+        });
+        dropdown.style.display = 'block';
+    });
+
+    input.addEventListener('blur', function() {
+        setTimeout(function() { dropdown.style.display = 'none'; }, 150);
+    });
+    input.addEventListener('focus', function() {
+        if (this.value.trim().length >= 1) this.dispatchEvent(new Event('input'));
+    });
+}
+
+setupAutocomplete('searchPartNo', 'partNoDropdown', partNos);
+setupAutocomplete('searchMaterialNo', 'materialNoDropdown', materialNos);
 </script>
+
+<style>
+.autocomplete-dropdown {
+    position: absolute; z-index: 1050; background: #fff; border: 1px solid #dee2e6;
+    border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 250px;
+    overflow-y: auto; display: none; width: calc(100% - 24px); margin-top: 2px;
+}
+.autocomplete-item {
+    padding: 6px 12px; cursor: pointer; font-size: 0.82rem;
+}
+.autocomplete-item:hover {
+    background: #e9ecef;
+}
+</style>
 {% endblock %}

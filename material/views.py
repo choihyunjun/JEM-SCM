@@ -7755,6 +7755,9 @@ def molding_master_list(request):
     # 필터용 데이터
     item_groups = MoldingMaster.objects.values_list('item_group', flat=True).exclude(item_group='').distinct().order_by('item_group')
     machines = MoldingMachine.objects.filter(is_active=True).order_by('code')
+    # 자동완성용
+    part_nos = list(MoldingMaster.objects.values_list('part_no', flat=True).distinct().order_by('part_no'))
+    material_nos = list(MoldingMaster.objects.values_list('material_part_no', flat=True).exclude(material_part_no='').distinct().order_by('material_part_no'))
 
     context = {
         'records': records,
@@ -7765,6 +7768,8 @@ def molding_master_list(request):
         'machine_code': machine_code,
         'item_groups': item_groups,
         'machines': machines,
+        'part_nos_json': json.dumps(part_nos, ensure_ascii=False),
+        'material_nos_json': json.dumps(material_nos, ensure_ascii=False),
     }
     return render(request, 'material/molding_master_list.html', context)
 
