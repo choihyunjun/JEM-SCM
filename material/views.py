@@ -7282,7 +7282,7 @@ def molding_erp_sync(request):
                 record.status = '가동'
                 # 품번별 수량 표시: "ZR700: 1000, ZR703: 2000"
                 part_qty = agg['part_qty']
-                record.product_part_no = ', '.join(
+                record.product_part_no = ' | '.join(
                     f"{p}: {q:,}" for p, q in sorted(part_qty.items())
                 )[:500]
                 record.product_qty = sum(part_qty.values())
@@ -7583,8 +7583,9 @@ def molding_analytics(request):
     for r in records_list:
         if not r.product_part_no:
             continue
-        # "RKC06-12712: 29,280, RKC08-12202: 8,000" 파싱
-        for item in r.product_part_no.split(','):
+        # "RKC06-12712: 29,280 | RKC08-12202: 8,000" 파싱 (|또는 구형 , 구분자)
+        sep = '|' if '|' in r.product_part_no else ','
+        for item in r.product_part_no.split(sep):
             item = item.strip()
             if ':' in item:
                 pno = item.split(':')[0].strip()
