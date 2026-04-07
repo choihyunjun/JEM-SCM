@@ -7618,24 +7618,17 @@ def molding_analytics(request):
         items = sorted(part_group_detail[grp].items(), key=lambda x: -x[1])[:20]
         group_detail_data[grp] = [{'name': k, 'qty': v} for k, v in items]
 
-    # ─── 차트 5: 주간 vs 야간 비교 ───
-    shift_data = defaultdict(lambda: {'base': 0, 'operating': 0, 'work': 0})
+    # ─── 차트 5: 호기별 가동일수 TOP 15 ───
+    machine_days = defaultdict(set)
     for r in records_list:
-        s = r.shift
-        shift_data[s]['base'] += r.base_minutes
-        shift_data[s]['operating'] += r.operating_minutes
-        shift_data[s]['work'] += r.work_minutes
-
-    shift_labels = ['주간', '야간']
-    shift_utilization = []
-    shift_time_rate = []
-    for s in shift_labels:
-        b = shift_data[s]['base']
-        o = shift_data[s]['operating']
-        base_per_shift = setting.day_shift_minutes if s == '주간' else setting.night_shift_minutes
-        total_shift_work = all_machines * setting.work_days * base_per_shift
-        shift_utilization.append(round(o / b * 100, 1) if b else 0)
-        shift_time_rate.append(round(o / total_shift_work * 100, 1) if total_shift_work else 0)
+        if r.status == '가동':
+            machine_days[r.machine.code].add(r.date)
+    machine_days_list = sorted(
+        [{'code': code, 'days': len(dates)} for code, dates in machine_days.items()],
+        key=lambda x: -x['days']
+    )[:15]
+    machine_days_labels = [m['code'] for m in machine_days_list]
+    machine_days_values = [m['days'] for m in machine_days_list]
 
     # ─── 차트 6: 월별 트렌드 최근 6개월 ───
     current_date = date(year, month, 1)
@@ -7711,9 +7704,8 @@ def molding_analytics(request):
         'ranking_top_rates': json.dumps(ranking_top_rates),
         'group_detail_data': json.dumps(group_detail_data, ensure_ascii=False),
         # Chart 5: Shift comparison
-        'shift_labels': json.dumps(shift_labels, ensure_ascii=False),
-        'shift_utilization': json.dumps(shift_utilization),
-        'shift_time_rate': json.dumps(shift_time_rate),
+        'machine_days_labels': json.dumps(machine_days_labels, ensure_ascii=False),
+        'machine_days_values': json.dumps(machine_days_values),
         # Chart 6: Monthly trend
         'monthly_labels': json.dumps(monthly_labels, ensure_ascii=False),
         'monthly_utilization': json.dumps(monthly_utilization),
