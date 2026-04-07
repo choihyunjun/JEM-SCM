@@ -217,22 +217,18 @@
     </div>
     <div class="kpi-card loss" style="padding:16px 24px;">
         <div class="kpi-label" style="margin-bottom:8px;">정지/유실 현황</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;text-align:center;">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;text-align:center;">
             <div>
-                <div style="font-size:0.7rem;color:#888;">비가동</div>
-                <div style="font-size:1.2rem;font-weight:700;color:#a0aec0;">{{ kpi_idle_hours }}<span style="font-size:0.7rem;font-weight:400;">h</span></div>
+                <div style="font-size:0.75rem;color:#888;">계획정지</div>
+                <div style="font-size:1.4rem;font-weight:700;color:#718096;">{{ kpi_planned_hours }}<span style="font-size:0.8rem;font-weight:400;">h</span></div>
             </div>
             <div>
-                <div style="font-size:0.7rem;color:#888;">계획정지</div>
-                <div style="font-size:1.2rem;font-weight:700;color:#718096;">{{ kpi_planned_hours }}<span style="font-size:0.7rem;font-weight:400;">h</span></div>
+                <div style="font-size:0.75rem;color:#888;">실유실</div>
+                <div style="font-size:1.4rem;font-weight:700;color:#e53e3e;">{{ kpi_actual_loss_hours }}<span style="font-size:0.8rem;font-weight:400;">h</span></div>
             </div>
-            <div>
-                <div style="font-size:0.7rem;color:#888;">실유실</div>
-                <div style="font-size:1.2rem;font-weight:700;color:#e53e3e;">{{ kpi_actual_loss_hours }}<span style="font-size:0.7rem;font-weight:400;">h</span></div>
-            </div>
-            <div style="border-left:1px solid #e2e8f0;padding-left:8px;">
-                <div style="font-size:0.7rem;color:#888;">합계</div>
-                <div style="font-size:1.2rem;font-weight:700;color:#2d3748;">{{ kpi_total_stop_hours }}<span style="font-size:0.7rem;font-weight:400;">h</span></div>
+            <div style="border-left:1px solid #e2e8f0;padding-left:12px;">
+                <div style="font-size:0.75rem;color:#888;">합계</div>
+                <div style="font-size:1.4rem;font-weight:700;color:#2d3748;">{{ kpi_total_loss_hours }}<span style="font-size:0.8rem;font-weight:400;">h</span></div>
             </div>
         </div>
     </div>
