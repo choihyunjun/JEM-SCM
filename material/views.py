@@ -7292,7 +7292,7 @@ def molding_erp_sync(request):
                 # 생산실적 API에서 실가동시간 반영
                 wt_key = (mc, dt_str, shift)
                 if wt_key in work_time_agg and not record.input_completed:
-                    record.work_minutes = work_time_agg[wt_key]
+                    record.work_minutes = min(work_time_agg[wt_key], base_min)
                     record.operating_minutes = record.work_minutes
                     record.loss_minutes = max(base_min - record.work_minutes, 0)
                     # 가동률 계산
