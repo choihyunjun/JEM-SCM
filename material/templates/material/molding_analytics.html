@@ -291,7 +291,7 @@
 
     <!-- 4. Machine Ranking -->
     <div class="chart-card">
-        <div class="chart-title"><i class="bi bi-trophy-fill"></i>호기별 가동률 랭킹 (TOP 5 / BOTTOM 5)</div>
+        <div class="chart-title"><i class="bi bi-trophy-fill"></i>품목군별 생산수량 (TOP 10)</div>
         <div class="chart-container">
             <canvas id="chartRanking"></canvas>
         </div>
@@ -504,29 +504,21 @@ document.addEventListener('DOMContentLoaded', function() {
         plugins: [noDataPlugin]
     });
 
-    // ─── Chart 4: Machine Ranking (horizontal bar) ───
-    // Combine top5 (blue) + bottom5 (red)
-    const rankLabels = [...rankTopLabels, ...rankBottomLabels];
-    const rankData   = [...rankTopRates, ...rankBottomRates];
-    const rankColors = [
-        ...rankTopRates.map(() => 'rgba(49,130,206,0.7)'),
-        ...rankBottomRates.map(() => 'rgba(229,62,62,0.7)')
-    ];
-    const rankBorders = [
-        ...rankTopRates.map(() => BLUE),
-        ...rankBottomRates.map(() => RED)
-    ];
+    // ─── Chart 4: 품목군별 생산수량 (horizontal bar) ───
+    const rankColors = rankTopRates.map((v, i) => {
+        const colors = ['#3182CE','#38A169','#D69E2E','#E53E3E','#805AD5','#DD6B20','#319795','#D53F8C','#718096','#2B6CB0'];
+        return colors[i % colors.length];
+    });
 
     new Chart(document.getElementById('chartRanking'), {
         type: 'bar',
         data: {
-            labels: rankLabels,
+            labels: rankTopLabels,
             datasets: [{
-                label: '가동률 (%)',
-                data: rankData,
+                label: '생산수량',
+                data: rankTopRates,
                 backgroundColor: rankColors,
-                borderColor: rankBorders,
-                borderWidth: 1,
+                borderWidth: 0,
                 borderRadius: 4,
                 barPercentage: 0.7
             }]
@@ -539,14 +531,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 legend: { display: false },
                 tooltip: {
                     callbacks: {
-                        label: ctx => `가동률: ${ctx.parsed.x}%`
+                        label: ctx => ctx.parsed.x.toLocaleString() + ' EA'
                     }
                 }
             },
             scales: {
                 x: {
-                    min: 0, max: 100,
-                    ticks: { callback: v => v + '%' },
+                    ticks: { callback: v => v.toLocaleString() },
                     grid: { color: 'rgba(0,0,0,0.04)' }
                 },
                 y: { grid: { display: false } }

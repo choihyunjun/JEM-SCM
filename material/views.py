@@ -7577,29 +7577,34 @@ def molding_analytics(request):
     loss_labels = [d['category'] for d in loss_details]
     loss_values = [d['total'] for d in loss_details]
 
-    # ─── 차트 4: 호기별 가동률 랭킹 TOP/BOTTOM 5 ───
-    machine_data = defaultdict(lambda: {'base': 0, 'operating': 0, 'code': ''})
+    # ─── 차트 4: 품목군별 생산수량 랭킹 TOP 10 ───
+    from orders.models import Part
+    part_group_qty = defaultdict(int)
     for r in records_list:
-        mid = r.machine_id
-        machine_data[mid]['base'] += r.base_minutes
-        machine_data[mid]['operating'] += r.operating_minutes
-        machine_data[mid]['code'] = r.machine.code
+        if not r.product_part_no:
+            continue
+        # "RKC06-12712: 29,280, RKC08-12202: 8,000" 파싱
+        for item in r.product_part_no.split(','):
+            item = item.strip()
+            if ':' in item:
+                pno = item.split(':')[0].strip()
+                try:
+                    qty = int(item.split(':')[1].strip().replace(',', ''))
+                except (ValueError, IndexError):
+                    qty = 0
+            else:
+                pno = item
+                qty = 0
+            if pno:
+                part = Part.objects.filter(part_no=pno).first()
+                group = part.part_group if part and part.part_group else '미분류'
+                part_group_qty[group] += qty
 
-    machine_ranking = []
-    for mid, d in machine_data.items():
-        if d['base'] > 0:
-            rate = round(d['operating'] / d['base'] * 100, 1)
-            machine_ranking.append({'code': d['code'], 'rate': rate})
-
-    machine_ranking.sort(key=lambda x: x['rate'], reverse=True)
-
-    top5 = machine_ranking[:5]
-    bottom5 = sorted(machine_ranking[-5:], key=lambda x: x['rate']) if len(machine_ranking) > 5 else []
-
-    ranking_top_labels = [m['code'] for m in top5]
-    ranking_top_rates = [m['rate'] for m in top5]
-    ranking_bottom_labels = [m['code'] for m in bottom5]
-    ranking_bottom_rates = [m['rate'] for m in bottom5]
+    group_ranking = sorted(part_group_qty.items(), key=lambda x: x[1], reverse=True)[:10]
+    ranking_top_labels = [g[0] for g in group_ranking]
+    ranking_top_rates = [g[1] for g in group_ranking]
+    ranking_bottom_labels = []
+    ranking_bottom_rates = []
 
     # ─── 차트 5: 주간 vs 야간 비교 ───
     shift_data = defaultdict(lambda: {'base': 0, 'operating': 0, 'work': 0})
