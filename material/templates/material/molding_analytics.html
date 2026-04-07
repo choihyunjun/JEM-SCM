@@ -495,7 +495,8 @@ document.addEventListener('DOMContentLoaded', function() {
             },
             scales: {
                 y: {
-                    min: 0, max: 100,
+                    min: Math.max(0, Math.floor((Math.min(...tonnageRates.filter(v=>v>0)) - 5) / 5) * 5),
+                    max: 100,
                     ticks: { callback: v => v + '%' },
                     grid: { color: 'rgba(0,0,0,0.04)' }
                 },
