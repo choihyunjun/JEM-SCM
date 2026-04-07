@@ -52,10 +52,11 @@
                         <option value="12" {% if month == 12 %}selected{% endif %}>12월</option>
                     </select>
                 </div>
-                <div class="col-auto d-flex align-items-end">
-                    <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> 조회</button>
+                <div class="col-auto">
+                    <label class="form-label mb-0 small">&nbsp;</label>
+                    <button type="submit" class="btn btn-primary btn-sm d-block"><i class="bi bi-search"></i> 조회</button>
                 </div>
-                <div class="col-auto ms-3">
+                <div class="col-auto d-flex align-items-end">
                     <span class="badge bg-light text-dark border small">
                         기준시간: 주간 {{ setting.day_shift_minutes }}분 / 야간 {{ setting.night_shift_minutes }}분 / 근무일 {{ setting.work_days }}일
                     </span>
