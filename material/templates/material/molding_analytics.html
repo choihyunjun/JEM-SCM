@@ -299,7 +299,7 @@
 
     <!-- 품목군 상세 모달 -->
     <div class="modal fade" id="groupDetailModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" style="max-width:560px;">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
             <div class="modal-content border-0 shadow">
                 <div class="modal-header py-2" style="background:linear-gradient(135deg,#1e3a5f,#2c5282);color:#fff;">
                     <h6 class="modal-title fw-bold mb-0">
@@ -312,23 +312,23 @@
                         <span class="text-muted small fw-bold">품번별 생산수량</span>
                         <span class="badge bg-primary" id="groupDetailCount">0건</span>
                     </div>
-                    <div style="max-height:400px;overflow-y:auto;">
-                        <table class="table table-sm mb-0" style="font-size:0.82rem;">
+                    <div style="max-height:450px;overflow-y:auto;">
+                        <table class="table table-sm table-hover mb-0" style="font-size:0.9rem;">
                             <thead class="table-light sticky-top">
                                 <tr>
                                     <th style="width:40px;" class="text-center">#</th>
-                                    <th>품번</th>
+                                    <th style="width:140px;">품번</th>
                                     <th>품명</th>
-                                    <th class="text-end" style="width:100px;">수량</th>
-                                    <th class="text-end" style="width:60px;">비율</th>
+                                    <th class="text-end" style="width:120px;">수량</th>
+                                    <th class="text-end" style="width:70px;">비율</th>
                                 </tr>
                             </thead>
                             <tbody id="groupDetailBody"></tbody>
                         </table>
                     </div>
-                    <div class="px-3 py-2 bg-light border-top d-flex justify-content-between fw-bold" style="font-size:0.85rem;">
-                        <span>합계</span>
-                        <span id="groupDetailTotal">0</span>
+                    <div class="px-3 py-2 border-top d-flex justify-content-between fw-bold" style="font-size:0.95rem;background:#f0f4f8;">
+                        <span><i class="bi bi-calculator me-1"></i>합계</span>
+                        <span id="groupDetailTotal" class="text-primary">0</span>
                     </div>
                 </div>
             </div>
@@ -608,10 +608,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 var barWidth = total > 0 ? (it.qty / items[0].qty * 100) : 0;
                 return '<tr>' +
                     '<td class="text-center text-muted">' + (i+1) + '</td>' +
-                    '<td class="fw-bold" style="font-family:monospace;font-size:0.8rem;">' + pno + '</td>' +
-                    '<td class="small text-muted">' + pname + '</td>' +
+                    '<td class="fw-bold">' + pno + '</td>' +
+                    '<td class="text-muted">' + pname + '</td>' +
                     '<td class="text-end fw-bold">' + it.qty.toLocaleString() + '</td>' +
-                    '<td class="text-end"><span class="badge bg-light text-dark border" style="font-size:0.7rem;">' + pct + '%</span></td>' +
+                    '<td class="text-end text-muted">' + pct + '%</td>' +
                     '</tr>';
             }).join('');
             document.getElementById('groupDetailTotal').textContent = total.toLocaleString() + ' EA';
