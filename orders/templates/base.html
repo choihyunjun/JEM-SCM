@@ -631,19 +631,18 @@
                             {% if user|has_perm:'can_wms_stock_view' %}
                             <a class="nav-link collapsed {% if request.resolver_match.url_name in 'process_tag_form,stock_check,stock_check_result' %}active{% endif %}"
                                href="#" data-bs-toggle="collapse" data-bs-target="#collapseSupport"
-                               aria-expanded="{% if request.resolver_match.url_name in 'process_tag_form,stock_check,stock_check_result,molding_utilization' %}true{% else %}false{% endif %}"
+                               aria-expanded="{% if request.resolver_match.url_name in 'process_tag_form,stock_check,stock_check_result' %}true{% else %}false{% endif %}"
                                aria-controls="collapseSupport">
                                 <div class="sb-nav-link-icon"><i class="bi bi-tools"></i></div>
                                 현장 지원
                                 <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
                             </a>
-                            <div class="collapse {% if request.resolver_match.url_name in 'process_tag_form,stock_check,stock_check_result,molding_utilization' %}show{% endif %}"
+                            <div class="collapse {% if request.resolver_match.url_name in 'process_tag_form,stock_check,stock_check_result' %}show{% endif %}"
                                  id="collapseSupport" data-bs-parent="#sidenavAccordion">
                                 <nav class="sb-sidenav-menu-nested nav">
                                     <a class="nav-link {% if request.resolver_match.url_name == 'process_tag_form' %}active{% endif %}" href="{% url 'material:process_tag_form' %}">공정 현품표 발행</a>
                                     <a class="nav-link {% if request.resolver_match.url_name == 'stock_check' %}active{% endif %}" href="{% url 'material:stock_check' %}">재고 조사 (QR)</a>
                                     <a class="nav-link {% if request.resolver_match.url_name == 'stock_check_result' %}active{% endif %}" href="{% url 'material:stock_check_result' %}">재고 조사 결과</a>
-                                    <a class="nav-link {% if request.resolver_match.url_name == 'molding_utilization' %}active{% endif %}" href="{% url 'material:molding_utilization' %}">성형 가동률</a>
                                 </nav>
                             </div>
                             {% endif %}
@@ -684,6 +683,37 @@
                                     <a class="nav-link {% if request.resolver_match.url_name == 'raw_material_rack_manage' %}active{% endif %}" href="{% url 'material:raw_material_rack_manage' %}">랙 위치 관리</a>
                                     <a class="nav-link {% if request.resolver_match.url_name == 'raw_material_setting' %}active{% endif %}" href="{% url 'material:raw_material_setting' %}">품목 설정</a>
                                     <a class="nav-link {% if request.resolver_match.url_name == 'raw_material_expiry' %}active{% endif %}" href="{% url 'material:raw_material_expiry' %}">유효기간 관리</a>
+                                </nav>
+                            </div>
+                            {% endif %}
+
+                            {# ─── 생산현장 관리 ─── #}
+                            <div class="sb-sidenav-menu-heading border-top border-secondary pt-2 mt-2">🏭 생산현장 관리</div>
+
+                            {# 성형팀 #}
+                            {% if user|has_perm:'can_wms_stock_view' %}
+                            <a class="nav-link collapsed" href="#" data-bs-toggle="collapse" data-bs-target="#collapseMoldingTeam" aria-expanded="false">
+                                <div class="sb-nav-link-icon"><i class="bi bi-gear"></i></div>
+                                성형팀
+                                <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
+                            </a>
+                            <div class="collapse {% if request.resolver_match.url_name == 'molding_utilization' %}show{% endif %}" id="collapseMoldingTeam" data-bs-parent="#sidenavAccordion">
+                                <nav class="sb-sidenav-menu-nested nav">
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'molding_utilization' %}active{% endif %}" href="{% url 'material:molding_utilization' %}">성형 가동률</a>
+                                </nav>
+                            </div>
+                            {% endif %}
+
+                            {# 금형팀 #}
+                            {% if user|has_perm:'can_wms_stock_view' %}
+                            <a class="nav-link collapsed" href="#" data-bs-toggle="collapse" data-bs-target="#collapseMoldTeam" aria-expanded="false">
+                                <div class="sb-nav-link-icon"><i class="bi bi-wrench"></i></div>
+                                금형팀
+                                <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
+                            </a>
+                            <div class="collapse" id="collapseMoldTeam" data-bs-parent="#sidenavAccordion">
+                                <nav class="sb-sidenav-menu-nested nav">
+                                    <a class="nav-link text-muted" href="#">준비 중</a>
                                 </nav>
                             </div>
                             {% endif %}
