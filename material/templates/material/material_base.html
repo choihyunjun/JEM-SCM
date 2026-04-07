@@ -112,9 +112,6 @@
         <a href="{% url 'material:stock_check_result' %}" class="submenu-item {% if request.resolver_match.url_name == 'stock_check_result' %}active{% endif %}">
             - 재고 조사 결과
         </a>
-        <a href="{% url 'material:molding_utilization' %}" class="submenu-item {% if request.resolver_match.url_name == 'molding_utilization' %}active{% endif %}">
-            - 성형 가동률
-        </a>
     </div>
     {% endif %}
 
@@ -127,6 +124,34 @@
         <a href="{% url 'material:erp_sync' %}" class="submenu-item {% if request.resolver_match.url_name == 'erp_sync' or request.resolver_match.url_name == 'erp_sync_export' %}active{% endif %}">
             - 엑셀 변환
         </a>
+    </div>
+    {% endif %}
+
+    {# ─── 생산현장 관리 ─── #}
+    <div class="border-top border-secondary my-2"></div>
+    <div class="px-3 py-1">
+        <small class="text-muted fw-bold" style="font-size:0.7rem;letter-spacing:1px;">🏭 생산현장 관리</small>
+    </div>
+
+    {# 성형팀 #}
+    {% if user|has_perm:'can_wms_stock_view' %}
+    <a class="nav-link dropdown-toggle collapsed" data-bs-toggle="collapse" href="#moldingTeamSubmenu" role="button" aria-expanded="false">
+        <i class="bi bi-gear me-2"></i> 성형팀
+    </a>
+    <div class="collapse {% if request.resolver_match.url_name == 'molding_utilization' %}show{% endif %}" id="moldingTeamSubmenu">
+        <a href="{% url 'material:molding_utilization' %}" class="submenu-item {% if request.resolver_match.url_name == 'molding_utilization' %}active{% endif %}">
+            - 성형 가동률
+        </a>
+    </div>
+    {% endif %}
+
+    {# 금형팀 #}
+    {% if user|has_perm:'can_wms_stock_view' %}
+    <a class="nav-link dropdown-toggle collapsed" data-bs-toggle="collapse" href="#moldTeamSubmenu" role="button" aria-expanded="false">
+        <i class="bi bi-wrench me-2"></i> 금형팀
+    </a>
+    <div class="collapse" id="moldTeamSubmenu">
+        <span class="submenu-item text-muted" style="font-size:0.8rem;">- 준비 중</span>
     </div>
     {% endif %}
 
