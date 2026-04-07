@@ -7583,18 +7583,13 @@ def molding_analytics(request):
     for r in records_list:
         if not r.product_part_no:
             continue
-        # "RKC06-12712: 29,280 | RKC08-12202: 8,000" 파싱 (|또는 구형 , 구분자)
-        sep = '|' if '|' in r.product_part_no else ','
-        for item in r.product_part_no.split(sep):
-            item = item.strip()
-            if ':' in item:
-                pno = item.split(':')[0].strip()
-                try:
-                    qty = int(item.split(':')[1].strip().replace(',', ''))
-                except (ValueError, IndexError):
-                    qty = 0
-            else:
-                pno = item
+        # 정규식으로 "품번: 수량" 패턴 추출 (콤마/파이프 구분자 무관)
+        import re as _re4
+        for m in _re4.finditer(r'([\w\-]+)\s*:\s*([\d,]+)', r.product_part_no):
+            pno = m.group(1).strip()
+            try:
+                qty = int(m.group(2).replace(',', ''))
+            except ValueError:
                 qty = 0
             if pno:
                 part = Part.objects.filter(part_no=pno).first()
