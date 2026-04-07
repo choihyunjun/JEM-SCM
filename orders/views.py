@@ -183,37 +183,38 @@ def menu_permission_required(permission_field):
 
 @login_required
 def login_success(request):
-    """로그인 후 권한에 따라 적절한 페이지로 redirect"""
+    """로그인 후 계정 유형/권한에 따라 적절한 페이지로 redirect"""
     user = request.user
 
-    # superuser는 SCM 대시보드로
+    # superuser는 WMS 대시보드로
     if user.is_superuser:
-        return redirect('scm_alert_dashboard')
+        return redirect('material:dashboard')
 
     # 프로필이 없으면 기본 대시보드로
     profile = getattr(user, 'profile', None)
     if not profile:
         return redirect('scm_alert_dashboard')
 
-    # 권한에 따라 적절한 페이지로 redirect
-    # SCM 권한이 있으면 SCM으로
-    if profile.can_scm_order_view or profile.can_scm_label_view or profile.can_scm_incoming_view or profile.can_scm_admin:
+    # 협력사 계정 → SCM으로
+    if profile.account_type == 'VENDOR':
         return redirect('scm_alert_dashboard')
 
-    # WMS 권한이 있으면 WMS로
+    # 내부 직원 → WMS 우선, 권한에 따라 분기
     if profile.can_wms_stock_view or profile.can_wms_inout_view or profile.can_wms_bom_view:
         return redirect('material:dashboard')
 
-    # QMS 권한이 있으면 QMS로
+    if profile.can_scm_order_view or profile.can_scm_label_view or profile.can_scm_incoming_view or profile.can_scm_admin:
+        return redirect('scm_alert_dashboard')
+
     if profile.can_qms_4m_view or profile.can_qms_inspection_view:
         return redirect('qms:m4_list')
 
     # 레거시 권한 체크 (호환성)
-    if profile.can_view_orders or profile.can_register_orders or profile.can_manage_incoming:
-        return redirect('scm_alert_dashboard')
-
     if profile.can_access_wms or profile.can_wms_inout:
         return redirect('material:dashboard')
+
+    if profile.can_view_orders or profile.can_register_orders or profile.can_manage_incoming:
+        return redirect('scm_alert_dashboard')
 
     if profile.can_access_qms or profile.can_qms_4m:
         return redirect('qms:m4_list')
