@@ -7579,12 +7579,14 @@ def molding_analytics(request):
 
     # ─── 차트 4: 품목군별 생산수량 랭킹 TOP 10 ───
     from orders.models import Part
+    import re as _re4
     part_group_qty = defaultdict(int)
+    part_group_detail = defaultdict(lambda: defaultdict(int))  # {group: {pno: qty}}
+    # Part 캐시 (N+1 방지)
+    part_cache = {}
     for r in records_list:
         if not r.product_part_no:
             continue
-        # 정규식으로 "품번: 수량" 패턴 추출 (콤마/파이프 구분자 무관)
-        import re as _re4
         for m in _re4.finditer(r'([\w\-]+)\s*:\s*([\d,]+)', r.product_part_no):
             pno = m.group(1).strip()
             try:
@@ -7592,15 +7594,21 @@ def molding_analytics(request):
             except ValueError:
                 qty = 0
             if pno:
-                part = Part.objects.filter(part_no=pno).first()
-                group = part.part_group if part and part.part_group else '미분류'
+                if pno not in part_cache:
+                    p = Part.objects.filter(part_no=pno).first()
+                    part_cache[pno] = (p.part_group if p and p.part_group else '미분류', p.part_name if p else pno)
+                group, pname = part_cache[pno]
                 part_group_qty[group] += qty
+                part_group_detail[group][f"{pno} ({pname})"] += qty
 
     group_ranking = sorted(part_group_qty.items(), key=lambda x: x[1], reverse=True)[:10]
     ranking_top_labels = [g[0] for g in group_ranking]
     ranking_top_rates = [g[1] for g in group_ranking]
-    ranking_bottom_labels = []
-    ranking_bottom_rates = []
+    # 상세 데이터 (모달용)
+    group_detail_data = {}
+    for grp, _ in group_ranking:
+        items = sorted(part_group_detail[grp].items(), key=lambda x: -x[1])[:20]
+        group_detail_data[grp] = [{'name': k, 'qty': v} for k, v in items]
 
     # ─── 차트 5: 주간 vs 야간 비교 ───
     shift_data = defaultdict(lambda: {'base': 0, 'operating': 0, 'work': 0})
@@ -7691,6 +7699,7 @@ def molding_analytics(request):
         # Chart 4: Machine ranking
         'ranking_top_labels': json.dumps(ranking_top_labels, ensure_ascii=False),
         'ranking_top_rates': json.dumps(ranking_top_rates),
+        'group_detail_data': json.dumps(group_detail_data, ensure_ascii=False),
         'ranking_bottom_labels': json.dumps(ranking_bottom_labels, ensure_ascii=False),
         'ranking_bottom_rates': json.dumps(ranking_bottom_rates),
         # Chart 5: Shift comparison

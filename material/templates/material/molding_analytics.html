@@ -297,6 +297,26 @@
         </div>
     </div>
 
+    <!-- 품목군 상세 모달 -->
+    <div class="modal fade" id="groupDetailModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h6 class="modal-title fw-bold"><i class="bi bi-list-ul me-1"></i><span id="groupDetailTitle"></span> 생산 상세</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <table class="table table-sm table-hover mb-0" style="font-size:0.85rem;">
+                        <thead class="table-light">
+                            <tr><th>품번 (품명)</th><th class="text-end">수량</th></tr>
+                        </thead>
+                        <tbody id="groupDetailBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 5. Shift Comparison -->
     <div class="chart-card">
         <div class="chart-title"><i class="bi bi-clock-fill"></i>주간 vs 야간 비교</div>
@@ -351,6 +371,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const lossLabels    = {{ loss_labels|safe }};
     const lossValues    = {{ loss_values|safe }};
     const rankTopLabels   = {{ ranking_top_labels|safe }};
+    const groupDetailData = {{ group_detail_data|safe }};
     const rankTopRates    = {{ ranking_top_rates|safe }};
     const rankBottomLabels = {{ ranking_bottom_labels|safe }};
     const rankBottomRates  = {{ ranking_bottom_rates|safe }};
@@ -527,11 +548,18 @@ document.addEventListener('DOMContentLoaded', function() {
             indexAxis: 'y',
             responsive: true,
             maintainAspectRatio: false,
+            onClick: function(e, elements) {
+                if (elements.length > 0) {
+                    var idx = elements[0].index;
+                    var group = rankTopLabels[idx];
+                    showGroupDetail(group);
+                }
+            },
             plugins: {
                 legend: { display: false },
                 tooltip: {
                     callbacks: {
-                        label: ctx => ctx.parsed.x.toLocaleString() + ' EA'
+                        label: ctx => ctx.parsed.x.toLocaleString() + ' EA (클릭하여 상세)'
                     }
                 }
             },
@@ -545,6 +573,20 @@ document.addEventListener('DOMContentLoaded', function() {
         },
         plugins: [noDataPlugin]
     });
+
+    function showGroupDetail(group) {
+        document.getElementById('groupDetailTitle').textContent = group;
+        var items = groupDetailData[group] || [];
+        var tbody = document.getElementById('groupDetailBody');
+        if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="2" class="text-center text-muted">데이터 없음</td></tr>';
+        } else {
+            tbody.innerHTML = items.map(function(it, i) {
+                return '<tr><td>' + (i+1) + '. ' + it.name + '</td><td class="text-end fw-bold">' + it.qty.toLocaleString() + '</td></tr>';
+            }).join('');
+        }
+        new bootstrap.Modal(document.getElementById('groupDetailModal')).show();
+    }
 
     // ─── Chart 5: Shift Comparison (grouped bar) ───
     new Chart(document.getElementById('chartShift'), {
