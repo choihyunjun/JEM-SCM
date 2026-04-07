@@ -7633,11 +7633,14 @@ def molding_analytics(request):
         )
         m_base = m_records.aggregate(total=Sum('base_minutes'))['total'] or 0
         m_operating = m_records.aggregate(total=Sum('operating_minutes'))['total'] or 0
-        m_work = m_records.aggregate(total=Sum('work_minutes'))['total'] or 0
+
+        # 시간가동률 분모 = 해당 월 전체 호기 × 근무시간
+        m_setting = MoldingWorkSetting.get_setting(target.year, target.month)
+        m_work_capacity = all_machines * m_setting.work_days * (m_setting.day_shift_minutes + m_setting.night_shift_minutes)
 
         monthly_labels.append(f"{target.year}.{target.month:02d}")
         monthly_utilization.append(round(m_operating / m_base * 100, 1) if m_base else 0)
-        monthly_time_rate.append(round(m_work / m_operating * 100, 1) if m_operating else 0)
+        monthly_time_rate.append(round(m_operating / m_work_capacity * 100, 1) if m_work_capacity else 0)
 
     # ─── 년도 목록 ───
     year_range = list(range(2024, now.year + 2))
