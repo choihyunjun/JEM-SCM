@@ -7647,15 +7647,21 @@ def molding_analytics(request):
     for m in MoldingMachine.objects.filter(is_active=True):
         tonnage_all_count[m.tonnage] += 1
 
+    # 톤수별 가동 호기 (한번이라도 실적 있는 호기)
+    active_machine_by_tonnage = defaultdict(set)
+    for r in records_list:
+        active_machine_by_tonnage[r.machine.tonnage].add(r.machine_id)
+
     tonnage_table = []
     for t in sorted(tonnage_all_count.keys()):
         count = tonnage_all_count[t]
+        active_count = len(active_machine_by_tonnage.get(t, set()))
         td = tonnage_data.get(t, {'base': 0, 'operating': 0})
         util = round(td['operating'] / td['base'] * 100, 1) if td['base'] else 0
         time_cap = count * setting.work_days * (setting.day_shift_minutes + setting.night_shift_minutes)
         time_r = round(td['operating'] / time_cap * 100, 1) if time_cap else 0
         tonnage_table.append({
-            'tonnage': t, 'count': count,
+            'tonnage': t, 'count': count, 'active_count': active_count,
             'util': util, 'time_rate': time_r,
         })
 

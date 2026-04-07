@@ -239,6 +239,10 @@
                     {% for t in tonnage_table %}<td>{{ t.count }}대</td>{% endfor %}
                 </tr>
                 <tr>
+                    <td class="fw-bold">가동대수</td>
+                    {% for t in tonnage_table %}<td>{% if t.active_count %}{{ t.active_count }}대{% else %}-{% endif %}</td>{% endfor %}
+                </tr>
+                <tr>
                     <td class="fw-bold">설비가동률</td>
                     {% for t in tonnage_table %}
                     <td class="{% if t.util >= 90 %}text-success{% elif t.util >= 70 %}text-warning{% elif t.util > 0 %}text-danger{% endif %} fw-bold">
