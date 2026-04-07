@@ -7700,8 +7700,6 @@ def molding_analytics(request):
         'ranking_top_labels': json.dumps(ranking_top_labels, ensure_ascii=False),
         'ranking_top_rates': json.dumps(ranking_top_rates),
         'group_detail_data': json.dumps(group_detail_data, ensure_ascii=False),
-        'ranking_bottom_labels': json.dumps(ranking_bottom_labels, ensure_ascii=False),
-        'ranking_bottom_rates': json.dumps(ranking_bottom_rates),
         # Chart 5: Shift comparison
         'shift_labels': json.dumps(shift_labels, ensure_ascii=False),
         'shift_utilization': json.dumps(shift_utilization),
