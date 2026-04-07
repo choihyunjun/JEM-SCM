@@ -2,66 +2,61 @@
 {% load auth_extras %}
 
 {% block sidebar_production %}
-<style>
-    .submenu-item {
-        background: #1a252f; color: #bdc3c7; padding: 10px 20px; display: block; text-decoration: none; font-size: 0.9rem;
-    }
-    .submenu-item:hover { background: #243342; color: white; }
-    .submenu-item.active { color: white; font-weight: bold; background: #2c3e50; }
-</style>
+                            <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom border-secondary mb-2">
+                                <small class="text-muted">생산현장 관리</small>
+                            </div>
 
-<div class="nav flex-column">
-    <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom border-secondary mb-2">
-        <small class="text-muted">생산현장 관리</small>
-    </div>
+                            {# 현장 지원 #}
+                            {% if user|has_perm:'can_wms_field_view' or user|has_perm:'can_wms_stock_view' %}
+                            <a class="nav-link collapsed {% if request.resolver_match.url_name in 'process_tag_form,stock_check,stock_check_result' %}active{% endif %}"
+                               href="#" data-bs-toggle="collapse" data-bs-target="#collapseSupport"
+                               aria-expanded="{% if request.resolver_match.url_name in 'process_tag_form,stock_check,stock_check_result' %}true{% else %}false{% endif %}">
+                                <div class="sb-nav-link-icon"><i class="bi bi-tools"></i></div>
+                                현장 지원
+                                <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
+                            </a>
+                            <div class="collapse {% if request.resolver_match.url_name in 'process_tag_form,stock_check,stock_check_result' %}show{% endif %}"
+                                 id="collapseSupport" data-bs-parent="#sidenavAccordion">
+                                <nav class="sb-sidenav-menu-nested nav">
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'process_tag_form' %}active{% endif %}" href="{% url 'material:process_tag_form' %}">공정 현품표 발행</a>
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'stock_check' %}active{% endif %}" href="{% url 'material:stock_check' %}">재고 조사 (QR)</a>
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'stock_check_result' %}active{% endif %}" href="{% url 'material:stock_check_result' %}">재고 조사 결과</a>
+                                </nav>
+                            </div>
+                            {% endif %}
 
-    {# 현장 지원 #}
-    {% if user|has_perm:'can_wms_field_view' or user|has_perm:'can_wms_stock_view' %}
-    <a class="nav-link dropdown-toggle {% if request.resolver_match.url_name not in 'process_tag_form,stock_check,stock_check_result' %}collapsed{% endif %}" data-bs-toggle="collapse" href="#supportSubmenu" role="button" aria-expanded="{% if request.resolver_match.url_name in 'process_tag_form,stock_check,stock_check_result' %}true{% else %}false{% endif %}">
-        <i class="bi bi-tools me-2"></i> 현장 지원
-    </a>
-    <div class="collapse {% if request.resolver_match.url_name in 'process_tag_form,stock_check,stock_check_result' %}show{% endif %}" id="supportSubmenu">
-        <a href="{% url 'material:process_tag_form' %}" class="submenu-item {% if request.resolver_match.url_name == 'process_tag_form' %}active{% endif %}">
-            - 공정 현품표 발행
-        </a>
-        <a href="{% url 'material:stock_check' %}" class="submenu-item {% if request.resolver_match.url_name == 'stock_check' %}active{% endif %}">
-            - 재고 조사 (QR)
-        </a>
-        <a href="{% url 'material:stock_check_result' %}" class="submenu-item {% if request.resolver_match.url_name == 'stock_check_result' %}active{% endif %}">
-            - 재고 조사 결과
-        </a>
-    </div>
-    {% endif %}
+                            {# 성형팀 #}
+                            {% if user|has_perm:'can_wms_stock_view' %}
+                            <a class="nav-link collapsed {% if request.resolver_match.url_name in 'molding_utilization,molding_analytics,molding_master_list' %}active{% endif %}"
+                               href="#" data-bs-toggle="collapse" data-bs-target="#collapseMolding"
+                               aria-expanded="{% if request.resolver_match.url_name in 'molding_utilization,molding_analytics,molding_master_list' %}true{% else %}false{% endif %}">
+                                <div class="sb-nav-link-icon"><i class="bi bi-gear"></i></div>
+                                성형팀
+                                <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
+                            </a>
+                            <div class="collapse {% if request.resolver_match.url_name in 'molding_utilization,molding_analytics,molding_master_list' %}show{% endif %}"
+                                 id="collapseMolding" data-bs-parent="#sidenavAccordion">
+                                <nav class="sb-sidenav-menu-nested nav">
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'molding_utilization' %}active{% endif %}" href="{% url 'material:molding_utilization' %}">성형 가동률 입력</a>
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'molding_analytics' %}active{% endif %}" href="{% url 'material:molding_analytics' %}">성형 가동률 조회</a>
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'molding_master_list' %}active{% endif %}" href="{% url 'material:molding_master_list' %}">성형 마스터</a>
+                                </nav>
+                            </div>
+                            {% endif %}
 
-    {# 성형팀 #}
-    {% if user|has_perm:'can_wms_stock_view' %}
-    <a class="nav-link dropdown-toggle {% if request.resolver_match.url_name not in 'molding_utilization,molding_analytics,molding_master_list' %}collapsed{% endif %}" data-bs-toggle="collapse" href="#moldingTeamSubmenu" role="button" aria-expanded="{% if request.resolver_match.url_name in 'molding_utilization,molding_analytics,molding_master_list' %}true{% else %}false{% endif %}">
-        <i class="bi bi-gear me-2"></i> 성형팀
-    </a>
-    <div class="collapse {% if request.resolver_match.url_name in 'molding_utilization,molding_analytics,molding_master_list' %}show{% endif %}" id="moldingTeamSubmenu">
-        <a href="{% url 'material:molding_utilization' %}" class="submenu-item {% if request.resolver_match.url_name == 'molding_utilization' %}active{% endif %}">
-            - 성형 가동률 입력
-        </a>
-        <a href="{% url 'material:molding_analytics' %}" class="submenu-item {% if request.resolver_match.url_name == 'molding_analytics' %}active{% endif %}">
-            - 성형 가동률 조회
-        </a>
-        <a href="{% url 'material:molding_master_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'molding_master_list' %}active{% endif %}">
-            - 성형 마스터
-        </a>
-    </div>
-    {% endif %}
-
-    {# 금형팀 #}
-    {% if user|has_perm:'can_wms_stock_view' %}
-    <a class="nav-link dropdown-toggle collapsed" data-bs-toggle="collapse" href="#moldTeamSubmenu" role="button" aria-expanded="false">
-        <i class="bi bi-wrench me-2"></i> 금형팀
-    </a>
-    <div class="collapse" id="moldTeamSubmenu">
-        <span class="submenu-item text-muted" style="font-size:0.8rem;">- 준비 중</span>
-    </div>
-    {% endif %}
-
-</div>
+                            {# 금형팀 #}
+                            {% if user|has_perm:'can_wms_stock_view' %}
+                            <a class="nav-link collapsed" href="#" data-bs-toggle="collapse" data-bs-target="#collapseMold">
+                                <div class="sb-nav-link-icon"><i class="bi bi-wrench"></i></div>
+                                금형팀
+                                <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
+                            </a>
+                            <div class="collapse" id="collapseMold" data-bs-parent="#sidenavAccordion">
+                                <nav class="sb-sidenav-menu-nested nav">
+                                    <a class="nav-link text-muted" href="#">준비 중</a>
+                                </nav>
+                            </div>
+                            {% endif %}
 {% endblock %}
 
 {% block content %}
