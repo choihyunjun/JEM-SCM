@@ -7538,13 +7538,29 @@ def molding_analytics(request):
     kpi_time_rate = round(total_operating / total_work_capacity * 100, 1) if total_work_capacity else 0
     kpi_total_loss_hours = round(total_loss / 60, 1)
 
-    # 계획정지 = 유실사유 중 '계획정지'로 입력된 것만
+    # 경과일 기준 비가동 계산
+    import calendar
+    from datetime import date as dt_date
+    _, days_in_month = calendar.monthrange(year, month)
+    today = timezone.localtime().date()
+    if year == today.year and month == today.month:
+        elapsed_days = today.day
+    elif dt_date(year, month, 1) < today:
+        elapsed_days = days_in_month
+    else:
+        elapsed_days = 0
+    elapsed_capacity = all_machines * elapsed_days * (setting.day_shift_minutes + setting.night_shift_minutes)
+    idle_minutes = max(elapsed_capacity - total_base, 0)  # 비가동 시간
+    kpi_idle_hours = round(idle_minutes / 60, 1)
+
+    # 계획정지 = 유실사유 중 '계획정지'
     planned_loss = MoldingLossDetail.objects.filter(
         record__date__year=year, record__date__month=month,
         category='계획정지'
     ).aggregate(total=Sum('minutes'))['total'] or 0
     kpi_planned_hours = round(planned_loss / 60, 1)
     kpi_actual_loss_hours = round((total_loss - planned_loss) / 60, 1)
+    kpi_total_stop_hours = round((idle_minutes + total_loss) / 60, 1)  # 비가동+전체유실
 
     # ─── 차트 1: 일별 설비가동률 추이 ───
     _, days_in_month = calendar.monthrange(year, month)
@@ -7693,8 +7709,10 @@ def molding_analytics(request):
         'kpi_utilization': kpi_utilization,
         'kpi_time_rate': kpi_time_rate,
         'kpi_total_loss_hours': kpi_total_loss_hours,
+        'kpi_idle_hours': kpi_idle_hours,
         'kpi_planned_hours': kpi_planned_hours,
         'kpi_actual_loss_hours': kpi_actual_loss_hours,
+        'kpi_total_stop_hours': kpi_total_stop_hours,
         'total_records': len(records_list),
         'tonnage_table': tonnage_table,
         # Chart 1: Daily trend
