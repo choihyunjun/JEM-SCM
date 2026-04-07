@@ -313,22 +313,22 @@
                         <span class="badge bg-primary" id="groupDetailCount">0건</span>
                     </div>
                     <div style="max-height:450px;overflow-y:auto;">
-                        <table class="table table-sm table-hover mb-0" style="font-size:0.9rem;">
+                        <table class="table table-sm table-hover mb-0" style="font-size:0.8rem;color:#333;">
                             <thead class="table-light sticky-top">
-                                <tr>
-                                    <th style="width:40px;" class="text-center">#</th>
-                                    <th style="width:140px;">품번</th>
+                                <tr style="color:#555;">
+                                    <th style="width:35px;" class="text-center">#</th>
+                                    <th style="width:130px;">품번</th>
                                     <th>품명</th>
-                                    <th class="text-end" style="width:120px;">수량</th>
-                                    <th class="text-end" style="width:70px;">비율</th>
+                                    <th class="text-end" style="width:100px;">수량</th>
+                                    <th class="text-end" style="width:55px;">비율</th>
                                 </tr>
                             </thead>
                             <tbody id="groupDetailBody"></tbody>
                         </table>
                     </div>
-                    <div class="px-3 py-2 border-top d-flex justify-content-between fw-bold" style="font-size:0.95rem;background:#f0f4f8;">
-                        <span><i class="bi bi-calculator me-1"></i>합계</span>
-                        <span id="groupDetailTotal" class="text-primary">0</span>
+                    <div class="px-3 py-2 border-top d-flex justify-content-between fw-bold" style="font-size:0.85rem;background:#f0f4f8;color:#333;">
+                        <span>합계</span>
+                        <span id="groupDetailTotal">0</span>
                     </div>
                 </div>
             </div>
@@ -607,11 +607,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 var pct = total > 0 ? (it.qty / total * 100).toFixed(1) : 0;
                 var barWidth = total > 0 ? (it.qty / items[0].qty * 100) : 0;
                 return '<tr>' +
-                    '<td class="text-center text-muted">' + (i+1) + '</td>' +
-                    '<td class="fw-bold">' + pno + '</td>' +
-                    '<td class="text-muted">' + pname + '</td>' +
+                    '<td class="text-center">' + (i+1) + '</td>' +
+                    '<td>' + pno + '</td>' +
+                    '<td>' + pname + '</td>' +
                     '<td class="text-end fw-bold">' + it.qty.toLocaleString() + '</td>' +
-                    '<td class="text-end text-muted">' + pct + '%</td>' +
+                    '<td class="text-end">' + pct + '%</td>' +
                     '</tr>';
             }).join('');
             document.getElementById('groupDetailTotal').textContent = total.toLocaleString() + ' EA';
