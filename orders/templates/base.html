@@ -688,7 +688,9 @@
                             {% endif %}
 
                             {# ─── 생산현장 관리 ─── #}
-                            <div class="sb-sidenav-menu-heading border-top border-secondary pt-2 mt-2">🏭 생산현장 관리</div>
+                            <div class="d-flex justify-content-between align-items-center px-3 py-2 border-top border-secondary mt-2">
+                                <small class="text-muted">생산현장 관리</small>
+                            </div>
 
                             {# 성형팀 #}
                             {% if user|has_perm:'can_wms_stock_view' %}
