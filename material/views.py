@@ -7642,6 +7642,23 @@ def molding_analytics(request):
         monthly_utilization.append(round(m_operating / m_base * 100, 1) if m_base else 0)
         monthly_time_rate.append(round(m_operating / m_work_capacity * 100, 1) if m_work_capacity else 0)
 
+    # ─── 톤수별 테이블 ───
+    tonnage_all_count = defaultdict(int)
+    for m in MoldingMachine.objects.filter(is_active=True):
+        tonnage_all_count[m.tonnage] += 1
+
+    tonnage_table = []
+    for t in sorted(tonnage_all_count.keys()):
+        count = tonnage_all_count[t]
+        td = tonnage_data.get(t, {'base': 0, 'operating': 0})
+        util = round(td['operating'] / td['base'] * 100, 1) if td['base'] else 0
+        time_cap = count * setting.work_days * (setting.day_shift_minutes + setting.night_shift_minutes)
+        time_r = round(td['operating'] / time_cap * 100, 1) if time_cap else 0
+        tonnage_table.append({
+            'tonnage': t, 'count': count,
+            'util': util, 'time_rate': time_r,
+        })
+
     # ─── 년도 목록 ───
     year_range = list(range(2024, now.year + 2))
 
@@ -7654,6 +7671,7 @@ def molding_analytics(request):
         'kpi_time_rate': kpi_time_rate,
         'kpi_total_loss_hours': kpi_total_loss_hours,
         'total_records': len(records_list),
+        'tonnage_table': tonnage_table,
         # Chart 1: Daily trend
         'daily_labels': json.dumps(daily_labels, ensure_ascii=False),
         'daily_rates': json.dumps(daily_rates),

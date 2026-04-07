@@ -222,6 +222,43 @@
     </div>
 </div>
 
+<!-- 톤수별 가동률 테이블 -->
+<div class="chart-card mb-3">
+    <div class="chart-title"><i class="bi bi-bar-chart-steps"></i>톤수별 가동률</div>
+    <div class="table-responsive">
+        <table class="table table-sm table-bordered text-center mb-0" style="font-size:0.8rem;">
+            <thead class="table-light">
+                <tr>
+                    <th>톤수</th>
+                    {% for t in tonnage_table %}<th>{{ t.tonnage }}t</th>{% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="fw-bold">보유대수</td>
+                    {% for t in tonnage_table %}<td>{{ t.count }}대</td>{% endfor %}
+                </tr>
+                <tr>
+                    <td class="fw-bold">설비가동률</td>
+                    {% for t in tonnage_table %}
+                    <td class="{% if t.util >= 90 %}text-success{% elif t.util >= 70 %}text-warning{% elif t.util > 0 %}text-danger{% endif %} fw-bold">
+                        {% if t.util > 0 %}{{ t.util }}%{% else %}-{% endif %}
+                    </td>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    <td class="fw-bold">시간가동률</td>
+                    {% for t in tonnage_table %}
+                    <td class="{% if t.time_rate >= 90 %}text-success{% elif t.time_rate >= 70 %}text-warning{% elif t.time_rate > 0 %}text-danger{% endif %}">
+                        {% if t.time_rate > 0 %}{{ t.time_rate }}%{% else %}-{% endif %}
+                    </td>
+                    {% endfor %}
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
 <!-- Charts -->
 <div class="chart-grid">
     <!-- 1. Daily Trend -->
