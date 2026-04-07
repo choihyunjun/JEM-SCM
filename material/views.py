@@ -7538,6 +7538,17 @@ def molding_analytics(request):
     kpi_time_rate = round(total_operating / total_work_capacity * 100, 1) if total_work_capacity else 0
     kpi_total_loss_hours = round(total_loss / 60, 1)
 
+    # 계획정지 시간 = 비가동 호기 시간 + 유실사유 중 '계획정지'
+    # 비가동 시간 = 전체근무시간 - 가동일 부하시간
+    idle_minutes = total_work_capacity - total_base  # 비가동(아예 안 돌린) 시간
+    # 유실사유 중 계획정지
+    planned_loss = MoldingLossDetail.objects.filter(
+        record__date__year=year, record__date__month=month,
+        category='계획정지'
+    ).aggregate(total=Sum('minutes'))['total'] or 0
+    kpi_planned_hours = round((idle_minutes + planned_loss) / 60, 1)
+    kpi_actual_loss_hours = round((total_loss - planned_loss) / 60, 1)
+
     # ─── 차트 1: 일별 설비가동률 추이 ───
     _, days_in_month = calendar.monthrange(year, month)
     daily_data = defaultdict(lambda: {'base': 0, 'operating': 0})
@@ -7685,6 +7696,8 @@ def molding_analytics(request):
         'kpi_utilization': kpi_utilization,
         'kpi_time_rate': kpi_time_rate,
         'kpi_total_loss_hours': kpi_total_loss_hours,
+        'kpi_planned_hours': kpi_planned_hours,
+        'kpi_actual_loss_hours': kpi_actual_loss_hours,
         'total_records': len(records_list),
         'tonnage_table': tonnage_table,
         # Chart 1: Daily trend

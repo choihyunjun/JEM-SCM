@@ -204,21 +204,33 @@
 </div>
 
 <!-- KPI Cards -->
-<div class="kpi-row">
+<div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:16px;margin-bottom:24px;">
     <div class="kpi-card util">
         <div class="kpi-label">설비가동률</div>
         <div class="kpi-value">{{ kpi_utilization }}<span class="kpi-unit">%</span></div>
-        <div class="kpi-sub">가동시간 / 기준시간</div>
+        <div class="kpi-sub">가동시간 / 부하시간</div>
     </div>
     <div class="kpi-card time">
         <div class="kpi-label">시간가동률</div>
         <div class="kpi-value">{{ kpi_time_rate }}<span class="kpi-unit">%</span></div>
-        <div class="kpi-sub">실가동시간 / 가동시간</div>
+        <div class="kpi-sub">가동시간 / 전체근무시간</div>
     </div>
-    <div class="kpi-card loss">
-        <div class="kpi-label">총 유실시간</div>
-        <div class="kpi-value">{{ kpi_total_loss_hours }}<span class="kpi-unit">시간</span></div>
-        <div class="kpi-sub">전체 유실시간 합계</div>
+    <div class="kpi-card loss" style="padding:16px 24px;">
+        <div class="kpi-label" style="margin-bottom:8px;">정지/유실 현황</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;text-align:center;">
+            <div>
+                <div style="font-size:0.75rem;color:#888;">계획정지</div>
+                <div style="font-size:1.4rem;font-weight:700;color:#718096;">{{ kpi_planned_hours }}<span style="font-size:0.8rem;font-weight:400;">h</span></div>
+            </div>
+            <div>
+                <div style="font-size:0.75rem;color:#888;">실유실</div>
+                <div style="font-size:1.4rem;font-weight:700;color:#e53e3e;">{{ kpi_actual_loss_hours }}<span style="font-size:0.8rem;font-weight:400;">h</span></div>
+            </div>
+            <div style="border-left:1px solid #e2e8f0;padding-left:12px;">
+                <div style="font-size:0.75rem;color:#888;">합계</div>
+                <div style="font-size:1.4rem;font-weight:700;color:#2d3748;">{{ kpi_total_loss_hours }}<span style="font-size:0.8rem;font-weight:400;">h</span></div>
+            </div>
+        </div>
     </div>
 </div>
 
