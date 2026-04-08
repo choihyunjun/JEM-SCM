@@ -909,13 +909,29 @@ def sync_stock_from_erp():
         erp_map[key] = erp_map.get(key, 0) + qty
 
     # 3) SCM 재고 맵: (warehouse_code, part_no) -> SUM(quantity)
-    scm_agg = MaterialStock.objects.values(
+    #    ERP 비교 시 LOT 재고(WMS 수기 입고)를 제외한 NULL LOT만으로 비교해야
+    #    WMS LOT 입고분이 ERP 동기화에서 중복 차감되지 않음
+    scm_null_agg = MaterialStock.objects.filter(lot_no__isnull=True).values(
         'warehouse__code', 'part__part_no'
     ).annotate(total=Sum('quantity'))
-    scm_map = {}
-    for row in scm_agg:
+    scm_null_map = {}
+    for row in scm_null_agg:
         key = (row['warehouse__code'], row['part__part_no'])
-        scm_map[key] = int(row['total'] or 0)
+        scm_null_map[key] = int(row['total'] or 0)
+
+    # LOT 재고 합계 (WMS 수기 입고분)
+    scm_lot_agg = MaterialStock.objects.filter(lot_no__isnull=False).values(
+        'warehouse__code', 'part__part_no'
+    ).annotate(total=Sum('quantity'))
+    scm_lot_map = {}
+    for row in scm_lot_agg:
+        key = (row['warehouse__code'], row['part__part_no'])
+        scm_lot_map[key] = int(row['total'] or 0)
+
+    # 전체 재고 = NULL + LOT (기존 호환용)
+    scm_map = {}
+    for key in set(list(scm_null_map.keys()) + list(scm_lot_map.keys())):
+        scm_map[key] = scm_null_map.get(key, 0) + scm_lot_map.get(key, 0)
 
     # 4) 마스터 데이터
     part_map = {p.part_no: p for p in Part.objects.all()}
@@ -929,7 +945,13 @@ def sync_stock_from_erp():
     for idx, (wh_cd, item_cd) in enumerate(all_keys):
         erp_qty = erp_map.get((wh_cd, item_cd), 0)
         scm_qty = scm_map.get((wh_cd, item_cd), 0)
-        diff = erp_qty - scm_qty  # 양수=SCM 부족, 음수=SCM 초과
+        lot_qty = scm_lot_map.get((wh_cd, item_cd), 0)
+
+        # ERP 재고에서 LOT 재고(WMS 입고분)를 제외한 나머지가 NULL LOT 목표치
+        # NULL LOT 목표 = ERP 재고 - LOT 재고
+        target_null = erp_qty - lot_qty
+        current_null = scm_null_map.get((wh_cd, item_cd), 0)
+        diff = target_null - current_null  # 양수=NULL 증가 필요, 음수=NULL 감소 필요
 
         if diff == 0:
             continue
@@ -969,7 +991,7 @@ def sync_stock_from_erp():
                 quantity=abs(diff),
                 lot_no=None,
                 date=now,
-                remark=f'ERP 재고동기화 (ERP={erp_qty}, SCM={scm_qty}, diff={diff:+d})',
+                remark=f'ERP 재고동기화 (ERP={erp_qty}, LOT={lot_qty}, NULL:{current_null}→{target_null}, diff={diff:+d})',
             )
         else:
             # ── SCM 초과 → 감소 필요 (NULL 버킷에서만 차감, LOT 보존) ──
@@ -987,7 +1009,7 @@ def sync_stock_from_erp():
 
             result['decreased'] += 1
 
-            remark = f'ERP 재고동기화 (ERP={erp_qty}, SCM={scm_qty}, diff={diff:+d})'
+            remark = f'ERP 재고동기화 (ERP={erp_qty}, LOT={lot_qty}, NULL:{current_null}→{target_null}, diff={diff:+d})'
 
             _create_trx(
                 transaction_type='ADJ_ERP_OUT',
