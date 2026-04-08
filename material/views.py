@@ -8125,14 +8125,14 @@ def mold_mt_dashboard(request):
     for m in molds_list:
         if m.is_over_guarantee:
             over_guarantee_count += 1
-        elif m.is_mt_due:
+        elif m.is_mt_due or m.mt_progress_pct >= 80:
             mt_due_count += 1
         else:
             normal_count += 1
 
     # 상태 필터
     if status_filter == 'mt_due':
-        molds_list = [m for m in molds_list if m.is_mt_due and not m.is_over_guarantee]
+        molds_list = [m for m in molds_list if (m.is_mt_due or m.mt_progress_pct >= 80) and not m.is_over_guarantee]
     elif status_filter == 'over':
         molds_list = [m for m in molds_list if m.is_over_guarantee]
     elif status_filter == 'normal':

@@ -71,7 +71,8 @@
     .btn-mt-complete { font-size: 0.7rem; padding: 2px 7px; }
 
     .clickable-row { cursor: pointer; }
-    .clickable-row:hover { background: #edf2f7 !important; }
+    .sortable { cursor: pointer; user-select: none; }
+    .sortable:hover { background: #e9ecef !important; }
 
     /* Modal */
     .modal-header-mt { background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); color: white; }
@@ -187,17 +188,17 @@
                 <thead>
                     <tr>
                         <th style="width:30px">No</th>
-                        <th>기종</th>
-                        <th>부품번호</th>
+                        <th class="sortable" data-col="1">기종 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
+                        <th class="sortable" data-col="2">부품번호 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th>금형명</th>
-                        <th>등급</th>
+                        <th class="sortable" data-col="4">등급 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th>재료</th>
                         <th>보증</th>
-                        <th>누적숏트</th>
+                        <th class="sortable" data-col="7">누적숏트 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th>이전MT</th>
                         <th>MT기준</th>
-                        <th style="min-width:110px">MT 진행률</th>
-                        <th>상태</th>
+                        <th class="sortable" data-col="10">MT진행률 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
+                        <th class="sortable" data-col="11">상태 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th style="width:40px">MT</th>
                     </tr>
                 </thead>
@@ -230,22 +231,26 @@
                         </td>
                         <td>
                             {% if m.is_mt_due %}
-                                <span class="badge badge-status bg-warning text-dark">MT필요</span>
+                                <span class="badge badge-status bg-danger">MT필요</span>
+                            {% elif m.mt_progress_pct >= 80 %}
+                                <span class="badge badge-status bg-warning text-dark">MT임박</span>
                             {% else %}
                                 <span class="badge badge-status bg-success">정상</span>
                             {% endif %}
                         </td>
                         <td>
+                            {% if m.mt_progress_pct >= 80 %}
                             <button class="btn btn-sm btn-outline-primary btn-mt-complete"
                                     onclick="event.stopPropagation(); openMTComplete({{ m.pk }}, '{{ m.part_no }}');"
                                     title="MT 완료 처리">
                                 <i class="bi bi-check-circle"></i>
                             </button>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="12" class="text-center text-muted py-5">
+                        <td colspan="13" class="text-center text-muted py-5">
                             <i class="bi bi-inbox" style="font-size: 2rem;"></i>
                             <p class="mt-2">등록된 금형 데이터가 없습니다.</p>
                             <p class="small">엑셀 업로드로 금형 데이터를 등록해주세요.</p>
@@ -708,5 +713,36 @@ function submitERPSync() {
         btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>동기화 실행';
     });
 }
+
+// ─── 테이블 정렬 ───
+var sortDir = {};
+document.querySelectorAll('.sortable').forEach(function(th) {
+    th.addEventListener('click', function() {
+        var col = parseInt(this.dataset.col);
+        var table = this.closest('table');
+        var tbody = table.querySelector('tbody');
+        var rows = Array.from(tbody.querySelectorAll('tr.clickable-row'));
+        var dir = sortDir[col] === 'asc' ? 'desc' : 'asc';
+        sortDir[col] = dir;
+
+        rows.sort(function(a, b) {
+            var aVal = a.cells[col].textContent.trim();
+            var bVal = b.cells[col].textContent.trim();
+            var aNum = parseFloat(aVal.replace(/[,%]/g, ''));
+            var bNum = parseFloat(bVal.replace(/[,%]/g, ''));
+            if (!isNaN(aNum) && !isNaN(bNum)) {
+                return dir === 'asc' ? aNum - bNum : bNum - aNum;
+            }
+            return dir === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+        });
+
+        rows.forEach(function(row) { tbody.appendChild(row); });
+
+        // 아이콘 업데이트
+        document.querySelectorAll('.sortable i').forEach(function(i) { i.className = 'bi bi-chevron-expand'; i.style.fontSize = '0.6rem'; });
+        this.querySelector('i').className = dir === 'asc' ? 'bi bi-chevron-up' : 'bi bi-chevron-down';
+        this.querySelector('i').style.fontSize = '0.6rem';
+    });
+});
 </script>
 {% endblock %}
