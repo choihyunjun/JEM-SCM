@@ -8735,6 +8735,31 @@ def mold_mt_erp_sync(request):
         return JsonResponse({'success': False, 'error': str(e)})
 
 
+def _send_repair_notification(event_type, obj):
+    """금형 수리 알림 발송 헬퍼"""
+    from admin_app.notifications import send_notification
+    priority_labels = {'A': 'A(긴급)', 'B': 'B(보통)', 'C': 'C(낮음)'}
+    requester_email = obj.requested_by.email if obj.requested_by and obj.requested_by.email else ''
+
+    context_vars = {
+        'part_no': obj.part_no,
+        'mold_name': obj.mold_name,
+        'item_group': obj.item_group,
+        'priority': priority_labels.get(obj.priority, obj.priority),
+        'status': obj.get_status_display(),
+        'repair_types': ', '.join(obj.repair_type_list) or '-',
+        'request_content': obj.request_content,
+        'requester': (obj.requested_by.get_full_name() or obj.requested_by.username) if obj.requested_by else '-',
+        'repair_by': obj.repair_by or '-',
+        'repair_content': obj.repair_content or '-',
+        'received_date': str(obj.received_date or '-'),
+        'expected_date': str(obj.expected_date or '-'),
+        'completed_date': str(obj.completed_date or '-'),
+    }
+    send_notification(event_type, context_vars=context_vars,
+                      reference_id=obj.pk, requester_email=requester_email)
+
+
 # =============================================================================
 # 금형 수리 의뢰 / 이력
 # =============================================================================
@@ -8819,28 +8844,7 @@ def mold_repair_create(request):
 
     # 알림 발송
     try:
-        from admin_app.notifications import send_notification
-        priority_label = {'A': 'A(긴급)', 'B': 'B(보통)', 'C': 'C(낮음)'}.get(priority, priority)
-        user_name = request.user.get_full_name() or request.user.username
-        types_str = ', '.join(repair_types) if repair_types else '-'
-
-        subject = f'[금형 수리의뢰] {part_no} {mold_name} (중요도: {priority_label})'
-        body = f'''
-        <div style="font-family:sans-serif;max-width:600px;">
-            <h3 style="color:#553c9a;border-bottom:2px solid #6b46c1;padding-bottom:8px;">금형 수리의뢰 등록</h3>
-            <table style="border-collapse:collapse;width:100%;font-size:14px;">
-                <tr><td style="padding:8px;background:#f5f3ff;font-weight:bold;width:100px;border:1px solid #e5e7eb;">품번</td><td style="padding:8px;border:1px solid #e5e7eb;">{part_no}</td></tr>
-                <tr><td style="padding:8px;background:#f5f3ff;font-weight:bold;border:1px solid #e5e7eb;">금형명</td><td style="padding:8px;border:1px solid #e5e7eb;">{mold_name}</td></tr>
-                <tr><td style="padding:8px;background:#f5f3ff;font-weight:bold;border:1px solid #e5e7eb;">품목</td><td style="padding:8px;border:1px solid #e5e7eb;">{item_group}</td></tr>
-                <tr><td style="padding:8px;background:#f5f3ff;font-weight:bold;border:1px solid #e5e7eb;">중요도</td><td style="padding:8px;border:1px solid #e5e7eb;">{priority_label}</td></tr>
-                <tr><td style="padding:8px;background:#f5f3ff;font-weight:bold;border:1px solid #e5e7eb;">수리유형</td><td style="padding:8px;border:1px solid #e5e7eb;">{types_str}</td></tr>
-                <tr><td style="padding:8px;background:#f5f3ff;font-weight:bold;border:1px solid #e5e7eb;">의뢰내용</td><td style="padding:8px;border:1px solid #e5e7eb;">{request_content}</td></tr>
-                <tr><td style="padding:8px;background:#f5f3ff;font-weight:bold;border:1px solid #e5e7eb;">의뢰자</td><td style="padding:8px;border:1px solid #e5e7eb;">{user_name}</td></tr>
-            </table>
-            <p style="color:#6b7280;font-size:12px;margin-top:16px;">JEM SCM 시스템에서 자동 발송된 메일입니다.</p>
-        </div>
-        '''
-        send_notification('MOLD_REPAIR_REQUESTED', subject, body, reference_id=obj.pk)
+        _send_repair_notification('MOLD_REPAIR_REQUESTED', obj)
     except Exception as e:
         logger.warning(f'수리의뢰 알림 발송 실패: {e}')
 
@@ -8926,27 +8930,20 @@ def mold_repair_update(request, pk):
 
     obj.save()
 
-    # 완료 처리 시 알림 발송
-    if new_status == 'COMPLETED' and old_status != 'COMPLETED':
-        try:
-            from admin_app.notifications import send_notification
-            subject = f'[금형 수리완료] {obj.part_no} {obj.mold_name}'
-            body = f'''
-            <div style="font-family:sans-serif;max-width:600px;">
-                <h3 style="color:#22543d;border-bottom:2px solid #38a169;padding-bottom:8px;">금형 수리 완료</h3>
-                <table style="border-collapse:collapse;width:100%;font-size:14px;">
-                    <tr><td style="padding:8px;background:#f0fff4;font-weight:bold;width:100px;border:1px solid #e5e7eb;">품번</td><td style="padding:8px;border:1px solid #e5e7eb;">{obj.part_no}</td></tr>
-                    <tr><td style="padding:8px;background:#f0fff4;font-weight:bold;border:1px solid #e5e7eb;">금형명</td><td style="padding:8px;border:1px solid #e5e7eb;">{obj.mold_name}</td></tr>
-                    <tr><td style="padding:8px;background:#f0fff4;font-weight:bold;border:1px solid #e5e7eb;">수리담당</td><td style="padding:8px;border:1px solid #e5e7eb;">{obj.repair_by or '-'}</td></tr>
-                    <tr><td style="padding:8px;background:#f0fff4;font-weight:bold;border:1px solid #e5e7eb;">수리내용</td><td style="padding:8px;border:1px solid #e5e7eb;">{obj.repair_content or '-'}</td></tr>
-                    <tr><td style="padding:8px;background:#f0fff4;font-weight:bold;border:1px solid #e5e7eb;">완료일</td><td style="padding:8px;border:1px solid #e5e7eb;">{obj.completed_date or '-'}</td></tr>
-                </table>
-                <p style="color:#6b7280;font-size:12px;margin-top:16px;">JEM SCM 시스템에서 자동 발송된 메일입니다.</p>
-            </div>
-            '''
-            send_notification('MOLD_REPAIR_COMPLETED', subject, body, reference_id=obj.pk)
-        except Exception as e:
-            logger.warning(f'수리완료 알림 발송 실패: {e}')
+    # 상태 변경 시 알림 발송
+    if new_status and new_status != old_status:
+        status_event_map = {
+            'REQUESTED': 'MOLD_REPAIR_REQUESTED',
+            'RECEIVED': 'MOLD_REPAIR_RECEIVED',
+            'IN_PROGRESS': 'MOLD_REPAIR_IN_PROGRESS',
+            'COMPLETED': 'MOLD_REPAIR_COMPLETED',
+        }
+        event_type = status_event_map.get(new_status)
+        if event_type:
+            try:
+                _send_repair_notification(event_type, obj)
+            except Exception as e:
+                logger.warning(f'수리 알림 발송 실패: {e}')
 
     status_display = obj.get_status_display()
     return JsonResponse({'success': True, 'message': f'{obj.part_no} {status_display} 처리 완료'})

@@ -109,6 +109,9 @@ def api_rules(request):
             'event_display': r.get_event_type_display(),
             'is_active': r.is_active,
             'send_to_vendor': r.send_to_vendor,
+            'send_to_requester': getattr(r, 'send_to_requester', False),
+            'subject_template': getattr(r, 'subject_template', ''),
+            'body_template': getattr(r, 'body_template', ''),
             'description': r.description,
             'recipient_ids': list(r.recipients.values_list('id', flat=True)),
             'recipient_names': ', '.join(f'{rec.name}' for rec in r.recipients.all()),
@@ -130,6 +133,9 @@ def api_rules(request):
             rule = NotificationRule.objects.create(
                 event_type=event_type,
                 send_to_vendor=bool(data.get('send_to_vendor', False)),
+                send_to_requester=bool(data.get('send_to_requester', False)),
+                subject_template=(data.get('subject_template') or '').strip(),
+                body_template=(data.get('body_template') or '').strip(),
                 description=(data.get('description') or '').strip(),
                 is_active=True,
             )
@@ -151,6 +157,12 @@ def api_rules(request):
                 rule.is_active = bool(data['is_active'])
             if 'send_to_vendor' in data:
                 rule.send_to_vendor = bool(data['send_to_vendor'])
+            if 'send_to_requester' in data:
+                rule.send_to_requester = bool(data['send_to_requester'])
+            if 'subject_template' in data:
+                rule.subject_template = (data['subject_template'] or '').strip()
+            if 'body_template' in data:
+                rule.body_template = (data['body_template'] or '').strip()
             rule.save()
             if 'recipient_ids' in data:
                 rule.recipients.set(data['recipient_ids'])

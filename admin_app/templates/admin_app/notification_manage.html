@@ -70,11 +70,15 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="col-md-2">
-                        <label class="form-label small fw-bold mb-0">협력사 발송</label>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold mb-0">자동 발송</label>
                         <div class="form-check form-switch mt-1">
                             <input class="form-check-input" type="checkbox" id="new_rule_vendor">
-                            <label class="form-check-label small" for="new_rule_vendor">해당 건 협력사에게</label>
+                            <label class="form-check-label small" for="new_rule_vendor">협력사에게</label>
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="new_rule_requester">
+                            <label class="form-check-label small" for="new_rule_requester">의뢰자(등록자)에게</label>
                         </div>
                     </div>
                     <div class="col-md-3">
@@ -93,18 +97,30 @@
                         <label class="form-label small fw-bold mb-0">설명</label>
                         <input type="text" class="form-control form-control-sm" id="new_rule_desc">
                     </div>
-                    <div class="col-md-2">
+                    <div class="col-md-1">
+                        <label class="form-label small fw-bold mb-0">&nbsp;</label>
                         <button class="btn btn-primary btn-sm w-100" onclick="addRule()">
-                            <i class="bi bi-plus-lg me-1"></i>규칙 추가
+                            <i class="bi bi-plus-lg me-1"></i>추가
                         </button>
                     </div>
                 </div>
+                <div class="row g-2 mt-1">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold mb-0">제목 템플릿 <span class="text-muted">(선택)</span></label>
+                        <input type="text" class="form-control form-control-sm" id="new_rule_subject" placeholder="예: [금형 수리] {part_no} {mold_name} - 비워두면 기본 제목">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold mb-0">본문 템플릿 <span class="text-muted">(선택)</span></label>
+                        <input type="text" class="form-control form-control-sm" id="new_rule_body" placeholder="예: {part_no} 금형의 수리가 {status} 상태입니다 - 비워두면 기본 본문">
+                    </div>
+                </div>
+                <div class="small text-muted mt-1">사용 가능 변수: <code>{part_no}</code> <code>{mold_name}</code> <code>{status}</code> <code>{priority}</code> <code>{requester}</code> <code>{repair_by}</code> <code>{repair_types}</code></div>
             </div>
         </div>
         <div class="table-responsive">
             <table class="table table-sm table-hover" style="font-size:0.85rem;">
                 <thead class="table-light">
-                    <tr><th>이벤트</th><th>협력사</th><th>내부 수신자</th><th>설명</th><th>상태</th><th>관리</th></tr>
+                    <tr><th>이벤트</th><th>자동발송</th><th>내부 수신자</th><th>템플릿</th><th>설명</th><th>상태</th><th>관리</th></tr>
                 </thead>
                 <tbody id="ruleBody"><tr><td colspan="6" class="text-center text-muted">로딩 중...</td></tr></tbody>
             </table>
@@ -199,16 +215,22 @@ function loadRules() {
     fetch('{% url "admin_app:api_rules" %}').then(r=>r.json()).then(data => {
         var tb = document.getElementById('ruleBody');
         if (!data.rules.length) { tb.innerHTML = '<tr><td colspan="6" class="text-center text-muted">등록된 규칙이 없습니다.</td></tr>'; return; }
-        tb.innerHTML = data.rules.map(r =>
-            '<tr>' +
-            '<td class="fw-bold">' + r.event_display + '</td>' +
-            '<td>' + (r.send_to_vendor ? '<span class="badge bg-warning text-dark">자동 발송</span>' : '<span class="text-muted">-</span>') + '</td>' +
-            '<td class="small">' + (r.recipient_names||'-') + '</td>' +
-            '<td class="small">' + (r.description||'-') + '</td>' +
-            '<td><div class="form-check form-switch"><input class="form-check-input" type="checkbox" ' + (r.is_active?'checked':'') + ' onchange="updateRule('+r.id+',this.checked)"></div></td>' +
-            '<td><button class="btn btn-outline-danger btn-sm" onclick="deleteRule('+r.id+')"><i class="bi bi-trash"></i></button></td>' +
-            '</tr>'
-        ).join('');
+        tb.innerHTML = data.rules.map(r => {
+            var autoSend = [];
+            if (r.send_to_vendor) autoSend.push('<span class="badge bg-warning text-dark me-1">협력사</span>');
+            if (r.send_to_requester) autoSend.push('<span class="badge bg-info text-dark me-1">의뢰자</span>');
+            var autoStr = autoSend.length ? autoSend.join('') : '<span class="text-muted">-</span>';
+            var tmplStr = r.subject_template ? '<span class="badge bg-success me-1">커스텀</span>' : '<span class="text-muted">기본</span>';
+            return '<tr>' +
+                '<td class="fw-bold">' + r.event_display + '</td>' +
+                '<td>' + autoStr + '</td>' +
+                '<td class="small">' + (r.recipient_names||'-') + '</td>' +
+                '<td>' + tmplStr + '</td>' +
+                '<td class="small">' + (r.description||'-') + '</td>' +
+                '<td><div class="form-check form-switch"><input class="form-check-input" type="checkbox" ' + (r.is_active?'checked':'') + ' onchange="updateRule('+r.id+',this.checked)"></div></td>' +
+                '<td><button class="btn btn-outline-danger btn-sm" onclick="deleteRule('+r.id+')"><i class="bi bi-trash"></i></button></td>' +
+                '</tr>';
+        }).join('');
     });
 }
 // ─── 수신자 선택 모달 ───
@@ -279,15 +301,21 @@ function removeRecipient(id) {
 function addRule() {
     var event_type = document.getElementById('new_rule_event').value;
     var send_to_vendor = document.getElementById('new_rule_vendor').checked;
+    var send_to_requester = document.getElementById('new_rule_requester').checked;
+    var subject_template = (document.getElementById('new_rule_subject') || {}).value || '';
+    var body_template = (document.getElementById('new_rule_body') || {}).value || '';
     var ids = selectedRecipientIds.slice();
-    if (!send_to_vendor && !ids.length) { alert('협력사 발송 또는 내부 수신자 중 하나는 선택하세요.'); return; }
+    if (!send_to_vendor && !send_to_requester && !ids.length) { alert('수신자를 1명 이상 선택하세요 (협력사/의뢰자/내부 수신자).'); return; }
     fetch('{% url "admin_app:api_rules" %}', {
         method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},
-        body: JSON.stringify({action:'add', event_type:event_type, send_to_vendor:send_to_vendor, recipient_ids:ids, description:document.getElementById('new_rule_desc').value.trim()})
+        body: JSON.stringify({action:'add', event_type:event_type, send_to_vendor:send_to_vendor, send_to_requester:send_to_requester, subject_template:subject_template.trim(), body_template:body_template.trim(), recipient_ids:ids, description:document.getElementById('new_rule_desc').value.trim()})
     }).then(r=>r.json()).then(d => {
         if (d.success) {
             document.getElementById('new_rule_desc').value='';
             document.getElementById('new_rule_vendor').checked=false;
+            document.getElementById('new_rule_requester').checked=false;
+            if (document.getElementById('new_rule_subject')) document.getElementById('new_rule_subject').value='';
+            if (document.getElementById('new_rule_body')) document.getElementById('new_rule_body').value='';
             selectedRecipientIds = [];
             updateRecipientDisplay();
             loadRules();

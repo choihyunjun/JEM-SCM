@@ -25,8 +25,10 @@ NOTIFICATION_EVENT_CHOICES = [
     ('DELIVERY_RECEIVED', '납품서 접수'),
     ('LOW_STOCK', '재고 부족 경고'),
     ('VENDOR_DOWNGRADED', '협력사 등급 하락'),
-    # 생산현장
+    # 생산현장 - 금형 수리
     ('MOLD_REPAIR_REQUESTED', '금형 수리의뢰 등록'),
+    ('MOLD_REPAIR_RECEIVED', '금형 수리 접수'),
+    ('MOLD_REPAIR_IN_PROGRESS', '금형 수리 진행'),
     ('MOLD_REPAIR_COMPLETED', '금형 수리 완료'),
 ]
 
@@ -61,9 +63,15 @@ class NotificationRule(models.Model):
     event_type = models.CharField("이벤트", max_length=30, choices=NOTIFICATION_EVENT_CHOICES)
     send_to_vendor = models.BooleanField("협력사 자동 발송", default=False,
         help_text="해당 건의 협력사 이메일로 자동 발송")
+    send_to_requester = models.BooleanField("의뢰자에게 발송", default=False,
+        help_text="해당 건의 의뢰자(등록자) 이메일로 자동 발송")
     recipients = models.ManyToManyField(NotificationRecipient, verbose_name="내부 수신자",
         related_name='rules', blank=True)
     is_active = models.BooleanField("활성", default=True)
+    subject_template = models.CharField("제목 템플릿", max_length=300, blank=True,
+        help_text="변수: {part_no}, {mold_name}, {status}, {priority} 등. 비워두면 기본 제목 사용")
+    body_template = models.TextField("본문 템플릿", blank=True,
+        help_text="변수: {part_no}, {mold_name}, {status}, {requester}, {repair_by} 등. 비워두면 기본 본문 사용")
     description = models.CharField("설명", max_length=200, blank=True)
     created_at = models.DateTimeField("등록일", auto_now_add=True)
     updated_at = models.DateTimeField("수정일", auto_now=True)
