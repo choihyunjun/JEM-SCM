@@ -8170,10 +8170,14 @@ def mold_mt_dashboard(request):
     import json as _json
     from django.db.models import Sum, Value, IntegerField
     from django.db.models.functions import Coalesce
-    from .models import MoldMaster as MoldMasterModel
+    from .models import MoldMaster as MoldMasterModel, MoldMTSetting
 
-    # MT 기준: A=50,000 / B=30,000 고정
-    MT_INTERVAL_MAP = {'A': 50000, 'B': 30000}
+    # MT 기준을 DB에서 캐싱 (구분 → 숏트수)
+    MT_INTERVAL_MAP = {}
+    for s in MoldMTSetting.objects.all():
+        MT_INTERVAL_MAP[s.material_type.upper()] = s.grade_a
+    if not MT_INTERVAL_MAP:
+        MT_INTERVAL_MAP = {'A': 50000, 'B': 30000}
 
     # annotate로 월별 숏트 합계를 DB에서 한번에 계산
     qs = MoldMasterModel.objects.filter(is_active=True).annotate(
@@ -8256,8 +8260,8 @@ def mold_mt_dashboard(request):
     material_list = sorted(set(_base.exclude(material_type__isnull=True).exclude(material_type='').values_list('material_type', flat=True)))
     item_group_list = sorted(set(_base.exclude(item_group__isnull=True).exclude(item_group='').values_list('item_group', flat=True)))
 
-    # MT 기준: A=50,000 / B=30,000 고정
-    mt_settings = [{'grade': 'A', 'interval': 50000}, {'grade': 'B', 'interval': 30000}]
+    # MT 기준 설정
+    mt_settings = [{'grade': k, 'interval': v} for k, v in MT_INTERVAL_MAP.items()]
 
     # 페이지네이션용 쿼리스트링 (page 제외)
     from urllib.parse import urlencode
@@ -8524,12 +8528,19 @@ def mold_mt_complete(request):
 @login_required
 @wms_permission_required('can_wms_stock_view')
 def mold_mt_settings(request):
-    """MT 기준 설정 CRUD (JSON API)"""
+    """MT 기준 설정 CRUD (구분별 숏트수) - MoldMTSetting을 구분별로 재활용"""
     from .models import MoldMTSetting
     import json
 
     if request.method == 'GET':
-        settings_list = list(MoldMTSetting.objects.all().values())
+        # MoldMTSetting의 material_type을 구분으로, grade_a를 interval로 사용
+        settings_list = []
+        for s in MoldMTSetting.objects.all():
+            settings_list.append({
+                'id': s.pk,
+                'grade': s.material_type,
+                'interval': s.grade_a,
+            })
         return JsonResponse({'success': True, 'data': settings_list})
 
     elif request.method == 'POST':
@@ -8542,23 +8553,29 @@ def mold_mt_settings(request):
                 MoldMTSetting.objects.filter(pk=pk).delete()
                 return JsonResponse({'success': True, 'message': '삭제 완료'})
 
-            material_type = data.get('material_type', '').strip()
-            if not material_type:
-                return JsonResponse({'success': False, 'error': '재료구분을 입력해주세요.'})
+            grade = data.get('grade', '').strip().upper()
+            if not grade:
+                return JsonResponse({'success': False, 'error': '구분을 입력해주세요.'})
 
-            obj, created = MoldMTSetting.objects.update_or_create(
-                material_type=material_type,
-                defaults={
-                    'grade_a': int(data.get('grade_a', 40000)),
-                    'grade_b': int(data.get('grade_b', 40000)),
-                    'grade_c': int(data.get('grade_c', 40000)),
-                    'grade_d': int(data.get('grade_d', 30000)),
-                    'grade_e': int(data.get('grade_e', 30000)),
-                }
-            )
+            interval = int(data.get('interval', 30000))
+            pk = data.get('id')
+
+            if pk:
+                MoldMTSetting.objects.filter(pk=pk).update(
+                    material_type=grade, grade_a=interval
+                )
+                created = False
+            else:
+                MoldMTSetting.objects.create(
+                    material_type=grade, grade_a=interval,
+                    grade_b=interval, grade_c=interval,
+                    grade_d=interval, grade_e=interval
+                )
+                created = True
+
             return JsonResponse({
                 'success': True,
-                'message': f'{material_type} {"등록" if created else "수정"} 완료'
+                'message': f'구분 {grade} {"등록" if created else "수정"} 완료 (MT기준: {interval:,})'
             })
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)})

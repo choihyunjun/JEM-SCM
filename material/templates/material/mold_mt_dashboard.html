@@ -518,30 +518,29 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header modal-header-mt">
-                <h5 class="modal-title"><i class="bi bi-sliders me-2"></i>MT 기준 설정 (재료별 등급별 숏트수)</h5>
+                <h5 class="modal-title"><i class="bi bi-sliders me-2"></i>MT 기준 설정 (구분별 숏트수)</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="mb-3">
                     <button class="btn btn-sm btn-outline-primary" onclick="addSettingRow()">
-                        <i class="bi bi-plus-circle me-1"></i>신규 추가
+                        <i class="bi bi-plus-circle me-1"></i>구분 추가
                     </button>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-sm table-bordered" id="settingsTable">
                         <thead class="table-dark">
                             <tr>
-                                <th>재료구분</th>
-                                <th>A등급</th>
-                                <th>B등급</th>
-                                <th>C등급</th>
-                                <th>D등급</th>
-                                <th>E등급</th>
+                                <th>구분</th>
+                                <th>MT기준 숏트수</th>
                                 <th style="width:100px">작업</th>
                             </tr>
                         </thead>
                         <tbody id="settingsBody"></tbody>
                     </table>
+                </div>
+                <div class="alert alert-info small mt-2 mb-0">
+                    <i class="bi bi-info-circle me-1"></i>구분을 추가하면 금형 등록/수정 시 해당 구분을 선택할 수 있습니다.
                 </div>
             </div>
         </div>
@@ -926,27 +925,21 @@ function loadSettings() {
             const tbody = document.getElementById('settingsBody');
             tbody.innerHTML = '';
             if (res.data && res.data.length) {
-                res.data.forEach(s => {
-                    addSettingRowData(s);
-                });
+                res.data.forEach(s => addSettingRowData(s));
             }
         });
 }
 
 function addSettingRow() {
-    addSettingRowData({id: '', material_type: '', grade_a: 40000, grade_b: 40000, grade_c: 40000, grade_d: 30000, grade_e: 30000});
+    addSettingRowData({id: '', grade: '', interval: 30000});
 }
 
 function addSettingRowData(s) {
     const tbody = document.getElementById('settingsBody');
     const tr = document.createElement('tr');
     tr.innerHTML = `
-        <td><input type="text" class="form-control form-control-sm" value="${s.material_type}" data-field="material_type" placeholder="예: ABS"></td>
-        <td><input type="number" class="form-control form-control-sm" value="${s.grade_a}" data-field="grade_a"></td>
-        <td><input type="number" class="form-control form-control-sm" value="${s.grade_b}" data-field="grade_b"></td>
-        <td><input type="number" class="form-control form-control-sm" value="${s.grade_c}" data-field="grade_c"></td>
-        <td><input type="number" class="form-control form-control-sm" value="${s.grade_d}" data-field="grade_d"></td>
-        <td><input type="number" class="form-control form-control-sm" value="${s.grade_e}" data-field="grade_e"></td>
+        <td><input type="text" class="form-control form-control-sm" value="${s.grade}" data-field="grade" placeholder="예: A, B, C" style="width:100px;"></td>
+        <td><input type="number" class="form-control form-control-sm" value="${s.interval}" data-field="interval" placeholder="숏트수"></td>
         <td>
             <button class="btn btn-sm btn-primary me-1" onclick="saveSetting(this, ${s.id || 0})"><i class="bi bi-check"></i></button>
             <button class="btn btn-sm btn-danger" onclick="deleteSetting(this, ${s.id || 0})"><i class="bi bi-trash"></i></button>
