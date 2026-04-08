@@ -5638,7 +5638,7 @@ def raw_material_incoming(request):
         # 이미 라벨 발행된 건 표시 + SCM/WMS 구분 + 품목설정 로딩
         for insp in approved_inspections:
             trx = insp.inbound_transaction
-            insp.is_scm = (trx.transaction_type == 'IN_SCM')
+            insp.is_scm = bool(trx.ref_delivery_order)
             insp.label_count = RawMaterialLabel.objects.filter(
                 incoming_transaction=trx, label_type='PACKAGE'
             ).exclude(status='CANCELLED').count()
