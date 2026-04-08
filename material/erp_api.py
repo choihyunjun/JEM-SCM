@@ -948,8 +948,8 @@ def sync_stock_from_erp():
         lot_qty = scm_lot_map.get((wh_cd, item_cd), 0)
 
         # ERP 재고에서 LOT 재고(WMS 입고분)를 제외한 나머지가 NULL LOT 목표치
-        # NULL LOT 목표 = ERP 재고 - LOT 재고
-        target_null = erp_qty - lot_qty
+        # NULL LOT 목표 = ERP 재고 - LOT 재고 (단, 0 미만이면 0으로)
+        target_null = max(erp_qty - lot_qty, 0)
         current_null = scm_null_map.get((wh_cd, item_cd), 0)
         diff = target_null - current_null  # 양수=NULL 증가 필요, 음수=NULL 감소 필요
 
