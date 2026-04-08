@@ -39,35 +39,36 @@
         margin-bottom: 20px;
     }
 
-    .table-mt { font-size: 0.85rem; }
-    .table-mt th { background: #2d3748; color: white; text-align: center; vertical-align: middle; white-space: nowrap; position: sticky; top: 0; z-index: 2; }
-    .table-mt td { vertical-align: middle; text-align: center; white-space: nowrap; }
+    .table-mt { font-size: 0.78rem; }
+    .table-mt th { background: #f8f9fa; color: #333; text-align: center; vertical-align: middle; white-space: nowrap; position: sticky; top: 0; z-index: 2; font-size: 0.72rem; font-weight: 600; border-bottom: 2px solid #dee2e6; }
+    .table-mt td { vertical-align: middle; text-align: center; white-space: nowrap; padding: 6px 8px; color: #444; }
+    .table-mt tbody tr:hover { background: #f0f7ff !important; }
 
     .progress-bar-mt {
-        height: 20px;
-        border-radius: 10px;
-        background: #e2e8f0;
+        height: 16px;
+        border-radius: 8px;
+        background: #edf2f7;
         overflow: hidden;
-        min-width: 100px;
+        min-width: 90px;
     }
     .progress-bar-mt .bar {
         height: 100%;
-        border-radius: 10px;
+        border-radius: 8px;
         transition: width 0.3s;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 0.7rem;
-        font-weight: 700;
+        font-size: 0.6rem;
+        font-weight: 600;
         color: white;
     }
-    .bar-green { background: linear-gradient(90deg, #48bb78, #38a169); }
-    .bar-yellow { background: linear-gradient(90deg, #ecc94b, #d69e2e); }
-    .bar-red { background: linear-gradient(90deg, #fc8181, #e53e3e); }
+    .bar-green { background: #48bb78; }
+    .bar-yellow { background: #ecc94b; color: #333; }
+    .bar-red { background: #e53e3e; }
 
-    .badge-status { font-size: 0.75rem; padding: 4px 10px; border-radius: 12px; }
+    .badge-status { font-size: 0.68rem; padding: 3px 8px; border-radius: 10px; }
 
-    .btn-mt-complete { font-size: 0.75rem; padding: 2px 8px; }
+    .btn-mt-complete { font-size: 0.7rem; padding: 2px 7px; }
 
     .clickable-row { cursor: pointer; }
     .clickable-row:hover { background: #edf2f7 !important; }
@@ -100,31 +101,36 @@
     </div>
 </div>
 
-<!-- Summary Cards -->
-<div class="row g-3 mb-4">
-    <div class="col-6 col-md-3">
-        <a href="?{{ q|default:'' }}" class="summary-card bg-total">
-            <div class="card-number">{{ total_count }}</div>
-            <div class="card-label">총 금형</div>
-        </a>
-    </div>
-    <div class="col-6 col-md-3">
-        <a href="?status=mt_due{% if q %}&q={{ q }}{% endif %}{% if grade %}&grade={{ grade }}{% endif %}{% if item_group %}&item_group={{ item_group }}{% endif %}" class="summary-card bg-danger-mt">
-            <div class="card-number">{{ mt_due_count }}</div>
-            <div class="card-label">MT 임박/필요</div>
-        </a>
-    </div>
-    <div class="col-6 col-md-3">
-        <a href="?status=over{% if q %}&q={{ q }}{% endif %}{% if grade %}&grade={{ grade }}{% endif %}{% if item_group %}&item_group={{ item_group }}{% endif %}" class="summary-card bg-warning-mt">
-            <div class="card-number">{{ over_guarantee_count }}</div>
-            <div class="card-label">보증수명 초과</div>
-        </a>
-    </div>
-    <div class="col-6 col-md-3">
-        <a href="?status=normal{% if q %}&q={{ q }}{% endif %}{% if grade %}&grade={{ grade }}{% endif %}{% if item_group %}&item_group={{ item_group }}{% endif %}" class="summary-card bg-success-mt">
-            <div class="card-number">{{ normal_count }}</div>
-            <div class="card-label">정상</div>
-        </a>
+<!-- Summary -->
+<div class="card shadow-sm mb-3">
+    <div class="card-body p-0">
+        <table class="table table-bordered mb-0 text-center" style="font-size:0.85rem;">
+            <thead>
+                <tr style="background:#f8f9fa;">
+                    <th colspan="4">금형 현황</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td style="width:25%;cursor:pointer;" onclick="location.href='?'">
+                        <div class="text-muted" style="font-size:0.7rem;">총 금형</div>
+                        <div class="fw-bold" style="font-size:1.6rem;color:#667eea;">{{ total_count }}</div>
+                    </td>
+                    <td style="width:25%;cursor:pointer;" onclick="location.href='?status=mt_due'">
+                        <div class="text-muted" style="font-size:0.7rem;">MT 임박/필요</div>
+                        <div class="fw-bold text-danger" style="font-size:1.6rem;">{{ mt_due_count }}</div>
+                    </td>
+                    <td style="width:25%;cursor:pointer;" onclick="location.href='?status=over'">
+                        <div class="text-muted" style="font-size:0.7rem;">보증수명 초과</div>
+                        <div class="fw-bold" style="font-size:1.6rem;color:#ed8936;">{{ over_guarantee_count }}</div>
+                    </td>
+                    <td style="width:25%;cursor:pointer;" onclick="location.href='?status=normal'">
+                        <div class="text-muted" style="font-size:0.7rem;">정상</div>
+                        <div class="fw-bold text-success" style="font-size:1.6rem;">{{ normal_count }}</div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
     </div>
 </div>
 
@@ -180,41 +186,39 @@
             <table class="table table-hover table-bordered table-mt mb-0">
                 <thead>
                     <tr>
-                        <th style="width:35px">No</th>
+                        <th style="width:30px">No</th>
+                        <th>기종</th>
                         <th>부품번호</th>
                         <th>금형명</th>
-                        <th>기종</th>
                         <th>등급</th>
                         <th>재료</th>
-                        <th>보증수명</th>
                         <th>보증</th>
                         <th>누적숏트</th>
                         <th>이전MT</th>
                         <th>MT기준</th>
-                        <th style="min-width:130px">MT 진행률</th>
+                        <th style="min-width:110px">MT 진행률</th>
                         <th>상태</th>
-                        <th>MT</th>
+                        <th style="width:40px">MT</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for m in molds %}
                     <tr class="clickable-row" data-pk="{{ m.pk }}">
-                        <td>{{ forloop.counter0|add:molds.start_index }}</td>
+                        <td class="text-muted">{{ forloop.counter0|add:molds.start_index }}</td>
+                        <td class="text-start">{{ m.item_group }}</td>
                         <td class="fw-bold text-primary">{{ m.part_no }}</td>
-                        <td class="text-start" style="max-width:200px; overflow:hidden; text-overflow:ellipsis;">{{ m.mold_name }}</td>
-                        <td>{{ m.item_group }}</td>
-                        <td><span class="badge bg-secondary">{{ m.grade|default:'-' }}</span></td>
+                        <td class="text-start" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;">{{ m.mold_name }}</td>
+                        <td><span class="badge bg-secondary" style="font-size:0.65rem;">{{ m.grade|default:'-' }}</span></td>
                         <td>{{ m.material_type|default:'-' }}</td>
-                        <td>{{ m.guarantee_shots|floatformat:0 }}</td>
                         <td>
                             {% if m.is_over_guarantee %}
-                                <span class="badge bg-danger" style="font-size:0.7rem;">초과</span>
+                                <span class="badge bg-danger" style="font-size:0.6rem;">초과</span>
                             {% else %}
-                                <span class="badge bg-success" style="font-size:0.7rem;">정상</span>
+                                <span class="badge bg-outline-success border text-success" style="font-size:0.6rem;">정상</span>
                             {% endif %}
                         </td>
                         <td class="fw-bold">{{ m.total_shots|floatformat:0 }}</td>
-                        <td class="text-muted">{{ m.last_mt_shots|floatformat:0 }}</td>
+                        <td style="color:#888;">{{ m.last_mt_shots|floatformat:0 }}</td>
                         <td>{{ m.mt_interval|floatformat:0 }}</td>
                         <td>
                             <div class="progress-bar-mt">
