@@ -8146,6 +8146,9 @@ def mold_mt_dashboard(request):
                 filtered.append(m)
         molds_list = filtered
 
+    # 기본 정렬: MT 진행률 높은순, 진행률 0이면 pk순
+    molds_list.sort(key=lambda m: (-m.mt_progress_pct if m.mt_progress_pct > 0 else 0, m.mt_progress_pct == 0, m.pk))
+
     # 페이지네이션
     paginator = Paginator(molds_list, 30)
     page = request.GET.get('page', 1)

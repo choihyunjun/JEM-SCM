@@ -85,14 +85,20 @@
     .autocomplete-item:hover { background: #e9ecef; }
 
     /* Toggle button filter */
-    .filter-btn-group { display: flex; flex-wrap: wrap; gap: 4px; }
-    .filter-toggle {
-        font-size: 0.72rem; padding: 3px 10px; border-radius: 15px;
-        border: 1px solid #cbd5e0; background: #fff; color: #4a5568;
-        cursor: pointer; transition: all 0.15s; white-space: nowrap;
-        user-select: none;
+    .filter-row { display: flex; align-items: flex-start; margin-bottom: 6px; }
+    .filter-row:last-child { margin-bottom: 0; }
+    .filter-label {
+        min-width: 42px; font-size: 0.73rem; font-weight: 700; color: #4a5568;
+        padding-top: 4px; margin-right: 10px; white-space: nowrap;
     }
-    .filter-toggle:hover { border-color: #4299e1; color: #2b6cb0; }
+    .filter-btn-group { display: flex; flex-wrap: wrap; gap: 3px; }
+    .filter-toggle {
+        font-size: 0.72rem; padding: 3px 9px; border-radius: 3px;
+        border: 1px solid #d2d6dc; background: #fff; color: #4a5568;
+        cursor: pointer; transition: all 0.12s; white-space: nowrap;
+        user-select: none; line-height: 1.4;
+    }
+    .filter-toggle:hover { border-color: #3182ce; color: #2b6cb0; background: #ebf4ff; }
     .filter-toggle.active {
         background: #3182ce; color: #fff; border-color: #3182ce;
     }
@@ -174,51 +180,49 @@
             <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search me-1"></i>검색</button>
             <a href="{% url 'material:mold_mt_dashboard' %}" class="btn btn-sm btn-outline-secondary">초기화</a>
         </div>
-        <!-- 2행: 토글 버튼 필터 -->
-        <div class="d-flex flex-wrap gap-4 align-items-start">
-            <div>
-                <label class="form-label small fw-bold mb-1 text-muted">등급</label>
-                <div class="filter-btn-group" id="filterGrade">
-                    {% for g in grade_list %}
-                    <label class="filter-toggle {% if g in grades %}active{% endif %}">
-                        <input type="checkbox" name="grade" value="{{ g }}" {% if g in grades %}checked{% endif %} hidden>{{ g }}
-                    </label>
-                    {% endfor %}
-                </div>
+        <!-- 2행: 토글 버튼 필터 (행별 정렬) -->
+        <div class="filter-row">
+            <span class="filter-label">등급</span>
+            <div class="filter-btn-group">
+                {% for g in grade_list %}
+                <label class="filter-toggle {% if g in grades %}active{% endif %}">
+                    <input type="checkbox" name="grade" value="{{ g }}" {% if g in grades %}checked{% endif %} hidden>{{ g }}
+                </label>
+                {% endfor %}
             </div>
-            <div>
-                <label class="form-label small fw-bold mb-1 text-muted">재료</label>
-                <div class="filter-btn-group" id="filterMaterial">
-                    {% for mt in material_list %}
-                    <label class="filter-toggle {% if mt in materials_filter %}active{% endif %}">
-                        <input type="checkbox" name="material_type" value="{{ mt }}" {% if mt in materials_filter %}checked{% endif %} hidden>{{ mt }}
-                    </label>
-                    {% endfor %}
-                </div>
+        </div>
+        <div class="filter-row">
+            <span class="filter-label">재료</span>
+            <div class="filter-btn-group">
+                {% for mt in material_list %}
+                <label class="filter-toggle {% if mt in materials_filter %}active{% endif %}">
+                    <input type="checkbox" name="material_type" value="{{ mt }}" {% if mt in materials_filter %}checked{% endif %} hidden>{{ mt }}
+                </label>
+                {% endfor %}
             </div>
-            <div>
-                <label class="form-label small fw-bold mb-1 text-muted">기종</label>
-                <div class="filter-btn-group" id="filterItemGroup">
-                    {% for ig in item_group_list %}
-                    <label class="filter-toggle {% if ig in item_groups_filter %}active{% endif %}">
-                        <input type="checkbox" name="item_group" value="{{ ig }}" {% if ig in item_groups_filter %}checked{% endif %} hidden>{{ ig }}
-                    </label>
-                    {% endfor %}
-                </div>
+        </div>
+        <div class="filter-row">
+            <span class="filter-label">기종</span>
+            <div class="filter-btn-group">
+                {% for ig in item_group_list %}
+                <label class="filter-toggle {% if ig in item_groups_filter %}active{% endif %}">
+                    <input type="checkbox" name="item_group" value="{{ ig }}" {% if ig in item_groups_filter %}checked{% endif %} hidden>{{ ig }}
+                </label>
+                {% endfor %}
             </div>
-            <div>
-                <label class="form-label small fw-bold mb-1 text-muted">상태</label>
-                <div class="filter-btn-group" id="filterStatus">
-                    <label class="filter-toggle {% if 'normal' in status_filters %}active{% endif %}">
-                        <input type="checkbox" name="status" value="normal" {% if 'normal' in status_filters %}checked{% endif %} hidden>정상
-                    </label>
-                    <label class="filter-toggle {% if 'mt_due' in status_filters %}active{% endif %}">
-                        <input type="checkbox" name="status" value="mt_due" {% if 'mt_due' in status_filters %}checked{% endif %} hidden>MT임박/필요
-                    </label>
-                    <label class="filter-toggle {% if 'over' in status_filters %}active{% endif %}">
-                        <input type="checkbox" name="status" value="over" {% if 'over' in status_filters %}checked{% endif %} hidden>보증초과
-                    </label>
-                </div>
+        </div>
+        <div class="filter-row">
+            <span class="filter-label">상태</span>
+            <div class="filter-btn-group">
+                <label class="filter-toggle {% if 'normal' in status_filters %}active{% endif %}">
+                    <input type="checkbox" name="status" value="normal" {% if 'normal' in status_filters %}checked{% endif %} hidden>정상
+                </label>
+                <label class="filter-toggle {% if 'mt_due' in status_filters %}active{% endif %}">
+                    <input type="checkbox" name="status" value="mt_due" {% if 'mt_due' in status_filters %}checked{% endif %} hidden>MT임박/필요
+                </label>
+                <label class="filter-toggle {% if 'over' in status_filters %}active{% endif %}">
+                    <input type="checkbox" name="status" value="over" {% if 'over' in status_filters %}checked{% endif %} hidden>보증초과
+                </label>
             </div>
         </div>
     </form>
