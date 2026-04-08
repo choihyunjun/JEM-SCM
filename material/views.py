@@ -8256,8 +8256,8 @@ def mold_mt_dashboard(request):
     material_list = sorted(set(_base.exclude(material_type__isnull=True).exclude(material_type='').values_list('material_type', flat=True)))
     item_group_list = sorted(set(_base.exclude(item_group__isnull=True).exclude(item_group='').values_list('item_group', flat=True)))
 
-    # MT 기준 설정
-    mt_settings = list(MoldMTSetting.objects.all().values())
+    # MT 기준: A=50,000 / B=30,000 고정
+    mt_settings = [{'grade': 'A', 'interval': 50000}, {'grade': 'B', 'interval': 30000}]
 
     # 페이지네이션용 쿼리스트링 (page 제외)
     from urllib.parse import urlencode
