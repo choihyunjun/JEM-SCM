@@ -8097,22 +8097,26 @@ def api_molding_master_detail(request, pk):
 @wms_permission_required('can_wms_stock_view')
 def mold_mt_dashboard(request):
     """금형 MT 대시보드 - 금형 수명/MT 현황"""
+    import json as _json
     from .models import MoldMaster as MoldMasterModel, MoldMTSetting
 
     qs = MoldMasterModel.objects.filter(is_active=True)
 
-    # 필터
+    # 필터 (다중 선택 지원: getlist)
     q = request.GET.get('q', '').strip()
-    grade = request.GET.get('grade', '')
-    item_group = request.GET.get('item_group', '')
-    status_filter = request.GET.get('status', '')
+    grades = request.GET.getlist('grade')
+    item_groups_filter = request.GET.getlist('item_group')
+    materials_filter = request.GET.getlist('material_type')
+    status_filters = request.GET.getlist('status')
 
     if q:
         qs = qs.filter(Q(part_no__icontains=q) | Q(mold_name__icontains=q))
-    if grade:
-        qs = qs.filter(grade=grade)
-    if item_group:
-        qs = qs.filter(item_group=item_group)
+    if grades:
+        qs = qs.filter(grade__in=grades)
+    if item_groups_filter:
+        qs = qs.filter(item_group__in=item_groups_filter)
+    if materials_filter:
+        qs = qs.filter(material_type__in=materials_filter)
 
     molds_list = list(qs)
 
@@ -8130,25 +8134,55 @@ def mold_mt_dashboard(request):
         else:
             normal_count += 1
 
-    # 상태 필터
-    if status_filter == 'mt_due':
-        molds_list = [m for m in molds_list if (m.is_mt_due or m.mt_progress_pct >= 80) and not m.is_over_guarantee]
-    elif status_filter == 'over':
-        molds_list = [m for m in molds_list if m.is_over_guarantee]
-    elif status_filter == 'normal':
-        molds_list = [m for m in molds_list if not m.is_mt_due and not m.is_over_guarantee]
+    # 상태 필터 (다중)
+    if status_filters:
+        filtered = []
+        for m in molds_list:
+            if m.is_over_guarantee and 'over' in status_filters:
+                filtered.append(m)
+            elif (m.is_mt_due or m.mt_progress_pct >= 80) and not m.is_over_guarantee and 'mt_due' in status_filters:
+                filtered.append(m)
+            elif not m.is_mt_due and m.mt_progress_pct < 80 and not m.is_over_guarantee and 'normal' in status_filters:
+                filtered.append(m)
+        molds_list = filtered
 
     # 페이지네이션
     paginator = Paginator(molds_list, 30)
     page = request.GET.get('page', 1)
     molds = paginator.get_page(page)
 
-    # 기종 목록 (필터용)
-    item_groups = MoldMasterModel.objects.filter(is_active=True).values_list(
-        'item_group', flat=True).distinct().order_by('item_group')
+    # 자동완성용 데이터
+    all_molds = MoldMasterModel.objects.filter(is_active=True)
+    part_nos = sorted(set(
+        f"{m.part_no} / {m.mold_name}" for m in all_molds if m.part_no
+    ))
+    grade_list = sorted(set(
+        all_molds.exclude(grade__isnull=True).exclude(grade='').values_list('grade', flat=True)
+    ))
+    material_list = sorted(set(
+        all_molds.exclude(material_type__isnull=True).exclude(material_type='').values_list('material_type', flat=True)
+    ))
+    item_group_list = sorted(set(
+        all_molds.exclude(item_group__isnull=True).exclude(item_group='').values_list('item_group', flat=True)
+    ))
 
     # MT 기준 설정
     mt_settings = list(MoldMTSetting.objects.all().values())
+
+    # 페이지네이션용 쿼리스트링 (page 제외)
+    from urllib.parse import urlencode
+    qs_params = []
+    if q:
+        qs_params.append(('q', q))
+    for g in grades:
+        qs_params.append(('grade', g))
+    for ig in item_groups_filter:
+        qs_params.append(('item_group', ig))
+    for mt in materials_filter:
+        qs_params.append(('material_type', mt))
+    for sf in status_filters:
+        qs_params.append(('status', sf))
+    pagination_qs = urlencode(qs_params)
 
     context = {
         'molds': molds,
@@ -8157,10 +8191,19 @@ def mold_mt_dashboard(request):
         'over_guarantee_count': over_guarantee_count,
         'normal_count': normal_count,
         'q': q,
-        'grade': grade,
-        'item_group': item_group,
-        'status': status_filter,
-        'item_groups': item_groups,
+        'grades': grades,
+        'grades_json': _json.dumps(grades, ensure_ascii=False),
+        'item_groups_filter': item_groups_filter,
+        'item_groups_filter_json': _json.dumps(item_groups_filter, ensure_ascii=False),
+        'materials_filter': materials_filter,
+        'materials_filter_json': _json.dumps(materials_filter, ensure_ascii=False),
+        'status_filters': status_filters,
+        'status_filters_json': _json.dumps(status_filters, ensure_ascii=False),
+        'pagination_qs': pagination_qs,
+        'part_nos_json': _json.dumps(part_nos, ensure_ascii=False),
+        'grade_list_json': _json.dumps(grade_list, ensure_ascii=False),
+        'material_list_json': _json.dumps(material_list, ensure_ascii=False),
+        'item_group_list_json': _json.dumps(item_group_list, ensure_ascii=False),
         'mt_settings': mt_settings,
     }
     return render(request, 'material/mold_mt_dashboard.html', context)
@@ -8319,7 +8362,12 @@ def mold_mt_excel(request):
         cell.alignment = Alignment(horizontal='center')
         cell.border = thin_border
 
-    molds = MoldMasterModel.objects.filter(is_active=True).order_by('item_group', 'part_no')
+    ids_param = request.GET.get('ids', '').strip()
+    if ids_param:
+        id_list = [int(x) for x in ids_param.split(',') if x.strip().isdigit()]
+        molds = MoldMasterModel.objects.filter(pk__in=id_list).order_by('item_group', 'part_no')
+    else:
+        molds = MoldMasterModel.objects.filter(is_active=True).order_by('item_group', 'part_no')
 
     for idx, m in enumerate(molds, 1):
         # 월별 숏트

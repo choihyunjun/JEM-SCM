@@ -74,6 +74,32 @@
     .sortable { cursor: pointer; user-select: none; }
     .sortable:hover { background: #e9ecef !important; }
 
+    /* Autocomplete */
+    .autocomplete-wrap { position: relative; }
+    .autocomplete-dropdown {
+        position: absolute; z-index: 1050; background: #fff; border: 1px solid #dee2e6;
+        border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 220px;
+        overflow-y: auto; display: none; width: 100%; margin-top: 2px;
+    }
+    .autocomplete-item { padding: 5px 10px; cursor: pointer; font-size: 0.8rem; }
+    .autocomplete-item:hover { background: #e9ecef; }
+
+    /* Multi-select tags */
+    .tag-container { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; min-height: 22px; }
+    .filter-tag {
+        display: inline-flex; align-items: center; gap: 3px;
+        background: #e2e8f0; color: #2d3748; font-size: 0.7rem;
+        padding: 1px 7px; border-radius: 10px; white-space: nowrap;
+    }
+    .filter-tag .tag-remove {
+        cursor: pointer; font-weight: bold; color: #718096;
+        font-size: 0.75rem; line-height: 1;
+    }
+    .filter-tag .tag-remove:hover { color: #e53e3e; }
+
+    /* Checkbox */
+    .row-check { width: 16px; height: 16px; cursor: pointer; }
+
     /* Modal */
     .modal-header-mt { background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); color: white; }
     .detail-table th { width: 140px; background: #f7fafc; font-weight: 600; font-size: 0.85rem; }
@@ -90,9 +116,9 @@
         <button class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#uploadModal">
             <i class="bi bi-upload me-1"></i>엑셀 업로드
         </button>
-        <a href="{% url 'material:mold_mt_excel' %}" class="btn btn-sm btn-outline-light">
+        <button class="btn btn-sm btn-outline-light" onclick="downloadExcel()">
             <i class="bi bi-download me-1"></i>엑셀 다운로드
-        </a>
+        </button>
         <button class="btn btn-sm btn-outline-light" onclick="new bootstrap.Modal(document.getElementById('settingsModal')).show(); loadSettings();">
             <i class="bi bi-sliders me-1"></i>MT 기준 설정
         </button>
@@ -122,7 +148,7 @@
                         <div class="fw-bold text-danger" style="font-size:1.6rem;">{{ mt_due_count }}</div>
                     </td>
                     <td style="width:25%;cursor:pointer;" onclick="location.href='?status=over'">
-                        <div class="text-muted" style="font-size:0.7rem;">보증수명 초과</div>
+                        <div class="text-muted" style="font-size:0.7rem;">보증초과</div>
                         <div class="fw-bold" style="font-size:1.6rem;color:#ed8936;">{{ over_guarantee_count }}</div>
                     </td>
                     <td style="width:25%;cursor:pointer;" onclick="location.href='?status=normal'">
@@ -137,45 +163,50 @@
 
 <!-- Filter Bar -->
 <div class="filter-bar">
-    <form method="get" class="row g-2 align-items-end">
-        <div class="col-md-3">
-            <label class="form-label small fw-bold mb-1">검색</label>
-            <input type="text" name="q" class="form-control form-control-sm" placeholder="부품번호 / 금형명" value="{{ q }}">
+    <form method="get" id="filterForm" class="row g-2 align-items-end">
+        <!-- 품번/품명 (단일 자동완성) -->
+        <div class="col-md-3 autocomplete-wrap">
+            <label class="form-label small fw-bold mb-1">품번/품명</label>
+            <input type="text" name="q" id="acPartNo" class="form-control form-control-sm"
+                   placeholder="품번 또는 품명 검색" value="{{ q }}" autocomplete="off">
+            <div id="acPartNoDD" class="autocomplete-dropdown"></div>
         </div>
-        <div class="col-md-2">
-            <label class="form-label small fw-bold mb-1">기종</label>
-            <select name="item_group" class="form-select form-select-sm">
-                <option value="">전체</option>
-                {% for ig in item_groups %}
-                    {% if ig %}
-                    <option value="{{ ig }}" {% if item_group == ig %}selected{% endif %}>{{ ig }}</option>
-                    {% endif %}
-                {% endfor %}
-            </select>
-        </div>
-        <div class="col-md-2">
+        <!-- 등급 (다중) -->
+        <div class="col-md-2 autocomplete-wrap">
             <label class="form-label small fw-bold mb-1">등급</label>
-            <select name="grade" class="form-select form-select-sm">
-                <option value="">전체</option>
-                <option value="A" {% if grade == 'A' %}selected{% endif %}>A</option>
-                <option value="B" {% if grade == 'B' %}selected{% endif %}>B</option>
-                <option value="C" {% if grade == 'C' %}selected{% endif %}>C</option>
-                <option value="D" {% if grade == 'D' %}selected{% endif %}>D</option>
-                <option value="E" {% if grade == 'E' %}selected{% endif %}>E</option>
-            </select>
+            <input type="text" id="acGrade" class="form-control form-control-sm"
+                   placeholder="등급 선택" autocomplete="off">
+            <div id="acGradeDD" class="autocomplete-dropdown"></div>
+            <div class="tag-container" id="tagGrade"></div>
         </div>
-        <div class="col-md-2">
+        <!-- 재료 (다중) -->
+        <div class="col-md-2 autocomplete-wrap">
+            <label class="form-label small fw-bold mb-1">재료</label>
+            <input type="text" id="acMaterial" class="form-control form-control-sm"
+                   placeholder="재료 선택" autocomplete="off">
+            <div id="acMaterialDD" class="autocomplete-dropdown"></div>
+            <div class="tag-container" id="tagMaterial"></div>
+        </div>
+        <!-- 기종 (다중) -->
+        <div class="col-md-2 autocomplete-wrap">
+            <label class="form-label small fw-bold mb-1">기종</label>
+            <input type="text" id="acItemGroup" class="form-control form-control-sm"
+                   placeholder="기종 선택" autocomplete="off">
+            <div id="acItemGroupDD" class="autocomplete-dropdown"></div>
+            <div class="tag-container" id="tagItemGroup"></div>
+        </div>
+        <!-- 상태 (다중) -->
+        <div class="col-md-2 autocomplete-wrap">
             <label class="form-label small fw-bold mb-1">상태</label>
-            <select name="status" class="form-select form-select-sm">
-                <option value="">전체</option>
-                <option value="normal" {% if status == 'normal' %}selected{% endif %}>정상</option>
-                <option value="mt_due" {% if status == 'mt_due' %}selected{% endif %}>MT 필요</option>
-                <option value="over" {% if status == 'over' %}selected{% endif %}>보증초과</option>
-            </select>
+            <input type="text" id="acStatus" class="form-control form-control-sm"
+                   placeholder="상태 선택" autocomplete="off">
+            <div id="acStatusDD" class="autocomplete-dropdown"></div>
+            <div class="tag-container" id="tagStatus"></div>
         </div>
-        <div class="col-md-3 d-flex gap-2">
-            <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search me-1"></i>검색</button>
-            <a href="{% url 'material:mold_mt_dashboard' %}" class="btn btn-sm btn-outline-secondary">초기화</a>
+        <!-- 버튼 -->
+        <div class="col-md-1 d-flex gap-1">
+            <button type="submit" class="btn btn-sm btn-primary" title="검색"><i class="bi bi-search"></i></button>
+            <a href="{% url 'material:mold_mt_dashboard' %}" class="btn btn-sm btn-outline-secondary" title="초기화"><i class="bi bi-arrow-counterclockwise"></i></a>
         </div>
     </form>
 </div>
@@ -187,24 +218,26 @@
             <table class="table table-hover table-bordered table-mt mb-0">
                 <thead>
                     <tr>
+                        <th style="width:30px"><input type="checkbox" class="row-check" id="checkAll" title="전체선택"></th>
                         <th style="width:30px">No</th>
-                        <th class="sortable" data-col="1">기종 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
-                        <th class="sortable" data-col="2">부품번호 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
+                        <th class="sortable" data-col="2">기종 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
+                        <th class="sortable" data-col="3">부품번호 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th>금형명</th>
-                        <th class="sortable" data-col="4">등급 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
+                        <th class="sortable" data-col="5">등급 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th>재료</th>
                         <th>보증</th>
-                        <th class="sortable" data-col="7">누적숏트 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
+                        <th class="sortable" data-col="8">누적숏트 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th>이전MT</th>
                         <th>MT기준</th>
-                        <th class="sortable" data-col="10">MT진행률 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
-                        <th class="sortable" data-col="11">상태 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
+                        <th class="sortable" data-col="11">MT진행률 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
+                        <th class="sortable" data-col="12">상태 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th style="width:40px">MT</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for m in molds %}
                     <tr class="clickable-row" data-pk="{{ m.pk }}">
+                        <td onclick="event.stopPropagation();"><input type="checkbox" class="row-check mold-check" value="{{ m.pk }}"></td>
                         <td class="text-muted">{{ forloop.counter0|add:molds.start_index }}</td>
                         <td class="text-start">{{ m.item_group }}</td>
                         <td class="fw-bold text-primary">{{ m.part_no }}</td>
@@ -250,7 +283,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="13" class="text-center text-muted py-5">
+                        <td colspan="14" class="text-center text-muted py-5">
                             <i class="bi bi-inbox" style="font-size: 2rem;"></i>
                             <p class="mt-2">등록된 금형 데이터가 없습니다.</p>
                             <p class="small">엑셀 업로드로 금형 데이터를 등록해주세요.</p>
@@ -269,7 +302,7 @@
     <ul class="pagination pagination-sm">
         {% if molds.has_previous %}
         <li class="page-item">
-            <a class="page-link" href="?page={{ molds.previous_page_number }}{% if q %}&q={{ q }}{% endif %}{% if grade %}&grade={{ grade }}{% endif %}{% if item_group %}&item_group={{ item_group }}{% endif %}{% if status %}&status={{ status }}{% endif %}">&laquo;</a>
+            <a class="page-link" href="?page={{ molds.previous_page_number }}&{{ pagination_qs }}">&laquo;</a>
         </li>
         {% endif %}
         {% for num in molds.paginator.page_range %}
@@ -277,13 +310,13 @@
             <li class="page-item active"><span class="page-link">{{ num }}</span></li>
             {% elif num > molds.number|add:'-5' and num < molds.number|add:'5' %}
             <li class="page-item">
-                <a class="page-link" href="?page={{ num }}{% if q %}&q={{ q }}{% endif %}{% if grade %}&grade={{ grade }}{% endif %}{% if item_group %}&item_group={{ item_group }}{% endif %}{% if status %}&status={{ status }}{% endif %}">{{ num }}</a>
+                <a class="page-link" href="?page={{ num }}&{{ pagination_qs }}">{{ num }}</a>
             </li>
             {% endif %}
         {% endfor %}
         {% if molds.has_next %}
         <li class="page-item">
-            <a class="page-link" href="?page={{ molds.next_page_number }}{% if q %}&q={{ q }}{% endif %}{% if grade %}&grade={{ grade }}{% endif %}{% if item_group %}&item_group={{ item_group }}{% endif %}{% if status %}&status={{ status }}{% endif %}">&raquo;</a>
+            <a class="page-link" href="?page={{ molds.next_page_number }}&{{ pagination_qs }}">&raquo;</a>
         </li>
         {% endif %}
     </ul>
@@ -457,7 +490,172 @@
 </div>
 
 <script>
-// Row click -> detail modal
+// ─── 자동완성 데이터 ───
+var acData = {
+    partNos: {{ part_nos_json|safe }},
+    grades: {{ grade_list_json|safe }},
+    materials: {{ material_list_json|safe }},
+    itemGroups: {{ item_group_list_json|safe }},
+    statuses: [
+        {label: '정상', value: 'normal'},
+        {label: 'MT임박', value: 'mt_due'},
+        {label: 'MT필요', value: 'mt_due'},
+        {label: '보증초과', value: 'over'}
+    ]
+};
+
+// 서버에서 ���달된 기존 선택값
+var selectedFilters = {
+    grade: {{ grades_json|safe }},
+    material_type: {{ materials_filter_json|safe }},
+    item_group: {{ item_groups_filter_json|safe }},
+    status: {{ status_filters_json|safe }}
+};
+
+// 상태 value→label 매핑
+var statusLabels = {normal: '정상', mt_due: 'MT임박/필요', over: '보증초과'};
+
+// ─── 단일 자동완성 (품번/품명) ───
+function setupSingleAutocomplete(inputId, dropdownId, dataList) {
+    var input = document.getElementById(inputId);
+    var dropdown = document.getElementById(dropdownId);
+    if (!input || !dropdown) return;
+
+    input.addEventListener('input', function() {
+        var val = this.value.trim().toLowerCase();
+        dropdown.innerHTML = '';
+        if (val.length < 1) { dropdown.style.display = 'none'; return; }
+        var matches = dataList.filter(function(item) {
+            return item.toLowerCase().includes(val);
+        }).slice(0, 10);
+        if (!matches.length) { dropdown.style.display = 'none'; return; }
+        matches.forEach(function(item) {
+            var div = document.createElement('div');
+            div.className = 'autocomplete-item';
+            div.textContent = item;
+            div.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                // 품번만 추출 (품번 / 품명 형식)
+                input.value = item.split(' / ')[0];
+                dropdown.style.display = 'none';
+            });
+            dropdown.appendChild(div);
+        });
+        dropdown.style.display = 'block';
+    });
+    input.addEventListener('blur', function() {
+        setTimeout(function() { dropdown.style.display = 'none'; }, 150);
+    });
+    input.addEventListener('focus', function() {
+        if (this.value.trim().length >= 1) this.dispatchEvent(new Event('input'));
+    });
+}
+
+// ─── 다중 자동완성 ───
+function setupMultiAutocomplete(inputId, dropdownId, tagContainerId, paramName, dataList, isObject) {
+    var input = document.getElementById(inputId);
+    var dropdown = document.getElementById(dropdownId);
+    var tagContainer = document.getElementById(tagContainerId);
+    if (!input || !dropdown || !tagContainer) return;
+
+    // 기존 선택값 복원
+    var selected = selectedFilters[paramName] || [];
+    selected.forEach(function(val) {
+        var label = val;
+        if (isObject) {
+            var found = dataList.find(function(d) { return d.value === val; });
+            label = found ? found.label : statusLabels[val] || val;
+        }
+        addTag(tagContainer, paramName, val, label);
+    });
+
+    input.addEventListener('input', function() {
+        var val = this.value.trim().toLowerCase();
+        dropdown.innerHTML = '';
+        if (val.length < 1 && !isObject) { dropdown.style.display = 'none'; return; }
+
+        var items = isObject ? dataList : dataList.map(function(d) { return {label: d, value: d}; });
+        var matches = items.filter(function(item) {
+            if (val.length > 0 && !item.label.toLowerCase().includes(val)) return false;
+            // 이미 선택된 것 제외 (status는 value 기준 중복 제거)
+            var hiddenInputs = tagContainer.querySelectorAll('input[type=hidden]');
+            for (var i = 0; i < hiddenInputs.length; i++) {
+                if (hiddenInputs[i].value === item.value) return false;
+            }
+            return true;
+        }).slice(0, 10);
+
+        if (!matches.length) { dropdown.style.display = 'none'; return; }
+        matches.forEach(function(item) {
+            var div = document.createElement('div');
+            div.className = 'autocomplete-item';
+            div.textContent = item.label;
+            div.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                addTag(tagContainer, paramName, item.value, item.label);
+                input.value = '';
+                dropdown.style.display = 'none';
+            });
+            dropdown.appendChild(div);
+        });
+        dropdown.style.display = 'block';
+    });
+
+    input.addEventListener('blur', function() {
+        setTimeout(function() { dropdown.style.display = 'none'; }, 150);
+    });
+    input.addEventListener('focus', function() {
+        this.dispatchEvent(new Event('input'));
+    });
+}
+
+function addTag(container, paramName, value, label) {
+    // 중복 방지
+    var existing = container.querySelectorAll('input[type=hidden]');
+    for (var i = 0; i < existing.length; i++) {
+        if (existing[i].value === value) return;
+    }
+    var tag = document.createElement('span');
+    tag.className = 'filter-tag';
+    tag.innerHTML = label + ' <span class="tag-remove">&times;</span>';
+    var hidden = document.createElement('input');
+    hidden.type = 'hidden';
+    hidden.name = paramName;
+    hidden.value = value;
+    tag.appendChild(hidden);
+    tag.querySelector('.tag-remove').addEventListener('click', function() {
+        tag.remove();
+    });
+    container.appendChild(tag);
+}
+
+// 초기화
+setupSingleAutocomplete('acPartNo', 'acPartNoDD', acData.partNos);
+setupMultiAutocomplete('acGrade', 'acGradeDD', 'tagGrade', 'grade', acData.grades, false);
+setupMultiAutocomplete('acMaterial', 'acMaterialDD', 'tagMaterial', 'material_type', acData.materials, false);
+setupMultiAutocomplete('acItemGroup', 'acItemGroupDD', 'tagItemGroup', 'item_group', acData.itemGroups, false);
+setupMultiAutocomplete('acStatus', 'acStatusDD', 'tagStatus', 'status', acData.statuses, true);
+
+// ─── 체크박스 전체선택 ───
+document.getElementById('checkAll').addEventListener('change', function() {
+    document.querySelectorAll('.mold-check').forEach(function(cb) {
+        cb.checked = this.checked;
+    }.bind(this));
+});
+
+// ─── 엑셀 다운로드 (선택 건) ───
+function downloadExcel() {
+    var checked = document.querySelectorAll('.mold-check:checked');
+    var url = '{% url "material:mold_mt_excel" %}';
+    if (checked.length > 0) {
+        var ids = [];
+        checked.forEach(function(cb) { ids.push(cb.value); });
+        url += '?ids=' + ids.join(',');
+    }
+    window.location.href = url;
+}
+
+// ─── Row click -> detail modal ───
 document.querySelectorAll('.clickable-row').forEach(row => {
     row.addEventListener('click', function() {
         const pk = this.dataset.pk;
@@ -526,11 +724,10 @@ document.querySelectorAll('.clickable-row').forEach(row => {
     });
 });
 
-// MT Complete
+// ─── MT Complete ───
 function openMTComplete(pk, partNo) {
     document.getElementById('mt_mold_id').value = pk;
     document.getElementById('mt_part_no_display').value = partNo;
-    // Set default date to today
     const today = new Date().toISOString().split('T')[0];
     document.querySelector('#mtCompleteForm [name="mt_date"]').value = today;
     new bootstrap.Modal(document.getElementById('mtCompleteModal')).show();
