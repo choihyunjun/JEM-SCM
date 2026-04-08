@@ -186,7 +186,7 @@
         </div>
         <!-- 2행: 토글 버튼 필터 (행별 정렬) -->
         <div class="filter-row">
-            <span class="filter-label">등급</span>
+            <span class="filter-label">구분</span>
             <div class="filter-btn-group">
                 {% for g in grade_list %}
                 <label class="filter-toggle {% if g in grades %}active{% endif %}">
@@ -244,7 +244,7 @@
                         <th class="sortable" data-col="2">기종 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th class="sortable" data-col="3">부품번호 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th>금형명</th>
-                        <th class="sortable" data-col="5">등급 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
+                        <th class="sortable" data-col="5">구분 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th>재료</th>
                         <th>보증</th>
                         <th class="sortable" data-col="8">누적숏트 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
@@ -426,14 +426,11 @@
                             <input type="text" name="mold_name" class="form-control form-control-sm" placeholder="금형 이름">
                         </div>
                         <div class="col-4 mb-2">
-                            <label class="form-label small fw-bold mb-1">등급</label>
+                            <label class="form-label small fw-bold mb-1">구분</label>
                             <select name="grade" class="form-select form-select-sm">
                                 <option value="">-</option>
-                                <option value="A">A</option>
-                                <option value="B">B</option>
-                                <option value="C">C</option>
-                                <option value="D">D</option>
-                                <option value="E">E</option>
+                                <option value="A">A (MT 50,000)</option>
+                                <option value="B">B (MT 30,000)</option>
                             </select>
                         </div>
                         <div class="col-4 mb-2">
@@ -481,7 +478,7 @@
             <div class="modal-body">
                 <div class="alert alert-info small mb-2">
                     <strong>엑셀 형식 (1행 헤더):</strong><br>
-                    <code>기종 | 부품번호 | 금형명 | 등급 | 보증수량 | 누적숏트 | 이전MT | MT기준</code>
+                    <code>기종 | 부품번호 | 금형명 | 구분(A/B) | 보증수량 | 누적숏트 | 이전MT | MT기준</code>
                 </div>
                 <table class="table table-sm table-bordered small mb-2" style="font-size:0.75rem;">
                     <thead class="table-light">
@@ -491,7 +488,7 @@
                         <tr><td>A</td><td>기종</td><td>기종(전체)</td></tr>
                         <tr><td>B</td><td>부품번호</td><td>필수</td></tr>
                         <tr><td>C</td><td>금형명</td><td>금형 이름</td></tr>
-                        <tr><td>D</td><td>등급</td><td>A~E</td></tr>
+                        <tr><td>D</td><td>구분</td><td>A 또는 B</td></tr>
                         <tr><td>E</td><td>보증수량</td><td>보증수명(숏트)</td></tr>
                         <tr><td>F</td><td>누적숏트</td><td>현재까지 총 숏트수</td></tr>
                         <tr><td>G</td><td>이전MT</td><td>최근 MT시점 누적숏트</td></tr>
@@ -712,7 +709,7 @@ document.querySelectorAll('.clickable-row').forEach(row => {
                             <tr><th>부품번호</th><td>${data.part_no}</td><th>금형명</th><td>${data.mold_name}</td></tr>
                             <tr><th>기종(전체)</th><td>${data.item_group || '-'}</td><th>기종(세부)</th><td>${data.item_group_detail || '-'}</td></tr>
                             <tr><th>이관일자</th><td>${data.transfer_date || '-'}</td><th>이관처</th><td>${data.transfer_from || '-'}</td></tr>
-                            <tr><th>재료구분</th><td>${data.material_type || '-'}</td><th>등급</th><td>${data.grade || '-'}</td></tr>
+                            <tr><th>재료구분</th><td>${data.material_type || '-'}</td><th>구분</th><td>${data.grade || '-'}</td></tr>
                             <tr><th>C/V수</th><td>${data.cv_count}</td><th>보증수명</th><td>${data.guarantee_shots.toLocaleString()}</td></tr>
                             <tr><th>누적숏트</th><td class="fw-bold">${data.total_shots.toLocaleString()}</td><th>잔량</th><td class="${data.remaining_shots < 0 ? 'text-danger fw-bold' : ''}">${data.remaining_shots.toLocaleString()}</td></tr>
                             <tr><th>MT주기</th><td>${data.mt_interval.toLocaleString()}</td><th>최근MT 이후</th><td>${data.shots_since_last_mt.toLocaleString()}</td></tr>
@@ -743,11 +740,11 @@ document.querySelectorAll('.clickable-row').forEach(row => {
                                 </tr>
                                 <tr>
                                     <th>재료구분</th><td><input type="text" class="form-control form-control-sm" name="material_type" value="${data.material_type || ''}"></td>
-                                    <th>등급</th>
+                                    <th>구분</th>
                                     <td>
                                         <select class="form-select form-select-sm" name="grade">
                                             <option value="">-</option>
-                                            ${['A','B','C','D','E'].map(g => '<option value="'+g+'"'+(data.grade===g?' selected':'')+'>'+g+'</option>').join('')}
+                                            ${['A','B'].map(g => '<option value="'+g+'"'+(data.grade===g?' selected':'')+'>'+g+'</option>').join('')}
                                         </select>
                                     </td>
                                 </tr>

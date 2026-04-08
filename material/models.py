@@ -1126,14 +1126,8 @@ class MoldMaster(models.Model):
 
     @property
     def mt_interval(self):
-        """MT 주기 (기준숏트수)"""
-        if self.material_type and self.grade:
-            try:
-                setting = MoldMTSetting.objects.get(material_type=self.material_type)
-                return setting.get_interval(self.grade)
-            except MoldMTSetting.DoesNotExist:
-                pass
-        return 30000
+        """MT 주기 (기준숏트수): A=50,000 / B=30,000"""
+        return {'A': 50000, 'B': 30000}.get(self.grade.upper(), 30000) if self.grade else 30000
 
     @property
     def mt_progress_pct(self):

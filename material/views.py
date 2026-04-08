@@ -8170,15 +8170,10 @@ def mold_mt_dashboard(request):
     import json as _json
     from django.db.models import Sum, Value, IntegerField
     from django.db.models.functions import Coalesce
-    from .models import MoldMaster as MoldMasterModel, MoldMTSetting
+    from .models import MoldMaster as MoldMasterModel
 
-    # MT 기준 설정을 미리 dict로 캐싱 (DB 조회 1회)
-    mt_settings_cache = {}
-    for s in MoldMTSetting.objects.all():
-        mt_settings_cache[s.material_type] = {
-            'a': s.grade_a, 'b': s.grade_b, 'c': s.grade_c,
-            'd': s.grade_d, 'e': s.grade_e,
-        }
+    # MT 기준: A=50,000 / B=30,000 고정
+    MT_INTERVAL_MAP = {'A': 50000, 'B': 30000}
 
     # annotate로 월별 숏트 합계를 DB에서 한번에 계산
     qs = MoldMasterModel.objects.filter(is_active=True).annotate(
@@ -8209,12 +8204,8 @@ def mold_mt_dashboard(request):
         m.c_remaining = m.guarantee_shots - m.c_total_shots
         m.c_over_guarantee = m.c_total_shots > m.guarantee_shots
 
-        # MT interval (캐시에서 조회)
-        interval = 30000
-        if m.material_type and m.grade:
-            setting = mt_settings_cache.get(m.material_type)
-            if setting:
-                interval = setting.get(m.grade.lower(), 30000)
+        # MT interval: A=50,000 / B=30,000
+        interval = MT_INTERVAL_MAP.get(m.grade.upper(), 30000) if m.grade else 30000
         m.c_mt_interval = interval
 
         shots_since = m.c_total_shots - m.last_mt_shots
