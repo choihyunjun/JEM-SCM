@@ -7495,141 +7495,52 @@ def api_molding_machines(request):
 
 
 # =============================================================================
-# 성형 가동률 대시보드 (요약)
+# 생산현장관리 메인 페이지
 # =============================================================================
 @login_required
 @wms_permission_required('can_wms_stock_view')
-def molding_dashboard(request):
-    """성형 가동률 대시보드 - 핵심 KPI 요약"""
-    from .models import (
-        MoldingMachine, MoldingDailyRecord, MoldingLossDetail,
-        MoldingWorkSetting, MOLDING_MGMT_LOSS
-    )
-    from collections import defaultdict
-    from django.db.models import Sum, Count
-    import json
-    import calendar
-    from datetime import date, timedelta
+def production_main(request):
+    """생산현장관리 메인 페이지 - 바로가기 + 현황 요약"""
+    from .models import MoldMaster, MoldingMachine, MoldingDailyRecord, MoldingWorkSetting
+    from django.db.models import Sum
 
     now = timezone.localtime()
     today = now.date()
     year = now.year
     month = now.month
 
-    # ─── 당월 레코드 ───
-    records = list(MoldingDailyRecord.objects.filter(
-        date__year=year, date__month=month
-    ).select_related('machine').prefetch_related('loss_details'))
+    # 성형 요약
+    molding_records = MoldingDailyRecord.objects.filter(date__year=year, date__month=month)
+    total_base = molding_records.aggregate(t=Sum('base_minutes'))['t'] or 0
+    total_operating = molding_records.aggregate(t=Sum('operating_minutes'))['t'] or 0
+    molding_util = round(total_operating / total_base * 100, 1) if total_base else 0
+    molding_machine_count = MoldingMachine.objects.filter(is_active=True).count()
+    molding_today_count = molding_records.filter(date=today, status='가동').values('machine').distinct().count()
 
-    setting = MoldingWorkSetting.get_setting(year, month)
-    all_machines = MoldingMachine.objects.filter(is_active=True)
-    machine_count = all_machines.count()
-
-    # ─── KPI 1: 설비가동률 ───
-    total_base = sum(r.base_minutes for r in records) or 1
-    total_operating = sum(r.operating_minutes for r in records)
-    kpi_utilization = round(total_operating / total_base * 100, 1) if total_base else 0
-
-    # ─── KPI 2: 시간가동률 ───
-    work_per_machine = setting.work_days * (setting.day_shift_minutes + setting.night_shift_minutes)
-    total_capacity = machine_count * work_per_machine
-    kpi_time_rate = round(total_operating / total_capacity * 100, 1) if total_capacity else 0
-
-    # ─── KPI 3: 유실 현황 ───
-    total_loss = sum(r.loss_minutes for r in records)
-    # 관리유실 제외한 실유실
-    mgmt_loss = MoldingLossDetail.objects.filter(
-        record__date__year=year, record__date__month=month,
-        category__in=MOLDING_MGMT_LOSS
-    ).aggregate(t=Sum('minutes'))['t'] or 0
-    actual_loss = total_loss - mgmt_loss
-
-    # ─── KPI 4: 금일 정지 건수 vs 전일 ───
-    today_stops = MoldingDailyRecord.objects.filter(
-        date=today, status='비가동'
-    ).count()
-    today_loss_records = MoldingLossDetail.objects.filter(
-        record__date=today
-    ).count()
-    yesterday = today - timedelta(days=1)
-    yesterday_loss_records = MoldingLossDetail.objects.filter(
-        record__date=yesterday
-    ).count()
-
-    # ─── 톤수별 가동률 테이블 ───
-    tonnage_data = defaultdict(lambda: {'total': 0, 'active': 0, 'base': 0, 'operating': 0, 'work': 0})
-    # 보유대수
-    for m in all_machines:
-        tonnage_data[m.tonnage]['total'] += 1
-    # 가동대수 + 가동률
-    active_machines = set()
-    for r in records:
-        t = r.machine.tonnage
-        tonnage_data[t]['base'] += r.base_minutes
-        tonnage_data[t]['operating'] += r.operating_minutes
-        tonnage_data[t]['work'] += r.work_minutes
-        active_machines.add((t, r.machine.pk))
-    for (t, _) in active_machines:
-        tonnage_data[t]['active'] = len([x for x in active_machines if x[0] == t])
-
-    tonnage_table = []
-    for t in sorted(tonnage_data.keys()):
-        d = tonnage_data[t]
-        util_rate = round(d['operating'] / d['base'] * 100, 1) if d['base'] else 0
-        cap = d['total'] * work_per_machine
-        time_rate = round(d['operating'] / cap * 100, 1) if cap else 0
-        tonnage_table.append({
-            'tonnage': f"{t}T",
-            'total': d['total'],
-            'active': d['active'],
-            'util_rate': util_rate,
-            'time_rate': time_rate,
-        })
-
-    # ─── 유실사유 TOP 5 ───
-    loss_details = MoldingLossDetail.objects.filter(
-        record__date__year=year, record__date__month=month
-    ).exclude(category__in=MOLDING_MGMT_LOSS).values('category').annotate(
-        total=Sum('minutes')
-    ).order_by('-total')[:5]
-
-    loss_total = sum(d['total'] for d in loss_details) or 1
-    loss_top5 = [{
-        'category': d['category'],
-        'minutes': d['total'],
-        'pct': round(d['total'] / loss_total * 100)
-    } for d in loss_details]
-
-    # ─── 호기별 금일 현황 (가동/비가동) ───
-    today_records = MoldingDailyRecord.objects.filter(
-        date=today
-    ).select_related('machine').order_by('machine__code')
-
-    machine_today = []
-    for r in today_records:
-        machine_today.append({
-            'code': r.machine.code,
-            'tonnage': r.machine.tonnage,
-            'status': r.status,
-            'shift': r.shift,
-            'qty': r.product_qty,
-            'util': r.utilization_rate or 0,
-        })
+    # 금형 요약
+    mold_total = MoldMaster.objects.filter(is_active=True).count()
+    # MT 필요 건수 (annotate 사용)
+    from django.db.models.functions import Coalesce
+    from django.db.models import Value, IntegerField
+    molds_qs = MoldMaster.objects.filter(is_active=True).annotate(
+        _ms=Coalesce(Sum('shot_records__shots'), Value(0), output_field=IntegerField())
+    )
+    mt_need = 0
+    for m in molds_qs:
+        total = m.total_shots_prev + m._ms
+        since_mt = total - m.last_mt_shots
+        if m.mt_interval > 0 and since_mt >= m.mt_interval:
+            mt_need += 1
 
     context = {
-        'year': year, 'month': month,
-        'kpi_utilization': kpi_utilization,
-        'kpi_time_rate': kpi_time_rate,
-        'kpi_loss_minutes': actual_loss,
-        'kpi_today_stops': today_loss_records,
-        'kpi_yesterday_stops': yesterday_loss_records,
-        'tonnage_table': tonnage_table,
-        'loss_top5': loss_top5,
-        'machine_today': json.dumps(machine_today, ensure_ascii=False),
-        'machine_count': machine_count,
-        'setting': setting,
+        'year': year, 'month': month, 'today': today,
+        'molding_util': molding_util,
+        'molding_machine_count': molding_machine_count,
+        'molding_today_count': molding_today_count,
+        'mold_total': mold_total,
+        'mt_need': mt_need,
     }
-    return render(request, 'material/molding_dashboard.html', context)
+    return render(request, 'material/production_main.html', context)
 
 
 # =============================================================================
