@@ -356,9 +356,47 @@
         </div>
     </div>
 
+    <!-- Machine Detail Modal -->
+    <div class="modal fade" id="machineDetailModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header py-2" style="background:linear-gradient(135deg,#742a2a,#9b2c2c);color:#fff;">
+                    <h6 class="modal-title fw-bold mb-0">
+                        <i class="bi bi-gear me-2"></i><span id="machineDetailTitle"></span>
+                    </h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <div class="px-3 py-2 bg-light border-bottom d-flex justify-content-between">
+                        <span class="text-muted small fw-bold">품번별 생산수량</span>
+                        <span class="badge bg-danger" id="machineDetailCount">0건</span>
+                    </div>
+                    <div style="max-height:450px;overflow-y:auto;">
+                        <table class="table table-sm table-hover mb-0" style="font-size:0.8rem;color:#333;">
+                            <thead class="table-light sticky-top">
+                                <tr style="color:#555;">
+                                    <th style="width:35px;" class="text-center">#</th>
+                                    <th style="width:130px;">품번</th>
+                                    <th>품명</th>
+                                    <th class="text-end" style="width:100px;">수량</th>
+                                    <th class="text-end" style="width:55px;">비율</th>
+                                </tr>
+                            </thead>
+                            <tbody id="machineDetailBody"></tbody>
+                        </table>
+                    </div>
+                    <div class="px-3 py-2 border-top d-flex justify-content-between fw-bold" style="font-size:0.85rem;background:#f0f4f8;color:#333;">
+                        <span>합계</span>
+                        <span id="machineDetailTotal">0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 5. 호기별 가동일수 -->
     <div class="chart-card">
-        <div class="chart-title"><i class="bi bi-calendar-check"></i>호기별 가동일수 (TOP 15)</div>
+        <div class="chart-title"><i class="bi bi-calendar-check"></i>호기별 가동일수 (TOP 15) <small class="text-muted" style="font-size:0.7rem;">클릭하여 생산 상세</small></div>
         <div class="chart-container">
             <canvas id="chartMachineDays"></canvas>
         </div>
@@ -416,6 +454,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const rankTopRates    = {{ ranking_top_rates|safe }};
     const machineDaysLabels = {{ machine_days_labels|safe }};
     const machineDaysValues = {{ machine_days_values|safe }};
+    const machineDetailData = {{ machine_detail_data|safe }};
     const monthlyLabels      = {{ monthly_labels|safe }};
     const monthlyUtilization = {{ monthly_utilization|safe }};
     const monthlyTimeRate    = {{ monthly_time_rate|safe }};
@@ -669,6 +708,34 @@ document.addEventListener('DOMContentLoaded', function() {
         new bootstrap.Modal(document.getElementById('groupDetailModal')).show();
     }
 
+    function showMachineDetail(code) {
+        document.getElementById('machineDetailTitle').textContent = code + ' 생산 상세';
+        var items = machineDetailData[code] || [];
+        var tbody = document.getElementById('machineDetailBody');
+        document.getElementById('machineDetailCount').textContent = items.length + '건';
+
+        if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">생산 데이터 없음</td></tr>';
+            document.getElementById('machineDetailTotal').textContent = '0';
+        } else {
+            var total = items.reduce(function(s, it) { return s + it.qty; }, 0);
+            tbody.innerHTML = items.map(function(it, i) {
+                var pno = it.name.split('(')[0].trim();
+                var pname = it.name.includes('(') ? it.name.substring(it.name.indexOf('(') + 1).replace(')', '') : '';
+                var pct = total > 0 ? (it.qty / total * 100).toFixed(1) : 0;
+                return '<tr>' +
+                    '<td class="text-center">' + (i+1) + '</td>' +
+                    '<td>' + pno + '</td>' +
+                    '<td>' + pname + '</td>' +
+                    '<td class="text-end fw-bold">' + it.qty.toLocaleString() + '</td>' +
+                    '<td class="text-end">' + pct + '%</td>' +
+                    '</tr>';
+            }).join('');
+            document.getElementById('machineDetailTotal').textContent = total.toLocaleString() + ' EA';
+        }
+        new bootstrap.Modal(document.getElementById('machineDetailModal')).show();
+    }
+
     // ─── Chart 5: 호기별 가동일수 ───
     const daysColors = machineDaysValues.map((v, i) => {
         var maxVal = Math.max(...machineDaysValues);
@@ -691,11 +758,18 @@ document.addEventListener('DOMContentLoaded', function() {
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            onClick: function(e, elements) {
+                if (elements.length > 0) {
+                    var idx = elements[0].index;
+                    var code = machineDaysLabels[idx];
+                    showMachineDetail(code);
+                }
+            },
             plugins: {
                 legend: { display: false },
                 tooltip: {
                     callbacks: {
-                        label: ctx => ctx.parsed.y + '일'
+                        label: ctx => ctx.parsed.y + '일 (클릭하여 생산 상세)'
                     }
                 },
                 datalabels: {

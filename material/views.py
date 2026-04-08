@@ -7756,17 +7756,37 @@ def molding_analytics(request):
         items = sorted(part_group_detail[grp].items(), key=lambda x: -x[1])[:20]
         group_detail_data[grp] = [{'name': k, 'qty': v} for k, v in items]
 
-    # ─── 차트 5: 호기별 가동일수 TOP 15 ───
+    # ─── 차트 5: 호기별 가동일수 TOP 15 + 생산 상세 ───
     machine_days = defaultdict(set)
+    machine_production = defaultdict(lambda: defaultdict(int))  # {code: {part_no: qty}}
     for r in records_list:
         if r.status == '가동':
             machine_days[r.machine.code].add(r.date)
+        # 호기별 생산 상세 집계
+        if r.product_part_no:
+            for m in _re4.finditer(r'([\w\-]+)\s*:\s*([\d,]+)', r.product_part_no):
+                pno = m.group(1).strip()
+                qty = int(m.group(2).replace(',', ''))
+                machine_production[r.machine.code][pno] += qty
+
     machine_days_list = sorted(
         [{'code': code, 'days': len(dates)} for code, dates in machine_days.items()],
         key=lambda x: -x['days']
     )[:15]
     machine_days_labels = [m['code'] for m in machine_days_list]
     machine_days_values = [m['days'] for m in machine_days_list]
+
+    # 호기별 생산 상세 데이터 (JS용)
+    machine_detail_data = {}
+    for code, parts in machine_production.items():
+        items = []
+        for pno, qty in sorted(parts.items(), key=lambda x: -x[1]):
+            name = pno
+            if pno in part_cache:
+                p = part_cache[pno]
+                name = f"{pno} ({p.part_name})" if hasattr(p, 'part_name') and p.part_name else pno
+            items.append({'name': name, 'qty': qty})
+        machine_detail_data[code] = items
 
     # ─── 차트 6: 월별 트렌드 최근 6개월 ───
     current_date = date(year, month, 1)
@@ -7841,9 +7861,10 @@ def molding_analytics(request):
         'ranking_top_labels': json.dumps(ranking_top_labels, ensure_ascii=False),
         'ranking_top_rates': json.dumps(ranking_top_rates),
         'group_detail_data': json.dumps(group_detail_data, ensure_ascii=False),
-        # Chart 5: Shift comparison
+        # Chart 5: Machine days + detail
         'machine_days_labels': json.dumps(machine_days_labels, ensure_ascii=False),
         'machine_days_values': json.dumps(machine_days_values),
+        'machine_detail_data': json.dumps(machine_detail_data, ensure_ascii=False),
         # Chart 6: Monthly trend
         'monthly_labels': json.dumps(monthly_labels, ensure_ascii=False),
         'monthly_utilization': json.dumps(monthly_utilization),
