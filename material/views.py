@@ -8182,16 +8182,20 @@ def mold_mt_upload(request):
 
     try:
         wb = openpyxl.load_workbook(file, data_only=True)
-        ws = wb.active
+        # '등급' 시트 찾기 (없으면 active)
+        ws = wb['등급'] if '등급' in wb.sheetnames else wb.active
 
+        # 헤더는 3행 (등급 시트 구조)
         headers = []
-        for cell in ws[1]:
-            headers.append(str(cell.value or '').strip())
+        for cell in ws[3]:
+            h = str(cell.value or '').strip().replace('\n', '')
+            headers.append(h)
 
         created = 0
         updated = 0
 
-        for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        # 데이터는 5행부터
+        for row_idx, row in enumerate(ws.iter_rows(min_row=5, values_only=True), start=5):
             row_dict = {}
             for i, val in enumerate(row):
                 if i < len(headers):
@@ -8219,11 +8223,18 @@ def mold_mt_upload(request):
             except (ValueError, TypeError):
                 cv_count = 1
 
+            # 기종: 등급 시트에서 3열=전체, 4열=세부 (헤더가 '기종'으로 합쳐져 있을 수 있음)
+            item_group = str(row_dict.get('기종', '') or row_dict.get('기종(전체)', '') or '').strip()
+            # 세부는 4열 — 헤더가 비어있으면 인덱스로 직접 접근
+            item_detail = ''
+            if len(row) > 3:
+                item_detail = str(row[3] or '').strip() if row[3] else ''
+
             obj, is_created = MoldMasterModel.objects.update_or_create(
                 part_no=part_no,
                 defaults={
-                    'item_group': str(row_dict.get('기종(전체)', '') or '').strip(),
-                    'item_group_detail': str(row_dict.get('기종(세부)', '') or '').strip(),
+                    'item_group': item_group,
+                    'item_group_detail': item_detail,
                     'mold_name': str(row_dict.get('금형명', '') or '').strip(),
                     'transfer_date': str(row_dict.get('이관일자', '') or '').strip(),
                     'transfer_from': str(row_dict.get('이관처', '') or '').strip(),
@@ -8240,10 +8251,15 @@ def mold_mt_upload(request):
             else:
                 updated += 1
 
-            # 2026년 월별 숏트수
+            # 2026년 월별 숏트수 (헤더: '2026\n1월' 또는 '20261월' 또는 '1월')
             for month_num in range(1, 13):
-                month_key = f'{month_num}월'
-                shots_val = row_dict.get(month_key, 0)
+                shots_val = None
+                for key in [f'2026{month_num}월', f'{month_num}월', f'2026\n{month_num}월']:
+                    if key in row_dict and row_dict[key]:
+                        shots_val = row_dict[key]
+                        break
+                if shots_val is None:
+                    shots_val = 0
                 try:
                     shots_val = int(shots_val) if shots_val else 0
                 except (ValueError, TypeError):
