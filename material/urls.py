@@ -147,4 +147,10 @@ urlpatterns = [
     path('api/mold/mt/<int:pk>/', views.api_mold_mt_detail, name='api_mold_mt_detail'),
     path('api/mold/mt/<int:pk>/edit/', views.api_mold_mt_edit, name='api_mold_mt_edit'),
     path('mold/mt/erp-sync/', views.mold_mt_erp_sync, name='mold_mt_erp_sync'),
+
+    # 금형 수리 의뢰
+    path('mold/repair/', views.mold_repair_list, name='mold_repair_list'),
+    path('mold/repair/create/', views.mold_repair_create, name='mold_repair_create'),
+    path('mold/repair/<int:pk>/update/', views.mold_repair_update, name='mold_repair_update'),
+    path('mold/repair/<int:pk>/detail/', views.mold_repair_detail, name='mold_repair_detail'),
 ]

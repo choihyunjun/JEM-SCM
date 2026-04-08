@@ -1191,3 +1191,110 @@ class MoldMTLog(models.Model):
 
     def __str__(self):
         return f"{self.mold.part_no} MT {self.mt_date}"
+
+
+# 금형 수리유형 선택지
+MOLD_REPAIR_TYPES = [
+    ('BURR', 'BURR'), ('미각기', '미각기'), ('가즈리', '가즈리'),
+    ('제품박힘', '제품박힘'), ('놀림', '놀림'), ('파손', '파손'),
+    ('설변개선', '설변개선'), ('멘트요정', '멘트요정'), ('안정화', '안정화'),
+    ('기타', '기타'),
+]
+
+MOLD_REPAIR_STATUS = [
+    ('REQUESTED', '의뢰등록'),
+    ('RECEIVED', '접수'),
+    ('IN_PROGRESS', '수리중'),
+    ('COMPLETED', '완료'),
+]
+
+MOLD_REPAIR_PRIORITY = [
+    ('A', 'A (긴급)'),
+    ('B', 'B (보통)'),
+    ('C', 'C (낮음)'),
+]
+
+
+class MoldRepairRequest(models.Model):
+    """금형 수리 의뢰 + 수리 이력 통합"""
+    # ─── 의뢰 정보 ───
+    mold = models.ForeignKey(MoldMaster, on_delete=models.CASCADE, related_name='repair_requests',
+                             null=True, blank=True)
+    part_no = models.CharField("품번", max_length=50, db_index=True)
+    mold_name = models.CharField("금형명", max_length=200, blank=True)
+    item_group = models.CharField("품목", max_length=50, blank=True)
+    priority = models.CharField("중요도", max_length=1, choices=MOLD_REPAIR_PRIORITY, default='B')
+    status = models.CharField("진행상태", max_length=20, choices=MOLD_REPAIR_STATUS, default='REQUESTED')
+
+    # 의뢰 내용
+    request_content = models.TextField("의뢰내용")
+    repair_types = models.CharField("수리유형", max_length=200, blank=True,
+                                    help_text="콤마 구분: BURR,미각기,파손 등")
+    requested_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                     related_name='mold_repair_requests', verbose_name="의뢰자")
+    requested_at = models.DateTimeField("의뢰일시", auto_now_add=True)
+
+    # ─── 일정 ───
+    received_date = models.DateField("접수일", null=True, blank=True)
+    repair_request_date = models.DateField("수리요청일", null=True, blank=True)
+    expected_date = models.DateField("완료예정일", null=True, blank=True)
+    completed_date = models.DateField("완료일", null=True, blank=True)
+
+    # ─── 수리 내용 (금형팀 입력) ───
+    repair_content = models.TextField("수리내용", blank=True)
+    repair_by = models.CharField("수리담당자", max_length=50, blank=True)
+
+    # 사내수리 (HR) - 각 공정별 시간
+    hr_milling = models.DecimalField("밀링", max_digits=5, decimal_places=1, default=0)
+    hr_lathe = models.DecimalField("선반", max_digits=5, decimal_places=1, default=0)
+    hr_grinding = models.DecimalField("연마", max_digits=5, decimal_places=1, default=0)
+    hr_welding = models.DecimalField("사내용접", max_digits=5, decimal_places=1, default=0)
+    hr_high_speed = models.DecimalField("고속가공기", max_digits=5, decimal_places=1, default=0)
+    hr_edm = models.DecimalField("방전", max_digits=5, decimal_places=1, default=0)
+    hr_wire = models.DecimalField("WIRE", max_digits=5, decimal_places=1, default=0)
+    hr_mt = models.DecimalField("M/T", max_digits=5, decimal_places=1, default=0)
+    hr_polishing = models.DecimalField("사상", max_digits=5, decimal_places=1, default=0)
+    hr_assembly = models.DecimalField("조립", max_digits=5, decimal_places=1, default=0)
+    hr_other = models.DecimalField("기타HR", max_digits=5, decimal_places=1, default=0)
+
+    # 외주금액 (원)
+    cost_welding = models.IntegerField("외주용접", default=0)
+    cost_tapping = models.IntegerField("탭핑", default=0)
+    cost_milpin = models.IntegerField("밀핀", default=0)
+    cost_purchase = models.IntegerField("구매품", default=0)
+    cost_outsource = models.IntegerField("외주가공", default=0)
+
+    # 기타
+    shot_count = models.IntegerField("SHOT수", default=0)
+    first_article = models.CharField("초물확인", max_length=20, blank=True)
+    ng_content = models.TextField("NG내용 및 비고", blank=True)
+
+    created_at = models.DateTimeField("등록일", auto_now_add=True)
+    updated_at = models.DateTimeField("수정일", auto_now=True)
+
+    class Meta:
+        verbose_name = "금형 수리 의뢰"
+        verbose_name_plural = "19. 금형 수리 의뢰"
+        ordering = ['-requested_at']
+
+    def __str__(self):
+        return f"[{self.get_status_display()}] {self.part_no} - {self.request_content[:30]}"
+
+    @property
+    def total_hr(self):
+        """사내수리 총 작업시간"""
+        return float(
+            self.hr_milling + self.hr_lathe + self.hr_grinding + self.hr_welding +
+            self.hr_high_speed + self.hr_edm + self.hr_wire + self.hr_mt +
+            self.hr_polishing + self.hr_assembly + self.hr_other
+        )
+
+    @property
+    def total_outsource_cost(self):
+        """외주 비용총액"""
+        return self.cost_welding + self.cost_tapping + self.cost_milpin + self.cost_purchase + self.cost_outsource
+
+    @property
+    def repair_type_list(self):
+        """수리유형 리스트"""
+        return [t.strip() for t in self.repair_types.split(',') if t.strip()] if self.repair_types else []

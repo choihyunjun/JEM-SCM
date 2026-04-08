@@ -8733,3 +8733,201 @@ def mold_mt_erp_sync(request):
     except Exception as e:
         logger.exception('금형 MT ERP 동기화 오류')
         return JsonResponse({'success': False, 'error': str(e)})
+
+
+# =============================================================================
+# 금형 수리 의뢰 / 이력
+# =============================================================================
+@login_required
+@wms_permission_required('can_wms_stock_view')
+def mold_repair_list(request):
+    """금형 수리 의뢰 목록"""
+    from .models import MoldRepairRequest, MOLD_REPAIR_STATUS
+    import json
+
+    status_filter = request.GET.get('status', '')
+    q = request.GET.get('q', '').strip()
+
+    qs = MoldRepairRequest.objects.all().select_related('mold', 'requested_by')
+    if status_filter:
+        qs = qs.filter(status=status_filter)
+    if q:
+        qs = qs.filter(Q(part_no__icontains=q) | Q(mold_name__icontains=q) | Q(request_content__icontains=q))
+
+    # 상태별 건수
+    from django.db.models import Count
+    status_counts = dict(MoldRepairRequest.objects.values_list('status').annotate(c=Count('id')).values_list('status', 'c'))
+    total_count = sum(status_counts.values())
+
+    paginator = Paginator(list(qs), 30)
+    page = request.GET.get('page', 1)
+    repairs = paginator.get_page(page)
+
+    context = {
+        'repairs': repairs,
+        'status_filter': status_filter,
+        'q': q,
+        'status_counts': status_counts,
+        'total_count': total_count,
+        'STATUS_CHOICES': MOLD_REPAIR_STATUS,
+    }
+    return render(request, 'material/mold_repair_list.html', context)
+
+
+@login_required
+@wms_permission_required('can_wms_stock_view')
+def mold_repair_create(request):
+    """금형 수리 의뢰 등록"""
+    from .models import MoldRepairRequest, MoldMaster
+    import json
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST만 허용'}, status=405)
+
+    part_no = request.POST.get('part_no', '').strip()
+    if not part_no:
+        return JsonResponse({'success': False, 'error': '품번을 입력해주세요.'})
+
+    # 금형 마스터 연결
+    mold = MoldMaster.objects.filter(part_no=part_no).first()
+
+    repair_types = request.POST.getlist('repair_types')
+
+    obj = MoldRepairRequest.objects.create(
+        mold=mold,
+        part_no=part_no,
+        mold_name=request.POST.get('mold_name', mold.mold_name if mold else '').strip(),
+        item_group=request.POST.get('item_group', mold.item_group if mold else '').strip(),
+        priority=request.POST.get('priority', 'B'),
+        request_content=request.POST.get('request_content', '').strip(),
+        repair_types=','.join(repair_types),
+        requested_by=request.user,
+    )
+    return JsonResponse({'success': True, 'message': f'수리의뢰 등록 완료 (#{obj.pk})', 'id': obj.pk})
+
+
+@login_required
+@wms_permission_required('can_wms_stock_view')
+def mold_repair_update(request, pk):
+    """금형 수리 의뢰 수정 (접수/수리/완료 처리 포함)"""
+    from .models import MoldRepairRequest
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST만 허용'}, status=405)
+
+    obj = get_object_or_404(MoldRepairRequest, pk=pk)
+
+    # 상태 변경
+    new_status = request.POST.get('status', '')
+    if new_status:
+        obj.status = new_status
+
+    # 일정
+    for field in ['received_date', 'repair_request_date', 'expected_date', 'completed_date']:
+        val = request.POST.get(field, '').strip()
+        if val:
+            setattr(obj, field, val)
+
+    # 수리 내용
+    repair_content = request.POST.get('repair_content', '').strip()
+    if repair_content:
+        obj.repair_content = repair_content
+    repair_by = request.POST.get('repair_by', '').strip()
+    if repair_by:
+        obj.repair_by = repair_by
+
+    # 수리유형
+    repair_types = request.POST.getlist('repair_types')
+    if repair_types:
+        obj.repair_types = ','.join(repair_types)
+
+    # 중요도
+    priority = request.POST.get('priority', '')
+    if priority:
+        obj.priority = priority
+
+    # 사내수리 HR
+    def safe_decimal(val):
+        try:
+            return float(val) if val else 0
+        except (ValueError, TypeError):
+            return 0
+
+    for hr_field in ['hr_milling', 'hr_lathe', 'hr_grinding', 'hr_welding', 'hr_high_speed',
+                     'hr_edm', 'hr_wire', 'hr_mt', 'hr_polishing', 'hr_assembly', 'hr_other']:
+        val = request.POST.get(hr_field, '')
+        if val != '':
+            setattr(obj, hr_field, safe_decimal(val))
+
+    # 외주금액
+    def safe_int(val):
+        try:
+            return int(val) if val else 0
+        except (ValueError, TypeError):
+            return 0
+
+    for cost_field in ['cost_welding', 'cost_tapping', 'cost_milpin', 'cost_purchase', 'cost_outsource']:
+        val = request.POST.get(cost_field, '')
+        if val != '':
+            setattr(obj, cost_field, safe_int(val))
+
+    # 기타
+    shot_count = request.POST.get('shot_count', '')
+    if shot_count != '':
+        obj.shot_count = safe_int(shot_count)
+    first_article = request.POST.get('first_article', '').strip()
+    if first_article:
+        obj.first_article = first_article
+    ng_content = request.POST.get('ng_content', '').strip()
+    if ng_content:
+        obj.ng_content = ng_content
+
+    obj.save()
+
+    status_display = obj.get_status_display()
+    return JsonResponse({'success': True, 'message': f'{obj.part_no} {status_display} 처리 완료'})
+
+
+@login_required
+@wms_permission_required('can_wms_stock_view')
+def mold_repair_detail(request, pk):
+    """금형 수리 의뢰 상세 JSON"""
+    from .models import MoldRepairRequest
+
+    obj = get_object_or_404(MoldRepairRequest, pk=pk)
+
+    data = {
+        'pk': obj.pk,
+        'part_no': obj.part_no,
+        'mold_name': obj.mold_name,
+        'item_group': obj.item_group,
+        'priority': obj.priority,
+        'priority_display': obj.get_priority_display(),
+        'status': obj.status,
+        'status_display': obj.get_status_display(),
+        'request_content': obj.request_content,
+        'repair_types': obj.repair_type_list,
+        'requested_by': obj.requested_by.get_full_name() or obj.requested_by.username if obj.requested_by else '-',
+        'requested_at': obj.requested_at.strftime('%Y-%m-%d %H:%M') if obj.requested_at else '',
+        'received_date': str(obj.received_date or ''),
+        'repair_request_date': str(obj.repair_request_date or ''),
+        'expected_date': str(obj.expected_date or ''),
+        'completed_date': str(obj.completed_date or ''),
+        'repair_content': obj.repair_content,
+        'repair_by': obj.repair_by,
+        'hr_milling': float(obj.hr_milling), 'hr_lathe': float(obj.hr_lathe),
+        'hr_grinding': float(obj.hr_grinding), 'hr_welding': float(obj.hr_welding),
+        'hr_high_speed': float(obj.hr_high_speed), 'hr_edm': float(obj.hr_edm),
+        'hr_wire': float(obj.hr_wire), 'hr_mt': float(obj.hr_mt),
+        'hr_polishing': float(obj.hr_polishing), 'hr_assembly': float(obj.hr_assembly),
+        'hr_other': float(obj.hr_other),
+        'total_hr': obj.total_hr,
+        'cost_welding': obj.cost_welding, 'cost_tapping': obj.cost_tapping,
+        'cost_milpin': obj.cost_milpin, 'cost_purchase': obj.cost_purchase,
+        'cost_outsource': obj.cost_outsource,
+        'total_outsource_cost': obj.total_outsource_cost,
+        'shot_count': obj.shot_count,
+        'first_article': obj.first_article,
+        'ng_content': obj.ng_content,
+    }
+    return JsonResponse(data)

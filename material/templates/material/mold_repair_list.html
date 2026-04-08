@@ -1,0 +1,359 @@
+{% extends 'material/production_base.html' %}
+{% load humanize %}
+
+{% block title %}금형 수리 의뢰{% endblock %}
+
+{% block production_content %}
+<style>
+    .repair-header {
+        background: linear-gradient(135deg, #553c9a 0%, #6b46c1 100%);
+        color: white; padding: 24px 28px; border-radius: 12px; margin-bottom: 24px;
+    }
+    .repair-header h2 { margin: 0; font-size: 1.5rem; font-weight: 700; }
+    .repair-header .subtitle { opacity: 0.8; font-size: 0.9rem; margin-top: 4px; }
+
+    .status-tab { display: flex; gap: 4px; margin-bottom: 16px; flex-wrap: wrap; }
+    .status-tab a {
+        padding: 6px 16px; border-radius: 20px; font-size: 0.78rem; font-weight: 600;
+        text-decoration: none; border: 1px solid #e2e8f0; color: #4a5568; background: #fff;
+        transition: all 0.15s;
+    }
+    .status-tab a:hover { border-color: #6b46c1; color: #6b46c1; }
+    .status-tab a.active { background: #6b46c1; color: #fff; border-color: #6b46c1; }
+
+    .repair-table { font-size: 0.78rem; }
+    .repair-table th { background: #f8f9fa; text-align: center; font-size: 0.72rem; font-weight: 600; white-space: nowrap; }
+    .repair-table td { vertical-align: middle; text-align: center; padding: 8px 6px; }
+    .repair-table tbody tr { cursor: pointer; }
+    .repair-table tbody tr:hover { background: #f0f4ff !important; }
+
+    .badge-requested { background: #bee3f8; color: #2a4365; }
+    .badge-received { background: #c6f6d5; color: #22543d; }
+    .badge-progress { background: #fefcbf; color: #744210; }
+    .badge-completed { background: #e2e8f0; color: #4a5568; }
+    .badge-priority-a { background: #fed7d7; color: #742a2a; }
+    .badge-priority-b { background: #fefcbf; color: #744210; }
+    .badge-priority-c { background: #e2e8f0; color: #4a5568; }
+
+    .modal-header-repair { background: linear-gradient(135deg, #553c9a 0%, #6b46c1 100%); color: white; }
+
+    .repair-form label { font-size: 0.8rem; font-weight: 600; color: #4a5568; }
+    .repair-type-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+    .repair-type-check { font-size: 0.78rem; }
+    .hr-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+    .hr-grid .form-group { display: flex; align-items: center; gap: 4px; }
+    .hr-grid .form-group label { font-size: 0.72rem; min-width: 55px; margin-bottom: 0; }
+    .hr-grid .form-group input { width: 70px; }
+    .cost-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .cost-grid .form-group { display: flex; align-items: center; gap: 4px; }
+    .cost-grid .form-group label { font-size: 0.72rem; min-width: 55px; margin-bottom: 0; }
+    .cost-grid .form-group input { width: 90px; }
+    .section-label { font-size: 0.82rem; font-weight: 700; color: #2d3748; border-bottom: 2px solid #e2e8f0; padding-bottom: 4px; margin: 12px 0 8px; }
+</style>
+
+<!-- Header -->
+<div class="repair-header d-flex justify-content-between align-items-center">
+    <div>
+        <h2><i class="bi bi-tools me-2"></i>금형 수리 의뢰</h2>
+        <div class="subtitle">수리 의뢰 등록 / 접수 / 수리 진행 / 완료 관리</div>
+    </div>
+    <button class="btn btn-sm btn-outline-light" onclick="openCreateModal()">
+        <i class="bi bi-plus-circle me-1"></i>수리의뢰 등록
+    </button>
+</div>
+
+<!-- Status Tabs -->
+<div class="status-tab">
+    <a href="{% url 'material:mold_repair_list' %}" class="{% if not status_filter %}active{% endif %}">전체 ({{ total_count }})</a>
+    {% for code, label in STATUS_CHOICES %}
+    <a href="?status={{ code }}" class="{% if status_filter == code %}active{% endif %}">{{ label }} ({{ status_counts|default_if_none:0 }})</a>
+    {% endfor %}
+</div>
+
+<!-- Search -->
+<div class="d-flex gap-2 mb-3">
+    <form method="get" class="d-flex gap-2">
+        {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
+        <input type="text" name="q" class="form-control form-control-sm" style="width:250px;" placeholder="품번 / 금형명 / 의뢰내용" value="{{ q }}">
+        <button class="btn btn-sm btn-primary"><i class="bi bi-search"></i></button>
+    </form>
+</div>
+
+<!-- Table -->
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-bordered repair-table mb-0">
+                <thead>
+                    <tr>
+                        <th style="width:40px">No</th>
+                        <th>상태</th>
+                        <th>중요도</th>
+                        <th>품번</th>
+                        <th>금형명</th>
+                        <th>품목</th>
+                        <th>수리유형</th>
+                        <th>의뢰내용</th>
+                        <th>의뢰자</th>
+                        <th>의뢰일</th>
+                        <th>완료예정</th>
+                        <th>완료일</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in repairs %}
+                    <tr onclick="openDetail({{ r.pk }})">
+                        <td class="text-muted">{{ forloop.counter0|add:repairs.start_index }}</td>
+                        <td>
+                            <span class="badge badge-status {% if r.status == 'REQUESTED' %}badge-requested{% elif r.status == 'RECEIVED' %}badge-received{% elif r.status == 'IN_PROGRESS' %}badge-progress{% else %}badge-completed{% endif %}" style="font-size:0.68rem;">
+                                {{ r.get_status_display }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge {% if r.priority == 'A' %}badge-priority-a{% elif r.priority == 'B' %}badge-priority-b{% else %}badge-priority-c{% endif %}" style="font-size:0.65rem;">{{ r.priority }}</span>
+                        </td>
+                        <td class="fw-bold text-primary">{{ r.part_no }}</td>
+                        <td class="text-start" style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ r.mold_name }}</td>
+                        <td>{{ r.item_group }}</td>
+                        <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ r.repair_types }}</td>
+                        <td class="text-start" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ r.request_content }}</td>
+                        <td>{% if r.requested_by %}{{ r.requested_by.get_full_name|default:r.requested_by.username }}{% endif %}</td>
+                        <td>{{ r.requested_at|date:"m/d" }}</td>
+                        <td>{% if r.expected_date %}{{ r.expected_date|date:"m/d" }}{% else %}-{% endif %}</td>
+                        <td>{% if r.completed_date %}{{ r.completed_date|date:"m/d" }}{% else %}-{% endif %}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="12" class="text-center text-muted py-5">등록된 수리 의뢰가 없습니다.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Pagination -->
+{% if repairs.has_other_pages %}
+<nav class="mt-3 d-flex justify-content-center">
+    <ul class="pagination pagination-sm">
+        {% if repairs.has_previous %}<li class="page-item"><a class="page-link" href="?page={{ repairs.previous_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if q %}&q={{ q }}{% endif %}">&laquo;</a></li>{% endif %}
+        {% for num in repairs.paginator.page_range %}
+            {% if repairs.number == num %}<li class="page-item active"><span class="page-link">{{ num }}</span></li>
+            {% elif num > repairs.number|add:'-5' and num < repairs.number|add:'5' %}<li class="page-item"><a class="page-link" href="?page={{ num }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if q %}&q={{ q }}{% endif %}">{{ num }}</a></li>{% endif %}
+        {% endfor %}
+        {% if repairs.has_next %}<li class="page-item"><a class="page-link" href="?page={{ repairs.next_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if q %}&q={{ q }}{% endif %}">&raquo;</a></li>{% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+<!-- Create Modal -->
+<div class="modal fade" id="createModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header modal-header-repair">
+                <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>수리의뢰 등록</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createForm">
+                    {% csrf_token %}
+                    <div class="row g-2">
+                        <div class="col-4">
+                            <label>품번 <span class="text-danger">*</span></label>
+                            <input type="text" name="part_no" class="form-control form-control-sm" required placeholder="품번 입력">
+                        </div>
+                        <div class="col-4">
+                            <label>금형명</label>
+                            <input type="text" name="mold_name" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-2">
+                            <label>품목</label>
+                            <input type="text" name="item_group" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-2">
+                            <label>중요도</label>
+                            <select name="priority" class="form-select form-select-sm">
+                                <option value="A">A (긴급)</option>
+                                <option value="B" selected>B (보통)</option>
+                                <option value="C">C (낮음)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <label>의뢰내용 <span class="text-danger">*</span></label>
+                        <textarea name="request_content" class="form-control form-control-sm" rows="3" required placeholder="수리 의뢰 내용을 입력하세요"></textarea>
+                    </div>
+                    <div class="section-label mt-3">수리유형</div>
+                    <div class="repair-type-grid">
+                        <label class="repair-type-check"><input type="checkbox" name="repair_types" value="BURR"> BURR</label>
+                        <label class="repair-type-check"><input type="checkbox" name="repair_types" value="미각기"> 미각기</label>
+                        <label class="repair-type-check"><input type="checkbox" name="repair_types" value="가즈리"> 가즈리</label>
+                        <label class="repair-type-check"><input type="checkbox" name="repair_types" value="제품박힘"> 제품박힘</label>
+                        <label class="repair-type-check"><input type="checkbox" name="repair_types" value="놀림"> 놀림</label>
+                        <label class="repair-type-check"><input type="checkbox" name="repair_types" value="파손"> 파손</label>
+                        <label class="repair-type-check"><input type="checkbox" name="repair_types" value="설변개선"> 설변개선</label>
+                        <label class="repair-type-check"><input type="checkbox" name="repair_types" value="멘트요정"> 멘트요정</label>
+                        <label class="repair-type-check"><input type="checkbox" name="repair_types" value="안정화"> 안정화</label>
+                        <label class="repair-type-check"><input type="checkbox" name="repair_types" value="기타"> 기타</label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="submitCreate()">
+                    <i class="bi bi-plus-circle me-1"></i>의뢰 등록
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Detail/Edit Modal -->
+<div class="modal fade" id="detailModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header modal-header-repair">
+                <h5 class="modal-title"><i class="bi bi-tools me-2"></i><span id="detailTitle">수리 상세</span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="detailBody">
+                <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function openCreateModal() {
+    document.getElementById('createForm').reset();
+    new bootstrap.Modal(document.getElementById('createModal')).show();
+}
+
+function submitCreate() {
+    var form = document.getElementById('createForm');
+    var formData = new FormData(form);
+    fetch('{% url "material:mold_repair_create" %}', { method: 'POST', body: formData })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) { alert(data.message); location.reload(); }
+        else { alert('오류: ' + data.error); }
+    })
+    .catch(err => alert('요청 실패: ' + err.message));
+}
+
+function openDetail(pk) {
+    var modal = new bootstrap.Modal(document.getElementById('detailModal'));
+    var body = document.getElementById('detailBody');
+    body.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>';
+    modal.show();
+
+    fetch('/wms/mold/repair/' + pk + '/detail/')
+    .then(r => r.json())
+    .then(d => {
+        var rtBadges = d.repair_types.map(t => '<span class="badge bg-secondary me-1" style="font-size:0.7rem;">' + t + '</span>').join('');
+        var statusClass = d.status === 'REQUESTED' ? 'badge-requested' : d.status === 'RECEIVED' ? 'badge-received' : d.status === 'IN_PROGRESS' ? 'badge-progress' : 'badge-completed';
+
+        document.getElementById('detailTitle').textContent = d.part_no + ' 수리 상세';
+
+        body.innerHTML = `
+            <form id="editForm">
+                <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+                <div class="row g-2 mb-3">
+                    <div class="col-md-8">
+                        <table class="table table-sm table-bordered" style="font-size:0.82rem;">
+                            <tr><th style="width:100px;background:#f7fafc;">품번</th><td>${d.part_no}</td><th style="width:100px;background:#f7fafc;">금형명</th><td>${d.mold_name}</td></tr>
+                            <tr><th style="background:#f7fafc;">품목</th><td>${d.item_group}</td><th style="background:#f7fafc;">의뢰자</th><td>${d.requested_by} (${d.requested_at})</td></tr>
+                            <tr><th style="background:#f7fafc;">의뢰내용</th><td colspan="3">${d.request_content}</td></tr>
+                            <tr><th style="background:#f7fafc;">수리유형</th><td colspan="3">${rtBadges || '-'}</td></tr>
+                        </table>
+                    </div>
+                    <div class="col-md-4">
+                        <table class="table table-sm table-bordered" style="font-size:0.82rem;">
+                            <tr><th style="background:#f7fafc;">상태</th><td>
+                                <select name="status" class="form-select form-select-sm">
+                                    <option value="REQUESTED" ${d.status==='REQUESTED'?'selected':''}>의뢰등록</option>
+                                    <option value="RECEIVED" ${d.status==='RECEIVED'?'selected':''}>접수</option>
+                                    <option value="IN_PROGRESS" ${d.status==='IN_PROGRESS'?'selected':''}>수리중</option>
+                                    <option value="COMPLETED" ${d.status==='COMPLETED'?'selected':''}>완료</option>
+                                </select>
+                            </td></tr>
+                            <tr><th style="background:#f7fafc;">중요도</th><td>
+                                <select name="priority" class="form-select form-select-sm">
+                                    <option value="A" ${d.priority==='A'?'selected':''}>A (긴급)</option>
+                                    <option value="B" ${d.priority==='B'?'selected':''}>B (보통)</option>
+                                    <option value="C" ${d.priority==='C'?'selected':''}>C (낮음)</option>
+                                </select>
+                            </td></tr>
+                            <tr><th style="background:#f7fafc;">접수일</th><td><input type="date" name="received_date" class="form-control form-control-sm" value="${d.received_date}"></td></tr>
+                            <tr><th style="background:#f7fafc;">수리요청일</th><td><input type="date" name="repair_request_date" class="form-control form-control-sm" value="${d.repair_request_date}"></td></tr>
+                            <tr><th style="background:#f7fafc;">완료예정</th><td><input type="date" name="expected_date" class="form-control form-control-sm" value="${d.expected_date}"></td></tr>
+                            <tr><th style="background:#f7fafc;">완료일</th><td><input type="date" name="completed_date" class="form-control form-control-sm" value="${d.completed_date}"></td></tr>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="section-label">수리내용</div>
+                <div class="row g-2 mb-2">
+                    <div class="col-9"><textarea name="repair_content" class="form-control form-control-sm" rows="2" placeholder="수리 내용">${d.repair_content}</textarea></div>
+                    <div class="col-3"><input type="text" name="repair_by" class="form-control form-control-sm" placeholder="수리담당자" value="${d.repair_by}"></div>
+                </div>
+
+                <div class="section-label">사내수리 (HR)</div>
+                <div class="hr-grid mb-2">
+                    <div class="form-group"><label>밀링</label><input type="number" step="0.1" name="hr_milling" class="form-control form-control-sm" value="${d.hr_milling}"></div>
+                    <div class="form-group"><label>선반</label><input type="number" step="0.1" name="hr_lathe" class="form-control form-control-sm" value="${d.hr_lathe}"></div>
+                    <div class="form-group"><label>연마</label><input type="number" step="0.1" name="hr_grinding" class="form-control form-control-sm" value="${d.hr_grinding}"></div>
+                    <div class="form-group"><label>사내용접</label><input type="number" step="0.1" name="hr_welding" class="form-control form-control-sm" value="${d.hr_welding}"></div>
+                    <div class="form-group"><label>고속가공</label><input type="number" step="0.1" name="hr_high_speed" class="form-control form-control-sm" value="${d.hr_high_speed}"></div>
+                    <div class="form-group"><label>방전</label><input type="number" step="0.1" name="hr_edm" class="form-control form-control-sm" value="${d.hr_edm}"></div>
+                    <div class="form-group"><label>WIRE</label><input type="number" step="0.1" name="hr_wire" class="form-control form-control-sm" value="${d.hr_wire}"></div>
+                    <div class="form-group"><label>M/T</label><input type="number" step="0.1" name="hr_mt" class="form-control form-control-sm" value="${d.hr_mt}"></div>
+                    <div class="form-group"><label>사상</label><input type="number" step="0.1" name="hr_polishing" class="form-control form-control-sm" value="${d.hr_polishing}"></div>
+                    <div class="form-group"><label>조립</label><input type="number" step="0.1" name="hr_assembly" class="form-control form-control-sm" value="${d.hr_assembly}"></div>
+                    <div class="form-group"><label>기타</label><input type="number" step="0.1" name="hr_other" class="form-control form-control-sm" value="${d.hr_other}"></div>
+                    <div class="form-group"><label class="fw-bold text-primary">총시간</label><span class="fw-bold text-primary">${d.total_hr}h</span></div>
+                </div>
+
+                <div class="section-label">외주금액 (원)</div>
+                <div class="cost-grid mb-2">
+                    <div class="form-group"><label>외주용접</label><input type="number" name="cost_welding" class="form-control form-control-sm" value="${d.cost_welding}"></div>
+                    <div class="form-group"><label>탭핑</label><input type="number" name="cost_tapping" class="form-control form-control-sm" value="${d.cost_tapping}"></div>
+                    <div class="form-group"><label>밀핀</label><input type="number" name="cost_milpin" class="form-control form-control-sm" value="${d.cost_milpin}"></div>
+                    <div class="form-group"><label>구매품</label><input type="number" name="cost_purchase" class="form-control form-control-sm" value="${d.cost_purchase}"></div>
+                    <div class="form-group"><label>외주가공</label><input type="number" name="cost_outsource" class="form-control form-control-sm" value="${d.cost_outsource}"></div>
+                    <div class="form-group"><label class="fw-bold text-danger">비용총액</label><span class="fw-bold text-danger">${d.total_outsource_cost.toLocaleString()}원</span></div>
+                </div>
+
+                <div class="section-label">기타 처리내용</div>
+                <div class="row g-2 mb-3">
+                    <div class="col-3"><label class="small">SHOT수</label><input type="number" name="shot_count" class="form-control form-control-sm" value="${d.shot_count}"></div>
+                    <div class="col-3"><label class="small">초물확인</label><input type="text" name="first_article" class="form-control form-control-sm" value="${d.first_article}"></div>
+                    <div class="col-6"><label class="small">NG내용 및 비고</label><input type="text" name="ng_content" class="form-control form-control-sm" value="${d.ng_content}"></div>
+                </div>
+
+                <div class="d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">닫기</button>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="submitUpdate(${d.pk})">
+                        <i class="bi bi-check-circle me-1"></i>저장
+                    </button>
+                </div>
+            </form>
+        `;
+    })
+    .catch(err => {
+        body.innerHTML = '<div class="alert alert-danger">로딩 실패: ' + err.message + '</div>';
+    });
+}
+
+function submitUpdate(pk) {
+    var form = document.getElementById('editForm');
+    var formData = new FormData(form);
+    fetch('/wms/mold/repair/' + pk + '/update/', { method: 'POST', body: formData })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) { alert(data.message); location.reload(); }
+        else { alert('오류: ' + data.error); }
+    })
+    .catch(err => alert('요청 실패: ' + err.message));
+}
+</script>
+{% endblock %}
