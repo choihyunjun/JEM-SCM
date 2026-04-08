@@ -1717,6 +1717,27 @@ def api_process_tag_scan(request):
                     'error': f'취소된 라벨입니다. ({rm_label.label_id})',
                 })
 
+            # RM 라벨 FIFO 검증
+            if rm_label.lot_no:
+                # 해당 품번의 모든 INSTOCK RM 라벨 중 가장 오래된 LOT
+                oldest_rm = RawMaterialLabel.objects.filter(
+                    part_no=rm_label.part_no, status='INSTOCK', lot_no__isnull=False
+                ).order_by('lot_no').first()
+
+                if oldest_rm and oldest_rm.lot_no < rm_label.lot_no:
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'[FIFO 위반] LOT {oldest_rm.lot_no} 라벨이 남아있습니다. 먼저 소진해주세요.',
+                        'tag_info': {
+                            'tag_id': rm_label.label_id,
+                            'part_no': rm_label.part_no,
+                            'part_name': rm_label.part_name,
+                            'quantity': float(rm_label.quantity),
+                            'lot_no': str(rm_label.lot_no),
+                            'status': rm_label.get_status_display(),
+                        }
+                    })
+
             # RM 라벨 투입 처리: INSTOCK → USED
             rm_label.status = 'USED'
             rm_label.save(update_fields=['status'])
