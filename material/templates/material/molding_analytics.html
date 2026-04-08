@@ -377,6 +377,7 @@
 {% block extra_js %}
 {{ block.super }}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
 
@@ -463,6 +464,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     callbacks: {
                         label: ctx => `설비가동률: ${ctx.parsed.y}%`
                     }
+                },
+                datalabels: {
+                    anchor: 'end', align: 'top', offset: 2,
+                    font: { size: 10, weight: 'bold' },
+                    color: BLUE,
+                    formatter: v => v > 0 ? v + '%' : ''
                 }
             },
             scales: {
@@ -511,6 +518,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     callbacks: {
                         label: ctx => `가동률: ${ctx.parsed.y}%`
                     }
+                },
+                datalabels: {
+                    anchor: 'end', align: 'top', offset: 2,
+                    font: { size: 10, weight: 'bold' },
+                    color: '#333',
+                    formatter: v => v > 0 ? v + '%' : ''
                 }
             },
             scales: {
@@ -556,6 +569,15 @@ document.addEventListener('DOMContentLoaded', function() {
                             return `${ctx.label}: ${ctx.parsed}분 (${pct}%)`;
                         }
                     }
+                },
+                datalabels: {
+                    font: { size: 10, weight: 'bold' },
+                    color: '#fff',
+                    formatter: function(v, ctx) {
+                        var total = ctx.dataset.data.reduce((a,b) => a+b, 0);
+                        var pct = total ? (v / total * 100).toFixed(0) : 0;
+                        return pct >= 5 ? pct + '%' : '';
+                    }
                 }
             }
         },
@@ -598,6 +620,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     callbacks: {
                         label: ctx => ctx.parsed.x.toLocaleString() + ' EA (클릭하여 상세)'
                     }
+                },
+                datalabels: {
+                    anchor: 'end', align: 'right', offset: 4,
+                    font: { size: 9, weight: 'bold' },
+                    color: '#333',
+                    formatter: v => v > 0 ? v.toLocaleString() : ''
                 }
             },
             scales: {
@@ -668,6 +696,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     callbacks: {
                         label: ctx => ctx.parsed.y + '일'
                     }
+                },
+                datalabels: {
+                    anchor: 'end', align: 'top', offset: 2,
+                    font: { size: 9, weight: 'bold' },
+                    color: BLUE,
+                    formatter: v => v > 0 ? v + '일' : ''
                 }
             },
             scales: {
@@ -730,6 +764,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     callbacks: {
                         label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y}%`
                     }
+                },
+                datalabels: {
+                    anchor: 'end', align: 'top', offset: 2,
+                    font: { size: 9, weight: 'bold' },
+                    color: function(ctx) {
+                        return ctx.datasetIndex === 0 ? BLUE : GREEN;
+                    },
+                    formatter: v => v > 0 ? v + '%' : ''
                 }
             },
             scales: {
