@@ -66,7 +66,7 @@
 <div class="prod-header d-flex justify-content-between align-items-center">
     <div>
         <h2><i class="bi bi-building-gear me-2"></i>생산현장관리</h2>
-        <div class="subtitle">생산 현장 지원 / 성형 가동률 / 금형 수명 관리</div>
+        <div class="subtitle">생산 현장 지원 / 성형 가동률 / 금형 유지보수 관리</div>
     </div>
     <div class="date-badge">
         <i class="bi bi-calendar3 me-1"></i>{{ today|date:"Y년 n월 j일" }}
@@ -75,28 +75,21 @@
 
 <!-- 현황 요약 -->
 <div class="row g-3 mb-4">
-    <div class="col-md-3">
+    <div class="col-md-4">
         <div class="summary-card">
             <div class="summary-label"><i class="bi bi-gear me-1"></i>당월 설비가동률</div>
             <div class="summary-value {% if molding_util >= 85 %}text-success{% elif molding_util >= 70 %}text-warning{% else %}text-danger{% endif %}">{{ molding_util }}%</div>
             <div class="summary-sub">{{ year }}년 {{ month }}월 기준</div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="summary-card">
-            <div class="summary-label"><i class="bi bi-cpu me-1"></i>금일 가동 호기</div>
-            <div class="summary-value">{{ molding_today_count }}<span style="font-size:0.9rem;color:#a0aec0;"> / {{ molding_machine_count }}</span></div>
-            <div class="summary-sub">가동 / 전체 보유</div>
-        </div>
-    </div>
-    <div class="col-md-3">
+    <div class="col-md-4">
         <div class="summary-card">
             <div class="summary-label"><i class="bi bi-wrench me-1"></i>등록 금형</div>
             <div class="summary-value">{{ mold_total }}</div>
             <div class="summary-sub">활성 금형 수</div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-4">
         <div class="summary-card">
             <div class="summary-label"><i class="bi bi-exclamation-triangle me-1"></i>MT 필요 금형</div>
             <div class="summary-value {% if mt_need > 0 %}text-danger{% else %}text-success{% endif %}">{{ mt_need }}</div>
@@ -176,7 +169,7 @@
             <div class="shortcut-icon" style="background:#fff5f5;color:#e53e3e;">
                 <i class="bi bi-wrench"></i>
             </div>
-            <div class="shortcut-title">금형 수명 관리</div>
+            <div class="shortcut-title">금형 유지보수 관리</div>
             <div class="shortcut-desc">MT 현황 / 숏트수 관리 / ERP 동기화</div>
             {% if mt_need > 0 %}
             <span class="badge bg-danger position-absolute" style="top:14px;right:80px;font-size:0.65rem;">MT {{ mt_need }}건</span>

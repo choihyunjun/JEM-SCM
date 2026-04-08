@@ -8166,7 +8166,7 @@ def api_molding_master_detail(request, pk):
 @login_required
 @wms_permission_required('can_wms_stock_view')
 def mold_mt_dashboard(request):
-    """금형 MT 대시보드 - 금형 수명/MT 현황"""
+    """금형 MT 대시보드 - 금형 유지보수/MT 현황"""
     import json as _json
     from django.db.models import Sum, Value, IntegerField
     from django.db.models.functions import Coalesce
@@ -8414,7 +8414,7 @@ def mold_mt_excel(request):
 
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = '금형 수명 관리'
+    ws.title = '금형 유지보수 관리'
 
     headers = [
         'No', '기종(전체)', '기종(세부)', '금형명', '부품번호',

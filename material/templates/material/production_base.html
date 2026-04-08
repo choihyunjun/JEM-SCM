@@ -63,7 +63,7 @@
                             <div class="collapse {% if request.resolver_match.url_name in 'mold_mt_dashboard' %}show{% endif %}"
                                  id="collapseMold" data-bs-parent="#sidenavAccordion">
                                 <nav class="sb-sidenav-menu-nested nav">
-                                    <a class="nav-link {% if request.resolver_match.url_name == 'mold_mt_dashboard' %}active{% endif %}" href="{% url 'material:mold_mt_dashboard' %}">금형 수명 관리</a>
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'mold_mt_dashboard' %}active{% endif %}" href="{% url 'material:mold_mt_dashboard' %}">금형 유지보수 관리</a>
                                 </nav>
                             </div>
                             {% endif %}
