@@ -217,20 +217,12 @@
                         <td class="text-muted">{{ m.last_mt_shots|floatformat:0 }}</td>
                         <td>{{ m.mt_interval|floatformat:0 }}</td>
                         <td>
-                            {% if m.is_over_guarantee and m.mt_progress_pct >= 100 %}
-                            <div class="progress-bar-mt">
-                                <div class="bar bar-red" style="width:100%">
-                                    <span style="font-size:0.65rem;">보증초과</span>
-                                </div>
-                            </div>
-                            {% else %}
                             <div class="progress-bar-mt">
                                 <div class="bar {% if m.mt_progress_pct >= 80 %}bar-red{% elif m.mt_progress_pct >= 60 %}bar-yellow{% else %}bar-green{% endif %}"
                                      style="width: {{ m.mt_progress_pct }}%">
                                     {% if m.mt_progress_pct >= 15 %}{{ m.mt_progress_pct }}%{% endif %}
                                 </div>
                             </div>
-                            {% endif %}
                         </td>
                         <td>
                             {% if m.is_mt_due %}
