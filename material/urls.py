@@ -119,6 +119,7 @@ urlpatterns = [
     path('api/audit-mode/clear-all/', views.api_audit_mode_clear_all, name='api_audit_mode_clear_all'),
 
     # 성형 가동률
+    path('molding/dashboard/', views.molding_dashboard, name='molding_dashboard'),
     path('molding/', views.molding_utilization, name='molding_utilization'),
     path('molding/erp-sync/', views.molding_erp_sync, name='molding_erp_sync'),
     path('molding/settings/', views.molding_settings, name='molding_settings'),
