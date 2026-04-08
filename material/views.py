@@ -8801,16 +8801,49 @@ def mold_repair_create(request):
 
     repair_types = request.POST.getlist('repair_types')
 
+    mold_name = request.POST.get('mold_name', mold.mold_name if mold else '').strip()
+    item_group = request.POST.get('item_group', mold.item_group if mold else '').strip()
+    priority = request.POST.get('priority', 'B')
+    request_content = request.POST.get('request_content', '').strip()
+
     obj = MoldRepairRequest.objects.create(
         mold=mold,
         part_no=part_no,
-        mold_name=request.POST.get('mold_name', mold.mold_name if mold else '').strip(),
-        item_group=request.POST.get('item_group', mold.item_group if mold else '').strip(),
-        priority=request.POST.get('priority', 'B'),
-        request_content=request.POST.get('request_content', '').strip(),
+        mold_name=mold_name,
+        item_group=item_group,
+        priority=priority,
+        request_content=request_content,
         repair_types=','.join(repair_types),
         requested_by=request.user,
     )
+
+    # 알림 발송
+    try:
+        from admin_app.notifications import send_notification
+        priority_label = {'A': 'A(긴급)', 'B': 'B(보통)', 'C': 'C(낮음)'}.get(priority, priority)
+        user_name = request.user.get_full_name() or request.user.username
+        types_str = ', '.join(repair_types) if repair_types else '-'
+
+        subject = f'[금형 수리의뢰] {part_no} {mold_name} (중요도: {priority_label})'
+        body = f'''
+        <div style="font-family:sans-serif;max-width:600px;">
+            <h3 style="color:#553c9a;border-bottom:2px solid #6b46c1;padding-bottom:8px;">금형 수리의뢰 등록</h3>
+            <table style="border-collapse:collapse;width:100%;font-size:14px;">
+                <tr><td style="padding:8px;background:#f5f3ff;font-weight:bold;width:100px;border:1px solid #e5e7eb;">품번</td><td style="padding:8px;border:1px solid #e5e7eb;">{part_no}</td></tr>
+                <tr><td style="padding:8px;background:#f5f3ff;font-weight:bold;border:1px solid #e5e7eb;">금형명</td><td style="padding:8px;border:1px solid #e5e7eb;">{mold_name}</td></tr>
+                <tr><td style="padding:8px;background:#f5f3ff;font-weight:bold;border:1px solid #e5e7eb;">품목</td><td style="padding:8px;border:1px solid #e5e7eb;">{item_group}</td></tr>
+                <tr><td style="padding:8px;background:#f5f3ff;font-weight:bold;border:1px solid #e5e7eb;">중요도</td><td style="padding:8px;border:1px solid #e5e7eb;">{priority_label}</td></tr>
+                <tr><td style="padding:8px;background:#f5f3ff;font-weight:bold;border:1px solid #e5e7eb;">수리유형</td><td style="padding:8px;border:1px solid #e5e7eb;">{types_str}</td></tr>
+                <tr><td style="padding:8px;background:#f5f3ff;font-weight:bold;border:1px solid #e5e7eb;">의뢰내용</td><td style="padding:8px;border:1px solid #e5e7eb;">{request_content}</td></tr>
+                <tr><td style="padding:8px;background:#f5f3ff;font-weight:bold;border:1px solid #e5e7eb;">의뢰자</td><td style="padding:8px;border:1px solid #e5e7eb;">{user_name}</td></tr>
+            </table>
+            <p style="color:#6b7280;font-size:12px;margin-top:16px;">JEM SCM 시스템에서 자동 발송된 메일입니다.</p>
+        </div>
+        '''
+        send_notification('MOLD_REPAIR_REQUESTED', subject, body, reference_id=obj.pk)
+    except Exception as e:
+        logger.warning(f'수리의뢰 알림 발송 실패: {e}')
+
     return JsonResponse({'success': True, 'message': f'수리의뢰 등록 완료 (#{obj.pk})', 'id': obj.pk})
 
 
@@ -8824,6 +8857,7 @@ def mold_repair_update(request, pk):
         return JsonResponse({'success': False, 'error': 'POST만 허용'}, status=405)
 
     obj = get_object_or_404(MoldRepairRequest, pk=pk)
+    old_status = obj.status
 
     # 상태 변경
     new_status = request.POST.get('status', '')
@@ -8891,6 +8925,28 @@ def mold_repair_update(request, pk):
         obj.ng_content = ng_content
 
     obj.save()
+
+    # 완료 처리 시 알림 발송
+    if new_status == 'COMPLETED' and old_status != 'COMPLETED':
+        try:
+            from admin_app.notifications import send_notification
+            subject = f'[금형 수리완료] {obj.part_no} {obj.mold_name}'
+            body = f'''
+            <div style="font-family:sans-serif;max-width:600px;">
+                <h3 style="color:#22543d;border-bottom:2px solid #38a169;padding-bottom:8px;">금형 수리 완료</h3>
+                <table style="border-collapse:collapse;width:100%;font-size:14px;">
+                    <tr><td style="padding:8px;background:#f0fff4;font-weight:bold;width:100px;border:1px solid #e5e7eb;">품번</td><td style="padding:8px;border:1px solid #e5e7eb;">{obj.part_no}</td></tr>
+                    <tr><td style="padding:8px;background:#f0fff4;font-weight:bold;border:1px solid #e5e7eb;">금형명</td><td style="padding:8px;border:1px solid #e5e7eb;">{obj.mold_name}</td></tr>
+                    <tr><td style="padding:8px;background:#f0fff4;font-weight:bold;border:1px solid #e5e7eb;">수리담당</td><td style="padding:8px;border:1px solid #e5e7eb;">{obj.repair_by or '-'}</td></tr>
+                    <tr><td style="padding:8px;background:#f0fff4;font-weight:bold;border:1px solid #e5e7eb;">수리내용</td><td style="padding:8px;border:1px solid #e5e7eb;">{obj.repair_content or '-'}</td></tr>
+                    <tr><td style="padding:8px;background:#f0fff4;font-weight:bold;border:1px solid #e5e7eb;">완료일</td><td style="padding:8px;border:1px solid #e5e7eb;">{obj.completed_date or '-'}</td></tr>
+                </table>
+                <p style="color:#6b7280;font-size:12px;margin-top:16px;">JEM SCM 시스템에서 자동 발송된 메일입니다.</p>
+            </div>
+            '''
+            send_notification('MOLD_REPAIR_COMPLETED', subject, body, reference_id=obj.pk)
+        except Exception as e:
+            logger.warning(f'수리완료 알림 발송 실패: {e}')
 
     status_display = obj.get_status_display()
     return JsonResponse({'success': True, 'message': f'{obj.part_no} {status_display} 처리 완료'})

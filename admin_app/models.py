@@ -25,6 +25,9 @@ NOTIFICATION_EVENT_CHOICES = [
     ('DELIVERY_RECEIVED', '납품서 접수'),
     ('LOW_STOCK', '재고 부족 경고'),
     ('VENDOR_DOWNGRADED', '협력사 등급 하락'),
+    # 생산현장
+    ('MOLD_REPAIR_REQUESTED', '금형 수리의뢰 등록'),
+    ('MOLD_REPAIR_COMPLETED', '금형 수리 완료'),
 ]
 
 RECIPIENT_TYPE_CHOICES = [
