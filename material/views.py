@@ -8098,9 +8098,22 @@ def api_molding_master_detail(request, pk):
 def mold_mt_dashboard(request):
     """금형 MT 대시보드 - 금형 수명/MT 현황"""
     import json as _json
+    from django.db.models import Sum, Value, IntegerField
+    from django.db.models.functions import Coalesce
     from .models import MoldMaster as MoldMasterModel, MoldMTSetting
 
-    qs = MoldMasterModel.objects.filter(is_active=True)
+    # MT 기준 설정을 미리 dict로 캐싱 (DB 조회 1회)
+    mt_settings_cache = {}
+    for s in MoldMTSetting.objects.all():
+        mt_settings_cache[s.material_type] = {
+            'a': s.grade_a, 'b': s.grade_b, 'c': s.grade_c,
+            'd': s.grade_d, 'e': s.grade_e,
+        }
+
+    # annotate로 월별 숏트 합계를 DB에서 한번에 계산
+    qs = MoldMasterModel.objects.filter(is_active=True).annotate(
+        _monthly_shots=Coalesce(Sum('shot_records__shots'), Value(0), output_field=IntegerField())
+    )
 
     # 필터 (다중 선택 지원: getlist)
     q = request.GET.get('q', '').strip()
@@ -8120,6 +8133,25 @@ def mold_mt_dashboard(request):
 
     molds_list = list(qs)
 
+    # Python에서 한번에 계산 (DB 추가 조회 없음)
+    for m in molds_list:
+        m._cached_total_shots = m.total_shots_prev + m._monthly_shots
+        m._cached_remaining = m.guarantee_shots - m._cached_total_shots
+        m._cached_over_guarantee = m._cached_total_shots > m.guarantee_shots
+
+        # MT interval (캐시에서 조회)
+        interval = 30000
+        if m.material_type and m.grade:
+            setting = mt_settings_cache.get(m.material_type)
+            if setting:
+                interval = setting.get(m.grade.lower(), 30000)
+        m._cached_mt_interval = interval
+
+        shots_since = m._cached_total_shots - m.last_mt_shots
+        m._cached_shots_since_mt = shots_since
+        m._cached_mt_pct = min(round(shots_since / interval * 100, 1), 100) if interval > 0 else 0
+        m._cached_is_mt_due = shots_since >= interval
+
     # 상태별 분류 계산
     total_count = len(molds_list)
     mt_due_count = 0
@@ -8127,9 +8159,9 @@ def mold_mt_dashboard(request):
     normal_count = 0
 
     for m in molds_list:
-        if m.is_over_guarantee:
+        if m._cached_over_guarantee:
             over_guarantee_count += 1
-        elif m.is_mt_due or m.mt_progress_pct >= 80:
+        elif m._cached_is_mt_due or m._cached_mt_pct >= 80:
             mt_due_count += 1
         else:
             normal_count += 1
@@ -8138,36 +8170,30 @@ def mold_mt_dashboard(request):
     if status_filters:
         filtered = []
         for m in molds_list:
-            if m.is_over_guarantee and 'over' in status_filters:
+            if m._cached_over_guarantee and 'over' in status_filters:
                 filtered.append(m)
-            elif (m.is_mt_due or m.mt_progress_pct >= 80) and not m.is_over_guarantee and 'mt_due' in status_filters:
+            elif (m._cached_is_mt_due or m._cached_mt_pct >= 80) and not m._cached_over_guarantee and 'mt_due' in status_filters:
                 filtered.append(m)
-            elif not m.is_mt_due and m.mt_progress_pct < 80 and not m.is_over_guarantee and 'normal' in status_filters:
+            elif not m._cached_is_mt_due and m._cached_mt_pct < 80 and not m._cached_over_guarantee and 'normal' in status_filters:
                 filtered.append(m)
         molds_list = filtered
 
     # 기본 정렬: MT 진행률 높은순, 진행률 0이면 pk순
-    molds_list.sort(key=lambda m: (-m.mt_progress_pct if m.mt_progress_pct > 0 else 0, m.mt_progress_pct == 0, m.pk))
+    molds_list.sort(key=lambda m: (-m._cached_mt_pct if m._cached_mt_pct > 0 else 0, m._cached_mt_pct == 0, m.pk))
 
     # 페이지네이션
     paginator = Paginator(molds_list, 60)
     page = request.GET.get('page', 1)
     molds = paginator.get_page(page)
 
-    # 자동완성용 데이터
-    all_molds = MoldMasterModel.objects.filter(is_active=True)
+    # 자동완성용 데이터 (values_list로 최적화 — 모델 인스턴스 안 만듦)
+    _base = MoldMasterModel.objects.filter(is_active=True)
     part_nos = sorted(set(
-        f"{m.part_no} / {m.mold_name}" for m in all_molds if m.part_no
+        f"{pn} / {mn}" for pn, mn in _base.values_list('part_no', 'mold_name') if pn
     ))
-    grade_list = sorted(set(
-        all_molds.exclude(grade__isnull=True).exclude(grade='').values_list('grade', flat=True)
-    ))
-    material_list = sorted(set(
-        all_molds.exclude(material_type__isnull=True).exclude(material_type='').values_list('material_type', flat=True)
-    ))
-    item_group_list = sorted(set(
-        all_molds.exclude(item_group__isnull=True).exclude(item_group='').values_list('item_group', flat=True)
-    ))
+    grade_list = sorted(_base.exclude(grade__isnull=True).exclude(grade='').values_list('grade', flat=True).distinct())
+    material_list = sorted(_base.exclude(material_type__isnull=True).exclude(material_type='').values_list('material_type', flat=True).distinct())
+    item_group_list = sorted(_base.exclude(item_group__isnull=True).exclude(item_group='').values_list('item_group', flat=True).distinct())
 
     # MT 기준 설정
     mt_settings = list(MoldMTSetting.objects.all().values())
