@@ -2738,19 +2738,31 @@ def get_lot_details(request, part_no):
             if oldest_lot is None or stock.lot_no < oldest_lot:
                 oldest_lot = stock.lot_no
 
-        # LOT에 배분 안 된 나머지 (ERP 관리분)
+        # LOT에 배분 안 된 나머지 (ERP 관리분 - 마이너스 포함)
         unallocated = total_qty - lot_total
-        if unallocated > 0:
-            # NULL 버킷 = LOT 미배분 재고
-            wh = base_qs.first().warehouse if base_qs.exists() else None
-            lot_data.insert(0, {
-                'warehouse': wh.name if wh else '-',
-                'warehouse_code': wh.code if wh else '-',
-                'lot_no': '-',
-                'quantity': unallocated,
-                'days_old': 99999,
-                'is_null_lot': True,
-            })
+        if unallocated != 0:
+            # NULL LOT 재고를 창고별로 표시
+            null_stocks = base_qs.filter(lot_no__isnull=True).exclude(quantity=0)
+            if null_stocks.exists():
+                for ns in null_stocks:
+                    lot_data.insert(0, {
+                        'warehouse': ns.warehouse.name,
+                        'warehouse_code': ns.warehouse.code,
+                        'lot_no': 'ERP 재고',
+                        'quantity': ns.quantity,
+                        'days_old': 99999,
+                        'is_null_lot': True,
+                    })
+            else:
+                wh = base_qs.first().warehouse if base_qs.exists() else None
+                lot_data.insert(0, {
+                    'warehouse': wh.name if wh else '-',
+                    'warehouse_code': wh.code if wh else '-',
+                    'lot_no': 'ERP 재고',
+                    'quantity': unallocated,
+                    'days_old': 99999,
+                    'is_null_lot': True,
+                })
 
         # FIFO 경고 판정 (60일 이상 된 LOT가 있으면 경고)
         fifo_warning = False
