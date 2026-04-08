@@ -1673,7 +1673,7 @@ def api_process_tag_scan(request):
         "tag_info": { ... }
     }
     """
-    from .models import ProcessTag, ProcessTagScanLog
+    from .models import ProcessTag, ProcessTagScanLog, RawMaterialLabel
 
     try:
         data = json.loads(request.body)
@@ -1688,7 +1688,57 @@ def api_process_tag_scan(request):
                 'error': '태그 ID가 누락되었습니다.'
             }, status=400)
 
-        # 태그 조회
+        # RM 라벨 스캔 처리 (RM-로 시작하는 경우)
+        if tag_id.startswith('RM-'):
+            rm_label = RawMaterialLabel.objects.filter(label_id=tag_id).first()
+            if not rm_label:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'등록되지 않은 라벨입니다: {tag_id}',
+                    'is_registered': False
+                })
+
+            if rm_label.status == 'USED':
+                return JsonResponse({
+                    'success': False,
+                    'error': f'이미 투입된 라벨입니다. ({rm_label.label_id})',
+                    'tag_info': {
+                        'tag_id': rm_label.label_id,
+                        'part_no': rm_label.part_no,
+                        'part_name': rm_label.part_name,
+                        'quantity': float(rm_label.quantity),
+                        'lot_no': str(rm_label.lot_no) if rm_label.lot_no else '',
+                        'status': rm_label.get_status_display(),
+                    }
+                })
+            elif rm_label.status == 'CANCELLED':
+                return JsonResponse({
+                    'success': False,
+                    'error': f'취소된 라벨입니다. ({rm_label.label_id})',
+                })
+
+            # RM 라벨 투입 처리: INSTOCK → USED
+            rm_label.status = 'USED'
+            rm_label.save(update_fields=['status'])
+
+            return JsonResponse({
+                'success': True,
+                'is_first_scan': True,
+                'message': '원재료 투입 완료',
+                'tag_info': {
+                    'tag_id': rm_label.label_id,
+                    'part_no': rm_label.part_no,
+                    'part_name': rm_label.part_name,
+                    'quantity': float(rm_label.quantity),
+                    'lot_no': str(rm_label.lot_no) if rm_label.lot_no else '',
+                    'status': rm_label.get_status_display(),
+                    'scan_count': 1,
+                    'printed_at': rm_label.printed_at.strftime('%Y-%m-%d %H:%M') if rm_label.printed_at else '',
+                    'used_at': timezone.now().strftime('%Y-%m-%d %H:%M'),
+                }
+            })
+
+        # 태그 조회 (기존 ProcessTag)
         tag = ProcessTag.objects.filter(tag_id=tag_id).first()
 
         if not tag:
