@@ -8186,14 +8186,14 @@ def mold_mt_dashboard(request):
     page = request.GET.get('page', 1)
     molds = paginator.get_page(page)
 
-    # 자동완성용 데이터 (values_list로 최적화 — 모델 인스턴스 안 만듦)
+    # 자동완성/필터용 데이터 (annotate 없는 순수 쿼리)
     _base = MoldMasterModel.objects.filter(is_active=True)
     part_nos = sorted(set(
         f"{pn} / {mn}" for pn, mn in _base.values_list('part_no', 'mold_name') if pn
     ))
-    grade_list = sorted(_base.exclude(grade__isnull=True).exclude(grade='').values_list('grade', flat=True).distinct())
-    material_list = sorted(_base.exclude(material_type__isnull=True).exclude(material_type='').values_list('material_type', flat=True).distinct())
-    item_group_list = sorted(_base.exclude(item_group__isnull=True).exclude(item_group='').values_list('item_group', flat=True).distinct())
+    grade_list = sorted(set(_base.exclude(grade__isnull=True).exclude(grade='').values_list('grade', flat=True)))
+    material_list = sorted(set(_base.exclude(material_type__isnull=True).exclude(material_type='').values_list('material_type', flat=True)))
+    item_group_list = sorted(set(_base.exclude(item_group__isnull=True).exclude(item_group='').values_list('item_group', flat=True)))
 
     # MT 기준 설정
     mt_settings = list(MoldMTSetting.objects.all().values())
