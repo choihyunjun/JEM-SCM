@@ -180,16 +180,18 @@
             <table class="table table-hover table-bordered table-mt mb-0">
                 <thead>
                     <tr>
-                        <th style="width:40px">No</th>
+                        <th style="width:35px">No</th>
                         <th>부품번호</th>
                         <th>금형명</th>
                         <th>기종</th>
                         <th>등급</th>
                         <th>재료</th>
                         <th>보증수명</th>
+                        <th>보증</th>
                         <th>누적숏트</th>
-                        <th>잔량</th>
-                        <th style="min-width:140px">MT 진행률</th>
+                        <th>이전MT</th>
+                        <th>MT기준</th>
+                        <th style="min-width:130px">MT 진행률</th>
                         <th>상태</th>
                         <th>MT</th>
                     </tr>
@@ -204,20 +206,34 @@
                         <td><span class="badge bg-secondary">{{ m.grade|default:'-' }}</span></td>
                         <td>{{ m.material_type|default:'-' }}</td>
                         <td>{{ m.guarantee_shots|floatformat:0 }}</td>
-                        <td class="fw-bold">{{ m.total_shots|floatformat:0 }}</td>
-                        <td class="{% if m.remaining_shots < 0 %}text-danger fw-bold{% endif %}">{{ m.remaining_shots|floatformat:0 }}</td>
                         <td>
+                            {% if m.is_over_guarantee %}
+                                <span class="badge bg-danger" style="font-size:0.7rem;">초과</span>
+                            {% else %}
+                                <span class="badge bg-success" style="font-size:0.7rem;">정상</span>
+                            {% endif %}
+                        </td>
+                        <td class="fw-bold">{{ m.total_shots|floatformat:0 }}</td>
+                        <td class="text-muted">{{ m.last_mt_shots|floatformat:0 }}</td>
+                        <td>{{ m.mt_interval|floatformat:0 }}</td>
+                        <td>
+                            {% if m.is_over_guarantee and m.mt_progress_pct >= 100 %}
+                            <div class="progress-bar-mt">
+                                <div class="bar bar-red" style="width:100%">
+                                    <span style="font-size:0.65rem;">보증초과</span>
+                                </div>
+                            </div>
+                            {% else %}
                             <div class="progress-bar-mt">
                                 <div class="bar {% if m.mt_progress_pct >= 80 %}bar-red{% elif m.mt_progress_pct >= 60 %}bar-yellow{% else %}bar-green{% endif %}"
                                      style="width: {{ m.mt_progress_pct }}%">
-                                    {% if m.mt_progress_pct >= 20 %}{{ m.mt_progress_pct }}%{% endif %}
+                                    {% if m.mt_progress_pct >= 15 %}{{ m.mt_progress_pct }}%{% endif %}
                                 </div>
                             </div>
+                            {% endif %}
                         </td>
                         <td>
-                            {% if m.is_over_guarantee %}
-                                <span class="badge badge-status bg-danger">보증초과</span>
-                            {% elif m.is_mt_due %}
+                            {% if m.is_mt_due %}
                                 <span class="badge badge-status bg-warning text-dark">MT필요</span>
                             {% else %}
                                 <span class="badge badge-status bg-success">정상</span>
