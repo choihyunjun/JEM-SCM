@@ -40,15 +40,31 @@
     .repair-form label { font-size: 0.8rem; font-weight: 600; color: #4a5568; }
     .repair-type-grid { display: flex; flex-wrap: wrap; gap: 6px; }
     .repair-type-check { font-size: 0.78rem; }
-    .hr-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-    .hr-grid .form-group { display: flex; align-items: center; gap: 4px; }
-    .hr-grid .form-group label { font-size: 0.72rem; min-width: 55px; margin-bottom: 0; }
-    .hr-grid .form-group input { width: 70px; }
-    .cost-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-    .cost-grid .form-group { display: flex; align-items: center; gap: 4px; }
-    .cost-grid .form-group label { font-size: 0.72rem; min-width: 55px; margin-bottom: 0; }
-    .cost-grid .form-group input { width: 90px; }
-    .section-label { font-size: 0.82rem; font-weight: 700; color: #2d3748; border-bottom: 2px solid #e2e8f0; padding-bottom: 4px; margin: 12px 0 8px; }
+    .section-label {
+        font-size: 0.82rem; font-weight: 700; color: #553c9a;
+        border-left: 3px solid #6b46c1; padding-left: 8px; margin: 16px 0 10px;
+    }
+    .detail-card {
+        background: #f8f9fb; border-radius: 10px; padding: 14px 16px; margin-bottom: 12px;
+        border: 1px solid #e8ecf1;
+    }
+    .detail-info th {
+        font-size: 0.75rem; font-weight: 600; color: #6b7280; background: #f0f2f5;
+        padding: 7px 10px; white-space: nowrap; width: 90px; border: 1px solid #e5e7eb;
+    }
+    .detail-info td {
+        font-size: 0.82rem; color: #1f2937; padding: 7px 10px; border: 1px solid #e5e7eb;
+    }
+    .hr-table { font-size: 0.78rem; }
+    .hr-table th { background: #f5f3ff; color: #553c9a; font-weight: 600; text-align: center; padding: 5px 8px; border: 1px solid #e5e7eb; }
+    .hr-table td { text-align: center; padding: 4px; border: 1px solid #e5e7eb; }
+    .hr-table input { width: 65px; text-align: center; border: 1px solid #d1d5db; border-radius: 4px; padding: 3px; font-size: 0.78rem; }
+    .hr-table .total-cell { background: #f5f3ff; font-weight: 700; color: #553c9a; }
+    .cost-table { font-size: 0.78rem; }
+    .cost-table th { background: #fef2f2; color: #991b1b; font-weight: 600; text-align: center; padding: 5px 8px; border: 1px solid #e5e7eb; }
+    .cost-table td { text-align: center; padding: 4px; border: 1px solid #e5e7eb; }
+    .cost-table input { width: 90px; text-align: right; border: 1px solid #d1d5db; border-radius: 4px; padding: 3px; font-size: 0.78rem; }
+    .cost-table .total-cell { background: #fef2f2; font-weight: 700; color: #dc2626; }
 
     .autocomplete-dropdown {
         position: absolute; z-index: 1060; background: #fff; border: 1px solid #dee2e6;
@@ -307,82 +323,127 @@ function openDetail(pk) {
         body.innerHTML = `
             <form id="editForm">
                 <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
-                <div class="row g-2 mb-3">
-                    <div class="col-md-8">
-                        <table class="table table-sm table-bordered" style="font-size:0.82rem;">
-                            <tr><th style="width:100px;background:#f7fafc;">품번</th><td>${d.part_no}</td><th style="width:100px;background:#f7fafc;">금형명</th><td>${d.mold_name}</td></tr>
-                            <tr><th style="background:#f7fafc;">품목</th><td>${d.item_group}</td><th style="background:#f7fafc;">의뢰자</th><td>${d.requested_by} (${d.requested_at})</td></tr>
-                            <tr><th style="background:#f7fafc;">의뢰내용</th><td colspan="3">${d.request_content}</td></tr>
-                            <tr><th style="background:#f7fafc;">수리유형</th><td colspan="3">${rtBadges || '-'}</td></tr>
-                        </table>
+
+                <!-- 의뢰 정보 + 상태/일정 -->
+                <div class="row g-3 mb-2">
+                    <div class="col-md-7">
+                        <div class="detail-card">
+                            <table class="table table-sm detail-info mb-0">
+                                <tr><th>품번</th><td class="fw-bold text-primary">${d.part_no}</td><th>금형명</th><td>${d.mold_name}</td></tr>
+                                <tr><th>품목</th><td>${d.item_group}</td><th>의뢰자</th><td>${d.requested_by} <span class="text-muted" style="font-size:0.7rem;">(${d.requested_at})</span></td></tr>
+                                <tr><th>의뢰내용</th><td colspan="3" style="white-space:pre-wrap;line-height:1.5;">${d.request_content}</td></tr>
+                                <tr><th>수리유형</th><td colspan="3">${rtBadges || '<span class="text-muted">-</span>'}</td></tr>
+                            </table>
+                        </div>
                     </div>
-                    <div class="col-md-4">
-                        <table class="table table-sm table-bordered" style="font-size:0.82rem;">
-                            <tr><th style="background:#f7fafc;">상태</th><td>
-                                <select name="status" class="form-select form-select-sm">
-                                    <option value="REQUESTED" ${d.status==='REQUESTED'?'selected':''}>의뢰등록</option>
-                                    <option value="RECEIVED" ${d.status==='RECEIVED'?'selected':''}>접수</option>
-                                    <option value="IN_PROGRESS" ${d.status==='IN_PROGRESS'?'selected':''}>수리중</option>
-                                    <option value="COMPLETED" ${d.status==='COMPLETED'?'selected':''}>완료</option>
-                                </select>
-                            </td></tr>
-                            <tr><th style="background:#f7fafc;">중요도</th><td>
-                                <select name="priority" class="form-select form-select-sm">
-                                    <option value="A" ${d.priority==='A'?'selected':''}>A (긴급)</option>
-                                    <option value="B" ${d.priority==='B'?'selected':''}>B (보통)</option>
-                                    <option value="C" ${d.priority==='C'?'selected':''}>C (낮음)</option>
-                                </select>
-                            </td></tr>
-                            <tr><th style="background:#f7fafc;">접수일</th><td><input type="date" name="received_date" class="form-control form-control-sm" value="${d.received_date}"></td></tr>
-                            <tr><th style="background:#f7fafc;">수리요청일</th><td><input type="date" name="repair_request_date" class="form-control form-control-sm" value="${d.repair_request_date}"></td></tr>
-                            <tr><th style="background:#f7fafc;">완료예정</th><td><input type="date" name="expected_date" class="form-control form-control-sm" value="${d.expected_date}"></td></tr>
-                            <tr><th style="background:#f7fafc;">완료일</th><td><input type="date" name="completed_date" class="form-control form-control-sm" value="${d.completed_date}"></td></tr>
-                        </table>
+                    <div class="col-md-5">
+                        <div class="detail-card">
+                            <table class="table table-sm detail-info mb-0">
+                                <tr><th>상태</th><td>
+                                    <select name="status" class="form-select form-select-sm" style="font-weight:600;">
+                                        <option value="REQUESTED" ${d.status==='REQUESTED'?'selected':''}>의뢰등록</option>
+                                        <option value="RECEIVED" ${d.status==='RECEIVED'?'selected':''}>접수</option>
+                                        <option value="IN_PROGRESS" ${d.status==='IN_PROGRESS'?'selected':''}>수리중</option>
+                                        <option value="COMPLETED" ${d.status==='COMPLETED'?'selected':''}>완료</option>
+                                    </select>
+                                </td></tr>
+                                <tr><th>중요도</th><td>
+                                    <select name="priority" class="form-select form-select-sm">
+                                        <option value="A" ${d.priority==='A'?'selected':''}>A (긴급)</option>
+                                        <option value="B" ${d.priority==='B'?'selected':''}>B (보통)</option>
+                                        <option value="C" ${d.priority==='C'?'selected':''}>C (낮음)</option>
+                                    </select>
+                                </td></tr>
+                                <tr><th>접수일</th><td><input type="date" name="received_date" class="form-control form-control-sm" value="${d.received_date}"></td></tr>
+                                <tr><th>수리요청일</th><td><input type="date" name="repair_request_date" class="form-control form-control-sm" value="${d.repair_request_date}"></td></tr>
+                                <tr><th>완료예정</th><td><input type="date" name="expected_date" class="form-control form-control-sm" value="${d.expected_date}"></td></tr>
+                                <tr><th>완료일</th><td><input type="date" name="completed_date" class="form-control form-control-sm" value="${d.completed_date}"></td></tr>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
+                <!-- 수리내용 -->
                 <div class="section-label">수리내용</div>
-                <div class="row g-2 mb-2">
-                    <div class="col-9"><textarea name="repair_content" class="form-control form-control-sm" rows="2" placeholder="수리 내용">${d.repair_content}</textarea></div>
-                    <div class="col-3"><input type="text" name="repair_by" class="form-control form-control-sm" placeholder="수리담당자" value="${d.repair_by}"></div>
+                <div class="detail-card">
+                    <div class="row g-2">
+                        <div class="col-9"><textarea name="repair_content" class="form-control form-control-sm" rows="2" placeholder="수리 내용을 입력하세요">${d.repair_content}</textarea></div>
+                        <div class="col-3">
+                            <label style="font-size:0.72rem;color:#6b7280;">수리담당자</label>
+                            <input type="text" name="repair_by" class="form-control form-control-sm" placeholder="담당자" value="${d.repair_by}">
+                        </div>
+                    </div>
                 </div>
 
+                <!-- 사내수리 HR -->
                 <div class="section-label">사내수리 (HR)</div>
-                <div class="hr-grid mb-2">
-                    <div class="form-group"><label>밀링</label><input type="number" step="0.1" name="hr_milling" class="form-control form-control-sm" value="${d.hr_milling}"></div>
-                    <div class="form-group"><label>선반</label><input type="number" step="0.1" name="hr_lathe" class="form-control form-control-sm" value="${d.hr_lathe}"></div>
-                    <div class="form-group"><label>연마</label><input type="number" step="0.1" name="hr_grinding" class="form-control form-control-sm" value="${d.hr_grinding}"></div>
-                    <div class="form-group"><label>사내용접</label><input type="number" step="0.1" name="hr_welding" class="form-control form-control-sm" value="${d.hr_welding}"></div>
-                    <div class="form-group"><label>고속가공</label><input type="number" step="0.1" name="hr_high_speed" class="form-control form-control-sm" value="${d.hr_high_speed}"></div>
-                    <div class="form-group"><label>방전</label><input type="number" step="0.1" name="hr_edm" class="form-control form-control-sm" value="${d.hr_edm}"></div>
-                    <div class="form-group"><label>WIRE</label><input type="number" step="0.1" name="hr_wire" class="form-control form-control-sm" value="${d.hr_wire}"></div>
-                    <div class="form-group"><label>M/T</label><input type="number" step="0.1" name="hr_mt" class="form-control form-control-sm" value="${d.hr_mt}"></div>
-                    <div class="form-group"><label>사상</label><input type="number" step="0.1" name="hr_polishing" class="form-control form-control-sm" value="${d.hr_polishing}"></div>
-                    <div class="form-group"><label>조립</label><input type="number" step="0.1" name="hr_assembly" class="form-control form-control-sm" value="${d.hr_assembly}"></div>
-                    <div class="form-group"><label>기타</label><input type="number" step="0.1" name="hr_other" class="form-control form-control-sm" value="${d.hr_other}"></div>
-                    <div class="form-group"><label class="fw-bold text-primary">총시간</label><span class="fw-bold text-primary">${d.total_hr}h</span></div>
+                <div class="detail-card">
+                    <table class="table table-sm hr-table mb-0">
+                        <tr>
+                            <th>밀링</th><th>선반</th><th>연마</th><th>사내용접</th><th>고속가공</th><th>방전</th>
+                        </tr>
+                        <tr>
+                            <td><input type="number" step="0.1" name="hr_milling" value="${d.hr_milling}"></td>
+                            <td><input type="number" step="0.1" name="hr_lathe" value="${d.hr_lathe}"></td>
+                            <td><input type="number" step="0.1" name="hr_grinding" value="${d.hr_grinding}"></td>
+                            <td><input type="number" step="0.1" name="hr_welding" value="${d.hr_welding}"></td>
+                            <td><input type="number" step="0.1" name="hr_high_speed" value="${d.hr_high_speed}"></td>
+                            <td><input type="number" step="0.1" name="hr_edm" value="${d.hr_edm}"></td>
+                        </tr>
+                        <tr>
+                            <th>WIRE</th><th>M/T</th><th>사상</th><th>조립</th><th>기타</th><th class="total-cell">총 작업시간</th>
+                        </tr>
+                        <tr>
+                            <td><input type="number" step="0.1" name="hr_wire" value="${d.hr_wire}"></td>
+                            <td><input type="number" step="0.1" name="hr_mt" value="${d.hr_mt}"></td>
+                            <td><input type="number" step="0.1" name="hr_polishing" value="${d.hr_polishing}"></td>
+                            <td><input type="number" step="0.1" name="hr_assembly" value="${d.hr_assembly}"></td>
+                            <td><input type="number" step="0.1" name="hr_other" value="${d.hr_other}"></td>
+                            <td class="total-cell" style="font-size:1rem;">${d.total_hr}h</td>
+                        </tr>
+                    </table>
                 </div>
 
+                <!-- 외주금액 -->
                 <div class="section-label">외주금액 (원)</div>
-                <div class="cost-grid mb-2">
-                    <div class="form-group"><label>외주용접</label><input type="number" name="cost_welding" class="form-control form-control-sm" value="${d.cost_welding}"></div>
-                    <div class="form-group"><label>탭핑</label><input type="number" name="cost_tapping" class="form-control form-control-sm" value="${d.cost_tapping}"></div>
-                    <div class="form-group"><label>밀핀</label><input type="number" name="cost_milpin" class="form-control form-control-sm" value="${d.cost_milpin}"></div>
-                    <div class="form-group"><label>구매품</label><input type="number" name="cost_purchase" class="form-control form-control-sm" value="${d.cost_purchase}"></div>
-                    <div class="form-group"><label>외주가공</label><input type="number" name="cost_outsource" class="form-control form-control-sm" value="${d.cost_outsource}"></div>
-                    <div class="form-group"><label class="fw-bold text-danger">비용총액</label><span class="fw-bold text-danger">${d.total_outsource_cost.toLocaleString()}원</span></div>
+                <div class="detail-card">
+                    <table class="table table-sm cost-table mb-0">
+                        <tr>
+                            <th>외주용접</th><th>탭핑</th><th>밀핀</th><th>구매품</th><th>외주가공</th><th class="total-cell">비용총액</th>
+                        </tr>
+                        <tr>
+                            <td><input type="number" name="cost_welding" value="${d.cost_welding}"></td>
+                            <td><input type="number" name="cost_tapping" value="${d.cost_tapping}"></td>
+                            <td><input type="number" name="cost_milpin" value="${d.cost_milpin}"></td>
+                            <td><input type="number" name="cost_purchase" value="${d.cost_purchase}"></td>
+                            <td><input type="number" name="cost_outsource" value="${d.cost_outsource}"></td>
+                            <td class="total-cell" style="font-size:1rem;">${d.total_outsource_cost.toLocaleString()}원</td>
+                        </tr>
+                    </table>
                 </div>
 
+                <!-- 기타 -->
                 <div class="section-label">기타 처리내용</div>
-                <div class="row g-2 mb-3">
-                    <div class="col-3"><label class="small">SHOT수</label><input type="number" name="shot_count" class="form-control form-control-sm" value="${d.shot_count}"></div>
-                    <div class="col-3"><label class="small">초물확인</label><input type="text" name="first_article" class="form-control form-control-sm" value="${d.first_article}"></div>
-                    <div class="col-6"><label class="small">NG내용 및 비고</label><input type="text" name="ng_content" class="form-control form-control-sm" value="${d.ng_content}"></div>
+                <div class="detail-card">
+                    <div class="row g-2">
+                        <div class="col-3">
+                            <label style="font-size:0.72rem;color:#6b7280;">SHOT수</label>
+                            <input type="number" name="shot_count" class="form-control form-control-sm" value="${d.shot_count}">
+                        </div>
+                        <div class="col-3">
+                            <label style="font-size:0.72rem;color:#6b7280;">초물확인</label>
+                            <input type="text" name="first_article" class="form-control form-control-sm" value="${d.first_article}">
+                        </div>
+                        <div class="col-6">
+                            <label style="font-size:0.72rem;color:#6b7280;">NG내용 및 비고</label>
+                            <input type="text" name="ng_content" class="form-control form-control-sm" value="${d.ng_content}">
+                        </div>
+                    </div>
                 </div>
 
-                <div class="d-flex justify-content-end gap-2">
-                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">닫기</button>
-                    <button type="button" class="btn btn-primary btn-sm" onclick="submitUpdate(${d.pk})">
+                <div class="d-flex justify-content-end gap-2 mt-3">
+                    <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">닫기</button>
+                    <button type="button" class="btn btn-primary btn-sm px-3" onclick="submitUpdate(${d.pk})">
                         <i class="bi bi-check-circle me-1"></i>저장
                     </button>
                 </div>
