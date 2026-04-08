@@ -218,10 +218,10 @@
                                 <span class="badge bg-outline-success border text-success" style="font-size:0.6rem;">정상</span>
                             {% endif %}
                         </td>
-                        <td class="fw-bold">{{ m.total_shots|floatformat:0 }}</td>
+                        <td class="fw-bold" data-value="{{ m.total_shots }}">{{ m.total_shots|floatformat:0 }}</td>
                         <td style="color:#888;">{{ m.last_mt_shots|floatformat:0 }}</td>
                         <td>{{ m.mt_interval|floatformat:0 }}</td>
-                        <td>
+                        <td data-value="{{ m.mt_progress_pct }}">
                             <div class="progress-bar-mt">
                                 <div class="bar {% if m.mt_progress_pct >= 80 %}bar-red{% elif m.mt_progress_pct >= 60 %}bar-yellow{% else %}bar-green{% endif %}"
                                      style="width: {{ m.mt_progress_pct }}%">
@@ -229,7 +229,7 @@
                                 </div>
                             </div>
                         </td>
-                        <td>
+                        <td data-value="{% if m.is_mt_due %}2{% elif m.mt_progress_pct >= 80 %}1{% else %}0{% endif %}">
                             {% if m.is_mt_due %}
                                 <span class="badge badge-status bg-danger">MT필요</span>
                             {% elif m.mt_progress_pct >= 80 %}
@@ -726,8 +726,8 @@ document.querySelectorAll('.sortable').forEach(function(th) {
         sortDir[col] = dir;
 
         rows.sort(function(a, b) {
-            var aVal = a.cells[col].textContent.trim();
-            var bVal = b.cells[col].textContent.trim();
+            var aVal = a.cells[col].dataset.value || a.cells[col].textContent.trim();
+            var bVal = b.cells[col].dataset.value || b.cells[col].textContent.trim();
             var aNum = parseFloat(aVal.replace(/[,%]/g, ''));
             var bNum = parseFloat(bVal.replace(/[,%]/g, ''));
             if (!isNaN(aNum) && !isNaN(bNum)) {
