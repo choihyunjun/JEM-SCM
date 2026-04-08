@@ -5641,7 +5641,7 @@ def raw_material_incoming(request):
             insp.is_scm = (trx.transaction_type == 'IN_SCM')
             insp.label_count = RawMaterialLabel.objects.filter(
                 incoming_transaction=trx, label_type='PACKAGE'
-            ).count()
+            ).exclude(status='CANCELLED').count()
             insp.pallet_count = RawMaterialLabel.objects.filter(
                 incoming_transaction=trx, label_type='PALLET'
             ).exclude(status='CANCELLED').count()
