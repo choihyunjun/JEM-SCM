@@ -139,6 +139,7 @@ urlpatterns = [
     # 금형 MT 관리
     path('mold/mt/', views.mold_mt_dashboard, name='mold_mt_dashboard'),
     path('mold/mt/upload/', views.mold_mt_upload, name='mold_mt_upload'),
+    path('mold/mt/add/', views.mold_mt_add, name='mold_mt_add'),
     path('mold/mt/excel/', views.mold_mt_excel, name='mold_mt_excel'),
     path('mold/mt/complete/', views.mold_mt_complete, name='mold_mt_complete'),
     path('mold/mt/settings/', views.mold_mt_settings, name='mold_mt_settings'),

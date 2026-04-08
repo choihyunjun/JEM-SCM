@@ -119,6 +119,9 @@
         <div class="subtitle">금형 MT(정비) 현황 및 수명 관리 대시보드</div>
     </div>
     <div class="d-flex gap-2 flex-wrap">
+        <button class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#addMoldModal">
+            <i class="bi bi-plus-circle me-1"></i>금형 추가
+        </button>
         <button class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#uploadModal">
             <i class="bi bi-upload me-1"></i>엑셀 업로드
         </button>
@@ -395,6 +398,75 @@
     </div>
 </div>
 
+<!-- Add Mold Modal (수기 등록) -->
+<div class="modal fade" id="addMoldModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header modal-header-mt">
+                <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>금형 수기 등록</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addMoldForm">
+                    {% csrf_token %}
+                    <div class="row g-2">
+                        <div class="col-6 mb-2">
+                            <label class="form-label small fw-bold mb-1">기종</label>
+                            <input type="text" name="item_group" class="form-control form-control-sm" placeholder="예: DENSO">
+                        </div>
+                        <div class="col-6 mb-2">
+                            <label class="form-label small fw-bold mb-1">부품번호 <span class="text-danger">*</span></label>
+                            <input type="text" name="part_no" class="form-control form-control-sm" required placeholder="필수 입력">
+                        </div>
+                        <div class="col-12 mb-2">
+                            <label class="form-label small fw-bold mb-1">금형명</label>
+                            <input type="text" name="mold_name" class="form-control form-control-sm" placeholder="금형 이름">
+                        </div>
+                        <div class="col-4 mb-2">
+                            <label class="form-label small fw-bold mb-1">등급</label>
+                            <select name="grade" class="form-select form-select-sm">
+                                <option value="">-</option>
+                                <option value="A">A</option>
+                                <option value="B">B</option>
+                                <option value="C">C</option>
+                                <option value="D">D</option>
+                                <option value="E">E</option>
+                            </select>
+                        </div>
+                        <div class="col-4 mb-2">
+                            <label class="form-label small fw-bold mb-1">재료</label>
+                            <input type="text" name="material_type" class="form-control form-control-sm" placeholder="예: ABS">
+                        </div>
+                        <div class="col-4 mb-2">
+                            <label class="form-label small fw-bold mb-1">보증수량</label>
+                            <input type="number" name="guarantee_shots" class="form-control form-control-sm" value="500000">
+                        </div>
+                        <div class="col-4 mb-2">
+                            <label class="form-label small fw-bold mb-1">누적숏트</label>
+                            <input type="number" name="total_shots_prev" class="form-control form-control-sm" value="0">
+                        </div>
+                        <div class="col-4 mb-2">
+                            <label class="form-label small fw-bold mb-1">이전MT</label>
+                            <input type="number" name="last_mt_shots" class="form-control form-control-sm" value="0">
+                        </div>
+                        <div class="col-4 mb-2">
+                            <label class="form-label small fw-bold mb-1">MT기준</label>
+                            <input type="number" name="mt_interval_override" class="form-control form-control-sm" placeholder="미입력시 자동">
+                        </div>
+                    </div>
+                </form>
+                <div id="addMoldResult" class="d-none mt-2"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+                <button type="button" class="btn btn-primary" onclick="submitAddMold()" id="addMoldBtn">
+                    <i class="bi bi-plus-circle me-1"></i>등록
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Upload Modal -->
 <div class="modal fade" id="uploadModal" tabindex="-1">
     <div class="modal-dialog">
@@ -404,14 +476,29 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div class="alert alert-info small">
-                    <strong>엑셀 형식 안내:</strong><br>
-                    헤더(1행): 기종(전체), 기종(세부), 금형명, 부품번호, 이관일자, 이관처, 보증수명, C/V수, 재료구분, 총사용숏트수(2025년까지), 등급, 1월~12월
+                <div class="alert alert-info small mb-2">
+                    <strong>엑셀 형식 (1행 헤더):</strong><br>
+                    <code>기종 | 부품번호 | 금형명 | 등급 | 보증수량 | 누적숏트 | 이전MT | MT기준</code>
                 </div>
+                <table class="table table-sm table-bordered small mb-2" style="font-size:0.75rem;">
+                    <thead class="table-light">
+                        <tr><th>열</th><th>항목</th><th>설명</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>A</td><td>기종</td><td>기종(전체)</td></tr>
+                        <tr><td>B</td><td>부품번호</td><td>필수</td></tr>
+                        <tr><td>C</td><td>금형명</td><td>금형 이름</td></tr>
+                        <tr><td>D</td><td>등급</td><td>A~E</td></tr>
+                        <tr><td>E</td><td>보증수량</td><td>보증수명(숏트)</td></tr>
+                        <tr><td>F</td><td>누적숏트</td><td>현재까지 총 숏트수</td></tr>
+                        <tr><td>G</td><td>이전MT</td><td>최근 MT시점 누적숏트</td></tr>
+                        <tr><td>H</td><td>MT기준</td><td>미입력시 MT설정 자동적용</td></tr>
+                    </tbody>
+                </table>
                 <form id="uploadForm" enctype="multipart/form-data">
                     {% csrf_token %}
-                    <div class="mb-3">
-                        <input type="file" name="file" class="form-control" accept=".xlsx,.xls" required>
+                    <div class="mb-2">
+                        <input type="file" name="file" class="form-control form-control-sm" accept=".xlsx,.xls" required>
                     </div>
                 </form>
                 <div id="uploadResult" class="d-none"></div>
@@ -669,6 +756,45 @@ function submitMTComplete() {
         }
     })
     .catch(err => alert('요청 실패: ' + err.message));
+}
+
+// ─── 수기 등록 ───
+function submitAddMold() {
+    const form = document.getElementById('addMoldForm');
+    const formData = new FormData(form);
+    const btn = document.getElementById('addMoldBtn');
+    const result = document.getElementById('addMoldResult');
+
+    if (!formData.get('part_no').trim()) {
+        alert('부품번호는 필수입니다.');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>등록 중...';
+
+    fetch('{% url "material:mold_mt_add" %}', {
+        method: 'POST',
+        body: formData,
+    })
+    .then(r => r.json())
+    .then(data => {
+        result.classList.remove('d-none');
+        if (data.success) {
+            result.innerHTML = '<div class="alert alert-success small py-1">' + data.message + '</div>';
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            result.innerHTML = '<div class="alert alert-danger small py-1">' + data.error + '</div>';
+        }
+    })
+    .catch(err => {
+        result.classList.remove('d-none');
+        result.innerHTML = '<div class="alert alert-danger small py-1">오류: ' + err.message + '</div>';
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-plus-circle me-1"></i>등록';
+    });
 }
 
 // Upload

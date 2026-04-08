@@ -8211,8 +8211,8 @@ def mold_mt_dashboard(request):
 @login_required
 @wms_permission_required('can_wms_stock_view')
 def mold_mt_upload(request):
-    """금형 마스터 엑셀 업로드"""
-    from .models import MoldMaster as MoldMasterModel, MoldShotRecord
+    """금형 마스터 엑셀 업로드 (신규 양식: 기종/부품번호/금형명/등급/보증수량/누적숏트/이전MT/MT기준)"""
+    from .models import MoldMaster as MoldMasterModel
     import openpyxl
 
     if request.method != 'POST':
@@ -8224,96 +8224,42 @@ def mold_mt_upload(request):
 
     try:
         wb = openpyxl.load_workbook(file, data_only=True)
-        # '등급' 시트 찾기 (없으면 active)
-        ws = wb['등급'] if '등급' in wb.sheetnames else wb.active
-
-        # 헤더는 3행 (등급 시트 구조)
-        headers = []
-        for cell in ws[3]:
-            h = str(cell.value or '').strip().replace('\n', '')
-            headers.append(h)
+        ws = wb.active
 
         created = 0
         updated = 0
 
-        # 데이터는 5행부터
-        for row_idx, row in enumerate(ws.iter_rows(min_row=5, values_only=True), start=5):
-            row_dict = {}
-            for i, val in enumerate(row):
-                if i < len(headers):
-                    row_dict[headers[i]] = val
-
-            part_no = str(row_dict.get('부품번호', '') or '').strip()
+        # 1행=헤더, 2행부터 데이터 (열 순서: 기종/부품번호/금형명/등급/보증수량/누적숏트/이전MT/MT기준)
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            if not row or len(row) < 2:
+                continue
+            part_no = str(row[1] or '').strip()
             if not part_no:
                 continue
 
-            guarantee = row_dict.get('보증수명', 500000)
-            try:
-                guarantee = int(guarantee) if guarantee else 500000
-            except (ValueError, TypeError):
-                guarantee = 500000
+            def safe_int(val, default=0):
+                try:
+                    return int(val) if val else default
+                except (ValueError, TypeError):
+                    return default
 
-            total_prev = row_dict.get('총사용숏트수(2025년까지)', 0)
-            try:
-                total_prev = int(total_prev) if total_prev else 0
-            except (ValueError, TypeError):
-                total_prev = 0
-
-            cv_count = row_dict.get('C/V수', 1)
-            try:
-                cv_count = int(cv_count) if cv_count else 1
-            except (ValueError, TypeError):
-                cv_count = 1
-
-            # 기종: 등급 시트에서 3열=전체, 4열=세부 (헤더가 '기종'으로 합쳐져 있을 수 있음)
-            item_group = str(row_dict.get('기종', '') or row_dict.get('기종(전체)', '') or '').strip()
-            # 세부는 4열 — 헤더가 비어있으면 인덱스로 직접 접근
-            item_detail = ''
-            if len(row) > 3:
-                item_detail = str(row[3] or '').strip() if row[3] else ''
+            defaults = {
+                'item_group': str(row[0] or '').strip(),
+                'mold_name': str(row[2] or '').strip() if len(row) > 2 else '',
+                'grade': str(row[3] or '').strip().upper() if len(row) > 3 else '',
+                'guarantee_shots': safe_int(row[4] if len(row) > 4 else None, 500000),
+                'total_shots_prev': safe_int(row[5] if len(row) > 5 else None, 0),
+                'last_mt_shots': safe_int(row[6] if len(row) > 6 else None, 0),
+            }
 
             obj, is_created = MoldMasterModel.objects.update_or_create(
-                part_no=part_no,
-                defaults={
-                    'item_group': item_group,
-                    'item_group_detail': item_detail,
-                    'mold_name': str(row_dict.get('금형명', '') or '').strip(),
-                    'transfer_date': str(row_dict.get('이관일자', '') or '').strip(),
-                    'transfer_from': str(row_dict.get('이관처', '') or '').strip(),
-                    'guarantee_shots': guarantee,
-                    'cv_count': cv_count,
-                    'total_shots_prev': total_prev,
-                    'grade': str(row_dict.get('등급', '') or '').strip().upper(),
-                    'material_type': str(row_dict.get('재료구분', '') or '').strip(),
-                }
+                part_no=part_no, defaults=defaults
             )
 
             if is_created:
                 created += 1
             else:
                 updated += 1
-
-            # 2026년 월별 숏트수 (헤더: '2026\n1월' 또는 '20261월' 또는 '1월')
-            for month_num in range(1, 13):
-                shots_val = None
-                for key in [f'2026{month_num}월', f'{month_num}월', f'2026\n{month_num}월']:
-                    if key in row_dict and row_dict[key]:
-                        shots_val = row_dict[key]
-                        break
-                if shots_val is None:
-                    shots_val = 0
-                try:
-                    shots_val = int(shots_val) if shots_val else 0
-                except (ValueError, TypeError):
-                    shots_val = 0
-
-                if shots_val > 0:
-                    MoldShotRecord.objects.update_or_create(
-                        mold=obj,
-                        year=2026,
-                        month=month_num,
-                        defaults={'shots': shots_val, 'source': 'EXCEL'}
-                    )
 
         return JsonResponse({
             'success': True,
@@ -8323,6 +8269,42 @@ def mold_mt_upload(request):
     except Exception as e:
         logger.exception('금형 MT 엑셀 업로드 오류')
         return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+@wms_permission_required('can_wms_stock_view')
+def mold_mt_add(request):
+    """금형 수기 등록"""
+    from .models import MoldMaster as MoldMasterModel
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST만 허용'}, status=405)
+
+    part_no = request.POST.get('part_no', '').strip()
+    if not part_no:
+        return JsonResponse({'success': False, 'error': '부품번호는 필수입니다.'})
+
+    if MoldMasterModel.objects.filter(part_no=part_no).exists():
+        return JsonResponse({'success': False, 'error': f'부품번호 {part_no}가 이미 존재합니다.'})
+
+    def safe_int(val, default=0):
+        try:
+            return int(val) if val else default
+        except (ValueError, TypeError):
+            return default
+
+    MoldMasterModel.objects.create(
+        item_group=request.POST.get('item_group', '').strip(),
+        part_no=part_no,
+        mold_name=request.POST.get('mold_name', '').strip(),
+        grade=request.POST.get('grade', '').strip().upper(),
+        material_type=request.POST.get('material_type', '').strip(),
+        guarantee_shots=safe_int(request.POST.get('guarantee_shots'), 500000),
+        total_shots_prev=safe_int(request.POST.get('total_shots_prev'), 0),
+        last_mt_shots=safe_int(request.POST.get('last_mt_shots'), 0),
+    )
+
+    return JsonResponse({'success': True, 'message': f'{part_no} 등록 완료'})
 
 
 @login_required
