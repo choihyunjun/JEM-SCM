@@ -8150,7 +8150,7 @@ def mold_mt_dashboard(request):
     molds_list.sort(key=lambda m: (-m.mt_progress_pct if m.mt_progress_pct > 0 else 0, m.mt_progress_pct == 0, m.pk))
 
     # 페이지네이션
-    paginator = Paginator(molds_list, 30)
+    paginator = Paginator(molds_list, 60)
     page = request.GET.get('page', 1)
     molds = paginator.get_page(page)
 
