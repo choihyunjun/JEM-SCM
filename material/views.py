@@ -8763,6 +8763,13 @@ def mold_repair_list(request):
     page = request.GET.get('page', 1)
     repairs = paginator.get_page(page)
 
+    # 금형 마스터 데이터 (자동완성용)
+    from .models import MoldMaster
+    mold_autocomplete = json.dumps([
+        {'part_no': m['part_no'], 'mold_name': m['mold_name'], 'item_group': m['item_group']}
+        for m in MoldMaster.objects.filter(is_active=True).values('part_no', 'mold_name', 'item_group')
+    ], ensure_ascii=False)
+
     context = {
         'repairs': repairs,
         'status_filter': status_filter,
@@ -8770,6 +8777,7 @@ def mold_repair_list(request):
         'status_counts': status_counts,
         'total_count': total_count,
         'STATUS_CHOICES': MOLD_REPAIR_STATUS,
+        'mold_autocomplete': mold_autocomplete,
     }
     return render(request, 'material/mold_repair_list.html', context)
 

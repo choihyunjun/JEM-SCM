@@ -49,6 +49,15 @@
     .cost-grid .form-group label { font-size: 0.72rem; min-width: 55px; margin-bottom: 0; }
     .cost-grid .form-group input { width: 90px; }
     .section-label { font-size: 0.82rem; font-weight: 700; color: #2d3748; border-bottom: 2px solid #e2e8f0; padding-bottom: 4px; margin: 12px 0 8px; }
+
+    .autocomplete-dropdown {
+        position: absolute; z-index: 1060; background: #fff; border: 1px solid #dee2e6;
+        border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 220px;
+        overflow-y: auto; display: none; width: calc(100% - 24px); margin-top: 2px;
+    }
+    .autocomplete-item { padding: 6px 10px; cursor: pointer; font-size: 0.8rem; }
+    .autocomplete-item:hover { background: #e9ecef; }
+    .autocomplete-item .ac-sub { font-size: 0.7rem; color: #718096; }
 </style>
 
 <!-- Header -->
@@ -157,17 +166,18 @@
                 <form id="createForm">
                     {% csrf_token %}
                     <div class="row g-2">
-                        <div class="col-4">
+                        <div class="col-4" style="position:relative;">
                             <label>품번 <span class="text-danger">*</span></label>
-                            <input type="text" name="part_no" class="form-control form-control-sm" required placeholder="품번 입력">
+                            <input type="text" name="part_no" id="createPartNo" class="form-control form-control-sm" required placeholder="품번 입력" autocomplete="off">
+                            <div id="createPartNoDD" class="autocomplete-dropdown"></div>
                         </div>
                         <div class="col-4">
                             <label>금형명</label>
-                            <input type="text" name="mold_name" class="form-control form-control-sm">
+                            <input type="text" name="mold_name" id="createMoldName" class="form-control form-control-sm" readonly style="background:#f7fafc;">
                         </div>
                         <div class="col-2">
                             <label>품목</label>
-                            <input type="text" name="item_group" class="form-control form-control-sm">
+                            <input type="text" name="item_group" id="createItemGroup" class="form-control form-control-sm" readonly style="background:#f7fafc;">
                         </div>
                         <div class="col-2">
                             <label>중요도</label>
@@ -223,8 +233,48 @@
 </div>
 
 <script>
+var moldData = {{ mold_autocomplete|safe }};
+
+// 품번 자동완성
+(function() {
+    var input = document.getElementById('createPartNo');
+    var dropdown = document.getElementById('createPartNoDD');
+
+    input.addEventListener('input', function() {
+        var val = this.value.trim().toLowerCase();
+        dropdown.innerHTML = '';
+        if (val.length < 1) { dropdown.style.display = 'none'; return; }
+        var matches = moldData.filter(function(m) {
+            return m.part_no.toLowerCase().includes(val) || m.mold_name.toLowerCase().includes(val);
+        }).slice(0, 10);
+        if (!matches.length) { dropdown.style.display = 'none'; return; }
+        matches.forEach(function(m) {
+            var div = document.createElement('div');
+            div.className = 'autocomplete-item';
+            div.innerHTML = '<strong>' + m.part_no + '</strong> <span class="ac-sub">' + m.mold_name + ' / ' + m.item_group + '</span>';
+            div.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                input.value = m.part_no;
+                document.getElementById('createMoldName').value = m.mold_name;
+                document.getElementById('createItemGroup').value = m.item_group;
+                dropdown.style.display = 'none';
+            });
+            dropdown.appendChild(div);
+        });
+        dropdown.style.display = 'block';
+    });
+    input.addEventListener('blur', function() {
+        setTimeout(function() { dropdown.style.display = 'none'; }, 150);
+    });
+    input.addEventListener('focus', function() {
+        if (this.value.trim().length >= 1) this.dispatchEvent(new Event('input'));
+    });
+})();
+
 function openCreateModal() {
     document.getElementById('createForm').reset();
+    document.getElementById('createMoldName').value = '';
+    document.getElementById('createItemGroup').value = '';
     new bootstrap.Modal(document.getElementById('createModal')).show();
 }
 
