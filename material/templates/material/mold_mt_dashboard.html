@@ -74,7 +74,7 @@
     .sortable { cursor: pointer; user-select: none; }
     .sortable:hover { background: #e9ecef !important; }
 
-    /* Autocomplete */
+    /* Autocomplete (품번/품명) */
     .autocomplete-wrap { position: relative; }
     .autocomplete-dropdown {
         position: absolute; z-index: 1050; background: #fff; border: 1px solid #dee2e6;
@@ -84,18 +84,18 @@
     .autocomplete-item { padding: 5px 10px; cursor: pointer; font-size: 0.8rem; }
     .autocomplete-item:hover { background: #e9ecef; }
 
-    /* Multi-select tags */
-    .tag-container { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; min-height: 22px; }
-    .filter-tag {
-        display: inline-flex; align-items: center; gap: 3px;
-        background: #e2e8f0; color: #2d3748; font-size: 0.7rem;
-        padding: 1px 7px; border-radius: 10px; white-space: nowrap;
+    /* Toggle button filter */
+    .filter-btn-group { display: flex; flex-wrap: wrap; gap: 4px; }
+    .filter-toggle {
+        font-size: 0.72rem; padding: 3px 10px; border-radius: 15px;
+        border: 1px solid #cbd5e0; background: #fff; color: #4a5568;
+        cursor: pointer; transition: all 0.15s; white-space: nowrap;
+        user-select: none;
     }
-    .filter-tag .tag-remove {
-        cursor: pointer; font-weight: bold; color: #718096;
-        font-size: 0.75rem; line-height: 1;
+    .filter-toggle:hover { border-color: #4299e1; color: #2b6cb0; }
+    .filter-toggle.active {
+        background: #3182ce; color: #fff; border-color: #3182ce;
     }
-    .filter-tag .tag-remove:hover { color: #e53e3e; }
 
     /* Checkbox */
     .row-check { width: 16px; height: 16px; cursor: pointer; }
@@ -163,50 +163,63 @@
 
 <!-- Filter Bar -->
 <div class="filter-bar">
-    <form method="get" id="filterForm" class="row g-2 align-items-end">
-        <!-- 품번/품명 (단일 자동완성) -->
-        <div class="col-md-3 autocomplete-wrap">
-            <label class="form-label small fw-bold mb-1">품번/품명</label>
-            <input type="text" name="q" id="acPartNo" class="form-control form-control-sm"
-                   placeholder="품번 또는 품명 검색" value="{{ q }}" autocomplete="off">
-            <div id="acPartNoDD" class="autocomplete-dropdown"></div>
+    <form method="get" id="filterForm">
+        <!-- 1행: 품번/품명 검색 -->
+        <div class="d-flex align-items-center gap-3 mb-2">
+            <div class="autocomplete-wrap" style="width:300px;">
+                <input type="text" name="q" id="acPartNo" class="form-control form-control-sm"
+                       placeholder="품번 또는 품명 검색" value="{{ q }}" autocomplete="off">
+                <div id="acPartNoDD" class="autocomplete-dropdown"></div>
+            </div>
+            <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search me-1"></i>검색</button>
+            <a href="{% url 'material:mold_mt_dashboard' %}" class="btn btn-sm btn-outline-secondary">초기화</a>
         </div>
-        <!-- 등급 (다중) -->
-        <div class="col-md-2 autocomplete-wrap">
-            <label class="form-label small fw-bold mb-1">등급</label>
-            <input type="text" id="acGrade" class="form-control form-control-sm"
-                   placeholder="등급 선택" autocomplete="off">
-            <div id="acGradeDD" class="autocomplete-dropdown"></div>
-            <div class="tag-container" id="tagGrade"></div>
-        </div>
-        <!-- 재료 (다중) -->
-        <div class="col-md-2 autocomplete-wrap">
-            <label class="form-label small fw-bold mb-1">재료</label>
-            <input type="text" id="acMaterial" class="form-control form-control-sm"
-                   placeholder="재료 선택" autocomplete="off">
-            <div id="acMaterialDD" class="autocomplete-dropdown"></div>
-            <div class="tag-container" id="tagMaterial"></div>
-        </div>
-        <!-- 기종 (다중) -->
-        <div class="col-md-2 autocomplete-wrap">
-            <label class="form-label small fw-bold mb-1">기종</label>
-            <input type="text" id="acItemGroup" class="form-control form-control-sm"
-                   placeholder="기종 선택" autocomplete="off">
-            <div id="acItemGroupDD" class="autocomplete-dropdown"></div>
-            <div class="tag-container" id="tagItemGroup"></div>
-        </div>
-        <!-- 상태 (다중) -->
-        <div class="col-md-2 autocomplete-wrap">
-            <label class="form-label small fw-bold mb-1">상태</label>
-            <input type="text" id="acStatus" class="form-control form-control-sm"
-                   placeholder="상태 선택" autocomplete="off">
-            <div id="acStatusDD" class="autocomplete-dropdown"></div>
-            <div class="tag-container" id="tagStatus"></div>
-        </div>
-        <!-- 버튼 -->
-        <div class="col-md-1 d-flex gap-1">
-            <button type="submit" class="btn btn-sm btn-primary" title="검색"><i class="bi bi-search"></i></button>
-            <a href="{% url 'material:mold_mt_dashboard' %}" class="btn btn-sm btn-outline-secondary" title="초기화"><i class="bi bi-arrow-counterclockwise"></i></a>
+        <!-- 2행: 토글 버튼 필터 -->
+        <div class="d-flex flex-wrap gap-4 align-items-start">
+            <div>
+                <label class="form-label small fw-bold mb-1 text-muted">등급</label>
+                <div class="filter-btn-group" id="filterGrade">
+                    {% for g in grade_list %}
+                    <label class="filter-toggle {% if g in grades %}active{% endif %}">
+                        <input type="checkbox" name="grade" value="{{ g }}" {% if g in grades %}checked{% endif %} hidden>{{ g }}
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+            <div>
+                <label class="form-label small fw-bold mb-1 text-muted">재료</label>
+                <div class="filter-btn-group" id="filterMaterial">
+                    {% for mt in material_list %}
+                    <label class="filter-toggle {% if mt in materials_filter %}active{% endif %}">
+                        <input type="checkbox" name="material_type" value="{{ mt }}" {% if mt in materials_filter %}checked{% endif %} hidden>{{ mt }}
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+            <div>
+                <label class="form-label small fw-bold mb-1 text-muted">기종</label>
+                <div class="filter-btn-group" id="filterItemGroup">
+                    {% for ig in item_group_list %}
+                    <label class="filter-toggle {% if ig in item_groups_filter %}active{% endif %}">
+                        <input type="checkbox" name="item_group" value="{{ ig }}" {% if ig in item_groups_filter %}checked{% endif %} hidden>{{ ig }}
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+            <div>
+                <label class="form-label small fw-bold mb-1 text-muted">상태</label>
+                <div class="filter-btn-group" id="filterStatus">
+                    <label class="filter-toggle {% if 'normal' in status_filters %}active{% endif %}">
+                        <input type="checkbox" name="status" value="normal" {% if 'normal' in status_filters %}checked{% endif %} hidden>정상
+                    </label>
+                    <label class="filter-toggle {% if 'mt_due' in status_filters %}active{% endif %}">
+                        <input type="checkbox" name="status" value="mt_due" {% if 'mt_due' in status_filters %}checked{% endif %} hidden>MT임박/필요
+                    </label>
+                    <label class="filter-toggle {% if 'over' in status_filters %}active{% endif %}">
+                        <input type="checkbox" name="status" value="over" {% if 'over' in status_filters %}checked{% endif %} hidden>보증초과
+                    </label>
+                </div>
+            </div>
         </div>
     </form>
 </div>
@@ -490,42 +503,18 @@
 </div>
 
 <script>
-// ─── 자동완성 데이터 ───
-var acData = {
-    partNos: {{ part_nos_json|safe }},
-    grades: {{ grade_list_json|safe }},
-    materials: {{ material_list_json|safe }},
-    itemGroups: {{ item_group_list_json|safe }},
-    statuses: [
-        {label: '정상', value: 'normal'},
-        {label: 'MT임박', value: 'mt_due'},
-        {label: 'MT필요', value: 'mt_due'},
-        {label: '보증초과', value: 'over'}
-    ]
-};
-
-// 서버에서 ���달된 기존 선택값
-var selectedFilters = {
-    grade: {{ grades_json|safe }},
-    material_type: {{ materials_filter_json|safe }},
-    item_group: {{ item_groups_filter_json|safe }},
-    status: {{ status_filters_json|safe }}
-};
-
-// 상태 value→label 매핑
-var statusLabels = {normal: '정상', mt_due: 'MT임박/필요', over: '보증초과'};
-
-// ─── 단일 자동완성 (품번/품명) ───
-function setupSingleAutocomplete(inputId, dropdownId, dataList) {
-    var input = document.getElementById(inputId);
-    var dropdown = document.getElementById(dropdownId);
+// ─── 품번/품명 자동완성 ───
+(function() {
+    var partNos = {{ part_nos_json|safe }};
+    var input = document.getElementById('acPartNo');
+    var dropdown = document.getElementById('acPartNoDD');
     if (!input || !dropdown) return;
 
     input.addEventListener('input', function() {
         var val = this.value.trim().toLowerCase();
         dropdown.innerHTML = '';
         if (val.length < 1) { dropdown.style.display = 'none'; return; }
-        var matches = dataList.filter(function(item) {
+        var matches = partNos.filter(function(item) {
             return item.toLowerCase().includes(val);
         }).slice(0, 10);
         if (!matches.length) { dropdown.style.display = 'none'; return; }
@@ -535,7 +524,6 @@ function setupSingleAutocomplete(inputId, dropdownId, dataList) {
             div.textContent = item;
             div.addEventListener('mousedown', function(e) {
                 e.preventDefault();
-                // 품번만 추출 (품번 / 품명 형식)
                 input.value = item.split(' / ')[0];
                 dropdown.style.display = 'none';
             });
@@ -549,92 +537,18 @@ function setupSingleAutocomplete(inputId, dropdownId, dataList) {
     input.addEventListener('focus', function() {
         if (this.value.trim().length >= 1) this.dispatchEvent(new Event('input'));
     });
-}
+})();
 
-// ─── 다중 자동완성 ───
-function setupMultiAutocomplete(inputId, dropdownId, tagContainerId, paramName, dataList, isObject) {
-    var input = document.getElementById(inputId);
-    var dropdown = document.getElementById(dropdownId);
-    var tagContainer = document.getElementById(tagContainerId);
-    if (!input || !dropdown || !tagContainer) return;
-
-    // 기존 선택값 복원
-    var selected = selectedFilters[paramName] || [];
-    selected.forEach(function(val) {
-        var label = val;
-        if (isObject) {
-            var found = dataList.find(function(d) { return d.value === val; });
-            label = found ? found.label : statusLabels[val] || val;
-        }
-        addTag(tagContainer, paramName, val, label);
+// ─── 토글 버튼 필터: 클릭하면 즉시 폼 제출 ───
+document.querySelectorAll('.filter-toggle').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        var cb = this.querySelector('input[type=checkbox]');
+        cb.checked = !cb.checked;
+        this.classList.toggle('active', cb.checked);
+        document.getElementById('filterForm').submit();
     });
-
-    input.addEventListener('input', function() {
-        var val = this.value.trim().toLowerCase();
-        dropdown.innerHTML = '';
-        if (val.length < 1 && !isObject) { dropdown.style.display = 'none'; return; }
-
-        var items = isObject ? dataList : dataList.map(function(d) { return {label: d, value: d}; });
-        var matches = items.filter(function(item) {
-            if (val.length > 0 && !item.label.toLowerCase().includes(val)) return false;
-            // 이미 선택된 것 제외 (status는 value 기준 중복 제거)
-            var hiddenInputs = tagContainer.querySelectorAll('input[type=hidden]');
-            for (var i = 0; i < hiddenInputs.length; i++) {
-                if (hiddenInputs[i].value === item.value) return false;
-            }
-            return true;
-        }).slice(0, 10);
-
-        if (!matches.length) { dropdown.style.display = 'none'; return; }
-        matches.forEach(function(item) {
-            var div = document.createElement('div');
-            div.className = 'autocomplete-item';
-            div.textContent = item.label;
-            div.addEventListener('mousedown', function(e) {
-                e.preventDefault();
-                addTag(tagContainer, paramName, item.value, item.label);
-                input.value = '';
-                dropdown.style.display = 'none';
-            });
-            dropdown.appendChild(div);
-        });
-        dropdown.style.display = 'block';
-    });
-
-    input.addEventListener('blur', function() {
-        setTimeout(function() { dropdown.style.display = 'none'; }, 150);
-    });
-    input.addEventListener('focus', function() {
-        this.dispatchEvent(new Event('input'));
-    });
-}
-
-function addTag(container, paramName, value, label) {
-    // 중복 방지
-    var existing = container.querySelectorAll('input[type=hidden]');
-    for (var i = 0; i < existing.length; i++) {
-        if (existing[i].value === value) return;
-    }
-    var tag = document.createElement('span');
-    tag.className = 'filter-tag';
-    tag.innerHTML = label + ' <span class="tag-remove">&times;</span>';
-    var hidden = document.createElement('input');
-    hidden.type = 'hidden';
-    hidden.name = paramName;
-    hidden.value = value;
-    tag.appendChild(hidden);
-    tag.querySelector('.tag-remove').addEventListener('click', function() {
-        tag.remove();
-    });
-    container.appendChild(tag);
-}
-
-// 초기화
-setupSingleAutocomplete('acPartNo', 'acPartNoDD', acData.partNos);
-setupMultiAutocomplete('acGrade', 'acGradeDD', 'tagGrade', 'grade', acData.grades, false);
-setupMultiAutocomplete('acMaterial', 'acMaterialDD', 'tagMaterial', 'material_type', acData.materials, false);
-setupMultiAutocomplete('acItemGroup', 'acItemGroupDD', 'tagItemGroup', 'item_group', acData.itemGroups, false);
-setupMultiAutocomplete('acStatus', 'acStatusDD', 'tagStatus', 'status', acData.statuses, true);
+});
 
 // ─── 체크박스 전체선택 ───
 document.getElementById('checkAll').addEventListener('change', function() {
