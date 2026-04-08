@@ -266,34 +266,34 @@
                         <td><span class="badge bg-secondary" style="font-size:0.65rem;">{{ m.grade|default:'-' }}</span></td>
                         <td>{{ m.material_type|default:'-' }}</td>
                         <td>
-                            {% if m._cached_over_guarantee %}
+                            {% if m.c_over_guarantee %}
                                 <span class="badge bg-danger" style="font-size:0.6rem;">초과</span>
                             {% else %}
                                 <span class="badge bg-outline-success border text-success" style="font-size:0.6rem;">정상</span>
                             {% endif %}
                         </td>
-                        <td class="fw-bold" data-value="{{ m._cached_total_shots }}">{{ m._cached_total_shots|intcomma }}</td>
+                        <td class="fw-bold" data-value="{{ m.c_total_shots }}">{{ m.c_total_shots|intcomma }}</td>
                         <td style="color:#888;">{{ m.last_mt_shots|intcomma }}</td>
-                        <td>{{ m._cached_mt_interval|intcomma }}</td>
-                        <td data-value="{{ m._cached_mt_pct }}">
+                        <td>{{ m.c_mt_interval|intcomma }}</td>
+                        <td data-value="{{ m.c_mt_pct }}">
                             <div class="progress-bar-mt">
-                                <div class="bar {% if m._cached_mt_pct >= 80 %}bar-red{% elif m._cached_mt_pct >= 60 %}bar-yellow{% else %}bar-green{% endif %}"
-                                     style="width: {{ m._cached_mt_pct }}%">
-                                    {% if m._cached_mt_pct >= 15 %}{{ m._cached_mt_pct }}%{% endif %}
+                                <div class="bar {% if m.c_mt_pct >= 80 %}bar-red{% elif m.c_mt_pct >= 60 %}bar-yellow{% else %}bar-green{% endif %}"
+                                     style="width: {{ m.c_mt_pct }}%">
+                                    {% if m.c_mt_pct >= 15 %}{{ m.c_mt_pct }}%{% endif %}
                                 </div>
                             </div>
                         </td>
-                        <td data-value="{% if m._cached_is_mt_due %}2{% elif m._cached_mt_pct >= 80 %}1{% else %}0{% endif %}">
-                            {% if m._cached_is_mt_due %}
+                        <td data-value="{% if m.c_is_mt_due %}2{% elif m.c_mt_pct >= 80 %}1{% else %}0{% endif %}">
+                            {% if m.c_is_mt_due %}
                                 <span class="badge badge-status bg-danger">MT필요</span>
-                            {% elif m._cached_mt_pct >= 80 %}
+                            {% elif m.c_mt_pct >= 80 %}
                                 <span class="badge badge-status bg-warning text-dark">MT임박</span>
                             {% else %}
                                 <span class="badge badge-status bg-success">정상</span>
                             {% endif %}
                         </td>
                         <td>
-                            {% if m._cached_mt_pct >= 80 %}
+                            {% if m.c_mt_pct >= 80 %}
                             <button class="btn btn-sm btn-outline-primary btn-mt-complete"
                                     onclick="event.stopPropagation(); openMTComplete({{ m.pk }}, '{{ m.part_no }}');"
                                     title="MT 완료 처리">

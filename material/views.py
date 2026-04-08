@@ -8135,9 +8135,9 @@ def mold_mt_dashboard(request):
 
     # Python에서 한번에 계산 (DB 추가 조회 없음)
     for m in molds_list:
-        m._cached_total_shots = m.total_shots_prev + m._monthly_shots
-        m._cached_remaining = m.guarantee_shots - m._cached_total_shots
-        m._cached_over_guarantee = m._cached_total_shots > m.guarantee_shots
+        m.c_total_shots = m.total_shots_prev + m._monthly_shots
+        m.c_remaining = m.guarantee_shots - m.c_total_shots
+        m.c_over_guarantee = m.c_total_shots > m.guarantee_shots
 
         # MT interval (캐시에서 조회)
         interval = 30000
@@ -8145,12 +8145,12 @@ def mold_mt_dashboard(request):
             setting = mt_settings_cache.get(m.material_type)
             if setting:
                 interval = setting.get(m.grade.lower(), 30000)
-        m._cached_mt_interval = interval
+        m.c_mt_interval = interval
 
-        shots_since = m._cached_total_shots - m.last_mt_shots
-        m._cached_shots_since_mt = shots_since
-        m._cached_mt_pct = min(round(shots_since / interval * 100, 1), 100) if interval > 0 else 0
-        m._cached_is_mt_due = shots_since >= interval
+        shots_since = m.c_total_shots - m.last_mt_shots
+        m.c_shots_since_mt = shots_since
+        m.c_mt_pct = min(round(shots_since / interval * 100, 1), 100) if interval > 0 else 0
+        m.c_is_mt_due = shots_since >= interval
 
     # 상태별 분류 계산
     total_count = len(molds_list)
@@ -8159,9 +8159,9 @@ def mold_mt_dashboard(request):
     normal_count = 0
 
     for m in molds_list:
-        if m._cached_over_guarantee:
+        if m.c_over_guarantee:
             over_guarantee_count += 1
-        elif m._cached_is_mt_due or m._cached_mt_pct >= 80:
+        elif m.c_is_mt_due or m.c_mt_pct >= 80:
             mt_due_count += 1
         else:
             normal_count += 1
@@ -8170,16 +8170,16 @@ def mold_mt_dashboard(request):
     if status_filters:
         filtered = []
         for m in molds_list:
-            if m._cached_over_guarantee and 'over' in status_filters:
+            if m.c_over_guarantee and 'over' in status_filters:
                 filtered.append(m)
-            elif (m._cached_is_mt_due or m._cached_mt_pct >= 80) and not m._cached_over_guarantee and 'mt_due' in status_filters:
+            elif (m.c_is_mt_due or m.c_mt_pct >= 80) and not m.c_over_guarantee and 'mt_due' in status_filters:
                 filtered.append(m)
-            elif not m._cached_is_mt_due and m._cached_mt_pct < 80 and not m._cached_over_guarantee and 'normal' in status_filters:
+            elif not m.c_is_mt_due and m.c_mt_pct < 80 and not m.c_over_guarantee and 'normal' in status_filters:
                 filtered.append(m)
         molds_list = filtered
 
     # 기본 정렬: MT 진행률 높은순, 진행률 0이면 pk순
-    molds_list.sort(key=lambda m: (-m._cached_mt_pct if m._cached_mt_pct > 0 else 0, m._cached_mt_pct == 0, m.pk))
+    molds_list.sort(key=lambda m: (-m.c_mt_pct if m.c_mt_pct > 0 else 0, m.c_mt_pct == 0, m.pk))
 
     # 페이지네이션
     paginator = Paginator(molds_list, 60)
