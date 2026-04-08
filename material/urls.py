@@ -144,5 +144,6 @@ urlpatterns = [
     path('mold/mt/complete/', views.mold_mt_complete, name='mold_mt_complete'),
     path('mold/mt/settings/', views.mold_mt_settings, name='mold_mt_settings'),
     path('api/mold/mt/<int:pk>/', views.api_mold_mt_detail, name='api_mold_mt_detail'),
+    path('api/mold/mt/<int:pk>/edit/', views.api_mold_mt_edit, name='api_mold_mt_edit'),
     path('mold/mt/erp-sync/', views.mold_mt_erp_sync, name='mold_mt_erp_sync'),
 ]

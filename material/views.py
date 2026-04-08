@@ -8527,6 +8527,41 @@ def api_mold_mt_detail(request, pk):
 
 @login_required
 @wms_permission_required('can_wms_stock_view')
+def api_mold_mt_edit(request, pk):
+    """금형 마스터 수정 API"""
+    from .models import MoldMaster as MoldMasterModel
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST만 허용'}, status=405)
+
+    mold = get_object_or_404(MoldMasterModel, pk=pk)
+
+    def safe_int(val, default=0):
+        try:
+            return int(val) if val else default
+        except (ValueError, TypeError):
+            return default
+
+    mold.part_no = request.POST.get('part_no', mold.part_no).strip()
+    mold.mold_name = request.POST.get('mold_name', mold.mold_name).strip()
+    mold.item_group = request.POST.get('item_group', mold.item_group).strip()
+    mold.item_group_detail = request.POST.get('item_group_detail', mold.item_group_detail).strip()
+    mold.material_type = request.POST.get('material_type', mold.material_type).strip()
+    mold.grade = request.POST.get('grade', mold.grade).strip().upper()
+    mold.cv_count = safe_int(request.POST.get('cv_count'), mold.cv_count)
+    mold.guarantee_shots = safe_int(request.POST.get('guarantee_shots'), mold.guarantee_shots)
+    mold.total_shots_prev = safe_int(request.POST.get('total_shots_prev'), mold.total_shots_prev)
+    mold.last_mt_shots = safe_int(request.POST.get('last_mt_shots'), mold.last_mt_shots)
+    mold.transfer_date = request.POST.get('transfer_date', mold.transfer_date).strip()
+    mold.transfer_from = request.POST.get('transfer_from', mold.transfer_from).strip()
+    mold.remark = request.POST.get('remark', mold.remark).strip()
+    mold.save()
+
+    return JsonResponse({'success': True, 'message': f'{mold.part_no} 수정 완료'})
+
+
+@login_required
+@wms_permission_required('can_wms_stock_view')
 def mold_mt_erp_sync(request):
     """ERP 생산입고 데이터로 금형 숏트수 동기화"""
     from .models import MoldMaster as MoldMasterModel, MoldShotRecord

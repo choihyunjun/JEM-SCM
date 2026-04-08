@@ -699,26 +699,77 @@ document.querySelectorAll('.clickable-row').forEach(row => {
                 }
 
                 body.innerHTML = `
-                    <table class="table table-bordered detail-table mb-3">
-                        <tr><th>부품번호</th><td>${data.part_no}</td><th>금형명</th><td>${data.mold_name}</td></tr>
-                        <tr><th>기종(전체)</th><td>${data.item_group || '-'}</td><th>기종(세부)</th><td>${data.item_group_detail || '-'}</td></tr>
-                        <tr><th>이관일자</th><td>${data.transfer_date || '-'}</td><th>이관처</th><td>${data.transfer_from || '-'}</td></tr>
-                        <tr><th>재료구분</th><td>${data.material_type || '-'}</td><th>등급</th><td>${data.grade || '-'}</td></tr>
-                        <tr><th>C/V수</th><td>${data.cv_count}</td><th>보증수명</th><td>${data.guarantee_shots.toLocaleString()}</td></tr>
-                        <tr><th>누적숏트</th><td class="fw-bold">${data.total_shots.toLocaleString()}</td><th>잔량</th><td class="${data.remaining_shots < 0 ? 'text-danger fw-bold' : ''}">${data.remaining_shots.toLocaleString()}</td></tr>
-                        <tr><th>MT주기</th><td>${data.mt_interval.toLocaleString()}</td><th>최근MT 이후</th><td>${data.shots_since_last_mt.toLocaleString()}</td></tr>
-                        <tr>
-                            <th>MT 진행률</th>
-                            <td>
-                                <div class="progress-bar-mt">
-                                    <div class="bar ${barClass}" style="width:${data.mt_progress_pct}%">${data.mt_progress_pct}%</div>
-                                </div>
-                            </td>
-                            <th>상태</th>
-                            <td>${statusBadge}</td>
-                        </tr>
-                        <tr><th>비고</th><td colspan="3">${data.remark || '-'}</td></tr>
-                    </table>
+                    <div class="d-flex justify-content-end mb-2">
+                        <button class="btn btn-sm btn-outline-primary" id="editMoldBtn" onclick="toggleEditMode(${data.pk})">
+                            <i class="bi bi-pencil me-1"></i>수정
+                        </button>
+                    </div>
+                    <div id="viewMode">
+                        <table class="table table-bordered detail-table mb-3">
+                            <tr><th>부품번호</th><td>${data.part_no}</td><th>금형명</th><td>${data.mold_name}</td></tr>
+                            <tr><th>기종(전체)</th><td>${data.item_group || '-'}</td><th>기종(세부)</th><td>${data.item_group_detail || '-'}</td></tr>
+                            <tr><th>이관일자</th><td>${data.transfer_date || '-'}</td><th>이관처</th><td>${data.transfer_from || '-'}</td></tr>
+                            <tr><th>재료구분</th><td>${data.material_type || '-'}</td><th>등급</th><td>${data.grade || '-'}</td></tr>
+                            <tr><th>C/V수</th><td>${data.cv_count}</td><th>보증수명</th><td>${data.guarantee_shots.toLocaleString()}</td></tr>
+                            <tr><th>누적숏트</th><td class="fw-bold">${data.total_shots.toLocaleString()}</td><th>잔량</th><td class="${data.remaining_shots < 0 ? 'text-danger fw-bold' : ''}">${data.remaining_shots.toLocaleString()}</td></tr>
+                            <tr><th>MT주기</th><td>${data.mt_interval.toLocaleString()}</td><th>최근MT 이후</th><td>${data.shots_since_last_mt.toLocaleString()}</td></tr>
+                            <tr>
+                                <th>MT 진행률</th>
+                                <td>
+                                    <div class="progress-bar-mt">
+                                        <div class="bar ${barClass}" style="width:${data.mt_progress_pct}%">${data.mt_progress_pct}%</div>
+                                    </div>
+                                </td>
+                                <th>상태</th>
+                                <td>${statusBadge}</td>
+                            </tr>
+                            <tr><th>비고</th><td colspan="3">${data.remark || '-'}</td></tr>
+                        </table>
+                    </div>
+                    <div id="editMode" class="d-none">
+                        <form id="editMoldForm">
+                            <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+                            <table class="table table-bordered detail-table mb-3">
+                                <tr>
+                                    <th>부품번호</th><td><input type="text" class="form-control form-control-sm" name="part_no" value="${data.part_no}"></td>
+                                    <th>금형명</th><td><input type="text" class="form-control form-control-sm" name="mold_name" value="${data.mold_name}"></td>
+                                </tr>
+                                <tr>
+                                    <th>기종(전체)</th><td><input type="text" class="form-control form-control-sm" name="item_group" value="${data.item_group || ''}"></td>
+                                    <th>기종(세부)</th><td><input type="text" class="form-control form-control-sm" name="item_group_detail" value="${data.item_group_detail || ''}"></td>
+                                </tr>
+                                <tr>
+                                    <th>재료구분</th><td><input type="text" class="form-control form-control-sm" name="material_type" value="${data.material_type || ''}"></td>
+                                    <th>등급</th>
+                                    <td>
+                                        <select class="form-select form-select-sm" name="grade">
+                                            <option value="">-</option>
+                                            ${['A','B','C','D','E'].map(g => '<option value="'+g+'"'+(data.grade===g?' selected':'')+'>'+g+'</option>').join('')}
+                                        </select>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>C/V수</th><td><input type="number" class="form-control form-control-sm" name="cv_count" value="${data.cv_count}"></td>
+                                    <th>보증수명</th><td><input type="number" class="form-control form-control-sm" name="guarantee_shots" value="${data.guarantee_shots}"></td>
+                                </tr>
+                                <tr>
+                                    <th>누적숏트(이전)</th><td><input type="number" class="form-control form-control-sm" name="total_shots_prev" value="${data.total_shots_prev}"></td>
+                                    <th>이전MT숏트</th><td><input type="number" class="form-control form-control-sm" name="last_mt_shots" value="${data.last_mt_shots}"></td>
+                                </tr>
+                                <tr>
+                                    <th>이관일자</th><td><input type="text" class="form-control form-control-sm" name="transfer_date" value="${data.transfer_date || ''}"></td>
+                                    <th>이관처</th><td><input type="text" class="form-control form-control-sm" name="transfer_from" value="${data.transfer_from || ''}"></td>
+                                </tr>
+                                <tr><th>비고</th><td colspan="3"><textarea class="form-control form-control-sm" name="remark" rows="2">${data.remark || ''}</textarea></td></tr>
+                            </table>
+                            <div class="d-flex justify-content-end gap-2">
+                                <button type="button" class="btn btn-sm btn-secondary" onclick="toggleEditMode()">취소</button>
+                                <button type="button" class="btn btn-sm btn-primary" onclick="submitEditMold(${data.pk})">
+                                    <i class="bi bi-check-circle me-1"></i>저장
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                     ${shotHtml}
                     ${mtLogHtml}
                 `;
@@ -728,6 +779,42 @@ document.querySelectorAll('.clickable-row').forEach(row => {
             });
     });
 });
+
+// ─── 상세 모달 수정 ───
+function toggleEditMode(pk) {
+    var viewMode = document.getElementById('viewMode');
+    var editMode = document.getElementById('editMode');
+    var btn = document.getElementById('editMoldBtn');
+    if (editMode.classList.contains('d-none')) {
+        viewMode.classList.add('d-none');
+        editMode.classList.remove('d-none');
+        btn.classList.add('d-none');
+    } else {
+        viewMode.classList.remove('d-none');
+        editMode.classList.add('d-none');
+        btn.classList.remove('d-none');
+    }
+}
+
+function submitEditMold(pk) {
+    var form = document.getElementById('editMoldForm');
+    var formData = new FormData(form);
+
+    fetch('/wms/api/mold/mt/' + pk + '/edit/', {
+        method: 'POST',
+        body: formData,
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('오류: ' + data.error);
+        }
+    })
+    .catch(err => alert('요청 실패: ' + err.message));
+}
 
 // ─── MT Complete ───
 function openMTComplete(pk, partNo) {
