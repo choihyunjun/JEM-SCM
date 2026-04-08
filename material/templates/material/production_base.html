@@ -46,14 +46,17 @@
 
                             {# 금형팀 #}
                             {% if user|has_perm:'can_wms_stock_view' %}
-                            <a class="nav-link collapsed" href="#" data-bs-toggle="collapse" data-bs-target="#collapseMold">
+                            <a class="nav-link collapsed {% if request.resolver_match.url_name in 'mold_mt_dashboard' %}active{% endif %}"
+                               href="#" data-bs-toggle="collapse" data-bs-target="#collapseMold"
+                               aria-expanded="{% if request.resolver_match.url_name in 'mold_mt_dashboard' %}true{% else %}false{% endif %}">
                                 <div class="sb-nav-link-icon"><i class="bi bi-wrench"></i></div>
                                 금형팀
                                 <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
                             </a>
-                            <div class="collapse" id="collapseMold" data-bs-parent="#sidenavAccordion">
+                            <div class="collapse {% if request.resolver_match.url_name in 'mold_mt_dashboard' %}show{% endif %}"
+                                 id="collapseMold" data-bs-parent="#sidenavAccordion">
                                 <nav class="sb-sidenav-menu-nested nav">
-                                    <a class="nav-link text-muted" href="#">준비 중</a>
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'mold_mt_dashboard' %}active{% endif %}" href="{% url 'material:mold_mt_dashboard' %}">금형 수명 관리</a>
                                 </nav>
                             </div>
                             {% endif %}

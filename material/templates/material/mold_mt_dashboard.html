@@ -1,0 +1,700 @@
+{% extends 'material/production_base.html' %}
+
+{% block title %}금형 수명 관리{% endblock %}
+
+{% block production_content %}
+<style>
+    .mt-header {
+        background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%);
+        color: white;
+        padding: 24px 28px;
+        border-radius: 12px;
+        margin-bottom: 24px;
+    }
+    .mt-header h2 { margin: 0; font-size: 1.5rem; font-weight: 700; }
+    .mt-header .subtitle { opacity: 0.8; font-size: 0.9rem; margin-top: 4px; }
+
+    .summary-card {
+        border-radius: 10px;
+        padding: 18px 20px;
+        color: white;
+        text-align: center;
+        cursor: pointer;
+        transition: transform 0.15s, box-shadow 0.15s;
+        text-decoration: none;
+        display: block;
+    }
+    .summary-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.15); color: white; text-decoration: none; }
+    .summary-card .card-number { font-size: 2rem; font-weight: 800; }
+    .summary-card .card-label { font-size: 0.85rem; opacity: 0.9; margin-top: 2px; }
+    .bg-total { background: linear-gradient(135deg, #667eea, #764ba2); }
+    .bg-danger-mt { background: linear-gradient(135deg, #e53e3e, #c53030); }
+    .bg-warning-mt { background: linear-gradient(135deg, #ed8936, #dd6b20); }
+    .bg-success-mt { background: linear-gradient(135deg, #38a169, #2f855a); }
+
+    .filter-bar {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 16px 20px;
+        margin-bottom: 20px;
+    }
+
+    .table-mt { font-size: 0.85rem; }
+    .table-mt th { background: #2d3748; color: white; text-align: center; vertical-align: middle; white-space: nowrap; position: sticky; top: 0; z-index: 2; }
+    .table-mt td { vertical-align: middle; text-align: center; white-space: nowrap; }
+
+    .progress-bar-mt {
+        height: 20px;
+        border-radius: 10px;
+        background: #e2e8f0;
+        overflow: hidden;
+        min-width: 100px;
+    }
+    .progress-bar-mt .bar {
+        height: 100%;
+        border-radius: 10px;
+        transition: width 0.3s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: white;
+    }
+    .bar-green { background: linear-gradient(90deg, #48bb78, #38a169); }
+    .bar-yellow { background: linear-gradient(90deg, #ecc94b, #d69e2e); }
+    .bar-red { background: linear-gradient(90deg, #fc8181, #e53e3e); }
+
+    .badge-status { font-size: 0.75rem; padding: 4px 10px; border-radius: 12px; }
+
+    .btn-mt-complete { font-size: 0.75rem; padding: 2px 8px; }
+
+    .clickable-row { cursor: pointer; }
+    .clickable-row:hover { background: #edf2f7 !important; }
+
+    /* Modal */
+    .modal-header-mt { background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); color: white; }
+    .detail-table th { width: 140px; background: #f7fafc; font-weight: 600; font-size: 0.85rem; }
+    .detail-table td { font-size: 0.85rem; }
+</style>
+
+<!-- Header -->
+<div class="mt-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div>
+        <h2><i class="bi bi-wrench me-2"></i>금형 수명 관리</h2>
+        <div class="subtitle">금형 MT(정비) 현황 및 수명 관리 대시보드</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <button class="btn btn-sm btn-outline-light" onclick="document.getElementById('uploadModal').querySelector('.modal').classList.add('show'); new bootstrap.Modal(document.getElementById('uploadModal')).show();">
+            <i class="bi bi-upload me-1"></i>엑셀 업로드
+        </button>
+        <a href="{% url 'material:mold_mt_excel' %}" class="btn btn-sm btn-outline-light">
+            <i class="bi bi-download me-1"></i>엑셀 다운로드
+        </a>
+        <button class="btn btn-sm btn-outline-light" onclick="new bootstrap.Modal(document.getElementById('settingsModal')).show(); loadSettings();">
+            <i class="bi bi-sliders me-1"></i>MT 기준 설정
+        </button>
+        <button class="btn btn-sm btn-outline-light" onclick="new bootstrap.Modal(document.getElementById('erpSyncModal')).show();">
+            <i class="bi bi-arrow-repeat me-1"></i>ERP 동기화
+        </button>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <a href="?{{ q|default:'' }}" class="summary-card bg-total">
+            <div class="card-number">{{ total_count }}</div>
+            <div class="card-label">총 금형</div>
+        </a>
+    </div>
+    <div class="col-6 col-md-3">
+        <a href="?status=mt_due{% if q %}&q={{ q }}{% endif %}{% if grade %}&grade={{ grade }}{% endif %}{% if item_group %}&item_group={{ item_group }}{% endif %}" class="summary-card bg-danger-mt">
+            <div class="card-number">{{ mt_due_count }}</div>
+            <div class="card-label">MT 임박/필요</div>
+        </a>
+    </div>
+    <div class="col-6 col-md-3">
+        <a href="?status=over{% if q %}&q={{ q }}{% endif %}{% if grade %}&grade={{ grade }}{% endif %}{% if item_group %}&item_group={{ item_group }}{% endif %}" class="summary-card bg-warning-mt">
+            <div class="card-number">{{ over_guarantee_count }}</div>
+            <div class="card-label">보증수명 초과</div>
+        </a>
+    </div>
+    <div class="col-6 col-md-3">
+        <a href="?status=normal{% if q %}&q={{ q }}{% endif %}{% if grade %}&grade={{ grade }}{% endif %}{% if item_group %}&item_group={{ item_group }}{% endif %}" class="summary-card bg-success-mt">
+            <div class="card-number">{{ normal_count }}</div>
+            <div class="card-label">정상</div>
+        </a>
+    </div>
+</div>
+
+<!-- Filter Bar -->
+<div class="filter-bar">
+    <form method="get" class="row g-2 align-items-end">
+        <div class="col-md-3">
+            <label class="form-label small fw-bold mb-1">검색</label>
+            <input type="text" name="q" class="form-control form-control-sm" placeholder="부품번호 / 금형명" value="{{ q }}">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-bold mb-1">기종</label>
+            <select name="item_group" class="form-select form-select-sm">
+                <option value="">전체</option>
+                {% for ig in item_groups %}
+                    {% if ig %}
+                    <option value="{{ ig }}" {% if item_group == ig %}selected{% endif %}>{{ ig }}</option>
+                    {% endif %}
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-bold mb-1">등급</label>
+            <select name="grade" class="form-select form-select-sm">
+                <option value="">전체</option>
+                <option value="A" {% if grade == 'A' %}selected{% endif %}>A</option>
+                <option value="B" {% if grade == 'B' %}selected{% endif %}>B</option>
+                <option value="C" {% if grade == 'C' %}selected{% endif %}>C</option>
+                <option value="D" {% if grade == 'D' %}selected{% endif %}>D</option>
+                <option value="E" {% if grade == 'E' %}selected{% endif %}>E</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-bold mb-1">상태</label>
+            <select name="status" class="form-select form-select-sm">
+                <option value="">전체</option>
+                <option value="normal" {% if status == 'normal' %}selected{% endif %}>정상</option>
+                <option value="mt_due" {% if status == 'mt_due' %}selected{% endif %}>MT 필요</option>
+                <option value="over" {% if status == 'over' %}selected{% endif %}>보증초과</option>
+            </select>
+        </div>
+        <div class="col-md-3 d-flex gap-2">
+            <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search me-1"></i>검색</button>
+            <a href="{% url 'material:mold_mt_dashboard' %}" class="btn btn-sm btn-outline-secondary">초기화</a>
+        </div>
+    </form>
+</div>
+
+<!-- Table -->
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive" style="max-height: 65vh; overflow-y: auto;">
+            <table class="table table-hover table-bordered table-mt mb-0">
+                <thead>
+                    <tr>
+                        <th style="width:40px">No</th>
+                        <th>부품번호</th>
+                        <th>금형명</th>
+                        <th>기종</th>
+                        <th>등급</th>
+                        <th>재료</th>
+                        <th>보증수명</th>
+                        <th>누적숏트</th>
+                        <th>잔량</th>
+                        <th style="min-width:140px">MT 진행률</th>
+                        <th>상태</th>
+                        <th>MT</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in molds %}
+                    <tr class="clickable-row" data-pk="{{ m.pk }}">
+                        <td>{{ forloop.counter0|add:molds.start_index }}</td>
+                        <td class="fw-bold text-primary">{{ m.part_no }}</td>
+                        <td class="text-start" style="max-width:200px; overflow:hidden; text-overflow:ellipsis;">{{ m.mold_name }}</td>
+                        <td>{{ m.item_group }}</td>
+                        <td><span class="badge bg-secondary">{{ m.grade|default:'-' }}</span></td>
+                        <td>{{ m.material_type|default:'-' }}</td>
+                        <td>{{ m.guarantee_shots|floatformat:0 }}</td>
+                        <td class="fw-bold">{{ m.total_shots|floatformat:0 }}</td>
+                        <td class="{% if m.remaining_shots < 0 %}text-danger fw-bold{% endif %}">{{ m.remaining_shots|floatformat:0 }}</td>
+                        <td>
+                            <div class="progress-bar-mt">
+                                <div class="bar {% if m.mt_progress_pct >= 80 %}bar-red{% elif m.mt_progress_pct >= 60 %}bar-yellow{% else %}bar-green{% endif %}"
+                                     style="width: {{ m.mt_progress_pct }}%">
+                                    {% if m.mt_progress_pct >= 20 %}{{ m.mt_progress_pct }}%{% endif %}
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            {% if m.is_over_guarantee %}
+                                <span class="badge badge-status bg-danger">보증초과</span>
+                            {% elif m.is_mt_due %}
+                                <span class="badge badge-status bg-warning text-dark">MT필요</span>
+                            {% else %}
+                                <span class="badge badge-status bg-success">정상</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary btn-mt-complete"
+                                    onclick="event.stopPropagation(); openMTComplete({{ m.pk }}, '{{ m.part_no }}');"
+                                    title="MT 완료 처리">
+                                <i class="bi bi-check-circle"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="12" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+                            <p class="mt-2">등록된 금형 데이터가 없습니다.</p>
+                            <p class="small">엑셀 업로드로 금형 데이터를 등록해주세요.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Pagination -->
+{% if molds.has_other_pages %}
+<nav class="mt-3 d-flex justify-content-center">
+    <ul class="pagination pagination-sm">
+        {% if molds.has_previous %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ molds.previous_page_number }}{% if q %}&q={{ q }}{% endif %}{% if grade %}&grade={{ grade }}{% endif %}{% if item_group %}&item_group={{ item_group }}{% endif %}{% if status %}&status={{ status }}{% endif %}">&laquo;</a>
+        </li>
+        {% endif %}
+        {% for num in molds.paginator.page_range %}
+            {% if molds.number == num %}
+            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+            {% elif num > molds.number|add:'-5' and num < molds.number|add:'5' %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ num }}{% if q %}&q={{ q }}{% endif %}{% if grade %}&grade={{ grade }}{% endif %}{% if item_group %}&item_group={{ item_group }}{% endif %}{% if status %}&status={{ status }}{% endif %}">{{ num }}</a>
+            </li>
+            {% endif %}
+        {% endfor %}
+        {% if molds.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ molds.next_page_number }}{% if q %}&q={{ q }}{% endif %}{% if grade %}&grade={{ grade }}{% endif %}{% if item_group %}&item_group={{ item_group }}{% endif %}{% if status %}&status={{ status }}{% endif %}">&raquo;</a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+<!-- Detail Modal -->
+<div class="modal fade" id="detailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header modal-header-mt">
+                <h5 class="modal-title"><i class="bi bi-info-circle me-2"></i>금형 상세 정보</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="detailModalBody">
+                <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MT Complete Modal -->
+<div class="modal fade" id="mtCompleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header modal-header-mt">
+                <h5 class="modal-title"><i class="bi bi-check-circle me-2"></i>MT 완료 처리</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="mtCompleteForm">
+                    {% csrf_token %}
+                    <input type="hidden" name="mold_id" id="mt_mold_id">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">부품번호</label>
+                        <input type="text" class="form-control" id="mt_part_no_display" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">MT 일자 <span class="text-danger">*</span></label>
+                        <input type="date" name="mt_date" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">담당자</label>
+                        <input type="text" name="performed_by" class="form-control" placeholder="담당자명">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">작업내용</label>
+                        <textarea name="description" class="form-control" rows="3" placeholder="MT 작업 내용을 입력하세요"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn btn-primary" onclick="submitMTComplete()">
+                    <i class="bi bi-check-circle me-1"></i>MT 완료 처리
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Modal -->
+<div class="modal fade" id="uploadModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header modal-header-mt">
+                <h5 class="modal-title"><i class="bi bi-upload me-2"></i>엑셀 업로드</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info small">
+                    <strong>엑셀 형식 안내:</strong><br>
+                    헤더(1행): 기종(전체), 기종(세부), 금형명, 부품번호, 이관일자, 이관처, 보증수명, C/V수, 재료구분, 총사용숏트수(2025년까지), 등급, 1월~12월
+                </div>
+                <form id="uploadForm" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <input type="file" name="file" class="form-control" accept=".xlsx,.xls" required>
+                    </div>
+                </form>
+                <div id="uploadResult" class="d-none"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+                <button type="button" class="btn btn-primary" onclick="submitUpload()" id="uploadBtn">
+                    <i class="bi bi-upload me-1"></i>업로드
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal fade" id="settingsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header modal-header-mt">
+                <h5 class="modal-title"><i class="bi bi-sliders me-2"></i>MT 기준 설정 (재료별 등급별 숏트수)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <button class="btn btn-sm btn-outline-primary" onclick="addSettingRow()">
+                        <i class="bi bi-plus-circle me-1"></i>신규 추가
+                    </button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered" id="settingsTable">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>재료구분</th>
+                                <th>A등급</th>
+                                <th>B등급</th>
+                                <th>C등급</th>
+                                <th>D등급</th>
+                                <th>E등급</th>
+                                <th style="width:100px">작업</th>
+                            </tr>
+                        </thead>
+                        <tbody id="settingsBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ERP Sync Modal -->
+<div class="modal fade" id="erpSyncModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header modal-header-mt">
+                <h5 class="modal-title"><i class="bi bi-arrow-repeat me-2"></i>ERP 숏트수 동기화</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted">ERP 생산입고 데이터에서 금형별 숏트수를 자동 계산하여 동기화합니다.</p>
+                <form id="erpSyncForm">
+                    {% csrf_token %}
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <label class="form-label fw-bold">년도</label>
+                            <select name="year" class="form-select">
+                                <option value="2026" selected>2026</option>
+                                <option value="2025">2025</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-bold">월</label>
+                            <select name="month" class="form-select">
+                                {% for i in "123456789" %}
+                                <option value="{{ forloop.counter }}">{{ forloop.counter }}월</option>
+                                {% endfor %}
+                                <option value="10">10월</option>
+                                <option value="11">11월</option>
+                                <option value="12">12월</option>
+                            </select>
+                        </div>
+                    </div>
+                </form>
+                <div id="erpSyncResult" class="mt-3 d-none"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+                <button type="button" class="btn btn-primary" onclick="submitERPSync()" id="erpSyncBtn">
+                    <i class="bi bi-arrow-repeat me-1"></i>동기화 실행
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Row click -> detail modal
+document.querySelectorAll('.clickable-row').forEach(row => {
+    row.addEventListener('click', function() {
+        const pk = this.dataset.pk;
+        const modal = new bootstrap.Modal(document.getElementById('detailModal'));
+        const body = document.getElementById('detailModalBody');
+        body.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>';
+        modal.show();
+
+        fetch(`/wms/api/mold/mt/${pk}/`)
+            .then(r => r.json())
+            .then(data => {
+                let statusBadge = data.is_over_guarantee
+                    ? '<span class="badge bg-danger">보증초과</span>'
+                    : data.is_mt_due
+                        ? '<span class="badge bg-warning text-dark">MT필요</span>'
+                        : '<span class="badge bg-success">정상</span>';
+
+                let barClass = data.mt_progress_pct >= 80 ? 'bar-red' : data.mt_progress_pct >= 60 ? 'bar-yellow' : 'bar-green';
+
+                let shotHtml = '';
+                if (data.shot_records && data.shot_records.length) {
+                    shotHtml = '<h6 class="mt-4 fw-bold">월별 숏트 이력</h6><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>년도</th><th>월</th><th>숏트수</th><th>소스</th></tr></thead><tbody>';
+                    data.shot_records.forEach(r => {
+                        shotHtml += `<tr><td>${r.year}</td><td>${r.month}월</td><td>${r.shots.toLocaleString()}</td><td>${r.source}</td></tr>`;
+                    });
+                    shotHtml += '</tbody></table>';
+                }
+
+                let mtLogHtml = '';
+                if (data.mt_logs && data.mt_logs.length) {
+                    mtLogHtml = '<h6 class="mt-4 fw-bold">MT 이력</h6><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>일자</th><th>누적숏트</th><th>담당자</th><th>작업내용</th></tr></thead><tbody>';
+                    data.mt_logs.forEach(r => {
+                        mtLogHtml += `<tr><td>${r.mt_date}</td><td>${r.accumulated_shots.toLocaleString()}</td><td>${r.performed_by || '-'}</td><td>${r.description || '-'}</td></tr>`;
+                    });
+                    mtLogHtml += '</tbody></table>';
+                }
+
+                body.innerHTML = `
+                    <table class="table table-bordered detail-table mb-3">
+                        <tr><th>부품번호</th><td>${data.part_no}</td><th>금형명</th><td>${data.mold_name}</td></tr>
+                        <tr><th>기종(전체)</th><td>${data.item_group || '-'}</td><th>기종(세부)</th><td>${data.item_group_detail || '-'}</td></tr>
+                        <tr><th>이관일자</th><td>${data.transfer_date || '-'}</td><th>이관처</th><td>${data.transfer_from || '-'}</td></tr>
+                        <tr><th>재료구분</th><td>${data.material_type || '-'}</td><th>등급</th><td>${data.grade || '-'}</td></tr>
+                        <tr><th>C/V수</th><td>${data.cv_count}</td><th>보증수명</th><td>${data.guarantee_shots.toLocaleString()}</td></tr>
+                        <tr><th>누적숏트</th><td class="fw-bold">${data.total_shots.toLocaleString()}</td><th>잔량</th><td class="${data.remaining_shots < 0 ? 'text-danger fw-bold' : ''}">${data.remaining_shots.toLocaleString()}</td></tr>
+                        <tr><th>MT주기</th><td>${data.mt_interval.toLocaleString()}</td><th>최근MT 이후</th><td>${data.shots_since_last_mt.toLocaleString()}</td></tr>
+                        <tr>
+                            <th>MT 진행률</th>
+                            <td>
+                                <div class="progress-bar-mt">
+                                    <div class="bar ${barClass}" style="width:${data.mt_progress_pct}%">${data.mt_progress_pct}%</div>
+                                </div>
+                            </td>
+                            <th>상태</th>
+                            <td>${statusBadge}</td>
+                        </tr>
+                        <tr><th>비고</th><td colspan="3">${data.remark || '-'}</td></tr>
+                    </table>
+                    ${shotHtml}
+                    ${mtLogHtml}
+                `;
+            })
+            .catch(err => {
+                body.innerHTML = '<div class="alert alert-danger">데이터 로딩 실패: ' + err.message + '</div>';
+            });
+    });
+});
+
+// MT Complete
+function openMTComplete(pk, partNo) {
+    document.getElementById('mt_mold_id').value = pk;
+    document.getElementById('mt_part_no_display').value = partNo;
+    // Set default date to today
+    const today = new Date().toISOString().split('T')[0];
+    document.querySelector('#mtCompleteForm [name="mt_date"]').value = today;
+    new bootstrap.Modal(document.getElementById('mtCompleteModal')).show();
+}
+
+function submitMTComplete() {
+    const form = document.getElementById('mtCompleteForm');
+    const formData = new FormData(form);
+
+    fetch('{% url "material:mold_mt_complete" %}', {
+        method: 'POST',
+        body: formData,
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('오류: ' + data.error);
+        }
+    })
+    .catch(err => alert('요청 실패: ' + err.message));
+}
+
+// Upload
+function submitUpload() {
+    const form = document.getElementById('uploadForm');
+    const formData = new FormData(form);
+    const btn = document.getElementById('uploadBtn');
+    const result = document.getElementById('uploadResult');
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>처리 중...';
+
+    fetch('{% url "material:mold_mt_upload" %}', {
+        method: 'POST',
+        body: formData,
+    })
+    .then(r => r.json())
+    .then(data => {
+        result.classList.remove('d-none');
+        if (data.success) {
+            result.innerHTML = '<div class="alert alert-success small">' + data.message + '</div>';
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            result.innerHTML = '<div class="alert alert-danger small">' + data.error + '</div>';
+        }
+    })
+    .catch(err => {
+        result.classList.remove('d-none');
+        result.innerHTML = '<div class="alert alert-danger small">오류: ' + err.message + '</div>';
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-upload me-1"></i>업로드';
+    });
+}
+
+// Settings
+function loadSettings() {
+    fetch('{% url "material:mold_mt_settings" %}')
+        .then(r => r.json())
+        .then(res => {
+            const tbody = document.getElementById('settingsBody');
+            tbody.innerHTML = '';
+            if (res.data && res.data.length) {
+                res.data.forEach(s => {
+                    addSettingRowData(s);
+                });
+            }
+        });
+}
+
+function addSettingRow() {
+    addSettingRowData({id: '', material_type: '', grade_a: 40000, grade_b: 40000, grade_c: 40000, grade_d: 30000, grade_e: 30000});
+}
+
+function addSettingRowData(s) {
+    const tbody = document.getElementById('settingsBody');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+        <td><input type="text" class="form-control form-control-sm" value="${s.material_type}" data-field="material_type" placeholder="예: ABS"></td>
+        <td><input type="number" class="form-control form-control-sm" value="${s.grade_a}" data-field="grade_a"></td>
+        <td><input type="number" class="form-control form-control-sm" value="${s.grade_b}" data-field="grade_b"></td>
+        <td><input type="number" class="form-control form-control-sm" value="${s.grade_c}" data-field="grade_c"></td>
+        <td><input type="number" class="form-control form-control-sm" value="${s.grade_d}" data-field="grade_d"></td>
+        <td><input type="number" class="form-control form-control-sm" value="${s.grade_e}" data-field="grade_e"></td>
+        <td>
+            <button class="btn btn-sm btn-primary me-1" onclick="saveSetting(this, ${s.id || 0})"><i class="bi bi-check"></i></button>
+            <button class="btn btn-sm btn-danger" onclick="deleteSetting(this, ${s.id || 0})"><i class="bi bi-trash"></i></button>
+        </td>
+    `;
+    tbody.appendChild(tr);
+}
+
+function saveSetting(btn, id) {
+    const tr = btn.closest('tr');
+    const data = {action: 'save'};
+    tr.querySelectorAll('input').forEach(inp => {
+        const field = inp.dataset.field;
+        data[field] = inp.type === 'number' ? parseInt(inp.value) : inp.value;
+    });
+    if (id) data.id = id;
+
+    fetch('{% url "material:mold_mt_settings" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify(data)
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.success) {
+            alert(res.message);
+            loadSettings();
+        } else {
+            alert('오류: ' + res.error);
+        }
+    });
+}
+
+function deleteSetting(btn, id) {
+    if (!id) {
+        btn.closest('tr').remove();
+        return;
+    }
+    if (!confirm('삭제하시겠습니까?')) return;
+
+    fetch('{% url "material:mold_mt_settings" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({action: 'delete', id: id})
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.success) {
+            loadSettings();
+        } else {
+            alert('오류: ' + res.error);
+        }
+    });
+}
+
+// ERP Sync
+function submitERPSync() {
+    const form = document.getElementById('erpSyncForm');
+    const formData = new FormData(form);
+    const btn = document.getElementById('erpSyncBtn');
+    const result = document.getElementById('erpSyncResult');
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>동기화 중...';
+
+    fetch('{% url "material:mold_mt_erp_sync" %}', {
+        method: 'POST',
+        body: formData,
+    })
+    .then(r => r.json())
+    .then(data => {
+        result.classList.remove('d-none');
+        if (data.success) {
+            result.innerHTML = '<div class="alert alert-success small">' + data.message + '</div>';
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            result.innerHTML = '<div class="alert alert-danger small">' + data.error + '</div>';
+        }
+    })
+    .catch(err => {
+        result.classList.remove('d-none');
+        result.innerHTML = '<div class="alert alert-danger small">오류: ' + err.message + '</div>';
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>동기화 실행';
+    });
+}
+</script>
+{% endblock %}

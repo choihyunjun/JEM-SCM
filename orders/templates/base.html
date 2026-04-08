@@ -287,7 +287,7 @@
     </style>
 </head>
 
-<body class="sb-nav-fixed {% if request.resolver_match.app_name == 'qms' %}is-qms{% elif request.resolver_match.url_name in 'molding_utilization,molding_analytics,molding_master_list,process_tag_form,stock_check,stock_check_result' %}is-production{% elif request.resolver_match.app_name == 'material' %}is-wms{% elif request.resolver_match.app_name == 'admin_app' %}is-admin{% else %}is-scm{% endif %}">
+<body class="sb-nav-fixed {% if request.resolver_match.app_name == 'qms' %}is-qms{% elif request.resolver_match.url_name in 'molding_utilization,molding_analytics,molding_master_list,process_tag_form,stock_check,stock_check_result,mold_mt_dashboard' %}is-production{% elif request.resolver_match.app_name == 'material' %}is-wms{% elif request.resolver_match.app_name == 'admin_app' %}is-admin{% else %}is-scm{% endif %}">
     
     <nav class="sb-topnav navbar navbar-expand navbar-dark">
         <a class="navbar-brand ps-3" href="{% url 'home' %}">
@@ -680,7 +680,7 @@
                         {# ====================================================== #}
                         {# 2-1. 생산현장관리 메뉴 #}
                         {# ====================================================== #}
-                        {% elif request.resolver_match.url_name in 'molding_utilization,molding_analytics,molding_master_list,process_tag_form,stock_check,stock_check_result' %}
+                        {% elif request.resolver_match.url_name in 'molding_utilization,molding_analytics,molding_master_list,process_tag_form,stock_check,stock_check_result,mold_mt_dashboard' %}
                             {# production_base.html의 sidebar_material 블록이 처리 #}
                             {% block sidebar_production %}{% endblock %}
 

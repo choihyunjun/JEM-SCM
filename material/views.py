@@ -8087,3 +8087,465 @@ def api_molding_master_detail(request, pk):
         'remark': obj.remark,
     }
     return JsonResponse(data)
+
+
+# =============================================================================
+# 금형 MT(정비) 관리
+# =============================================================================
+
+@login_required
+@wms_permission_required('can_wms_stock_view')
+def mold_mt_dashboard(request):
+    """금형 MT 대시보드 - 금형 수명/MT 현황"""
+    from .models import MoldMaster as MoldMasterModel, MoldMTSetting
+
+    qs = MoldMasterModel.objects.filter(is_active=True)
+
+    # 필터
+    q = request.GET.get('q', '').strip()
+    grade = request.GET.get('grade', '')
+    item_group = request.GET.get('item_group', '')
+    status_filter = request.GET.get('status', '')
+
+    if q:
+        qs = qs.filter(Q(part_no__icontains=q) | Q(mold_name__icontains=q))
+    if grade:
+        qs = qs.filter(grade=grade)
+    if item_group:
+        qs = qs.filter(item_group=item_group)
+
+    molds_list = list(qs)
+
+    # 상태별 분류 계산
+    total_count = len(molds_list)
+    mt_due_count = 0
+    over_guarantee_count = 0
+    normal_count = 0
+
+    for m in molds_list:
+        if m.is_over_guarantee:
+            over_guarantee_count += 1
+        elif m.is_mt_due:
+            mt_due_count += 1
+        else:
+            normal_count += 1
+
+    # 상태 필터
+    if status_filter == 'mt_due':
+        molds_list = [m for m in molds_list if m.is_mt_due and not m.is_over_guarantee]
+    elif status_filter == 'over':
+        molds_list = [m for m in molds_list if m.is_over_guarantee]
+    elif status_filter == 'normal':
+        molds_list = [m for m in molds_list if not m.is_mt_due and not m.is_over_guarantee]
+
+    # 페이지네이션
+    paginator = Paginator(molds_list, 30)
+    page = request.GET.get('page', 1)
+    molds = paginator.get_page(page)
+
+    # 기종 목록 (필터용)
+    item_groups = MoldMasterModel.objects.filter(is_active=True).values_list(
+        'item_group', flat=True).distinct().order_by('item_group')
+
+    # MT 기준 설정
+    mt_settings = list(MoldMTSetting.objects.all().values())
+
+    context = {
+        'molds': molds,
+        'total_count': total_count,
+        'mt_due_count': mt_due_count,
+        'over_guarantee_count': over_guarantee_count,
+        'normal_count': normal_count,
+        'q': q,
+        'grade': grade,
+        'item_group': item_group,
+        'status': status_filter,
+        'item_groups': item_groups,
+        'mt_settings': mt_settings,
+    }
+    return render(request, 'material/mold_mt_dashboard.html', context)
+
+
+@login_required
+@wms_permission_required('can_wms_stock_view')
+def mold_mt_upload(request):
+    """금형 마스터 엑셀 업로드"""
+    from .models import MoldMaster as MoldMasterModel, MoldShotRecord
+    import openpyxl
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST만 허용'}, status=405)
+
+    file = request.FILES.get('file')
+    if not file:
+        return JsonResponse({'success': False, 'error': '파일을 선택해주세요.'})
+
+    try:
+        wb = openpyxl.load_workbook(file, data_only=True)
+        ws = wb.active
+
+        headers = []
+        for cell in ws[1]:
+            headers.append(str(cell.value or '').strip())
+
+        created = 0
+        updated = 0
+
+        for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+            row_dict = {}
+            for i, val in enumerate(row):
+                if i < len(headers):
+                    row_dict[headers[i]] = val
+
+            part_no = str(row_dict.get('부품번호', '') or '').strip()
+            if not part_no:
+                continue
+
+            guarantee = row_dict.get('보증수명', 500000)
+            try:
+                guarantee = int(guarantee) if guarantee else 500000
+            except (ValueError, TypeError):
+                guarantee = 500000
+
+            total_prev = row_dict.get('총사용숏트수(2025년까지)', 0)
+            try:
+                total_prev = int(total_prev) if total_prev else 0
+            except (ValueError, TypeError):
+                total_prev = 0
+
+            cv_count = row_dict.get('C/V수', 1)
+            try:
+                cv_count = int(cv_count) if cv_count else 1
+            except (ValueError, TypeError):
+                cv_count = 1
+
+            obj, is_created = MoldMasterModel.objects.update_or_create(
+                part_no=part_no,
+                defaults={
+                    'item_group': str(row_dict.get('기종(전체)', '') or '').strip(),
+                    'item_group_detail': str(row_dict.get('기종(세부)', '') or '').strip(),
+                    'mold_name': str(row_dict.get('금형명', '') or '').strip(),
+                    'transfer_date': str(row_dict.get('이관일자', '') or '').strip(),
+                    'transfer_from': str(row_dict.get('이관처', '') or '').strip(),
+                    'guarantee_shots': guarantee,
+                    'cv_count': cv_count,
+                    'total_shots_prev': total_prev,
+                    'grade': str(row_dict.get('등급', '') or '').strip().upper(),
+                    'material_type': str(row_dict.get('재료구분', '') or '').strip(),
+                }
+            )
+
+            if is_created:
+                created += 1
+            else:
+                updated += 1
+
+            # 2026년 월별 숏트수
+            for month_num in range(1, 13):
+                month_key = f'{month_num}월'
+                shots_val = row_dict.get(month_key, 0)
+                try:
+                    shots_val = int(shots_val) if shots_val else 0
+                except (ValueError, TypeError):
+                    shots_val = 0
+
+                if shots_val > 0:
+                    MoldShotRecord.objects.update_or_create(
+                        mold=obj,
+                        year=2026,
+                        month=month_num,
+                        defaults={'shots': shots_val, 'source': 'EXCEL'}
+                    )
+
+        return JsonResponse({
+            'success': True,
+            'message': f'업로드 완료: 신규 {created}건, 수정 {updated}건'
+        })
+
+    except Exception as e:
+        logger.exception('금형 MT 엑셀 업로드 오류')
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+@wms_permission_required('can_wms_stock_view')
+def mold_mt_excel(request):
+    """금형 마스터 엑셀 다운로드"""
+    from .models import MoldMaster as MoldMasterModel, MoldShotRecord
+    import openpyxl
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = '금형 수명 관리'
+
+    headers = [
+        'No', '기종(전체)', '기종(세부)', '금형명', '부품번호',
+        '이관일자', '이관처', '보증수명', 'C/V수', '재료구분',
+        '총사용숏트수(이전)', '등급',
+        '1월', '2월', '3월', '4월', '5월', '6월',
+        '7월', '8월', '9월', '10월', '11월', '12월',
+        '누적숏트', '잔량', 'MT진행률(%)', '상태'
+    ]
+
+    header_fill = PatternFill(start_color='1F4E79', end_color='1F4E79', fill_type='solid')
+    header_font = Font(bold=True, color='FFFFFF', size=10)
+    thin_border = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin')
+    )
+
+    for col_num, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col_num, value=header)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+
+    molds = MoldMasterModel.objects.filter(is_active=True).order_by('item_group', 'part_no')
+
+    for idx, m in enumerate(molds, 1):
+        # 월별 숏트
+        monthly = {}
+        for rec in m.shot_records.filter(year=2026):
+            monthly[rec.month] = rec.shots
+
+        status = '보증초과' if m.is_over_guarantee else ('MT필요' if m.is_mt_due else '정상')
+
+        row_data = [
+            idx, m.item_group, m.item_group_detail, m.mold_name, m.part_no,
+            m.transfer_date, m.transfer_from, m.guarantee_shots, m.cv_count,
+            m.material_type, m.total_shots_prev, m.grade,
+        ]
+        for mon in range(1, 13):
+            row_data.append(monthly.get(mon, 0))
+        row_data += [m.total_shots, m.remaining_shots, m.mt_progress_pct, status]
+
+        for col_num, val in enumerate(row_data, 1):
+            cell = ws.cell(row=idx + 1, column=col_num, value=val)
+            cell.border = thin_border
+            cell.alignment = Alignment(horizontal='center')
+
+    # 컬럼 너비 자동 조정
+    for col_num in range(1, len(headers) + 1):
+        col_letter = get_column_letter(col_num)
+        max_length = len(str(headers[col_num - 1]))
+        for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=col_num, max_col=col_num):
+            for cell in row:
+                if cell.value:
+                    max_length = max(max_length, len(str(cell.value)))
+        ws.column_dimensions[col_letter].width = min(max_length + 3, 25)
+
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = 'attachment; filename="mold_mt_management.xlsx"'
+    wb.save(response)
+    return response
+
+
+@login_required
+@wms_permission_required('can_wms_stock_view')
+def mold_mt_complete(request):
+    """MT 완료 처리"""
+    from .models import MoldMaster as MoldMasterModel, MoldMTLog
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST만 허용'}, status=405)
+
+    mold_id = request.POST.get('mold_id')
+    mt_date = request.POST.get('mt_date')
+    description = request.POST.get('description', '')
+    performed_by = request.POST.get('performed_by', '')
+
+    if not mold_id or not mt_date:
+        return JsonResponse({'success': False, 'error': '필수 항목이 누락되었습니다.'})
+
+    try:
+        from datetime import datetime as dt
+        mold = MoldMasterModel.objects.get(pk=mold_id)
+        current_shots = mold.total_shots
+
+        MoldMTLog.objects.create(
+            mold=mold,
+            mt_date=dt.strptime(mt_date, '%Y-%m-%d').date(),
+            accumulated_shots=current_shots,
+            description=description,
+            performed_by=performed_by,
+        )
+
+        mold.last_mt_shots = current_shots
+        mold.save(update_fields=['last_mt_shots', 'updated_at'])
+
+        return JsonResponse({
+            'success': True,
+            'message': f'{mold.part_no} MT 완료 처리되었습니다. (누적: {current_shots:,}숏)'
+        })
+    except MoldMasterModel.DoesNotExist:
+        return JsonResponse({'success': False, 'error': '금형을 찾을 수 없습니다.'})
+    except Exception as e:
+        logger.exception('MT 완료 처리 오류')
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+@wms_permission_required('can_wms_stock_view')
+def mold_mt_settings(request):
+    """MT 기준 설정 CRUD (JSON API)"""
+    from .models import MoldMTSetting
+    import json
+
+    if request.method == 'GET':
+        settings_list = list(MoldMTSetting.objects.all().values())
+        return JsonResponse({'success': True, 'data': settings_list})
+
+    elif request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            action = data.get('action', 'save')
+
+            if action == 'delete':
+                pk = data.get('id')
+                MoldMTSetting.objects.filter(pk=pk).delete()
+                return JsonResponse({'success': True, 'message': '삭제 완료'})
+
+            material_type = data.get('material_type', '').strip()
+            if not material_type:
+                return JsonResponse({'success': False, 'error': '재료구분을 입력해주세요.'})
+
+            obj, created = MoldMTSetting.objects.update_or_create(
+                material_type=material_type,
+                defaults={
+                    'grade_a': int(data.get('grade_a', 40000)),
+                    'grade_b': int(data.get('grade_b', 40000)),
+                    'grade_c': int(data.get('grade_c', 40000)),
+                    'grade_d': int(data.get('grade_d', 30000)),
+                    'grade_e': int(data.get('grade_e', 30000)),
+                }
+            )
+            return JsonResponse({
+                'success': True,
+                'message': f'{material_type} {"등록" if created else "수정"} 완료'
+            })
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+
+    return JsonResponse({'success': False, 'error': '허용되지 않는 메서드'}, status=405)
+
+
+@login_required
+@wms_permission_required('can_wms_stock_view')
+def api_mold_mt_detail(request, pk):
+    """금형 MT 상세 JSON API"""
+    from .models import MoldMaster as MoldMasterModel
+
+    mold = get_object_or_404(MoldMasterModel, pk=pk)
+
+    # 월별 숏트 이력
+    shot_records = list(mold.shot_records.order_by('year', 'month').values(
+        'year', 'month', 'shots', 'source'
+    ))
+
+    # MT 이력
+    mt_logs = list(mold.mt_logs.order_by('-mt_date').values(
+        'mt_date', 'accumulated_shots', 'description', 'performed_by', 'created_at'
+    ))
+
+    data = {
+        'pk': mold.pk,
+        'part_no': mold.part_no,
+        'mold_name': mold.mold_name,
+        'item_group': mold.item_group,
+        'item_group_detail': mold.item_group_detail,
+        'transfer_date': mold.transfer_date,
+        'transfer_from': mold.transfer_from,
+        'guarantee_shots': mold.guarantee_shots,
+        'cv_count': mold.cv_count,
+        'material_type': mold.material_type,
+        'total_shots_prev': mold.total_shots_prev,
+        'grade': mold.grade,
+        'total_shots': mold.total_shots,
+        'remaining_shots': mold.remaining_shots,
+        'shots_since_last_mt': mold.shots_since_last_mt,
+        'mt_interval': mold.mt_interval,
+        'mt_progress_pct': mold.mt_progress_pct,
+        'is_mt_due': mold.is_mt_due,
+        'is_over_guarantee': mold.is_over_guarantee,
+        'last_mt_shots': mold.last_mt_shots,
+        'remark': mold.remark,
+        'shot_records': shot_records,
+        'mt_logs': mt_logs,
+    }
+    return JsonResponse(data)
+
+
+@login_required
+@wms_permission_required('can_wms_stock_view')
+def mold_mt_erp_sync(request):
+    """ERP 생산입고 데이터로 금형 숏트수 동기화"""
+    from .models import MoldMaster as MoldMasterModel, MoldShotRecord
+    from .erp_api import fetch_erp_receipt_list
+    import calendar
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST만 허용'}, status=405)
+
+    year = int(request.POST.get('year', timezone.localtime().year))
+    month = int(request.POST.get('month', timezone.localtime().month))
+    _, days_in_month = calendar.monthrange(year, month)
+
+    date_from = f"{year}{month:02d}01"
+    date_to = f"{year}{month:02d}{days_in_month:02d}"
+
+    ok, data, err = fetch_erp_receipt_list(date_from, date_to)
+    if not ok:
+        return JsonResponse({'success': False, 'error': f'ERP 조회 실패: {err}'})
+
+    if not data:
+        return JsonResponse({'success': False, 'error': '해당 기간 생산입고 데이터가 없습니다.'})
+
+    # 금형 마스터 매핑 (part_no -> MoldMaster)
+    mold_map = {}
+    for m in MoldMasterModel.objects.filter(is_active=True):
+        mold_map[m.part_no] = m
+
+    # ERP 데이터 집계: part_no별 생산수량 합계
+    part_qty_agg = {}
+    for r in data:
+        item_cd = (r.get('itemCd') or '').strip()
+        rcv_qt = int(r.get('rcvQt', 0) or 0)
+        if item_cd and rcv_qt > 0:
+            part_qty_agg[item_cd] = part_qty_agg.get(item_cd, 0) + rcv_qt
+
+    synced = 0
+    skipped = 0
+
+    try:
+        with transaction.atomic():
+            for part_no, total_qty in part_qty_agg.items():
+                mold = mold_map.get(part_no)
+                if not mold:
+                    skipped += 1
+                    continue
+
+                # 숏트수 = 생산수량 / C/V수
+                cv = mold.cv_count if mold.cv_count > 0 else 1
+                shots = total_qty // cv
+
+                if shots > 0:
+                    MoldShotRecord.objects.update_or_create(
+                        mold=mold,
+                        year=year,
+                        month=month,
+                        defaults={'shots': shots, 'source': 'ERP'}
+                    )
+                    synced += 1
+
+        return JsonResponse({
+            'success': True,
+            'message': f'ERP 동기화 완료: {year}년 {month}월 / 동기화 {synced}건, 미매칭 {skipped}건'
+        })
+    except Exception as e:
+        logger.exception('금형 MT ERP 동기화 오류')
+        return JsonResponse({'success': False, 'error': str(e)})

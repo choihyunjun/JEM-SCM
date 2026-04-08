@@ -1053,3 +1053,140 @@ class MoldingMaster(models.Model):
 
     def __str__(self):
         return f"{self.part_no} ({self.material_type})"
+
+
+# -----------------------------------------------------------------------------
+# 18. 금형 MT(정비) 관리
+# -----------------------------------------------------------------------------
+class MoldMTSetting(models.Model):
+    """MT 기준 설정 (재료별 등급별 기준숏트수)"""
+    material_type = models.CharField("재료구분", max_length=30)  # ABS, PC, POM...
+    grade_a = models.IntegerField("A등급 기준", default=40000)
+    grade_b = models.IntegerField("B등급 기준", default=40000)
+    grade_c = models.IntegerField("C등급 기준", default=40000)
+    grade_d = models.IntegerField("D등급 기준", default=30000)
+    grade_e = models.IntegerField("E등급 기준", default=30000)
+
+    class Meta:
+        verbose_name = "MT 기준 설정"
+        verbose_name_plural = "18. MT 기준 설정"
+        ordering = ['material_type']
+
+    def __str__(self):
+        return self.material_type
+
+    def get_interval(self, grade):
+        return getattr(self, f'grade_{grade.lower()}', 30000)
+
+
+class MoldMaster(models.Model):
+    """금형 마스터 - 금형 수명 관리"""
+    GRADE_CHOICES = [('A','A'),('B','B'),('C','C'),('D','D'),('E','E')]
+
+    item_group = models.CharField("기종(전체)", max_length=50, blank=True, db_index=True)
+    item_group_detail = models.CharField("기종(세부)", max_length=50, blank=True)
+    mold_name = models.CharField("금형명", max_length=200)
+    part_no = models.CharField("부품번호", max_length=50, db_index=True)
+    transfer_date = models.CharField("이관일자", max_length=20, blank=True)
+    transfer_from = models.CharField("이관처", max_length=50, blank=True)
+    guarantee_shots = models.IntegerField("보증수명(숏)", default=500000)
+    cv_count = models.IntegerField("C/V수", default=1)
+    material_type = models.CharField("재료구분", max_length=30, blank=True)
+    total_shots_prev = models.IntegerField("총사용숏트수(이전)", default=0)
+    grade = models.CharField("등급", max_length=1, choices=GRADE_CHOICES, blank=True)
+    last_mt_shots = models.IntegerField("최근MT시점 누적숏트", default=0)
+    is_active = models.BooleanField("사용여부", default=True)
+    remark = models.TextField("비고", blank=True)
+    created_at = models.DateTimeField("등록일", auto_now_add=True)
+    updated_at = models.DateTimeField("수정일", auto_now=True)
+
+    class Meta:
+        verbose_name = "금형 마스터"
+        verbose_name_plural = "18. 금형 마스터"
+        ordering = ['item_group', 'part_no']
+
+    def __str__(self):
+        return f"{self.part_no} ({self.mold_name})"
+
+    @property
+    def total_shots(self):
+        """총 누적 숏트수 = 이전 + 월별 이력 합"""
+        monthly = self.shot_records.aggregate(total=models.Sum('shots'))['total'] or 0
+        return self.total_shots_prev + monthly
+
+    @property
+    def remaining_shots(self):
+        """잔량 = 보증수명 - 누적"""
+        return self.guarantee_shots - self.total_shots
+
+    @property
+    def shots_since_last_mt(self):
+        """최근 MT 이후 숏트수"""
+        return self.total_shots - self.last_mt_shots
+
+    @property
+    def mt_interval(self):
+        """MT 주기 (기준숏트수)"""
+        if self.material_type and self.grade:
+            try:
+                setting = MoldMTSetting.objects.get(material_type=self.material_type)
+                return setting.get_interval(self.grade)
+            except MoldMTSetting.DoesNotExist:
+                pass
+        return 30000
+
+    @property
+    def mt_progress_pct(self):
+        """MT 진행률 (%)"""
+        interval = self.mt_interval
+        if interval <= 0:
+            return 0
+        return min(round(self.shots_since_last_mt / interval * 100, 1), 100)
+
+    @property
+    def is_mt_due(self):
+        """MT 필요 여부"""
+        return self.shots_since_last_mt >= self.mt_interval
+
+    @property
+    def is_over_guarantee(self):
+        """보증수명 초과"""
+        return self.total_shots > self.guarantee_shots
+
+
+class MoldShotRecord(models.Model):
+    """금형 월별 숏트수 이력"""
+    SOURCE_CHOICES = [('EXCEL', '엑셀'), ('ERP', 'ERP')]
+
+    mold = models.ForeignKey(MoldMaster, on_delete=models.CASCADE, related_name='shot_records')
+    year = models.IntegerField("년도")
+    month = models.IntegerField("월")
+    shots = models.IntegerField("숏트수", default=0)
+    source = models.CharField("소스", max_length=10, choices=SOURCE_CHOICES, default='EXCEL')
+
+    class Meta:
+        verbose_name = "숏트수 이력"
+        verbose_name_plural = "18. 숏트수 이력"
+        unique_together = ['mold', 'year', 'month']
+        ordering = ['year', 'month']
+
+    def __str__(self):
+        return f"{self.mold.part_no} {self.year}/{self.month}: {self.shots}"
+
+
+class MoldMTLog(models.Model):
+    """MT 완료 이력"""
+    mold = models.ForeignKey(MoldMaster, on_delete=models.CASCADE, related_name='mt_logs')
+    mt_date = models.DateField("MT일자")
+    accumulated_shots = models.IntegerField("MT시점 누적숏트", default=0)
+    description = models.TextField("작업내용", blank=True)
+    performed_by = models.CharField("담당자", max_length=50, blank=True)
+    created_at = models.DateTimeField("등록일", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "MT 이력"
+        verbose_name_plural = "18. MT 이력"
+        ordering = ['-mt_date']
+
+    def __str__(self):
+        return f"{self.mold.part_no} MT {self.mt_date}"
