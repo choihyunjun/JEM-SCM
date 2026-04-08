@@ -8781,8 +8781,9 @@ def mold_repair_list(request):
 
     # 상태별 건수
     from django.db.models import Count
-    status_counts = dict(MoldRepairRequest.objects.values_list('status').annotate(c=Count('id')).values_list('status', 'c'))
-    total_count = sum(status_counts.values())
+    _counts = dict(MoldRepairRequest.objects.values_list('status').annotate(c=Count('id')).values_list('status', 'c'))
+    total_count = sum(_counts.values())
+    status_tabs = [(code, label, _counts.get(code, 0)) for code, label in MOLD_REPAIR_STATUS]
 
     paginator = Paginator(list(qs), 30)
     page = request.GET.get('page', 1)
@@ -8799,9 +8800,8 @@ def mold_repair_list(request):
         'repairs': repairs,
         'status_filter': status_filter,
         'q': q,
-        'status_counts': status_counts,
+        'status_tabs': status_tabs,
         'total_count': total_count,
-        'STATUS_CHOICES': MOLD_REPAIR_STATUS,
         'mold_autocomplete': mold_autocomplete,
     }
     return render(request, 'material/mold_repair_list.html', context)
@@ -8947,6 +8947,21 @@ def mold_repair_update(request, pk):
 
     status_display = obj.get_status_display()
     return JsonResponse({'success': True, 'message': f'{obj.part_no} {status_display} 처리 완료'})
+
+
+@login_required
+@wms_permission_required('can_wms_stock_view')
+def mold_repair_delete(request, pk):
+    """금형 수리 의뢰 삭제"""
+    from .models import MoldRepairRequest
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST만 허용'}, status=405)
+
+    obj = get_object_or_404(MoldRepairRequest, pk=pk)
+    part_no = obj.part_no
+    obj.delete()
+    return JsonResponse({'success': True, 'message': f'{part_no} 수리의뢰 삭제 완료'})
 
 
 @login_required

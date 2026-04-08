@@ -152,5 +152,6 @@ urlpatterns = [
     path('mold/repair/', views.mold_repair_list, name='mold_repair_list'),
     path('mold/repair/create/', views.mold_repair_create, name='mold_repair_create'),
     path('mold/repair/<int:pk>/update/', views.mold_repair_update, name='mold_repair_update'),
+    path('mold/repair/<int:pk>/delete/', views.mold_repair_delete, name='mold_repair_delete'),
     path('mold/repair/<int:pk>/detail/', views.mold_repair_detail, name='mold_repair_detail'),
 ]

@@ -90,8 +90,8 @@
 <!-- Status Tabs -->
 <div class="status-tab">
     <a href="{% url 'material:mold_repair_list' %}" class="{% if not status_filter %}active{% endif %}">전체 ({{ total_count }})</a>
-    {% for code, label in STATUS_CHOICES %}
-    <a href="?status={{ code }}" class="{% if status_filter == code %}active{% endif %}">{{ label }} ({{ status_counts|default_if_none:0 }})</a>
+    {% for code, label, cnt in status_tabs %}
+    <a href="?status={{ code }}" class="{% if status_filter == code %}active{% endif %}">{{ label }} ({{ cnt }})</a>
     {% endfor %}
 </div>
 
@@ -123,6 +123,7 @@
                         <th>의뢰일</th>
                         <th>완료예정</th>
                         <th>완료일</th>
+                        <th style="width:70px">관리</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -146,9 +147,13 @@
                         <td>{{ r.requested_at|date:"m/d" }}</td>
                         <td>{% if r.expected_date %}{{ r.expected_date|date:"m/d" }}{% else %}-{% endif %}</td>
                         <td>{% if r.completed_date %}{{ r.completed_date|date:"m/d" }}{% else %}-{% endif %}</td>
+                        <td onclick="event.stopPropagation();">
+                            <button class="btn btn-outline-primary btn-sm py-0 px-1" onclick="openDetail({{ r.pk }})" title="수정"><i class="bi bi-pencil" style="font-size:0.7rem;"></i></button>
+                            <button class="btn btn-outline-danger btn-sm py-0 px-1" onclick="deleteRepair({{ r.pk }})" title="삭제"><i class="bi bi-trash" style="font-size:0.7rem;"></i></button>
+                        </td>
                     </tr>
                     {% empty %}
-                    <tr><td colspan="12" class="text-center text-muted py-5">등록된 수리 의뢰가 없습니다.</td></tr>
+                    <tr><td colspan="13" class="text-center text-muted py-5">등록된 수리 의뢰가 없습니다.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -453,6 +458,19 @@ function openDetail(pk) {
     .catch(err => {
         body.innerHTML = '<div class="alert alert-danger">로딩 실패: ' + err.message + '</div>';
     });
+}
+
+function deleteRepair(pk) {
+    if (!confirm('삭제하시겠습니까?')) return;
+    var formData = new FormData();
+    formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+    fetch('/wms/mold/repair/' + pk + '/delete/', { method: 'POST', body: formData })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) { alert(data.message); location.reload(); }
+        else { alert('오류: ' + data.error); }
+    })
+    .catch(err => alert('요청 실패: ' + err.message));
 }
 
 function submitUpdate(pk) {
