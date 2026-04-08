@@ -2,6 +2,7 @@
 
 {% block title %}금형 수명 관리{% endblock %}
 
+{% load humanize %}
 {% block production_content %}
 <style>
     .mt-header {
@@ -271,9 +272,9 @@
                                 <span class="badge bg-outline-success border text-success" style="font-size:0.6rem;">정상</span>
                             {% endif %}
                         </td>
-                        <td class="fw-bold" data-value="{{ m.total_shots }}">{{ m.total_shots|floatformat:0 }}</td>
-                        <td style="color:#888;">{{ m.last_mt_shots|floatformat:0 }}</td>
-                        <td>{{ m.mt_interval|floatformat:0 }}</td>
+                        <td class="fw-bold" data-value="{{ m.total_shots }}">{{ m.total_shots|intcomma }}</td>
+                        <td style="color:#888;">{{ m.last_mt_shots|intcomma }}</td>
+                        <td>{{ m.mt_interval|intcomma }}</td>
                         <td data-value="{{ m.mt_progress_pct }}">
                             <div class="progress-bar-mt">
                                 <div class="bar {% if m.mt_progress_pct >= 80 %}bar-red{% elif m.mt_progress_pct >= 60 %}bar-yellow{% else %}bar-green{% endif %}"
