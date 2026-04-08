@@ -249,9 +249,10 @@
                         <th>보증</th>
                         <th class="sortable" data-col="8">누적숏트 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th>이전MT</th>
+                        <th class="sortable" data-col="10">MT후숏트 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th>MT기준</th>
-                        <th class="sortable" data-col="11">MT진행률 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
-                        <th class="sortable" data-col="12">상태 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
+                        <th class="sortable" data-col="12">MT진행률 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
+                        <th class="sortable" data-col="13">상태 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th style="width:40px">MT</th>
                     </tr>
                 </thead>
@@ -274,6 +275,7 @@
                         </td>
                         <td class="fw-bold" data-value="{{ m.c_total_shots }}">{{ m.c_total_shots|intcomma }}</td>
                         <td style="color:#888;">{{ m.last_mt_shots|intcomma }}</td>
+                        <td class="fw-bold" data-value="{{ m.c_shots_since_mt }}" style="color:{% if m.c_mt_pct >= 100 %}#e53e3e{% elif m.c_mt_pct >= 80 %}#dd6b20{% else %}#2d3748{% endif %};">{{ m.c_shots_since_mt|intcomma }}</td>
                         <td>{{ m.c_mt_interval|intcomma }}</td>
                         <td data-value="{{ m.c_mt_pct }}">
                             <div class="progress-bar-mt">
@@ -304,7 +306,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="14" class="text-center text-muted py-5">
+                        <td colspan="15" class="text-center text-muted py-5">
                             <i class="bi bi-inbox" style="font-size: 2rem;"></i>
                             <p class="mt-2">등록된 금형 데이터가 없습니다.</p>
                             <p class="small">엑셀 업로드로 금형 데이터를 등록해주세요.</p>
