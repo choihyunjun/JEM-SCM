@@ -705,9 +705,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     formatter: v => v > 0 ? v + '일' : ''
                 }
             },
+            layout: { padding: { top: 20 } },
             scales: {
                 y: {
                     beginAtZero: true,
+                    suggestedMax: Math.max(...machineDaysValues) + 1,
                     ticks: { callback: v => v + '일', stepSize: 1 },
                     grid: { color: 'rgba(0,0,0,0.04)' }
                 },
@@ -721,7 +723,14 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // ─── Chart 6: Monthly Trend (multi-line) ───
-    new Chart(document.getElementById('chartMonthly'), {
+    // 마지막 달 = 현재 집계중 → 빨간색 포인트
+    var lastIdx = monthlyLabels.length - 1;
+    var bluePoints = monthlyUtilization.map((v, i) => i === lastIdx ? RED : BLUE);
+    var blueRadius = monthlyUtilization.map((v, i) => i === lastIdx ? 6 : 4);
+    var greenPoints = monthlyTimeRate.map((v, i) => i === lastIdx ? RED : GREEN);
+    var greenRadius = monthlyTimeRate.map((v, i) => i === lastIdx ? 6 : 4);
+
+    var chartMonthly = new Chart(document.getElementById('chartMonthly'), {
         type: 'line',
         data: {
             labels: monthlyLabels,
@@ -733,9 +742,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     backgroundColor: BLUE_BG,
                     fill: false,
                     tension: 0.3,
-                    pointRadius: 4,
+                    pointRadius: blueRadius,
                     pointHoverRadius: 7,
-                    pointBackgroundColor: BLUE,
+                    pointBackgroundColor: bluePoints,
+                    pointBorderColor: bluePoints,
                     borderWidth: 2.5
                 },
                 {
@@ -745,9 +755,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     backgroundColor: GREEN_BG,
                     fill: false,
                     tension: 0.3,
-                    pointRadius: 4,
+                    pointRadius: greenRadius,
                     pointHoverRadius: 7,
-                    pointBackgroundColor: GREEN,
+                    pointBackgroundColor: greenPoints,
+                    pointBorderColor: greenPoints,
                     borderWidth: 2.5,
                     borderDash: [5, 3]
                 }
@@ -770,11 +781,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     anchor: 'end', align: 'top', offset: 2,
                     font: { size: 9, weight: 'bold' },
                     color: function(ctx) {
+                        if (ctx.dataIndex === lastIdx) return RED;
                         return ctx.datasetIndex === 0 ? BLUE : GREEN;
                     },
-                    formatter: v => v > 0 ? v + '%' : ''
+                    formatter: function(v, ctx) {
+                        if (v <= 0) return '';
+                        if (ctx.dataIndex === lastIdx) return v + '% (집계중)';
+                        return v + '%';
+                    }
                 }
             },
+            layout: { padding: { top: 20 } },
             scales: {
                 y: {
                     min: 0, max: 100,
@@ -786,6 +803,19 @@ document.addEventListener('DOMContentLoaded', function() {
         },
         plugins: [noDataPlugin]
     });
+
+    // 마지막 달 포인트 깜빡이 (빨강 ↔ 흰)
+    var blinkOn = true;
+    setInterval(function() {
+        blinkOn = !blinkOn;
+        var c1 = blinkOn ? RED : '#fff';
+        var c2 = blinkOn ? RED : '#fff';
+        chartMonthly.data.datasets[0].pointBackgroundColor = monthlyUtilization.map((v, i) => i === lastIdx ? c1 : BLUE);
+        chartMonthly.data.datasets[0].pointBorderColor = monthlyUtilization.map((v, i) => i === lastIdx ? RED : BLUE);
+        chartMonthly.data.datasets[1].pointBackgroundColor = monthlyTimeRate.map((v, i) => i === lastIdx ? c2 : GREEN);
+        chartMonthly.data.datasets[1].pointBorderColor = monthlyTimeRate.map((v, i) => i === lastIdx ? RED : GREEN);
+        chartMonthly.update('none');
+    }, 700);
 
 });
 </script>
