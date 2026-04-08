@@ -287,7 +287,7 @@
     </style>
 </head>
 
-<body class="sb-nav-fixed {% if request.resolver_match.app_name == 'qms' %}is-qms{% elif request.resolver_match.url_name in 'molding_utilization,molding_analytics,molding_master_list,process_tag_form,stock_check,stock_check_result,mold_mt_dashboard' %}is-production{% elif request.resolver_match.app_name == 'material' %}is-wms{% elif request.resolver_match.app_name == 'admin_app' %}is-admin{% else %}is-scm{% endif %}">
+<body class="sb-nav-fixed {% if request.resolver_match.app_name == 'qms' %}is-qms{% elif request.resolver_match.url_name|in_list:'molding_utilization,molding_analytics,molding_master_list,process_tag_form,stock_check,stock_check_result,mold_mt_dashboard' %}is-production{% elif request.resolver_match.app_name == 'material' %}is-wms{% elif request.resolver_match.app_name == 'admin_app' %}is-admin{% else %}is-scm{% endif %}">
     
     <nav class="sb-topnav navbar navbar-expand navbar-dark">
         <a class="navbar-brand ps-3" href="{% url 'home' %}">
@@ -301,7 +301,7 @@
                 {# SCM 탭 - SCM 관련 권한 중 하나라도 있으면 표시 #}
                 {% if user|has_perm:'can_scm_order_view' or user|has_perm:'can_scm_order_edit' or user|has_perm:'can_scm_label_view' or user|has_perm:'can_scm_incoming_view' or user|has_perm:'can_scm_admin' %}
                 <li class="nav-item">
-                    <a class="nav-link {% if request.resolver_match.app_name != 'qms' and request.resolver_match.app_name != 'material' %}active-system{% endif %}" href="{% url 'scm_alert_dashboard' %}">
+                    <a class="nav-link {% if request.resolver_match.app_name != 'qms' and request.resolver_match.app_name != 'material' and request.resolver_match.app_name != 'admin_app' %}active-system{% endif %}" href="{% url 'scm_alert_dashboard' %}">
                        <i class="bi bi-cart-check me-1"></i>발주관리(SCM)
                     </a>
                 </li>
@@ -317,7 +317,7 @@
                 {# WMS 탭 - WMS 관련 권한 중 하나라도 있으면 표시 #}
                 {% if user|has_perm:'can_wms_stock_view' or user|has_perm:'can_wms_inout_view' or user|has_perm:'can_wms_bom_view' or user|has_perm:'can_wms_inout' %}
                 <li class="nav-item">
-                    <a class="nav-link {% if request.resolver_match.app_name == 'material' and request.resolver_match.url_name not in 'molding_utilization,molding_analytics,molding_master_list,process_tag_form,stock_check,stock_check_result,mold_mt_dashboard' %}active-system{% endif %}" href="{% url 'material:dashboard' %}">
+                    <a class="nav-link {% if request.resolver_match.app_name == 'material' and not request.resolver_match.url_name|in_list:'molding_utilization,molding_analytics,molding_master_list,process_tag_form,stock_check,stock_check_result,mold_mt_dashboard' %}active-system{% endif %}" href="{% url 'material:dashboard' %}">
                        <i class="bi bi-box-seam me-1"></i>자재관리(WMS)
                     </a>
                 </li>
@@ -325,7 +325,7 @@
                 {# 생산현장관리 탭 - 내부 직원/관리자만 #}
                 {% if user.profile.account_type == 'INTERNAL' or user.is_superuser %}
                 <li class="nav-item">
-                    <a class="nav-link {% if request.resolver_match.url_name in 'molding_utilization,molding_analytics,molding_master_list,process_tag_form,stock_check,stock_check_result,mold_mt_dashboard' %}active-system{% endif %}" href="{% url 'material:process_tag_form' %}">
+                    <a class="nav-link {% if request.resolver_match.url_name|in_list:'molding_utilization,molding_analytics,molding_master_list,process_tag_form,stock_check,stock_check_result,mold_mt_dashboard' %}active-system{% endif %}" href="{% url 'material:process_tag_form' %}">
                        <i class="bi bi-building-gear me-1"></i>생산현장관리
                     </a>
                 </li>
@@ -534,7 +534,7 @@
                         {# ====================================================== #}
                         {# 2. WMS 메뉴 (자재관리) #}
                         {# ====================================================== #}
-                        {% elif request.resolver_match.app_name == 'material' and request.resolver_match.url_name not in 'molding_utilization,molding_analytics,molding_master_list,process_tag_form,stock_check,stock_check_result,mold_mt_dashboard' %}
+                        {% elif request.resolver_match.app_name == 'material' and not request.resolver_match.url_name|in_list:'molding_utilization,molding_analytics,molding_master_list,process_tag_form,stock_check,stock_check_result,mold_mt_dashboard' %}
                             {# 메뉴 고정핀 #}
                             <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom border-secondary mb-2">
                                 <small class="text-muted">WMS 메뉴</small>
@@ -680,7 +680,7 @@
                         {# ====================================================== #}
                         {# 2-1. 생산현장관리 메뉴 #}
                         {# ====================================================== #}
-                        {% elif request.resolver_match.url_name in 'molding_utilization,molding_analytics,molding_master_list,process_tag_form,stock_check,stock_check_result,mold_mt_dashboard' %}
+                        {% elif request.resolver_match.url_name|in_list:'molding_utilization,molding_analytics,molding_master_list,process_tag_form,stock_check,stock_check_result,mold_mt_dashboard' %}
                             {# production_base.html의 sidebar_material 블록이 처리 #}
                             {% block sidebar_production %}{% endblock %}
 
