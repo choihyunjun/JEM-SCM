@@ -4147,8 +4147,9 @@ def bom_calc_batch_export(request):
                         ws.cell(row=row_idx, column=1, value=batch['part_no'])
                         ws.cell(row=row_idx, column=2, value=batch['part_name'])
                         ws.cell(row=row_idx, column=3, value=batch['qty'])
-                        ws.cell(row=row_idx, column=4, value=batch.get('need_date') or '')
                         first_row = False
+                    # 필요일자는 모든 행에 채움
+                    ws.cell(row=row_idx, column=4, value=batch.get('need_date') or '')
 
                     ws.cell(row=row_idx, column=5, value=sitem.get('level', 1))
                     ws.cell(row=row_idx, column=6, value=sitem['child_part_no'])
@@ -4178,7 +4179,8 @@ def bom_calc_batch_export(request):
                         ws.cell(row=row_idx, column=1, value=batch['part_no'])
                         ws.cell(row=row_idx, column=2, value=batch['part_name'])
                         ws.cell(row=row_idx, column=3, value=batch['qty'])
-                        ws.cell(row=row_idx, column=4, value=batch.get('need_date') or '')
+                    # 필요일자는 모든 행에 채움
+                    ws.cell(row=row_idx, column=4, value=batch.get('need_date') or '')
                     ws.cell(row=row_idx, column=5, value=1)
                     ws.cell(row=row_idx, column=6, value=item['child_part_no'])
                     ws.cell(row=row_idx, column=7, value=item['child_part_name'])
@@ -4223,7 +4225,8 @@ def bom_calc_batch_export(request):
                         ws.cell(row=row_idx, column=1, value=batch['part_no'])
                         ws.cell(row=row_idx, column=2, value=batch['part_name'])
                         ws.cell(row=row_idx, column=3, value=batch['qty'])
-                        ws.cell(row=row_idx, column=4, value=batch.get('need_date') or '')
+                    # 필요일자는 모든 행에 채움
+                    ws.cell(row=row_idx, column=4, value=batch.get('need_date') or '')
 
                     ws.cell(row=row_idx, column=5, value=item['child_part_no'])
                     ws.cell(row=row_idx, column=6, value=item['child_part_name'])
