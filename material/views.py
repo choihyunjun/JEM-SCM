@@ -4141,13 +4141,21 @@ def bom_calc_batch_export(request):
         for batch in batch_results:
             structured = batch.get('structured_items', [])
             if structured:
-                first_row = True
+                # 모품번 자체를 LEVEL 0 자품번 행으로 추가 (소요량 당겨오기용)
+                ws.cell(row=row_idx, column=1, value=batch['part_no'])
+                ws.cell(row=row_idx, column=2, value=batch['part_name'])
+                ws.cell(row=row_idx, column=3, value=batch['qty'])
+                ws.cell(row=row_idx, column=4, value=batch.get('need_date') or '')
+                ws.cell(row=row_idx, column=5, value=0)
+                ws.cell(row=row_idx, column=6, value=batch['part_no'])
+                ws.cell(row=row_idx, column=7, value=batch['part_name'])
+                ws.cell(row=row_idx, column=10, value=batch['qty'])
+                for col in range(1, 14):
+                    ws.cell(row=row_idx, column=col).fill = semi_fill
+                    ws.cell(row=row_idx, column=col).font = semi_font
+                row_idx += 1
+
                 for sitem in structured:
-                    if first_row:
-                        ws.cell(row=row_idx, column=1, value=batch['part_no'])
-                        ws.cell(row=row_idx, column=2, value=batch['part_name'])
-                        ws.cell(row=row_idx, column=3, value=batch['qty'])
-                        first_row = False
                     # 필요일자는 모든 행에 채움
                     ws.cell(row=row_idx, column=4, value=batch.get('need_date') or '')
 
