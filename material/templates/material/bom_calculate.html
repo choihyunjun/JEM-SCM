@@ -295,7 +295,7 @@
                 <button type="button" class="btn btn-sm btn-outline-light me-2" data-bs-toggle="modal" data-bs-target="#excelExportModal">
                     <i class="bi bi-file-excel me-1"></i>결과 엑셀
                 </button>
-                <a href="{% url 'material:bom_calc_demand_export' %}?session_key={{ session_key }}"
+                <a href="{% url 'material:bom_calc_batch_export' %}?session_key={{ session_key }}&mode=structured"
                    class="btn btn-sm btn-outline-success me-2">
                     <i class="bi bi-file-earmark-arrow-down me-1"></i>소요량 변환
                 </a>
@@ -929,10 +929,10 @@ function toggleSemiChildren(semiRow) {
                         <i class="bi bi-table me-2"></i>합산 (기본)
                         <div class="small text-muted">자재별 총 소요량 합산</div>
                     </a>
-                    <a href="{% url 'material:bom_calc_batch_export' %}?session_key={{ session_key }}&mode=structured"
+                    <a href="{% url 'material:bom_calc_demand_export' %}?session_key={{ session_key }}"
                        class="btn btn-outline-info">
-                        <i class="bi bi-diagram-3 me-2"></i>BOM 구조 포함
-                        <div class="small text-muted">반제품 LEVEL/순번 포함</div>
+                        <i class="bi bi-box-seam me-2"></i>원재료 산출
+                        <div class="small text-muted">필요일자 / 품번 / 필요수량 (간단 양식)</div>
                     </a>
                 </div>
             </div>
