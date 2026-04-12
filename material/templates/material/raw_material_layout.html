@@ -723,7 +723,7 @@ document.getElementById('scanInput').addEventListener('keydown', function(e) {
     }
 });
 
-function doScan() {
+function doScan(overrideQty) {
     const scanInput = document.getElementById('scanInput');
     const scanResult = document.getElementById('scanResult');
     const tagId = scanInput.value.trim();
@@ -734,13 +734,18 @@ function doScan() {
     scanResult.style.color = '#475569';
     scanResult.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>처리 중...';
 
+    const body = { tag_id: tagId };
+    if (overrideQty !== undefined && overrideQty !== null) {
+        body.override_qty = overrideQty;
+    }
+
     fetch('{% url "material:api_process_tag_scan" %}', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'X-CSRFToken': '{{ csrf_token }}'
         },
-        body: JSON.stringify({ tag_id: tagId })
+        body: JSON.stringify(body)
     })
     .then(async r => {
         if (!r.ok) {
@@ -755,21 +760,46 @@ function doScan() {
             scanResult.style.background = '#dcfce7';
             scanResult.style.color = '#166534';
             const info = data.tag_info;
-            scanResult.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i><b>${info.part_no}</b> LOT:${info.lot_no || '-'} ${info.quantity}개 투입 완료`;
+            scanResult.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i><b>${info.part_no}</b> LOT:${info.lot_no || '-'} ${info.quantity} 투입 완료`;
 
             // 이력 테이블 새로고침
             if (currentModalPartNo) {
                 loadScanHistory(currentModalPartNo);
             }
             needReloadOnClose = true;
+            scanInput.value = '';
+            scanInput.focus();
+        } else if (data.need_adjust) {
+            // 재고 부족 → 조정 수량 입력 요청
+            const labelQty = data.label_qty;
+            const availQty = data.available_qty;
+            const promptMsg = `재고 부족\n\n라벨 수량: ${labelQty}\n현재 재고: ${availQty}\n\n이동할 수량을 입력하세요:`;
+            const userInput = prompt(promptMsg, availQty);
+            if (userInput === null || userInput.trim() === '') {
+                scanResult.style.background = '#fef2f2';
+                scanResult.style.color = '#991b1b';
+                scanResult.innerHTML = '<i class="bi bi-x-circle-fill me-1"></i>이동 취소됨';
+                scanInput.value = '';
+                scanInput.focus();
+                return;
+            }
+            const adjustQty = parseFloat(userInput);
+            if (isNaN(adjustQty) || adjustQty <= 0) {
+                scanResult.style.background = '#fef2f2';
+                scanResult.style.color = '#991b1b';
+                scanResult.innerHTML = '<i class="bi bi-x-circle-fill me-1"></i>잘못된 수량';
+                return;
+            }
+            // 조정 수량으로 재시도
+            doScan(adjustQty);
         } else {
             const isFifo = data.error && data.error.includes('FIFO');
             scanResult.style.background = isFifo ? '#fef3c7' : '#fef2f2';
             scanResult.style.color = isFifo ? '#92400e' : '#991b1b';
             scanResult.innerHTML = `<i class="bi bi-${isFifo ? 'exclamation-triangle' : 'x-circle'}-fill me-1"></i>${data.error}`;
+            scanInput.value = '';
+            scanInput.focus();
         }
-        scanInput.value = '';
-        scanInput.focus();
     })
     .catch(err => {
         scanResult.style.background = '#fef2f2';

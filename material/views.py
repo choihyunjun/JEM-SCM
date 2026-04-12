@@ -1681,6 +1681,8 @@ def api_process_tag_scan(request):
         # QR 데이터 형식: TAG_ID|품번|수량|LOT → 첫 번째 필드만 추출
         tag_id = raw_tag.split('|')[0].strip() if '|' in raw_tag else raw_tag
         warehouse_id = data.get('warehouse_id')
+        # 부족 시 사용자가 입력한 조정 수량 (옵션)
+        override_qty = data.get('override_qty')
 
         if not tag_id:
             return JsonResponse({
@@ -1688,8 +1690,8 @@ def api_process_tag_scan(request):
                 'error': '태그 ID가 누락되었습니다.'
             }, status=400)
 
-        # RM 라벨 스캔 처리 (RM-로 시작하는 경우)
-        if tag_id.startswith('RM-'):
+        # RM/PLT 라벨 스캔 처리 (원재료 라벨)
+        if tag_id.startswith('RM-') or tag_id.startswith('PLT-'):
             rm_label = RawMaterialLabel.objects.filter(label_id=tag_id).first()
             if not rm_label:
                 return JsonResponse({
@@ -1697,6 +1699,8 @@ def api_process_tag_scan(request):
                     'error': f'등록되지 않은 라벨입니다: {tag_id}',
                     'is_registered': False
                 })
+
+            label_kind = '파렛트' if tag_id.startswith('PLT-') else '원재료'
 
             if rm_label.status == 'USED':
                 return JsonResponse({
@@ -1717,41 +1721,156 @@ def api_process_tag_scan(request):
                     'error': f'취소된 라벨입니다. ({rm_label.label_id})',
                 })
 
-            # RM 라벨 FIFO 검증
-            if rm_label.lot_no:
-                # 해당 품번의 모든 INSTOCK RM 라벨 중 가장 오래된 LOT
-                oldest_rm = RawMaterialLabel.objects.filter(
-                    part_no=rm_label.part_no, status='INSTOCK', lot_no__isnull=False
-                ).order_by('lot_no').first()
+            # 3200 원재료창고 / 3000 현장창고 조회
+            wh_from = Warehouse.objects.filter(code='3200').first()
+            wh_to = Warehouse.objects.filter(code='3000').first()
+            if not wh_from or not wh_to:
+                return JsonResponse({
+                    'success': False,
+                    'error': '창고 마스터(3200/3000)가 등록되어 있지 않습니다.',
+                })
 
-                if oldest_rm and oldest_rm.lot_no < rm_label.lot_no:
+            # FIFO 검증 (3200 창고에서 같은 품번 더 오래된 LOT가 남아있으면 차단)
+            if rm_label.lot_no:
+                older = MaterialStock.objects.filter(
+                    warehouse=wh_from, part=rm_label.part,
+                    lot_no__lt=rm_label.lot_no, quantity__gt=0
+                ).order_by('lot_no').first()
+                if older:
                     return JsonResponse({
                         'success': False,
-                        'error': f'[FIFO 위반] LOT {oldest_rm.lot_no} 라벨이 남아있습니다. 먼저 소진해주세요.',
+                        'error': f'[FIFO 위반] 더 오래된 LOT {older.lot_no} 재고({older.quantity})가 남아있습니다. 먼저 소진해주세요.',
                         'tag_info': {
                             'tag_id': rm_label.label_id,
                             'part_no': rm_label.part_no,
-                            'part_name': rm_label.part_name,
-                            'quantity': float(rm_label.quantity),
                             'lot_no': str(rm_label.lot_no),
-                            'status': rm_label.get_status_display(),
+                            'quantity': float(rm_label.quantity),
                         }
                     })
 
-            # RM 라벨 투입 처리: INSTOCK → USED
-            rm_label.status = 'USED'
-            rm_label.save(update_fields=['status'])
+            # 3200 창고의 해당 LOT 재고 조회 (LOT 우선, 없으면 NULL LOT)
+            from django.db.models import F as _F
+            lot_no = rm_label.lot_no
+            src_stock = MaterialStock.objects.filter(
+                warehouse=wh_from, part=rm_label.part, lot_no=lot_no
+            ).first() if lot_no else None
+
+            # LOT 재고가 없으면 NULL LOT에서 차감 시도
+            null_stock = MaterialStock.objects.filter(
+                warehouse=wh_from, part=rm_label.part, lot_no__isnull=True
+            ).first()
+
+            available_lot = src_stock.quantity if src_stock else 0
+            available_null = null_stock.quantity if null_stock else 0
+            available_total = max(available_lot, 0) + max(available_null, 0)
+
+            label_qty = float(rm_label.quantity)
+
+            if available_total <= 0:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'3200 원재료창고에 {rm_label.part_no} 재고가 없습니다.',
+                })
+
+            # 사용자가 조정 수량을 입력하지 않았는데 재고 부족 → 조정 입력 요청
+            if override_qty is None and available_total < label_qty:
+                return JsonResponse({
+                    'success': False,
+                    'need_adjust': True,
+                    'available_qty': float(available_total),
+                    'label_qty': label_qty,
+                    'error': f'재고 부족: 라벨 수량 {label_qty} > 재고 {available_total}',
+                    'tag_info': {
+                        'tag_id': rm_label.label_id,
+                        'part_no': rm_label.part_no,
+                        'part_name': rm_label.part_name,
+                        'quantity': label_qty,
+                        'lot_no': str(lot_no) if lot_no else '',
+                    }
+                })
+
+            # 실제 이동할 수량 결정
+            if override_qty is not None:
+                try:
+                    move_qty = float(override_qty)
+                except (ValueError, TypeError):
+                    return JsonResponse({'success': False, 'error': '이동 수량이 올바르지 않습니다.'})
+                if move_qty <= 0:
+                    return JsonResponse({'success': False, 'error': '이동 수량은 0보다 커야 합니다.'})
+                if move_qty > available_total:
+                    return JsonResponse({'success': False, 'error': f'이동 수량({move_qty})이 재고({available_total})보다 큽니다.'})
+            else:
+                move_qty = label_qty
+
+            # 트랜잭션: 3200 차감 → 3000 추가 → 라벨 USED → 이력 생성
+            with transaction.atomic():
+                remaining = move_qty
+                # LOT 재고 우선 차감
+                if lot_no and src_stock and src_stock.quantity > 0:
+                    deduct_lot = min(src_stock.quantity, remaining)
+                    MaterialStock.objects.filter(pk=src_stock.pk).update(
+                        quantity=_F('quantity') - deduct_lot
+                    )
+                    remaining -= deduct_lot
+                # NULL LOT 차감
+                if remaining > 0 and null_stock and null_stock.quantity > 0:
+                    deduct_null = min(null_stock.quantity, remaining)
+                    MaterialStock.objects.filter(pk=null_stock.pk).update(
+                        quantity=_F('quantity') - deduct_null
+                    )
+                    remaining -= deduct_null
+                # NULL LOT 부족분도 강제 차감 (마이너스 가능)
+                if remaining > 0:
+                    if null_stock:
+                        MaterialStock.objects.filter(pk=null_stock.pk).update(
+                            quantity=_F('quantity') - remaining
+                        )
+                    else:
+                        MaterialStock.objects.create(
+                            warehouse=wh_from, part=rm_label.part, lot_no=None, quantity=-remaining
+                        )
+
+                # 3000 창고에 추가 (LOT 유지)
+                tgt_stock, _created = MaterialStock.objects.get_or_create(
+                    warehouse=wh_to, part=rm_label.part, lot_no=lot_no,
+                    defaults={'quantity': 0}
+                )
+                MaterialStock.objects.filter(pk=tgt_stock.pk).update(
+                    quantity=_F('quantity') + move_qty
+                )
+                tgt_stock.refresh_from_db()
+
+                # 라벨 USED 처리
+                rm_label.status = 'USED'
+                rm_label.save(update_fields=['status'])
+
+                # 이력 생성
+                trx_no = f"RM-SCAN-{timezone.now().strftime('%y%m%d%H%M%S')}-{request.user.id}"
+                lot_display = lot_no.strftime('%Y-%m-%d') if lot_no else 'NO LOT'
+                MaterialTransaction.objects.create(
+                    transaction_no=trx_no,
+                    transaction_type='TRANSFER',
+                    date=timezone.now(),
+                    part=rm_label.part,
+                    quantity=move_qty,
+                    lot_no=lot_no,
+                    warehouse_from=wh_from,
+                    warehouse_to=wh_to,
+                    result_stock=tgt_stock.quantity,
+                    actor=request.user,
+                    remark=f"[{label_kind} 라벨 스캔 투입] {rm_label.label_id} (LOT: {lot_display})"
+                )
 
             return JsonResponse({
                 'success': True,
                 'is_first_scan': True,
-                'message': '원재료 투입 완료',
+                'message': f'{label_kind} 투입 완료 ({move_qty})',
                 'tag_info': {
                     'tag_id': rm_label.label_id,
                     'part_no': rm_label.part_no,
                     'part_name': rm_label.part_name,
-                    'quantity': float(rm_label.quantity),
-                    'lot_no': str(rm_label.lot_no) if rm_label.lot_no else '',
+                    'quantity': move_qty,
+                    'lot_no': str(lot_no) if lot_no else '',
                     'status': rm_label.get_status_display(),
                     'scan_count': 1,
                     'printed_at': rm_label.printed_at.strftime('%Y-%m-%d %H:%M') if rm_label.printed_at else '',
@@ -5280,28 +5399,19 @@ def raw_material_layout(request):
     ).select_related('part')
 
     def get_rack_info(rack):
-        """랙별 재고 정보 조회 (스캔 차감 반영, 감사모드 지원)"""
+        """랙별 재고 정보 조회 (3200 원재료창고 기준, 감사모드 지원)"""
         stock_qty = 0
         scanned_qty = 0
         stock_status = 'empty'
         base_qty = 0
 
         if rack.part:
-            # 실재고
+            # 실재고 (3200 원재료창고)
             stock = MaterialStock.objects.filter(
                 part=rack.part,
-                warehouse__code='3000'
+                warehouse__code='3200'
             ).aggregate(total=Sum('quantity'))
             actual_qty = stock['total'] or 0
-
-            # 미소진 스캔 수량 (USED + stock_reflected=False)
-            from .models import ProcessTag
-            scanned = ProcessTag.objects.filter(
-                part_no=rack.part.part_no,
-                status='USED',
-                stock_reflected=False
-            ).aggregate(total=Sum('quantity'))
-            scanned_qty = scanned['total'] or 0
 
             # 감사모드: 보정값(delta)이 있으면 실재고에 더함
             if audit_mode_on and rack.display_adjustment is not None:
@@ -5309,7 +5419,7 @@ def raw_material_layout(request):
             else:
                 base_qty = actual_qty
 
-            stock_qty = max(base_qty - scanned_qty, 0)
+            stock_qty = max(base_qty, 0)
 
             try:
                 setting = rack.part.raw_material_setting
