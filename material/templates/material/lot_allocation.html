@@ -270,7 +270,10 @@
                 <div class="modal-footer py-2">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button>
                     <button type="button" class="btn btn-success btn-sm" id="reprintConfirmBtn">
-                        <i class="bi bi-printer me-1"></i>출력
+                        <i class="bi bi-printer me-1"></i>현품표 (TAG)
+                    </button>
+                    <button type="button" class="btn btn-primary btn-sm" id="reprintRMBtn">
+                        <i class="bi bi-qr-code me-1"></i>원재료 라벨 (RM)
                     </button>
                 </div>
             </div>
@@ -895,6 +898,31 @@ document.getElementById('reprintConfirmBtn').addEventListener('click', function(
 
     bootstrap.Modal.getInstance(modal).hide();
     document.getElementById('reprintForm').submit();
+});
+
+// 재발행 모달 → 원재료 라벨(RM) 출력
+document.getElementById('reprintRMBtn').addEventListener('click', function() {
+    const modal = document.getElementById('reprintModal');
+    const partNo = modal.dataset.partNo;
+    const partName = modal.dataset.partName;
+    const lotNo = modal.dataset.lot;
+    const qty = parseInt(modal.dataset.qty);
+    const snpVal = parseInt(document.getElementById('reprintSnp').value) || qty;
+
+    const maxSheets = parseInt(document.getElementById('reprintSheetInput').value) || Math.ceil(qty / snpVal);
+    const items = [];
+    let remaining = qty;
+    let count = 0;
+    while (remaining > 0 && count < maxSheets) {
+        const tagQty = Math.min(snpVal, remaining);
+        items.push({ part_no: partNo, part_name: partName, lot_no: lotNo, quantity: tagQty });
+        remaining -= tagQty;
+        count++;
+    }
+
+    document.getElementById('rmPrintItems').value = JSON.stringify(items);
+    bootstrap.Modal.getInstance(modal).hide();
+    document.getElementById('rmPrintForm').submit();
 });
 
 // 원재료 라벨 출력 (RM)
