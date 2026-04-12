@@ -710,10 +710,23 @@ function swapParts(sourceRackId, targetRackId) {
 }
 
 function deleteRack(rackId, positionCode) {
-    if (confirm(`${positionCode} 삭제?`)) {
+    // 품목 유무 판단: 해당 랙 셀에 has-part 클래스가 있으면 품목만 제거, 없으면 랙 삭제
+    var cell = document.querySelector(`.rack-cell[data-rack-id="${rackId}"]`);
+    var hasPart = cell && cell.classList.contains('has-part');
+
+    var action, confirmMsg;
+    if (hasPart) {
+        action = 'clear_rack';
+        confirmMsg = `${positionCode} 의 품목을 제거하시겠습니까?\n(랙 위치는 유지됩니다)`;
+    } else {
+        action = 'delete_rack';
+        confirmMsg = `${positionCode} 랙 위치를 삭제하시겠습니까?`;
+    }
+
+    if (confirm(confirmMsg)) {
         const form = document.createElement('form');
         form.method = 'POST';
-        form.innerHTML = `<input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}"><input type="hidden" name="action" value="delete_rack"><input type="hidden" name="rack_id" value="${rackId}">`;
+        form.innerHTML = `<input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}"><input type="hidden" name="action" value="${action}"><input type="hidden" name="rack_id" value="${rackId}">`;
         document.body.appendChild(form);
         form.submit();
     }

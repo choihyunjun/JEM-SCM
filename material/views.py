@@ -6157,6 +6157,18 @@ def raw_material_rack_manage(request):
 
             messages.success(request, f'{source_rack.position_code} ↔ {target_rack.position_code} 품목 교환 완료')
 
+        elif action == 'clear_rack':
+            rack_id = request.POST.get('rack_id')
+            try:
+                rack = RawMaterialRack.objects.get(id=rack_id)
+            except RawMaterialRack.DoesNotExist:
+                messages.error(request, '해당 랙을 찾을 수 없습니다.')
+                return redirect(f'/wms/raw-material/rack-manage/?section={section}')
+            position = rack.position_code
+            rack.part = None
+            rack.save(update_fields=['part'])
+            messages.success(request, f'랙 위치 {position} 품목 제거 완료')
+
         elif action == 'delete_rack':
             rack_id = request.POST.get('rack_id')
             try:
