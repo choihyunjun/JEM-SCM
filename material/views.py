@@ -1705,16 +1705,87 @@ def api_process_tag_scan(request):
             label_kind = '파렛트' if tag_id.startswith('PLT-') else '원재료'
 
             if rm_label.status == 'USED':
+                # 이미 투입된 라벨 → 투입 취소 처리 (3000 차감, 3200 복구, INSTOCK 복구)
+                wh_3200 = Warehouse.objects.filter(code='3200').first()
+                wh_3000 = Warehouse.objects.filter(code='3000').first()
+                if not wh_3200 or not wh_3000:
+                    return JsonResponse({
+                        'success': False,
+                        'error': '창고 마스터(3200/3000)가 등록되어 있지 않습니다.',
+                    })
+
+                # 가장 최근 투입 이력에서 실제 이동 수량 조회
+                last_trx = MaterialTransaction.objects.filter(
+                    part=rm_label.part,
+                    transaction_type='TRANSFER',
+                    warehouse_from=wh_3200,
+                    warehouse_to=wh_3000,
+                    remark__icontains=rm_label.label_id,
+                ).order_by('-date').first()
+
+                cancel_qty = float(last_trx.quantity) if last_trx else float(rm_label.quantity)
+                lot_no_cancel = rm_label.lot_no
+
+                from django.db.models import F as _F
+                with transaction.atomic():
+                    # 3000 재고 차감 (LOT 유지)
+                    src_3000 = MaterialStock.objects.filter(
+                        warehouse=wh_3000, part=rm_label.part, lot_no=lot_no_cancel
+                    ).first()
+                    if src_3000:
+                        MaterialStock.objects.filter(pk=src_3000.pk).update(
+                            quantity=_F('quantity') - cancel_qty
+                        )
+                    else:
+                        MaterialStock.objects.create(
+                            warehouse=wh_3000, part=rm_label.part, lot_no=lot_no_cancel,
+                            quantity=-cancel_qty
+                        )
+
+                    # 3200 재고 복구 (LOT 유지)
+                    tgt_3200, _c = MaterialStock.objects.get_or_create(
+                        warehouse=wh_3200, part=rm_label.part, lot_no=lot_no_cancel,
+                        defaults={'quantity': 0}
+                    )
+                    MaterialStock.objects.filter(pk=tgt_3200.pk).update(
+                        quantity=_F('quantity') + cancel_qty
+                    )
+                    tgt_3200.refresh_from_db()
+
+                    # 라벨 USED → INSTOCK 복구
+                    rm_label.status = 'INSTOCK'
+                    rm_label.save(update_fields=['status'])
+
+                    # 취소 이력 (역방향 TRANSFER)
+                    trx_no = f"RM-CANCEL-{timezone.now().strftime('%y%m%d%H%M%S')}-{request.user.id}"
+                    lot_disp = lot_no_cancel.strftime('%Y-%m-%d') if lot_no_cancel else 'NO LOT'
+                    label_kind_c = '파렛트' if rm_label.label_id.startswith('PLT-') else '원재료'
+                    MaterialTransaction.objects.create(
+                        transaction_no=trx_no,
+                        transaction_type='TRANSFER',
+                        date=timezone.now(),
+                        part=rm_label.part,
+                        quantity=cancel_qty,
+                        lot_no=lot_no_cancel,
+                        warehouse_from=wh_3000,
+                        warehouse_to=wh_3200,
+                        result_stock=tgt_3200.quantity,
+                        actor=request.user,
+                        remark=f"[{label_kind_c} 라벨 투입취소] {rm_label.label_id} (LOT: {lot_disp})"
+                    )
+
                 return JsonResponse({
-                    'success': False,
-                    'error': f'이미 투입된 라벨입니다. ({rm_label.label_id})',
+                    'success': True,
+                    'is_first_scan': True,
+                    'message': f'투입 취소 완료 ({cancel_qty}) - 라벨 재사용 가능',
                     'tag_info': {
                         'tag_id': rm_label.label_id,
                         'part_no': rm_label.part_no,
                         'part_name': rm_label.part_name,
-                        'quantity': float(rm_label.quantity),
-                        'lot_no': str(rm_label.lot_no) if rm_label.lot_no else '',
-                        'status': rm_label.get_status_display(),
+                        'quantity': cancel_qty,
+                        'lot_no': str(lot_no_cancel) if lot_no_cancel else '',
+                        'status': '재고',
+                        'cancelled': True,
                     }
                 })
             elif rm_label.status == 'CANCELLED':
