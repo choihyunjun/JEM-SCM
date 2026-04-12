@@ -1807,7 +1807,9 @@ def api_process_tag_scan(request):
 
                     # 라벨 USED → INSTOCK 복구
                     rm_label.status = 'INSTOCK'
-                    rm_label.save(update_fields=['status'])
+                    rm_label.used_at = None
+                    rm_label.used_by = None
+                    rm_label.save(update_fields=['status', 'used_at', 'used_by'])
 
                     # 취소 이력 (역방향 TRANSFER)
                     trx_no = f"RM-CANCEL-{timezone.now().strftime('%y%m%d%H%M%S%f')}-{request.user.id}"
@@ -1991,7 +1993,9 @@ def api_process_tag_scan(request):
                 # 현장(3000)으로 이동할 때만 라벨 USED 처리
                 if mark_used:
                     rm_label.status = 'USED'
-                    rm_label.save(update_fields=['status'])
+                    rm_label.used_at = timezone.now()
+                    rm_label.used_by = request.user
+                    rm_label.save(update_fields=['status', 'used_at', 'used_by'])
 
                 # 이력 생성
                 trx_no = f"RM-SCAN-{timezone.now().strftime('%y%m%d%H%M%S%f')}-{request.user.id}"
@@ -2414,7 +2418,7 @@ def api_scan_history_by_part(request):
     - 원재료 레이아웃에서 랙 셀 클릭 시 사용
     GET ?part_no=11630-06360
     """
-    from .models import ProcessTag
+    from .models import ProcessTag, RawMaterialLabel
 
     part_no = request.GET.get('part_no', '').strip()
     if not part_no:
@@ -2422,7 +2426,7 @@ def api_scan_history_by_part(request):
 
     items = []
 
-    # 1) ProcessTag 투입 이력 (3000 사용)
+    # 1) ProcessTag - 현재 USED 상태만 표시 (취소된 건 자동 제외)
     tags = ProcessTag.objects.filter(
         part_no=part_no, status='USED', used_warehouse__code='3000'
     ).select_related('used_by').order_by('-used_at')[:30]
@@ -2436,29 +2440,18 @@ def api_scan_history_by_part(request):
             'stock_reflected': t.stock_reflected,
         })
 
-    # 2) RM/PLT 라벨 스캔 투입 이력 (3200→3000 TRANSFER)
-    rm_trxs = MaterialTransaction.objects.filter(
-        part__part_no=part_no,
-        transaction_type='TRANSFER',
-        warehouse_from__code='3200',
-        warehouse_to__code='3000',
-        remark__icontains='라벨'
-    ).select_related('actor').order_by('-date')[:30]
-    for t in rm_trxs:
-        # remark에서 라벨 ID 추출
-        label_id = '-'
-        if t.remark:
-            import re as _re_lbl
-            m = _re_lbl.search(r'((?:RM|PLT)-[\w-]+)', t.remark)
-            if m:
-                label_id = m.group(1)
+    # 2) RM/PLT 라벨 - 현재 USED 상태만 표시 (취소되어 INSTOCK 복구된 건 자동 제외)
+    used_labels = RawMaterialLabel.objects.filter(
+        part_no=part_no, status='USED'
+    ).select_related('used_by', 'part').order_by('-used_at')[:30]
+    for lbl in used_labels:
         items.append({
-            'tag_id': label_id,
-            'lot_no': t.lot_no.strftime('%Y-%m-%d') if t.lot_no else '-',
-            'quantity': float(t.quantity),
-            'used_at': t.date.strftime('%Y-%m-%d %H:%M') if t.date else '-',
-            'used_by': t.actor.username if t.actor else '-',
-            'stock_reflected': True,
+            'tag_id': lbl.label_id,
+            'lot_no': lbl.lot_no.strftime('%Y-%m-%d') if lbl.lot_no else '-',
+            'quantity': float(lbl.quantity),
+            'used_at': lbl.used_at.strftime('%Y-%m-%d %H:%M') if lbl.used_at else '-',
+            'used_by': lbl.used_by.username if lbl.used_by else '-',
+            'stock_reflected': False,
         })
 
     # 시간 역순 정렬 후 30건 제한
