@@ -2044,7 +2044,7 @@ def api_process_tag_scan(request):
                 }
             })
 
-        # 태그 조회 (기존 ProcessTag)
+        # 태그 조회 (ProcessTag) - RM/PLT와 동일 로직으로 처리
         tag = ProcessTag.objects.filter(tag_id=tag_id).first()
 
         if not tag:
@@ -2054,102 +2054,298 @@ def api_process_tag_scan(request):
                 'is_registered': False
             })
 
-        # 창고 조회
-        warehouse = None
-        if warehouse_id:
-            warehouse = Warehouse.objects.filter(id=warehouse_id).first()
-
-        # ── FIFO 검증 (3000번 창고, LOT가 있는 태그, 아직 미사용인 경우만) ──
-        if tag.status == 'PRINTED' and tag.lot_no:
-            wh_3000 = Warehouse.objects.filter(code='3000').first()
-            if wh_3000:
-                # 해당 품번의 LOT별 실재고 (3000번 창고)
-                lot_stocks = MaterialStock.objects.filter(
-                    warehouse=wh_3000, part__part_no=tag.part_no,
-                    lot_no__isnull=False, quantity__gt=0
-                ).values('lot_no').annotate(actual_qty=Sum('quantity'))
-
-                # 미소진 스캔 수량 (LOT별)
-                scanned_by_lot = dict(
-                    ProcessTag.objects.filter(
-                        part_no=tag.part_no, status='USED', stock_reflected=False
-                    ).values('lot_no').annotate(s=Sum('quantity')).values_list('lot_no', 's')
-                )
-
-                # 유효재고 = 실재고 - 미소진 스캔 (LOT별)
-                for ls in lot_stocks:
-                    lot = ls['lot_no']
-                    effective = ls['actual_qty'] - scanned_by_lot.get(lot, 0)
-                    if effective > 0 and lot < tag.lot_no:
-                        return JsonResponse({
-                            'success': False,
-                            'error': f'[FIFO 위반] LOT {lot} 재고가 남아있습니다. 먼저 소진해주세요.',
-                            'tag_info': {
-                                'tag_id': tag.tag_id,
-                                'part_no': tag.part_no,
-                                'part_name': tag.part_name,
-                                'quantity': tag.quantity,
-                                'lot_no': str(tag.lot_no),
-                                'status': tag.get_status_display(),
-                            }
-                        })
-
-        # 스캔 기록 (record_scan 메서드 호출)
-        success, is_first_scan, error = tag.record_scan(user=request.user, warehouse=warehouse)
-
-        # 스캔 로그 생성 (성공/실패 모두 기록)
-        client_ip = request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR', ''))
-        if client_ip and ',' in client_ip:
-            client_ip = client_ip.split(',')[0].strip()
-
-        if not success and tag.status == 'CANCELLED':
-            scan_remark = '취소된 라벨 스캔 시도 (사용 불가)'
-        elif not success:
-            scan_remark = '중복 스캔 시도 (차단됨)'
-        else:
-            scan_remark = ''
-
-        ProcessTagScanLog.objects.create(
-            tag=tag,
-            scanned_by=request.user,
-            warehouse=warehouse,
-            is_first_scan=is_first_scan,
-            ip_address=client_ip if client_ip else None,
-            remark=scan_remark
-        )
-
-        # 중복 스캔 차단
-        if not success:
+        if tag.status == 'CANCELLED':
             return JsonResponse({
                 'success': False,
-                'is_first_scan': False,
-                'error': error,
+                'error': f'취소된 태그입니다. ({tag.tag_id})',
+            })
+
+        # 3200 원재료창고 / 도착 창고 조회
+        wh_from_tag = Warehouse.objects.filter(code='3200').first()
+        wh_to_tag = Warehouse.objects.filter(code=target_warehouse_code).first()
+        if not wh_from_tag:
+            return JsonResponse({
+                'success': False,
+                'error': '3200 원재료창고가 등록되어 있지 않습니다.',
+            })
+        if not wh_to_tag:
+            return JsonResponse({
+                'success': False,
+                'error': f'도착 창고({target_warehouse_code})가 등록되어 있지 않습니다.',
+            })
+
+        # USED 상태 → 투입 취소 (3000→3200 복구)
+        if tag.status == 'USED':
+            # 원래 투입처 조회 (이전 이동 이력에서 도착 창고 확인)
+            last_trx_t = MaterialTransaction.objects.filter(
+                part=tag.part,
+                transaction_type='TRANSFER',
+                warehouse_from__code='3200',
+                remark__icontains=tag.tag_id,
+            ).order_by('-date').first()
+
+            if not last_trx_t:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'이동 이력을 찾을 수 없습니다. ({tag.tag_id})',
+                })
+
+            cancel_qty_t = float(last_trx_t.quantity)
+            lot_no_tag = tag.lot_no
+            wh_to_cancel = last_trx_t.warehouse_to  # 원래 투입처
+
+            from django.db.models import F as _F
+            with transaction.atomic():
+                # 원래 투입처 재고 차감
+                src_t = MaterialStock.objects.filter(
+                    warehouse=wh_to_cancel, part=tag.part, lot_no=lot_no_tag
+                ).first()
+                if src_t:
+                    MaterialStock.objects.filter(pk=src_t.pk).update(
+                        quantity=_F('quantity') - cancel_qty_t
+                    )
+                else:
+                    MaterialStock.objects.create(
+                        warehouse=wh_to_cancel, part=tag.part, lot_no=lot_no_tag,
+                        quantity=-cancel_qty_t
+                    )
+
+                # 3200 재고 복구
+                tgt_t, _c = MaterialStock.objects.get_or_create(
+                    warehouse=wh_from_tag, part=tag.part, lot_no=lot_no_tag,
+                    defaults={'quantity': 0}
+                )
+                MaterialStock.objects.filter(pk=tgt_t.pk).update(
+                    quantity=_F('quantity') + cancel_qty_t
+                )
+                tgt_t.refresh_from_db()
+
+                # 태그 USED → PRINTED 복구
+                tag.status = 'PRINTED'
+                tag.used_at = None
+                tag.used_by = None
+                tag.used_warehouse = None
+                tag.scan_count = 0
+                tag.save(update_fields=['status', 'used_at', 'used_by', 'used_warehouse', 'scan_count'])
+
+                # 취소 이력
+                trx_no_t = f"TAG-CANCEL-{timezone.now().strftime('%y%m%d%H%M%S%f')}-{request.user.id}"
+                lot_disp_t = lot_no_tag.strftime('%Y-%m-%d') if lot_no_tag else 'NO LOT'
+                cancel_trx_t = MaterialTransaction.objects.create(
+                    transaction_no=trx_no_t,
+                    transaction_type='TRANSFER',
+                    date=timezone.now(),
+                    part=tag.part,
+                    quantity=cancel_qty_t,
+                    lot_no=lot_no_tag,
+                    warehouse_from=wh_to_cancel,
+                    warehouse_to=wh_from_tag,
+                    result_stock=tgt_t.quantity,
+                    actor=request.user,
+                    remark=f"[현품표 투입취소] {tag.tag_id} (LOT: {lot_disp_t})"
+                )
+
+            # ERP 역방향
+            erp_msg_tc = ''
+            try:
+                from .erp_api import register_erp_stock_move
+                ok_erp, erp_no, err_erp = register_erp_stock_move(
+                    cancel_trx_t, cancel_qty_t, wh_to_cancel.code, wh_from_tag.code
+                )
+                if not ok_erp:
+                    erp_msg_tc = f' (ERP 연동 실패: {err_erp})'
+            except Exception as _e:
+                erp_msg_tc = f' (ERP 연동 예외)'
+                logger.warning(f'TAG 취소 ERP 예외: {_e}')
+
+            return JsonResponse({
+                'success': True,
+                'is_first_scan': True,
+                'message': f'투입 취소 완료 ({cancel_qty_t}) - 라벨 재사용 가능' + erp_msg_tc,
                 'tag_info': {
                     'tag_id': tag.tag_id,
                     'part_no': tag.part_no,
                     'part_name': tag.part_name,
-                    'quantity': tag.quantity,
-                    'status': tag.get_status_display(),
-                    'scan_count': tag.scan_count,
-                    'used_at': tag.used_at.strftime('%Y-%m-%d %H:%M') if tag.used_at else None,
-                    'used_by': tag.used_by.username if tag.used_by else None,
+                    'quantity': cancel_qty_t,
+                    'lot_no': str(lot_no_tag) if lot_no_tag else '',
+                    'status': 'PRINTED',
+                    'cancelled': True,
                 }
             })
 
+        # PRINTED 상태 → 3200→도착 이동
+        # FIFO 검증 (3200 창고 기준)
+        if tag.lot_no:
+            older = MaterialStock.objects.filter(
+                warehouse=wh_from_tag, part=tag.part,
+                lot_no__lt=tag.lot_no, quantity__gt=0
+            ).order_by('lot_no').first()
+            if older:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'[FIFO 위반] 더 오래된 LOT {older.lot_no} 재고({older.quantity})가 남아있습니다. 먼저 소진해주세요.',
+                    'tag_info': {
+                        'tag_id': tag.tag_id,
+                        'part_no': tag.part_no,
+                        'lot_no': str(tag.lot_no),
+                        'quantity': int(tag.quantity),
+                    }
+                })
+
+        # 재고 조회
+        lot_no_t = tag.lot_no
+        from django.db.models import F as _F
+        src_stock_t = MaterialStock.objects.filter(
+            warehouse=wh_from_tag, part=tag.part, lot_no=lot_no_t
+        ).first() if lot_no_t else None
+
+        null_stock_t = MaterialStock.objects.filter(
+            warehouse=wh_from_tag, part=tag.part, lot_no__isnull=True
+        ).first()
+
+        avail_lot = src_stock_t.quantity if src_stock_t else 0
+        avail_null = null_stock_t.quantity if null_stock_t else 0
+        available_total_t = max(avail_lot, 0) + max(avail_null, 0)
+
+        tag_qty_t = float(tag.quantity)
+
+        if available_total_t <= 0:
+            return JsonResponse({
+                'success': False,
+                'error': f'3200 원재료창고에 {tag.part_no} 재고가 없습니다.',
+            })
+
+        # 부족 시 조정 수량 요청
+        if override_qty is None and available_total_t < tag_qty_t:
+            return JsonResponse({
+                'success': False,
+                'need_adjust': True,
+                'available_qty': float(available_total_t),
+                'label_qty': tag_qty_t,
+                'error': f'재고 부족: 태그 수량 {tag_qty_t} > 재고 {available_total_t}',
+                'tag_info': {
+                    'tag_id': tag.tag_id,
+                    'part_no': tag.part_no,
+                    'part_name': tag.part_name,
+                    'quantity': tag_qty_t,
+                    'lot_no': str(lot_no_t) if lot_no_t else '',
+                }
+            })
+
+        if override_qty is not None:
+            try:
+                move_qty_t = float(override_qty)
+            except (ValueError, TypeError):
+                return JsonResponse({'success': False, 'error': '이동 수량이 올바르지 않습니다.'})
+            if move_qty_t <= 0:
+                return JsonResponse({'success': False, 'error': '이동 수량은 0보다 커야 합니다.'})
+            if move_qty_t > available_total_t:
+                return JsonResponse({'success': False, 'error': f'이동 수량({move_qty_t})이 재고({available_total_t})보다 큽니다.'})
+        else:
+            move_qty_t = tag_qty_t
+
+        # 현장(3000)으로 이동할 때만 USED 처리
+        mark_used_t = (target_warehouse_code == '3000')
+
+        with transaction.atomic():
+            remaining = move_qty_t
+            if lot_no_t and src_stock_t and src_stock_t.quantity > 0:
+                deduct_lot = min(src_stock_t.quantity, remaining)
+                MaterialStock.objects.filter(pk=src_stock_t.pk).update(
+                    quantity=_F('quantity') - deduct_lot
+                )
+                remaining -= deduct_lot
+            if remaining > 0 and null_stock_t and null_stock_t.quantity > 0:
+                deduct_null = min(null_stock_t.quantity, remaining)
+                MaterialStock.objects.filter(pk=null_stock_t.pk).update(
+                    quantity=_F('quantity') - deduct_null
+                )
+                remaining -= deduct_null
+            if remaining > 0:
+                if null_stock_t:
+                    MaterialStock.objects.filter(pk=null_stock_t.pk).update(
+                        quantity=_F('quantity') - remaining
+                    )
+                else:
+                    MaterialStock.objects.create(
+                        warehouse=wh_from_tag, part=tag.part, lot_no=None, quantity=-remaining
+                    )
+
+            # 도착창고 재고 추가
+            tgt_stock_t, _c = MaterialStock.objects.get_or_create(
+                warehouse=wh_to_tag, part=tag.part, lot_no=lot_no_t,
+                defaults={'quantity': 0}
+            )
+            MaterialStock.objects.filter(pk=tgt_stock_t.pk).update(
+                quantity=_F('quantity') + move_qty_t
+            )
+            tgt_stock_t.refresh_from_db()
+
+            # 현장(3000) 이동 시에만 USED 처리
+            if mark_used_t:
+                tag.status = 'USED'
+                tag.used_at = timezone.now()
+                tag.used_by = request.user
+                tag.used_warehouse = wh_to_tag
+                tag.scan_count = (tag.scan_count or 0) + 1
+                tag.save(update_fields=['status', 'used_at', 'used_by', 'used_warehouse', 'scan_count'])
+
+            # 이력 생성
+            trx_no_t = f"TAG-SCAN-{timezone.now().strftime('%y%m%d%H%M%S%f')}-{request.user.id}"
+            lot_display_t = lot_no_t.strftime('%Y-%m-%d') if lot_no_t else 'NO LOT'
+            action_label_t = '스캔 투입' if mark_used_t else '재고 이동'
+            trx_for_erp_t = MaterialTransaction.objects.create(
+                transaction_no=trx_no_t,
+                transaction_type='TRANSFER',
+                date=timezone.now(),
+                part=tag.part,
+                quantity=move_qty_t,
+                lot_no=lot_no_t,
+                warehouse_from=wh_from_tag,
+                warehouse_to=wh_to_tag,
+                result_stock=tgt_stock_t.quantity,
+                actor=request.user,
+                remark=f"[현품표 {action_label_t}] {tag.tag_id} (LOT: {lot_display_t})"
+            )
+
+            # 스캔 로그
+            ProcessTagScanLog.objects.create(
+                tag=tag,
+                scanned_by=request.user,
+                warehouse=wh_to_tag,
+                is_first_scan=mark_used_t,
+                remark='' if mark_used_t else f'{wh_to_tag.code} 이동'
+            )
+
+        # ERP 연동
+        erp_msg_t = ''
+        try:
+            from .erp_api import register_erp_stock_move
+            ok_erp, erp_no, err_erp = register_erp_stock_move(
+                trx_for_erp_t, move_qty_t, wh_from_tag.code, wh_to_tag.code
+            )
+            if not ok_erp:
+                erp_msg_t = f' (ERP 연동 실패: {err_erp})'
+        except Exception as _e:
+            erp_msg_t = f' (ERP 연동 예외)'
+            logger.warning(f'TAG 스캔 ERP 예외: {_e}')
+
+        msg_t = f'{wh_to_tag.name}(으)로 이동 완료 ({move_qty_t})' + erp_msg_t
         return JsonResponse({
             'success': True,
-            'is_first_scan': is_first_scan,
-            'message': '스캔 성공',
+            'is_first_scan': mark_used_t,
+            'message': msg_t,
             'tag_info': {
                 'tag_id': tag.tag_id,
                 'part_no': tag.part_no,
                 'part_name': tag.part_name,
-                'quantity': tag.quantity,
-                'lot_no': str(tag.lot_no) if tag.lot_no else '',
+                'quantity': move_qty_t,
+                'lot_no': str(lot_no_t) if lot_no_t else '',
                 'status': tag.get_status_display(),
                 'scan_count': tag.scan_count,
-                'printed_at': tag.printed_at.strftime('%Y-%m-%d %H:%M'),
-                'used_at': tag.used_at.strftime('%Y-%m-%d %H:%M') if tag.used_at else None,
+                'printed_at': tag.printed_at.strftime('%Y-%m-%d %H:%M') if tag.printed_at else '',
+                'used_at': timezone.now().strftime('%Y-%m-%d %H:%M'),
+                'target_warehouse': wh_to_tag.code,
             }
         })
 
