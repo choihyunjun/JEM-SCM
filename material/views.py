@@ -1757,7 +1757,7 @@ def api_process_tag_scan(request):
                     rm_label.save(update_fields=['status'])
 
                     # 취소 이력 (역방향 TRANSFER)
-                    trx_no = f"RM-CANCEL-{timezone.now().strftime('%y%m%d%H%M%S')}-{request.user.id}"
+                    trx_no = f"RM-CANCEL-{timezone.now().strftime('%y%m%d%H%M%S%f')}-{request.user.id}"
                     lot_disp = lot_no_cancel.strftime('%Y-%m-%d') if lot_no_cancel else 'NO LOT'
                     label_kind_c = '파렛트' if rm_label.label_id.startswith('PLT-') else '원재료'
                     MaterialTransaction.objects.create(
@@ -1927,7 +1927,7 @@ def api_process_tag_scan(request):
                     rm_label.save(update_fields=['status'])
 
                 # 이력 생성
-                trx_no = f"RM-SCAN-{timezone.now().strftime('%y%m%d%H%M%S')}-{request.user.id}"
+                trx_no = f"RM-SCAN-{timezone.now().strftime('%y%m%d%H%M%S%f')}-{request.user.id}"
                 lot_display = lot_no.strftime('%Y-%m-%d') if lot_no else 'NO LOT'
                 action_label = '스캔 투입' if mark_used else '재고 이동'
                 MaterialTransaction.objects.create(
