@@ -1650,6 +1650,59 @@ def lot_allocation_print(request):
     return render(request, 'material/process_tag_print.html', context)
 
 
+@wms_permission_required('can_wms_stock_edit')
+def lot_allocation_rm_print(request):
+    """LOT 배분 후 원재료 라벨(RM) 일괄 출력 - 3200 창고 기준"""
+    if request.method != 'POST':
+        return redirect('material:lot_allocation')
+
+    import json
+    from .models import RawMaterialLabel
+    from datetime import datetime
+    from decimal import Decimal
+
+    items = json.loads(request.POST.get('items', '[]'))
+    if not items:
+        return redirect('material:lot_allocation')
+
+    all_labels = []
+    for item in items:
+        part = Part.objects.filter(part_no=item['part_no']).first()
+        if not part:
+            continue
+
+        lot_date = None
+        if item.get('lot_no'):
+            try:
+                lot_date = datetime.strptime(item['lot_no'], '%Y-%m-%d').date()
+            except (ValueError, TypeError):
+                pass
+
+        qty = Decimal(str(item.get('quantity', 0)))
+        unit = (part.weight_unit or 'KG').strip() or 'KG'
+
+        label = RawMaterialLabel.objects.create(
+            label_id=RawMaterialLabel.generate_label_id(),
+            part=part,
+            part_no=part.part_no,
+            part_name=part.part_name or '',
+            lot_no=lot_date,
+            quantity=qty,
+            unit=unit,
+            status='INSTOCK',
+            printed_by=request.user if request.user.is_authenticated else None,
+        )
+        all_labels.append(label)
+
+    if not all_labels:
+        messages.error(request, '출력할 라벨이 없습니다.')
+        return redirect('material:lot_allocation')
+
+    # 라벨 출력 페이지로 리다이렉트
+    label_ids = ','.join([str(l.id) for l in all_labels])
+    return redirect(f'/wms/raw-material/label-print/?ids={label_ids}')
+
+
 # =============================================================================
 # 3-2. 현품표 스캔 API (중복 스캔 확인)
 # =============================================================================

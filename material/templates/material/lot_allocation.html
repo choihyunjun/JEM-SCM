@@ -75,7 +75,10 @@
                         <option value="large">대형 (A5)</option>
                     </select>
                     <button type="submit" class="btn btn-success">
-                        <i class="bi bi-printer me-1"></i>현품표 출력
+                        <i class="bi bi-printer me-1"></i>현품표 출력 (TAG)
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="printRMLabels()">
+                        <i class="bi bi-qr-code me-1"></i>원재료 라벨 출력 (RM)
                     </button>
                     <span class="text-muted small ms-2" id="totalSheetInfo"></span>
                 </div>
@@ -213,6 +216,10 @@
         <input type="hidden" name="items" id="reprintItems">
         <input type="hidden" name="print_mode" id="reprintMode" value="roll">
         <input type="hidden" name="size_type" id="reprintSize" value="medium">
+    </form>
+    <form method="post" action="{% url 'material:lot_allocation_rm_print' %}" target="_blank" id="rmPrintForm" style="display:none;">
+        {% csrf_token %}
+        <input type="hidden" name="items" id="rmPrintItems">
     </form>
 
     <!-- 재발행 설정 모달 -->
@@ -889,6 +896,17 @@ document.getElementById('reprintConfirmBtn').addEventListener('click', function(
     bootstrap.Modal.getInstance(modal).hide();
     document.getElementById('reprintForm').submit();
 });
+
+// 원재료 라벨 출력 (RM)
+function printRMLabels() {
+    var allocPrintItems = document.getElementById('allocPrintItems');
+    if (!allocPrintItems || !allocPrintItems.value) {
+        alert('출력할 배분 데이터가 없습니다.');
+        return;
+    }
+    document.getElementById('rmPrintItems').value = allocPrintItems.value;
+    document.getElementById('rmPrintForm').submit();
+}
 </script>
 
 {% endblock %}
