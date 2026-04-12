@@ -1760,7 +1760,7 @@ def api_process_tag_scan(request):
                     trx_no = f"RM-CANCEL-{timezone.now().strftime('%y%m%d%H%M%S%f')}-{request.user.id}"
                     lot_disp = lot_no_cancel.strftime('%Y-%m-%d') if lot_no_cancel else 'NO LOT'
                     label_kind_c = '파렛트' if rm_label.label_id.startswith('PLT-') else '원재료'
-                    MaterialTransaction.objects.create(
+                    cancel_trx = MaterialTransaction.objects.create(
                         transaction_no=trx_no,
                         transaction_type='TRANSFER',
                         date=timezone.now(),
@@ -1774,10 +1774,24 @@ def api_process_tag_scan(request):
                         remark=f"[{label_kind_c} 라벨 투입취소] {rm_label.label_id} (LOT: {lot_disp})"
                     )
 
+                # ERP 역방향 재고이동 등록 (atomic 밖)
+                erp_msg_c = ''
+                try:
+                    from .erp_api import register_erp_stock_move
+                    ok_erp, erp_no, err_erp = register_erp_stock_move(
+                        cancel_trx, cancel_qty, wh_3000.code, wh_3200.code
+                    )
+                    if not ok_erp:
+                        erp_msg_c = f' (ERP 연동 실패: {err_erp})'
+                        logger.warning(f'RM 취소 ERP 이동 실패: {err_erp}')
+                except Exception as _e:
+                    erp_msg_c = f' (ERP 연동 예외)'
+                    logger.warning(f'RM 취소 ERP 이동 예외: {_e}')
+
                 return JsonResponse({
                     'success': True,
                     'is_first_scan': True,
-                    'message': f'투입 취소 완료 ({cancel_qty}) - 라벨 재사용 가능',
+                    'message': f'투입 취소 완료 ({cancel_qty}) - 라벨 재사용 가능' + erp_msg_c,
                     'tag_info': {
                         'tag_id': rm_label.label_id,
                         'part_no': rm_label.part_no,
@@ -1930,7 +1944,7 @@ def api_process_tag_scan(request):
                 trx_no = f"RM-SCAN-{timezone.now().strftime('%y%m%d%H%M%S%f')}-{request.user.id}"
                 lot_display = lot_no.strftime('%Y-%m-%d') if lot_no else 'NO LOT'
                 action_label = '스캔 투입' if mark_used else '재고 이동'
-                MaterialTransaction.objects.create(
+                trx_for_erp = MaterialTransaction.objects.create(
                     transaction_no=trx_no,
                     transaction_type='TRANSFER',
                     date=timezone.now(),
@@ -1944,7 +1958,21 @@ def api_process_tag_scan(request):
                     remark=f"[{label_kind} 라벨 {action_label}] {rm_label.label_id} (LOT: {lot_display})"
                 )
 
-            msg = f'{label_kind} 투입 완료 ({move_qty})' if mark_used else f'{wh_to.name}(으)로 이동 완료 ({move_qty})'
+            # ERP 재고이동 등록 (atomic 밖 - ERP 실패가 SCM 롤백하지 않도록)
+            erp_msg = ''
+            try:
+                from .erp_api import register_erp_stock_move
+                ok_erp, erp_no, err_erp = register_erp_stock_move(
+                    trx_for_erp, move_qty, wh_from.code, wh_to.code
+                )
+                if not ok_erp:
+                    erp_msg = f' (ERP 연동 실패: {err_erp})'
+                    logger.warning(f'RM 스캔 ERP 이동 실패: {err_erp}')
+            except Exception as _e:
+                erp_msg = f' (ERP 연동 예외)'
+                logger.warning(f'RM 스캔 ERP 이동 예외: {_e}')
+
+            msg = (f'{label_kind} 투입 완료 ({move_qty})' if mark_used else f'{wh_to.name}(으)로 이동 완료 ({move_qty})') + erp_msg
             return JsonResponse({
                 'success': True,
                 'is_first_scan': True,
