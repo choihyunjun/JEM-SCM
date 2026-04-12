@@ -858,17 +858,20 @@ function loadScanHistory(partNo) {
             list.innerHTML = '<div class="text-center text-muted py-3"><i class="bi bi-inbox me-1"></i>투입 이력이 없습니다.</div>';
             return;
         }
-        let html = '<table class="table table-sm table-hover mb-0" style="font-size:0.85rem;">'
+        let html = '<div class="alert alert-info py-2 mb-2" style="font-size:0.78rem;">'
+            + '<i class="bi bi-info-circle me-1"></i>'
+            + '투입 취소는 <b>해당 라벨을 다시 스캔</b>해야 가능합니다. 라벨 분실 시 관리자에게 문의하세요.'
+            + '</div>'
+            + '<table class="table table-sm table-hover mb-0" style="font-size:0.85rem;">'
             + '<thead><tr><th>태그ID</th><th>LOT</th><th>투입일시</th><th>상태</th></tr></thead><tbody>';
         data.items.forEach(item => {
             let badge;
-            const canCancel = !item.stock_reflected;
             if (item.stock_reflected) {
                 badge = '<span class="badge bg-secondary">출고완료</span>';
             } else {
                 badge = '<span class="badge bg-success">투입</span>';
             }
-            html += `<tr${canCancel ? ` ondblclick="cancelScan('${item.tag_id}')" style="cursor:pointer;" title="더블클릭하여 취소"` : ''}>
+            html += `<tr>
                 <td><code style="font-size:0.75rem;">${item.tag_id}</code></td>
                 <td>${item.lot_no}</td>
                 <td>${item.used_at}</td>
@@ -880,49 +883,6 @@ function loadScanHistory(partNo) {
     })
     .catch(() => {
         list.innerHTML = '<div class="text-center text-danger py-3">조회 오류</div>';
-    });
-}
-
-// 투입 취소
-function cancelScan(tagId) {
-    if (!confirm(`${tagId} 투입을 취소하시겠습니까?\n취소된 라벨은 다시 스캔할 수 있습니다.`)) return;
-
-    const scanResult = document.getElementById('scanResult');
-    scanResult.style.display = 'block';
-    scanResult.style.background = '#f1f5f9';
-    scanResult.style.color = '#475569';
-    scanResult.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>취소 처리 중...';
-
-    fetch('{% url "material:api_process_tag_cancel_scan" %}', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
-        body: JSON.stringify({ tag_id: tagId })
-    })
-    .then(async r => {
-        if (!r.ok) {
-            let errMsg = `서버 오류 (${r.status})`;
-            try { const j = await r.json(); errMsg = j.error || errMsg; } catch(e) {}
-            throw new Error(errMsg);
-        }
-        return r.json();
-    })
-    .then(data => {
-        if (data.success) {
-            scanResult.style.background = '#fef3c7';
-            scanResult.style.color = '#92400e';
-            scanResult.innerHTML = `<i class="bi bi-arrow-counterclockwise me-1"></i>${data.message}`;
-            if (currentModalPartNo) loadScanHistory(currentModalPartNo);
-            needReloadOnClose = true;
-        } else {
-            scanResult.style.background = '#fef2f2';
-            scanResult.style.color = '#991b1b';
-            scanResult.innerHTML = `<i class="bi bi-x-circle-fill me-1"></i>${data.error}`;
-        }
-    })
-    .catch(err => {
-        scanResult.style.background = '#fef2f2';
-        scanResult.style.color = '#991b1b';
-        scanResult.innerHTML = `<i class="bi bi-x-circle-fill me-1"></i>${err.message || '네트워크 오류'}`;
     });
 }
 

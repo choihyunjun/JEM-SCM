@@ -1972,7 +1972,7 @@ def api_process_tag_scan(request):
                 erp_msg = f' (ERP 연동 예외)'
                 logger.warning(f'RM 스캔 ERP 이동 예외: {_e}')
 
-            msg = (f'{label_kind} 투입 완료 ({move_qty})' if mark_used else f'{wh_to.name}(으)로 이동 완료 ({move_qty})') + erp_msg
+            msg = f'{wh_to.name}(으)로 이동 완료 ({move_qty})' + erp_msg
             return JsonResponse({
                 'success': True,
                 'is_first_scan': True,
