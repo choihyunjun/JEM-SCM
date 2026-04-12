@@ -1683,6 +1683,8 @@ def api_process_tag_scan(request):
         warehouse_id = data.get('warehouse_id')
         # 부족 시 사용자가 입력한 조정 수량 (옵션)
         override_qty = data.get('override_qty')
+        # 도착 창고 코드 (기본: 3000 현장)
+        target_warehouse_code = (data.get('target_warehouse_code') or '3000').strip()
 
         if not tag_id:
             return JsonResponse({
@@ -1721,14 +1723,22 @@ def api_process_tag_scan(request):
                     'error': f'취소된 라벨입니다. ({rm_label.label_id})',
                 })
 
-            # 3200 원재료창고 / 3000 현장창고 조회
+            # 3200 원재료창고 (출발) / 도착 창고 조회
             wh_from = Warehouse.objects.filter(code='3200').first()
-            wh_to = Warehouse.objects.filter(code='3000').first()
-            if not wh_from or not wh_to:
+            wh_to = Warehouse.objects.filter(code=target_warehouse_code).first()
+            if not wh_from:
                 return JsonResponse({
                     'success': False,
-                    'error': '창고 마스터(3200/3000)가 등록되어 있지 않습니다.',
+                    'error': '3200 원재료창고가 등록되어 있지 않습니다.',
                 })
+            if not wh_to:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'도착 창고({target_warehouse_code})가 등록되어 있지 않습니다.',
+                })
+
+            # 현장(3000)으로 이동할 때만 라벨 USED 처리
+            mark_used = (target_warehouse_code == '3000')
 
             # FIFO 검증 (3200 창고에서 같은 품번 더 오래된 LOT가 남아있으면 차단)
             if rm_label.lot_no:
@@ -1840,13 +1850,15 @@ def api_process_tag_scan(request):
                 )
                 tgt_stock.refresh_from_db()
 
-                # 라벨 USED 처리
-                rm_label.status = 'USED'
-                rm_label.save(update_fields=['status'])
+                # 현장(3000)으로 이동할 때만 라벨 USED 처리
+                if mark_used:
+                    rm_label.status = 'USED'
+                    rm_label.save(update_fields=['status'])
 
                 # 이력 생성
                 trx_no = f"RM-SCAN-{timezone.now().strftime('%y%m%d%H%M%S')}-{request.user.id}"
                 lot_display = lot_no.strftime('%Y-%m-%d') if lot_no else 'NO LOT'
+                action_label = '스캔 투입' if mark_used else '재고 이동'
                 MaterialTransaction.objects.create(
                     transaction_no=trx_no,
                     transaction_type='TRANSFER',
@@ -1858,13 +1870,14 @@ def api_process_tag_scan(request):
                     warehouse_to=wh_to,
                     result_stock=tgt_stock.quantity,
                     actor=request.user,
-                    remark=f"[{label_kind} 라벨 스캔 투입] {rm_label.label_id} (LOT: {lot_display})"
+                    remark=f"[{label_kind} 라벨 {action_label}] {rm_label.label_id} (LOT: {lot_display})"
                 )
 
+            msg = f'{label_kind} 투입 완료 ({move_qty})' if mark_used else f'{wh_to.name}(으)로 이동 완료 ({move_qty})'
             return JsonResponse({
                 'success': True,
                 'is_first_scan': True,
-                'message': f'{label_kind} 투입 완료 ({move_qty})',
+                'message': msg,
                 'tag_info': {
                     'tag_id': rm_label.label_id,
                     'part_no': rm_label.part_no,
@@ -1875,6 +1888,7 @@ def api_process_tag_scan(request):
                     'scan_count': 1,
                     'printed_at': rm_label.printed_at.strftime('%Y-%m-%d %H:%M') if rm_label.printed_at else '',
                     'used_at': timezone.now().strftime('%Y-%m-%d %H:%M'),
+                    'target_warehouse': wh_to.code,
                 }
             })
 
@@ -2048,7 +2062,7 @@ def api_process_tag_info(request, tag_id):
 @wms_permission_required('can_wms_stock_view')
 def api_scan_history_by_part(request):
     """
-    품번별 투입(스캔) 이력 조회 API
+    품번별 투입(스캔) 이력 조회 API - 현장(3000) 투입 건만 표시
     - 원재료 레이아웃에서 랙 셀 클릭 시 사용
     GET ?part_no=11630-06360
     """
@@ -2058,18 +2072,50 @@ def api_scan_history_by_part(request):
     if not part_no:
         return JsonResponse({'success': False, 'error': '품번이 필요합니다.'}, status=400)
 
-    tags = ProcessTag.objects.filter(
-        part_no=part_no, status='USED'
-    ).select_related('used_by').order_by('-used_at')[:30]
+    items = []
 
-    items = [{
-        'tag_id': t.tag_id,
-        'lot_no': str(t.lot_no) if t.lot_no else '-',
-        'quantity': t.quantity,
-        'used_at': t.used_at.strftime('%Y-%m-%d %H:%M') if t.used_at else '-',
-        'used_by': t.used_by.username if t.used_by else '-',
-        'stock_reflected': t.stock_reflected,
-    } for t in tags]
+    # 1) ProcessTag 투입 이력 (3000 사용)
+    tags = ProcessTag.objects.filter(
+        part_no=part_no, status='USED', used_warehouse__code='3000'
+    ).select_related('used_by').order_by('-used_at')[:30]
+    for t in tags:
+        items.append({
+            'tag_id': t.tag_id,
+            'lot_no': str(t.lot_no) if t.lot_no else '-',
+            'quantity': t.quantity,
+            'used_at': t.used_at.strftime('%Y-%m-%d %H:%M') if t.used_at else '-',
+            'used_by': t.used_by.username if t.used_by else '-',
+            'stock_reflected': t.stock_reflected,
+        })
+
+    # 2) RM/PLT 라벨 스캔 투입 이력 (3200→3000 TRANSFER)
+    rm_trxs = MaterialTransaction.objects.filter(
+        part__part_no=part_no,
+        transaction_type='TRANSFER',
+        warehouse_from__code='3200',
+        warehouse_to__code='3000',
+        remark__icontains='라벨'
+    ).select_related('actor').order_by('-date')[:30]
+    for t in rm_trxs:
+        # remark에서 라벨 ID 추출
+        label_id = '-'
+        if t.remark:
+            import re as _re_lbl
+            m = _re_lbl.search(r'((?:RM|PLT)-[\w-]+)', t.remark)
+            if m:
+                label_id = m.group(1)
+        items.append({
+            'tag_id': label_id,
+            'lot_no': t.lot_no.strftime('%Y-%m-%d') if t.lot_no else '-',
+            'quantity': float(t.quantity),
+            'used_at': t.date.strftime('%Y-%m-%d %H:%M') if t.date else '-',
+            'used_by': t.actor.username if t.actor else '-',
+            'stock_reflected': True,
+        })
+
+    # 시간 역순 정렬 후 30건 제한
+    items.sort(key=lambda x: x['used_at'], reverse=True)
+    items = items[:30]
 
     return JsonResponse({'success': True, 'part_no': part_no, 'items': items})
 
@@ -5490,6 +5536,11 @@ def raw_material_layout(request):
     profile = getattr(request.user, 'userprofile', None)
     can_edit = request.user.is_superuser or (profile and getattr(profile, 'can_wms_stock_edit', False))
 
+    # 도착 창고 목록 (3200 출발용 - 기본 3000)
+    target_warehouses = Warehouse.objects.filter(
+        is_active=True
+    ).exclude(code='3200').order_by('code')
+
     context = {
         'section': section,
         'section_display': '3공장' if section == '3F' else '2공장',
@@ -5501,6 +5552,7 @@ def raw_material_layout(request):
         'expiry_warning': expiry_warning,
         'audit_mode': audit_mode_on,
         'can_edit': can_edit,
+        'target_warehouses': target_warehouses,
     }
 
     return render(request, 'material/raw_material_layout.html', context)

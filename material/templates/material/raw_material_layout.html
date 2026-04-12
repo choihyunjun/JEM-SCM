@@ -660,8 +660,17 @@
                     <div id="overrideResult" style="display:none; font-size:0.82rem; padding:6px 10px; border-radius:6px; margin-top:6px;"></div>
                 </div>
                 {% endif %}
-                <!-- 바코드 스캔 입력 -->
+                <!-- 도착 창고 선택 + 바코드 스캔 입력 -->
                 <div class="mb-3">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <label class="small fw-bold mb-0 text-muted" style="white-space:nowrap;">도착 창고:</label>
+                        <select id="targetWarehouse" class="form-select form-select-sm" style="max-width:200px;">
+                            {% for w in target_warehouses %}
+                                <option value="{{ w.code }}" {% if w.code == '3000' %}selected{% endif %}>[{{ w.code }}] {{ w.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">기본: 현장 투입(3000)</small>
+                    </div>
                     <div class="input-group">
                         <span class="input-group-text" id="scanIconBtn" style="cursor:pointer;"><i class="bi bi-upc-scan"></i></span>
                         <input type="text" id="scanInput" class="form-control" placeholder="바코드를 스캔하세요...">
@@ -734,7 +743,8 @@ function doScan(overrideQty) {
     scanResult.style.color = '#475569';
     scanResult.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>처리 중...';
 
-    const body = { tag_id: tagId };
+    const targetWh = (document.getElementById('targetWarehouse') || {}).value || '3000';
+    const body = { tag_id: tagId, target_warehouse_code: targetWh };
     if (overrideQty !== undefined && overrideQty !== null) {
         body.override_qty = overrideQty;
     }
