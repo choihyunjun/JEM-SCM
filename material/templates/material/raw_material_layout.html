@@ -335,16 +335,21 @@
     }
 </style>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h4 class="fw-bold text-secondary m-0">
         <i class="bi bi-grid-3x3-gap me-2"></i>원재료 보관 현황
     </h4>
-    <div class="section-tabs">
-        {% for code, name in sections %}
-        <a href="?section={{ code }}" class="btn btn-sm {% if section == code %}btn-primary{% else %}btn-outline-primary{% endif %}">
-            {{ name }}
-        </a>
-        {% endfor %}
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+        <button type="button" class="btn btn-sm btn-success" onclick="openQuickScan()">
+            <i class="bi bi-upc-scan me-1"></i>빠른 스캔
+        </button>
+        <div class="section-tabs">
+            {% for code, name in sections %}
+            <a href="?section={{ code }}" class="btn btn-sm {% if section == code %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                {{ name }}
+            </a>
+            {% endfor %}
+        </div>
     </div>
 </div>
 
@@ -822,6 +827,33 @@ function doScan(overrideQty) {
 
 // 랙 셀 클릭 → 모달
 let currentModalRackId = '';
+
+// 빠른 스캔: 품번 사전 지정 없이 바로 스캔 (모든 품목 범용)
+function openQuickScan() {
+    currentModalPartNo = '';  // 이력 조회 안 함
+    currentModalRackId = '';
+    document.getElementById('modalPartTitle').textContent = '빠른 스캔 (모든 품목)';
+    document.getElementById('scanResult').style.display = 'none';
+    document.getElementById('scanInput').value = '';
+
+    // 감사모드 오버라이드는 범용 스캔에서 사용 안 함
+    const overrideInput = document.getElementById('overrideInput');
+    if (overrideInput) {
+        overrideInput.value = '';
+        const overrideResult = document.getElementById('overrideResult');
+        if (overrideResult) overrideResult.style.display = 'none';
+    }
+
+    // 이력 영역은 최근 스캔만 요약으로 표시
+    const list = document.getElementById('modalScanList');
+    list.innerHTML = '<div class="alert alert-info py-2 mb-0" style="font-size:0.82rem;">'
+        + '<i class="bi bi-info-circle me-1"></i>'
+        + '라벨을 연속으로 스캔하세요. 각 라벨 종류(RM/PLT/TAG)는 자동 인식됩니다.'
+        + '</div>';
+
+    const modal = new bootstrap.Modal(scanModal);
+    modal.show();
+}
 
 function showScanHistory(el) {
     const partNo = el.dataset.partNo;
