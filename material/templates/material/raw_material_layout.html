@@ -343,6 +343,9 @@
         <button type="button" class="btn btn-sm btn-success" onclick="openQuickScan()">
             <i class="bi bi-upc-scan me-1"></i>빠른 스캔
         </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="openAllHistory()">
+            <i class="bi bi-clock-history me-1"></i>투입 이력
+        </button>
         <div class="section-tabs">
             {% for code, name in sections %}
             <a href="?section={{ code }}" class="btn btn-sm {% if section == code %}btn-primary{% else %}btn-outline-primary{% endif %}">
@@ -827,6 +830,62 @@ function doScan(overrideQty) {
 
 // 랙 셀 클릭 → 모달
 let currentModalRackId = '';
+
+// 전체 투입 이력 조회 (모든 품목)
+function openAllHistory() {
+    currentModalPartNo = '';
+    currentModalRackId = '';
+    document.getElementById('modalPartTitle').textContent = '전체 투입 이력 (최근 50건)';
+    document.getElementById('scanResult').style.display = 'none';
+    document.getElementById('scanInput').value = '';
+
+    // 감사모드 오버라이드 숨김
+    const overrideInput = document.getElementById('overrideInput');
+    if (overrideInput) {
+        overrideInput.value = '';
+        const overrideResult = document.getElementById('overrideResult');
+        if (overrideResult) overrideResult.style.display = 'none';
+    }
+
+    const list = document.getElementById('modalScanList');
+    list.innerHTML = '<div class="text-center text-muted py-3"><i class="bi bi-hourglass-split"></i> 조회 중...</div>';
+
+    fetch(`{% url "material:api_scan_history_by_part" %}?part_no=`)
+    .then(r => r.json())
+    .then(data => {
+        if (!data.success || !data.items.length) {
+            list.innerHTML = '<div class="text-center text-muted py-3"><i class="bi bi-inbox me-1"></i>투입 이력이 없습니다.</div>';
+            return;
+        }
+        let html = '<div class="alert alert-info py-2 mb-2" style="font-size:0.78rem;">'
+            + '<i class="bi bi-info-circle me-1"></i>'
+            + '현재 투입된 상태의 라벨만 표시됩니다. 취소된 건은 자동으로 사라집니다.'
+            + '</div>'
+            + '<table class="table table-sm table-hover mb-0" style="font-size:0.82rem;">'
+            + '<thead><tr><th>태그ID</th><th>품번</th><th>LOT</th><th>수량</th><th>투입일시</th><th>상태</th></tr></thead><tbody>';
+        data.items.forEach(item => {
+            const badge = item.stock_reflected
+                ? '<span class="badge bg-secondary">출고완료</span>'
+                : '<span class="badge bg-success">투입</span>';
+            html += `<tr>
+                <td><code style="font-size:0.72rem;">${item.tag_id}</code></td>
+                <td>${item.part_no || '-'}</td>
+                <td>${item.lot_no}</td>
+                <td class="text-end">${item.quantity}</td>
+                <td>${item.used_at}</td>
+                <td>${badge}</td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+        list.innerHTML = html;
+    })
+    .catch(() => {
+        list.innerHTML = '<div class="text-center text-danger py-3">조회 오류</div>';
+    });
+
+    const modal = new bootstrap.Modal(scanModal);
+    modal.show();
+}
 
 // 빠른 스캔: 품번 사전 지정 없이 바로 스캔 (모든 품목 범용)
 function openQuickScan() {

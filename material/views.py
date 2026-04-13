@@ -2421,8 +2421,40 @@ def api_scan_history_by_part(request):
     from .models import ProcessTag, RawMaterialLabel
 
     part_no = request.GET.get('part_no', '').strip()
+    # part_no 비어있으면 전체 품목 조회
     if not part_no:
-        return JsonResponse({'success': False, 'error': '품번이 필요합니다.'}, status=400)
+        # 전체 모드: 모든 USED 라벨/태그 (최근 50건)
+        tags_all = ProcessTag.objects.filter(
+            status='USED', used_warehouse__code='3000'
+        ).select_related('used_by').order_by('-used_at')[:50]
+        items_all = []
+        for t in tags_all:
+            items_all.append({
+                'tag_id': t.tag_id,
+                'part_no': t.part_no,
+                'part_name': t.part_name,
+                'lot_no': str(t.lot_no) if t.lot_no else '-',
+                'quantity': t.quantity,
+                'used_at': t.used_at.strftime('%Y-%m-%d %H:%M') if t.used_at else '-',
+                'used_by': t.used_by.username if t.used_by else '-',
+                'stock_reflected': t.stock_reflected,
+            })
+        used_labels_all = RawMaterialLabel.objects.filter(
+            status='USED'
+        ).select_related('used_by').order_by('-used_at')[:50]
+        for lbl in used_labels_all:
+            items_all.append({
+                'tag_id': lbl.label_id,
+                'part_no': lbl.part_no,
+                'part_name': lbl.part_name,
+                'lot_no': lbl.lot_no.strftime('%Y-%m-%d') if lbl.lot_no else '-',
+                'quantity': float(lbl.quantity),
+                'used_at': lbl.used_at.strftime('%Y-%m-%d %H:%M') if lbl.used_at else '-',
+                'used_by': lbl.used_by.username if lbl.used_by else '-',
+                'stock_reflected': False,
+            })
+        items_all.sort(key=lambda x: x['used_at'], reverse=True)
+        return JsonResponse({'success': True, 'part_no': '', 'items': items_all[:50]})
 
     items = []
 
