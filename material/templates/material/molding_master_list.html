@@ -183,7 +183,10 @@
                         <div class="col-12"><h6 class="fw-bold text-primary border-bottom pb-1 mb-2">기본 정보</h6></div>
                         <div class="col-md-3">
                             <label class="form-label small fw-bold">품번 <span class="text-danger">*</span></label>
-                            <input type="text" name="part_no" id="editPartNo" class="form-control form-control-sm" required>
+                            <div class="input-group input-group-sm">
+                                <input type="text" name="part_no" id="editPartNo" class="form-control form-control-sm" required readonly style="background:#f7fafc;cursor:pointer;" placeholder="클릭하여 검색" onclick="openPartSearchModal()">
+                                <button type="button" class="btn btn-outline-secondary" onclick="openPartSearchModal()"><i class="bi bi-search"></i></button>
+                            </div>
                         </div>
                         <div class="col-md-3">
                             <label class="form-label small fw-bold">품명</label>
@@ -302,6 +305,28 @@
     </div>
 </div>
 
+<!-- 품번 검색 모달 -->
+<div class="modal fade" id="partSearchModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title fw-bold"><i class="bi bi-search me-1"></i>품번 검색</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2">
+                    <input type="text" id="partSearchInput" class="form-control form-control-sm" placeholder="품번 또는 품명을 2자 이상 입력하세요" autocomplete="off">
+                </div>
+                <div id="partSearchResults" style="max-height:400px;overflow-y:auto;">
+                    <div class="text-center text-muted py-3 small">
+                        <i class="bi bi-info-circle me-1"></i>검색어를 입력하면 결과가 표시됩니다.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- 엑셀 업로드 모달 -->
 <div class="modal fade" id="uploadModal" tabindex="-1">
     <div class="modal-dialog">
@@ -340,52 +365,89 @@
 </form>
 
 <script>
-// 품번 입력 → Part/기존 마스터에서 품명/품목/재료정보 자동 채우기
-(function() {
-    var partInput = document.getElementById('editPartNo');
-    if (!partInput) return;
+// 품번 선택 후 성형마스터/Part 정보 자동 채우기
+function autoFillPartInfo(partNo) {
+    if (!partNo) return;
+    fetch('{% url "material:api_molding_master_lookup" %}?part_no=' + encodeURIComponent(partNo))
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) return;
+            function fillIfEmpty(id, val) {
+                var el = document.getElementById(id);
+                if (el && !el.value && val) el.value = val;
+            }
+            fillIfEmpty('editPartName', data.part_name);
+            fillIfEmpty('editItemGroup', data.item_group);
+            fillIfEmpty('editMaterialPartNo', data.material_part_no);
+            fillIfEmpty('editMaterialName', data.material_name);
+            var matType = document.getElementById('editMaterialType');
+            if (matType && !matType.value && data.material_type) matType.value = data.material_type;
+        })
+        .catch(function(){});
+}
 
-    function lookup() {
-        var pn = partInput.value.trim();
-        if (!pn) return;
-
-        // 수정 모드에서는 자동조회 안 함 (기존 값 유지)
-        if (document.getElementById('editPk').value) return;
-
-        fetch('{% url "material:api_molding_master_lookup" %}?part_no=' + encodeURIComponent(pn))
-            .then(r => r.json())
-            .then(data => {
-                if (!data.success) return;
-
-                // 빈 값일 때만 채움 (사용자가 이미 입력한 값 보존)
-                function fillIfEmpty(id, val) {
-                    var el = document.getElementById(id);
-                    if (el && !el.value && val) el.value = val;
-                }
-                fillIfEmpty('editPartName', data.part_name);
-                fillIfEmpty('editItemGroup', data.item_group);
-                fillIfEmpty('editMaterialPartNo', data.material_part_no);
-                fillIfEmpty('editMaterialName', data.material_name);
-                var matType = document.getElementById('editMaterialType');
-                if (matType && !matType.value && data.material_type) matType.value = data.material_type;
-
-                // 기존 성형마스터에서 가져온 경우 토스트 알림
-                if (data.source === 'molding_master') {
-                    partInput.style.background = '#d4edda';
-                    setTimeout(function() { partInput.style.background = ''; }, 1500);
-                }
-            })
-            .catch(function(){});
+// 품번 검색 모달
+function openPartSearchModal() {
+    // 수정 모드면 품번 변경 불가
+    if (document.getElementById('editPk').value) {
+        alert('수정 모드에서는 품번을 변경할 수 없습니다.');
+        return;
     }
+    document.getElementById('partSearchInput').value = '';
+    document.getElementById('partSearchResults').innerHTML = '<div class="text-center text-muted py-3 small"><i class="bi bi-info-circle me-1"></i>검색어를 입력하면 결과가 표시됩니다.</div>';
+    new bootstrap.Modal(document.getElementById('partSearchModal')).show();
+    setTimeout(function() { document.getElementById('partSearchInput').focus(); }, 300);
+}
 
-    partInput.addEventListener('blur', lookup);
-    partInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            lookup();
+// 품번 검색 실행
+(function() {
+    var searchInput = document.getElementById('partSearchInput');
+    var resultsBox = document.getElementById('partSearchResults');
+    if (!searchInput) return;
+
+    var debounceTimer = null;
+    searchInput.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        var q = this.value.trim();
+        if (q.length < 2) {
+            resultsBox.innerHTML = '<div class="text-center text-muted py-3 small"><i class="bi bi-info-circle me-1"></i>2자 이상 입력하세요.</div>';
+            return;
         }
+        debounceTimer = setTimeout(function() {
+            fetch('{% url "material:api_part_search" %}?q=' + encodeURIComponent(q))
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.results || !data.results.length) {
+                        resultsBox.innerHTML = '<div class="text-center text-muted py-3 small">검색 결과가 없습니다.</div>';
+                        return;
+                    }
+                    var html = '<table class="table table-sm table-hover mb-0" style="font-size:0.82rem;">'
+                        + '<thead class="table-light"><tr><th style="width:160px;">품번</th><th>품명</th><th style="width:60px;"></th></tr></thead><tbody>';
+                    data.results.forEach(function(p) {
+                        html += '<tr>'
+                            + '<td><code>' + p.part_no + '</code></td>'
+                            + '<td>' + (p.part_name || '-') + '</td>'
+                            + '<td><button type="button" class="btn btn-primary btn-sm py-0 px-2" onclick="selectPart(\'' + p.part_no.replace(/'/g, "\\'") + '\', \'' + (p.part_name || '').replace(/'/g, "\\'") + '\')">선택</button></td>'
+                            + '</tr>';
+                    });
+                    html += '</tbody></table>';
+                    resultsBox.innerHTML = html;
+                })
+                .catch(function() {
+                    resultsBox.innerHTML = '<div class="text-center text-danger py-3 small">검색 오류</div>';
+                });
+        }, 300);
     });
 })();
+
+function selectPart(partNo, partName) {
+    document.getElementById('editPartNo').value = partNo;
+    // 품명은 autoFillPartInfo가 덮어쓸 수 있으므로 먼저 설정
+    var pn = document.getElementById('editPartName');
+    if (pn && !pn.value) pn.value = partName;
+    bootstrap.Modal.getInstance(document.getElementById('partSearchModal')).hide();
+    autoFillPartInfo(partNo);
+}
 
 function openAddModal() {
     document.getElementById('editPk').value = '';
