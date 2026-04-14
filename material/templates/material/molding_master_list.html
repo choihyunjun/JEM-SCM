@@ -340,6 +340,53 @@
 </form>
 
 <script>
+// 품번 입력 → Part/기존 마스터에서 품명/품목/재료정보 자동 채우기
+(function() {
+    var partInput = document.getElementById('editPartNo');
+    if (!partInput) return;
+
+    function lookup() {
+        var pn = partInput.value.trim();
+        if (!pn) return;
+
+        // 수정 모드에서는 자동조회 안 함 (기존 값 유지)
+        if (document.getElementById('editPk').value) return;
+
+        fetch('{% url "material:api_molding_master_lookup" %}?part_no=' + encodeURIComponent(pn))
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) return;
+
+                // 빈 값일 때만 채움 (사용자가 이미 입력한 값 보존)
+                function fillIfEmpty(id, val) {
+                    var el = document.getElementById(id);
+                    if (el && !el.value && val) el.value = val;
+                }
+                fillIfEmpty('editPartName', data.part_name);
+                fillIfEmpty('editItemGroup', data.item_group);
+                fillIfEmpty('editMaterialPartNo', data.material_part_no);
+                fillIfEmpty('editMaterialName', data.material_name);
+                var matType = document.getElementById('editMaterialType');
+                if (matType && !matType.value && data.material_type) matType.value = data.material_type;
+
+                // 기존 성형마스터에서 가져온 경우 토스트 알림
+                if (data.source === 'molding_master') {
+                    partInput.style.background = '#d4edda';
+                    setTimeout(function() { partInput.style.background = ''; }, 1500);
+                }
+            })
+            .catch(function(){});
+    }
+
+    partInput.addEventListener('blur', lookup);
+    partInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            lookup();
+        }
+    });
+})();
+
 function openAddModal() {
     document.getElementById('editPk').value = '';
     document.getElementById('editModalTitle').textContent = '성형 마스터 등록';

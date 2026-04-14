@@ -111,6 +111,7 @@ urlpatterns = [
     path('raw-material/pallet-label/print/', views.pallet_label_print, name='pallet_label_print'),
     path('api/raw-material-labels/', views.api_raw_material_labels, name='api_raw_material_labels'),
     path('api/part-search/', views.api_part_search, name='api_part_search'),
+    path('api/molding-master/lookup/', views.api_molding_master_lookup, name='api_molding_master_lookup'),
     path('api/labels-for-lot/', views.api_labels_for_lot, name='api_labels_for_lot'),
     path('api/transfer-detail/<int:trx_id>/', views.api_transfer_detail, name='api_transfer_detail'),
     path('api/cancel-stock-move/<int:trx_id>/', views.cancel_stock_move, name='cancel_stock_move'),

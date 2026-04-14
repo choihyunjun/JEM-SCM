@@ -6821,6 +6821,48 @@ def pallet_label_print(request):
 
 
 @wms_permission_required('can_wms_stock_view')
+def api_molding_master_lookup(request):
+    """성형 마스터 등록용 품번 자동완성 정보 조회
+    - 기존 MoldingMaster 동일 품번 있으면 그 정보 반환
+    - 없으면 Part 마스터에서 품명/품목만 반환
+    """
+    from .models import MoldingMaster
+    part_no = (request.GET.get('part_no') or '').strip()
+    if not part_no:
+        return JsonResponse({'success': False, 'error': '품번 필요'})
+
+    # 1) 기존 성형 마스터 (가장 최근 것)
+    existing = MoldingMaster.objects.filter(part_no=part_no).order_by('-id').first()
+    if existing:
+        return JsonResponse({
+            'success': True,
+            'source': 'molding_master',
+            'part_no': existing.part_no,
+            'part_name': existing.part_name or '',
+            'item_group': existing.item_group or '',
+            'material_type': existing.material_type or '',
+            'material_part_no': existing.material_part_no or '',
+            'material_name': existing.material_name or '',
+        })
+
+    # 2) Part 마스터
+    part = Part.objects.filter(part_no=part_no).first()
+    if part:
+        return JsonResponse({
+            'success': True,
+            'source': 'part_master',
+            'part_no': part.part_no,
+            'part_name': part.part_name or '',
+            'item_group': part.part_group or '',
+            'material_type': '',
+            'material_part_no': '',
+            'material_name': '',
+        })
+
+    return JsonResponse({'success': False, 'error': '품번을 찾을 수 없습니다.'})
+
+
+@wms_permission_required('can_wms_stock_view')
 def api_part_search(request):
     """
     품목 검색 API - 품번/품명으로 검색
