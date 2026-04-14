@@ -6565,13 +6565,16 @@ def raw_material_label_print(request):
 def pallet_label_create(request):
     """
     파렛트 라벨 발행 API
-    - 수입검사 합격 건에 대해 전체 수량 1장의 파렛트 라벨 발행
-    - QR 스캔 시 전체 수량 이동처리 용도
+    - 수입검사 합격 건에 대해 파렛트 라벨 발행
+    - 사용자가 지정한 파렛트 단위 수량으로 분할 (예: 6,000kg에 1,000 지정 → 6장)
+    - 미지정 시 전체 수량 1장 발행
     """
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'POST only'})
 
     inspection_id = request.POST.get('inspection_id')
+    # 사용자 지정 파렛트 단위 수량 (kg 또는 단위)
+    pallet_unit_input = request.POST.get('pallet_unit_qty', '').strip()
     try:
         inspection = ImportInspection.objects.get(id=inspection_id)
         if inspection.status != 'APPROVED':
@@ -6582,18 +6585,18 @@ def pallet_label_create(request):
         qty = trx.quantity
         lot = trx.lot_no or timezone.now().date()
         vendor = trx.vendor
-        warehouse = trx.warehouse_to
 
         # 이미 파렛트 라벨이 발행된 건인지 확인
-        existing_pallet = RawMaterialLabel.objects.filter(
+        existing_pallets = RawMaterialLabel.objects.filter(
             incoming_transaction=trx, label_type='PALLET'
-        ).exclude(status='CANCELLED').first()
-        if existing_pallet:
+        ).exclude(status='CANCELLED')
+        if existing_pallets.exists():
+            label_ids_str = ','.join([str(l.id) for l in existing_pallets])
             return JsonResponse({
                 'success': True,
                 'already_exists': True,
-                'label_id': existing_pallet.id,
-                'message': f'이미 파렛트 라벨이 발행되었습니다. ({existing_pallet.label_id})'
+                'label_ids': label_ids_str,
+                'message': f'이미 파렛트 라벨이 발행되었습니다. ({existing_pallets.count()}장)'
             })
 
         # 단위 결정: 품목설정이 있으면 그 단위, 없으면 EA
@@ -6603,27 +6606,55 @@ def pallet_label_create(request):
         except Exception:
             unit = 'EA'
 
-        with transaction.atomic():
-            label = RawMaterialLabel.objects.create(
-                label_id=RawMaterialLabel.generate_pallet_label_id(),
-                label_type='PALLET',
-                part=part,
-                part_no=part.part_no,
-                part_name=part.part_name,
-                lot_no=lot,
-                quantity=qty,
-                unit=unit,
-                incoming_transaction=trx,
-                vendor=vendor,
-                status='INSTOCK',
-                printed_by=request.user,
-            )
+        # 파렛트 단위 수량 — 사용자가 지정하면 그 값으로 분할, 아니면 전체 1장
+        from decimal import Decimal, InvalidOperation
+        total_qty = Decimal(str(qty))
+        pallet_unit_qty = None
+        if pallet_unit_input:
+            try:
+                pallet_unit_qty = Decimal(pallet_unit_input)
+                if pallet_unit_qty <= 0:
+                    pallet_unit_qty = None
+            except (InvalidOperation, ValueError):
+                pallet_unit_qty = None
 
+        # 분할 수량 계산
+        split_qtys = []
+        if pallet_unit_qty and total_qty > pallet_unit_qty:
+            full_count = int(total_qty // pallet_unit_qty)
+            remainder = total_qty - (pallet_unit_qty * full_count)
+            for _ in range(full_count):
+                split_qtys.append(pallet_unit_qty)
+            if remainder > 0:
+                split_qtys.append(remainder)
+        else:
+            split_qtys.append(total_qty)
+
+        created_labels = []
+        with transaction.atomic():
+            for split_qty in split_qtys:
+                label = RawMaterialLabel.objects.create(
+                    label_id=RawMaterialLabel.generate_pallet_label_id(),
+                    label_type='PALLET',
+                    part=part,
+                    part_no=part.part_no,
+                    part_name=part.part_name,
+                    lot_no=lot,
+                    quantity=split_qty,
+                    unit=unit,
+                    incoming_transaction=trx,
+                    vendor=vendor,
+                    status='INSTOCK',
+                    printed_by=request.user,
+                )
+                created_labels.append(label)
+
+        label_ids_str = ','.join([str(l.id) for l in created_labels])
         return JsonResponse({
             'success': True,
-            'label_id': label.id,
-            'label_code': label.label_id,
-            'message': f'파렛트 라벨 발행 완료 ({part.part_no}, {qty}{unit})'
+            'label_ids': label_ids_str,
+            'label_count': len(created_labels),
+            'message': f'파렛트 라벨 {len(created_labels)}장 발행 완료 ({part.part_no}, 총 {qty}{unit})'
         })
 
     except ImportInspection.DoesNotExist:
@@ -6635,17 +6666,29 @@ def pallet_label_create(request):
 @wms_permission_required('can_wms_stock_view')
 def pallet_label_print(request):
     """
-    파렛트 라벨 출력 화면 (A4 크기)
+    파렛트 라벨 출력 화면 (A4 크기) - 복수 라벨 지원 (ids=1,2,3)
     """
     label_id = request.GET.get('id', '')
-    label = None
-    if label_id.isdigit():
-        label = RawMaterialLabel.objects.filter(id=int(label_id), label_type='PALLET').select_related(
+    ids_param = request.GET.get('ids', '')
+
+    labels = []
+    if ids_param:
+        id_list = [int(x) for x in ids_param.split(',') if x.strip().isdigit()]
+        labels = list(RawMaterialLabel.objects.filter(
+            id__in=id_list, label_type='PALLET'
+        ).select_related('part', 'vendor', 'incoming_transaction__warehouse_to'))
+        # id_list 순서대로 정렬
+        labels.sort(key=lambda l: id_list.index(l.id))
+    elif label_id.isdigit():
+        lbl = RawMaterialLabel.objects.filter(id=int(label_id), label_type='PALLET').select_related(
             'part', 'vendor', 'incoming_transaction__warehouse_to'
         ).first()
+        if lbl:
+            labels = [lbl]
 
     context = {
-        'label': label,
+        'label': labels[0] if labels else None,  # 기존 단일 템플릿 호환
+        'labels': labels,
     }
     return render(request, 'material/pallet_label_print.html', context)
 

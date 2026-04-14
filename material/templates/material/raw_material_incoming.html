@@ -734,7 +734,19 @@ function printSelectedLabels() {
 
 // ===== 파렛트 라벨 발행 =====
 function createPalletLabel(inspId) {
-    if (!confirm('파렛트 라벨을 발행하시겠습니까?\n전체 수량 1장의 A4 라벨이 발행됩니다.')) return;
+    // 파렛트 단위 수량 입력 (비워두면 전체 수량 1장)
+    var input = prompt(
+        '파렛트 1장당 수량을 입력하세요.\n' +
+        '(예: 1000 입력 시 6000kg → 1000×6장)\n' +
+        '비워두거나 취소하면 전체 수량 1장 발행',
+        ''
+    );
+    // 취소(null) → 중단, 빈값 → 전체 1장
+    if (input === null) return;
+    var palletUnit = input.trim();
+
+    var body = 'inspection_id=' + encodeURIComponent(inspId);
+    if (palletUnit) body += '&pallet_unit_qty=' + encodeURIComponent(palletUnit);
 
     fetch("{% url 'material:pallet_label_create' %}", {
         method: 'POST',
@@ -742,18 +754,18 @@ function createPalletLabel(inspId) {
             'Content-Type': 'application/x-www-form-urlencoded',
             'X-CSRFToken': '{{ csrf_token }}'
         },
-        body: 'inspection_id=' + inspId
+        body: body
     })
     .then(r => r.json())
     .then(data => {
         if (data.success) {
             if (data.already_exists) {
                 if (confirm(data.message + '\n\n재출력하시겠습니까?')) {
-                    window.open("{% url 'material:pallet_label_print' %}?id=" + data.label_id, '_blank');
+                    window.open("{% url 'material:pallet_label_print' %}?ids=" + data.label_ids, '_blank');
                 }
             } else {
                 alert(data.message);
-                window.open("{% url 'material:pallet_label_print' %}?id=" + data.label_id, '_blank');
+                window.open("{% url 'material:pallet_label_print' %}?ids=" + data.label_ids, '_blank');
             }
         } else {
             alert('오류: ' + data.error);

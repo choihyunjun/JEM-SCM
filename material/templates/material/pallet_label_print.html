@@ -196,8 +196,8 @@
     <div class="no-print">
         <div class="print-info">
             📦 <strong>파렛트 라벨</strong>
-            {% if label %}
-            <span style="margin-left: 20px;">{{ label.part_no }} | {{ label.quantity }}{{ label.get_unit_display }}</span>
+            {% if labels %}
+            <span style="margin-left: 20px;">{{ labels.0.part_no }} | 총 {{ labels|length }}장</span>
             {% endif %}
         </div>
         <div class="btn-group-actions">
@@ -206,62 +206,71 @@
         </div>
     </div>
 
-    {% if label %}
+    {% if labels %}
+    {% for lbl in labels %}
     <div class="pallet-label">
         <!-- 헤더 -->
         <div class="label-header">
             <h1>파 렛 트 라 벨</h1>
-            <div class="sub">PALLET LABEL</div>
+            <div class="sub">PALLET LABEL ({{ forloop.counter }}/{{ labels|length }})</div>
         </div>
 
         <!-- 정보 테이블 -->
         <table class="info-table">
             <tr>
                 <td class="lbl">품 번</td>
-                <td class="val part-no" colspan="3">{{ label.part_no }}</td>
+                <td class="val part-no" colspan="3">{{ lbl.part_no }}</td>
             </tr>
             <tr>
                 <td class="lbl">품 명</td>
-                <td class="val" colspan="3">{{ label.part_name }}</td>
+                <td class="val" colspan="3">{{ lbl.part_name }}</td>
             </tr>
             <tr>
                 <td class="lbl">수 량</td>
-                <td class="val qty">{{ label.quantity }}{{ label.get_unit_display }}</td>
+                <td class="val qty">{{ lbl.quantity }}{{ lbl.get_unit_display }}</td>
                 <td class="lbl">L O T</td>
-                <td class="val">{{ label.lot_no|date:"Y-m-d" }}</td>
+                <td class="val">{{ lbl.lot_no|date:"Y-m-d" }}</td>
             </tr>
-            {% if label.vendor %}
+            {% if lbl.vendor %}
             <tr>
                 <td class="lbl">거래처</td>
-                <td class="val" colspan="3">{{ label.vendor.name }}</td>
+                <td class="val" colspan="3">{{ lbl.vendor.name }}</td>
             </tr>
             {% endif %}
         </table>
 
         <!-- QR 코드 -->
         <div class="qr-section">
-            <div class="qr-box" id="qrCode"></div>
-            <div class="qr-data-text" id="qrDataText"></div>
+            <div class="qr-box" id="qrCode-{{ forloop.counter0 }}"></div>
+            <div class="qr-data-text">{{ lbl.label_id }}|{{ lbl.part_no }}|{{ lbl.quantity }}{{ lbl.get_unit_display }}|{{ lbl.lot_no|date:'Y-m-d' }}</div>
         </div>
 
         <!-- 푸터 -->
         <div class="label-footer">
-            <div class="label-id">{{ label.label_id }}</div>
-            <div class="print-date">발행일: {{ label.printed_at|date:"Y-m-d H:i" }}</div>
+            <div class="label-id">{{ lbl.label_id }}</div>
+            <div class="print-date">발행일: {{ lbl.printed_at|date:"Y-m-d H:i" }}</div>
         </div>
     </div>
+    {% endfor %}
 
     <script>
-        const qrData = "{{ label.label_id }}|{{ label.part_no }}|{{ label.quantity }}{{ label.get_unit_display }}|{{ label.lot_no|date:'Y-m-d' }}";
-        document.getElementById('qrDataText').textContent = qrData;
-
-        new QRCode(document.getElementById('qrCode'), {
-            text: qrData,
-            width: 200,
-            height: 200,
-            colorDark: "#000000",
-            colorLight: "#ffffff",
-            correctLevel: QRCode.CorrectLevel.M
+        var allLabels = [
+            {% for lbl in labels %}
+            { idx: {{ forloop.counter0 }}, data: "{{ lbl.label_id }}|{{ lbl.part_no }}|{{ lbl.quantity }}{{ lbl.get_unit_display }}|{{ lbl.lot_no|date:'Y-m-d' }}" },
+            {% endfor %}
+        ];
+        allLabels.forEach(function(l) {
+            var el = document.getElementById('qrCode-' + l.idx);
+            if (el) {
+                new QRCode(el, {
+                    text: l.data,
+                    width: 200,
+                    height: 200,
+                    colorDark: "#000000",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+            }
         });
     </script>
 
