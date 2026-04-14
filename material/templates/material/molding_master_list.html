@@ -281,8 +281,8 @@
                             <input type="number" step="0.0001" name="runner_weight" id="editRunnerWeight" class="form-control form-control-sm" value="0">
                         </div>
                         <div class="col-md-2">
-                            <label class="form-label small fw-bold">총소요량(g)</label>
-                            <input type="number" step="0.0001" name="total_material" id="editTotalMaterial" class="form-control form-control-sm" value="0">
+                            <label class="form-label small fw-bold">총소요량(g) <small class="text-muted">자동</small></label>
+                            <input type="number" step="0.0001" name="total_material" id="editTotalMaterial" class="form-control form-control-sm" value="0" readonly style="background:#f7fafc;">
                         </div>
                         <div class="col-md-2">
                             <label class="form-label small fw-bold">ERP수량(kg)</label>
@@ -448,6 +448,34 @@ function selectPart(partNo, partName) {
     bootstrap.Modal.getInstance(document.getElementById('partSearchModal')).hide();
     autoFillPartInfo(partNo);
 }
+
+// 총소요량 자동 계산: 제품중량 + (런너중량 / 캐비티)
+(function() {
+    var weightEl = document.getElementById('editProductWeight');
+    var cavityEl = document.getElementById('editCavity');
+    var runnerEl = document.getElementById('editRunnerWeight');
+    var totalEl = document.getElementById('editTotalMaterial');
+    if (!weightEl || !cavityEl || !runnerEl || !totalEl) return;
+
+    function recalc() {
+        var weight = parseFloat(weightEl.value) || 0;
+        var cavity = parseInt(cavityEl.value) || 0;
+        var runner = parseFloat(runnerEl.value) || 0;
+
+        var total = 0;
+        if (cavity > 0) {
+            total = weight + (runner / cavity);
+        } else {
+            total = weight;
+        }
+        totalEl.value = total.toFixed(4);
+    }
+
+    [weightEl, cavityEl, runnerEl].forEach(function(el) {
+        el.addEventListener('input', recalc);
+        el.addEventListener('change', recalc);
+    });
+})();
 
 function openAddModal() {
     document.getElementById('editPk').value = '';
