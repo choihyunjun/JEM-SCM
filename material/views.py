@@ -1898,29 +1898,49 @@ def api_process_tag_scan(request):
                         }
                     })
 
-            # 3200 창고의 해당 LOT 재고 조회 (LOT 우선, 없으면 NULL LOT)
+            # 3200 창고의 해당 LOT 재고 조회 (3200은 LOT 필수 창고)
             from django.db.models import F as _F
             lot_no = rm_label.lot_no
+
+            # 라벨에 LOT가 없으면 차단
+            if not lot_no:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'라벨에 LOT 정보가 없습니다. ({rm_label.label_id})',
+                })
+
             src_stock = MaterialStock.objects.filter(
                 warehouse=wh_from, part=rm_label.part, lot_no=lot_no
-            ).first() if lot_no else None
-
-            # LOT 재고가 없으면 NULL LOT에서 차감 시도
-            null_stock = MaterialStock.objects.filter(
-                warehouse=wh_from, part=rm_label.part, lot_no__isnull=True
             ).first()
 
             available_lot = src_stock.quantity if src_stock else 0
-            available_null = null_stock.quantity if null_stock else 0
-            available_total = max(available_lot, 0) + max(available_null, 0)
 
-            label_qty = float(rm_label.quantity)
-
-            if available_total <= 0:
+            # LOT 일치 재고가 없으면 라벨 사용 불가 (다른 LOT 재고가 있어도 차단)
+            if available_lot <= 0:
+                # 같은 품번의 다른 LOT 재고 확인 (사용자 안내용)
+                other_lots = MaterialStock.objects.filter(
+                    warehouse=wh_from, part=rm_label.part, lot_no__isnull=False, quantity__gt=0
+                ).exclude(lot_no=lot_no).values_list('lot_no', flat=True)[:3]
+                other_msg = ''
+                if other_lots:
+                    other_msg = f' (창고 내 다른 LOT: {", ".join(str(l) for l in other_lots)})'
                 return JsonResponse({
                     'success': False,
-                    'error': f'3200 원재료창고에 {rm_label.part_no} 재고가 없습니다.',
+                    'error': f'[LOT 불일치] 라벨 LOT({lot_no}) 재고가 3200 창고에 없습니다.{other_msg}',
+                    'tag_info': {
+                        'tag_id': rm_label.label_id,
+                        'part_no': rm_label.part_no,
+                        'lot_no': str(lot_no),
+                        'quantity': float(rm_label.quantity),
+                    }
                 })
+
+            # NULL LOT은 더 이상 사용 안 함 (3200은 LOT 필수)
+            null_stock = None
+            available_null = 0
+            available_total = max(available_lot, 0)
+
+            label_qty = float(rm_label.quantity)
 
             # 사용자가 조정 수량을 입력하지 않았는데 재고 부족 → 조정 입력 요청
             if override_qty is None and available_total < label_qty:
@@ -2199,25 +2219,44 @@ def api_process_tag_scan(request):
         # 재고 조회
         lot_no_t = tag.lot_no
         from django.db.models import F as _F
+
+        # 태그에 LOT가 없으면 차단
+        if not lot_no_t:
+            return JsonResponse({
+                'success': False,
+                'error': f'태그에 LOT 정보가 없습니다. ({tag.tag_id})',
+            })
+
         src_stock_t = MaterialStock.objects.filter(
             warehouse=wh_from_tag, part=tag.part, lot_no=lot_no_t
-        ).first() if lot_no_t else None
-
-        null_stock_t = MaterialStock.objects.filter(
-            warehouse=wh_from_tag, part=tag.part, lot_no__isnull=True
         ).first()
 
         avail_lot = src_stock_t.quantity if src_stock_t else 0
-        avail_null = null_stock_t.quantity if null_stock_t else 0
-        available_total_t = max(avail_lot, 0) + max(avail_null, 0)
 
-        tag_qty_t = float(tag.quantity)
-
-        if available_total_t <= 0:
+        # LOT 일치 재고가 없으면 태그 사용 불가 (다른 LOT 재고가 있어도 차단)
+        if avail_lot <= 0:
+            other_lots = MaterialStock.objects.filter(
+                warehouse=wh_from_tag, part=tag.part, lot_no__isnull=False, quantity__gt=0
+            ).exclude(lot_no=lot_no_t).values_list('lot_no', flat=True)[:3]
+            other_msg = ''
+            if other_lots:
+                other_msg = f' (창고 내 다른 LOT: {", ".join(str(l) for l in other_lots)})'
             return JsonResponse({
                 'success': False,
-                'error': f'3200 원재료창고에 {tag.part_no} 재고가 없습니다.',
+                'error': f'[LOT 불일치] 태그 LOT({lot_no_t}) 재고가 3200 창고에 없습니다.{other_msg}',
+                'tag_info': {
+                    'tag_id': tag.tag_id,
+                    'part_no': tag.part_no,
+                    'lot_no': str(lot_no_t),
+                    'quantity': int(tag.quantity),
+                }
             })
+
+        # NULL LOT은 더 이상 사용 안 함 (3200은 LOT 필수)
+        null_stock_t = None
+        available_total_t = max(avail_lot, 0)
+
+        tag_qty_t = float(tag.quantity)
 
         # 부족 시 조정 수량 요청
         if override_qty is None and available_total_t < tag_qty_t:
