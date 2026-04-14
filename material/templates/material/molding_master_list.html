@@ -182,10 +182,16 @@
                         <!-- 기본 정보 -->
                         <div class="col-12"><h6 class="fw-bold text-primary border-bottom pb-1 mb-2">기본 정보</h6></div>
                         <div class="col-md-3">
-                            <label class="form-label small fw-bold">품번 <span class="text-danger">*</span></label>
+                            <label class="form-label small fw-bold d-flex justify-content-between align-items-center">
+                                <span>품번 <span class="text-danger">*</span></span>
+                                <span class="form-check form-check-inline mb-0" style="font-weight:normal;font-size:0.78rem;">
+                                    <input class="form-check-input" type="checkbox" id="manualModeCheck" onchange="toggleManualMode()">
+                                    <label class="form-check-label" for="manualModeCheck">수기입력</label>
+                                </span>
+                            </label>
                             <div class="input-group input-group-sm">
                                 <input type="text" name="part_no" id="editPartNo" class="form-control form-control-sm" required readonly style="background:#f7fafc;cursor:pointer;" placeholder="클릭하여 검색" onclick="openPartSearchModal()">
-                                <button type="button" class="btn btn-outline-secondary" onclick="openPartSearchModal()"><i class="bi bi-search"></i></button>
+                                <button type="button" class="btn btn-outline-secondary" id="partSearchBtn" onclick="openPartSearchModal()"><i class="bi bi-search"></i></button>
                             </div>
                         </div>
                         <div class="col-md-3">
@@ -449,6 +455,31 @@ function selectPart(partNo, partName) {
     autoFillPartInfo(partNo);
 }
 
+// 수기입력 모드 토글
+function toggleManualMode() {
+    var checked = document.getElementById('manualModeCheck').checked;
+    var partInput = document.getElementById('editPartNo');
+    var searchBtn = document.getElementById('partSearchBtn');
+
+    if (checked) {
+        // 수기입력 모드: 품번 직접 편집 가능, 검색 버튼 비활성화
+        partInput.readOnly = false;
+        partInput.style.background = '';
+        partInput.style.cursor = '';
+        partInput.placeholder = '품번 직접 입력';
+        partInput.onclick = null;
+        if (searchBtn) searchBtn.disabled = true;
+    } else {
+        // 검색 모드: 품번 검색만 가능
+        partInput.readOnly = true;
+        partInput.style.background = '#f7fafc';
+        partInput.style.cursor = 'pointer';
+        partInput.placeholder = '클릭하여 검색';
+        partInput.onclick = openPartSearchModal;
+        if (searchBtn) searchBtn.disabled = false;
+    }
+}
+
 // 총소요량 자동 계산: 제품중량 + (런너중량 / 캐비티)
 (function() {
     var weightEl = document.getElementById('editProductWeight');
@@ -487,6 +518,9 @@ function openAddModal() {
         else el.value = '';
     });
     form.querySelectorAll('select').forEach(el => el.selectedIndex = 0);
+    // 수기입력 모드 초기화 (검색 모드)
+    var mc = document.getElementById('manualModeCheck');
+    if (mc) { mc.checked = false; toggleManualMode(); }
     new bootstrap.Modal(document.getElementById('editModal')).show();
 }
 
