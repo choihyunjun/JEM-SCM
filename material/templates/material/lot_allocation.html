@@ -221,6 +221,11 @@
         {% csrf_token %}
         <input type="hidden" name="items" id="rmPrintItems">
     </form>
+    <form method="post" action="{% url 'material:lot_allocation_plt_print' %}" target="_blank" id="pltPrintForm" style="display:none;">
+        {% csrf_token %}
+        <input type="hidden" name="items" id="pltPrintItems">
+        <input type="hidden" name="pallet_unit_qty" id="pltUnitQty">
+    </form>
 
     <!-- 재발행 설정 모달 -->
     <div class="modal fade" id="reprintModal" tabindex="-1">
@@ -274,6 +279,9 @@
                     </button>
                     <button type="button" class="btn btn-primary btn-sm" id="reprintRMBtn">
                         <i class="bi bi-qr-code me-1"></i>원재료 라벨 (RM)
+                    </button>
+                    <button type="button" class="btn btn-warning btn-sm" id="reprintPLTBtn">
+                        <i class="bi bi-box-seam me-1"></i>파렛트 라벨 (PLT)
                     </button>
                 </div>
             </div>
@@ -923,6 +931,32 @@ document.getElementById('reprintRMBtn').addEventListener('click', function() {
     document.getElementById('rmPrintItems').value = JSON.stringify(items);
     bootstrap.Modal.getInstance(modal).hide();
     document.getElementById('rmPrintForm').submit();
+});
+
+// 재발행 모달 → 파렛트 라벨(PLT) 출력
+document.getElementById('reprintPLTBtn').addEventListener('click', function() {
+    const modal = document.getElementById('reprintModal');
+    const partNo = modal.dataset.partNo;
+    const partName = modal.dataset.partName;
+    const lotNo = modal.dataset.lot;
+    const qty = parseInt(modal.dataset.qty);
+
+    // 파렛트 단위 수량 입력
+    const input = prompt(
+        '파렛트 1장당 수량을 입력하세요.\n' +
+        `(총 ${qty} 중 분할할 단위)\n` +
+        '비워두거나 취소하면 전체 수량 1장 발행',
+        ''
+    );
+    if (input === null) return;
+    const palletUnit = input.trim();
+
+    // items는 1건 (전체 수량), 서버에서 pallet_unit_qty로 분할
+    const items = [{ part_no: partNo, part_name: partName, lot_no: lotNo, quantity: qty }];
+    document.getElementById('pltPrintItems').value = JSON.stringify(items);
+    document.getElementById('pltUnitQty').value = palletUnit;
+    bootstrap.Modal.getInstance(modal).hide();
+    document.getElementById('pltPrintForm').submit();
 });
 
 // 원재료 라벨 출력 (RM)

@@ -1703,6 +1703,84 @@ def lot_allocation_rm_print(request):
     return redirect(f'/wms/raw-material/label-print/?ids={label_ids}')
 
 
+@wms_permission_required('can_wms_stock_edit')
+def lot_allocation_plt_print(request):
+    """LOT 배분 후 파렛트 라벨(PLT) 일괄 출력 - 사용자 지정 단위로 분할"""
+    if request.method != 'POST':
+        return redirect('material:lot_allocation')
+
+    import json
+    from .models import RawMaterialLabel
+    from datetime import datetime
+    from decimal import Decimal, InvalidOperation
+
+    items = json.loads(request.POST.get('items', '[]'))
+    pallet_unit_input = request.POST.get('pallet_unit_qty', '').strip()
+
+    if not items:
+        return redirect('material:lot_allocation')
+
+    pallet_unit_qty = None
+    if pallet_unit_input:
+        try:
+            pallet_unit_qty = Decimal(pallet_unit_input)
+            if pallet_unit_qty <= 0:
+                pallet_unit_qty = None
+        except (InvalidOperation, ValueError):
+            pallet_unit_qty = None
+
+    all_labels = []
+    for item in items:
+        part = Part.objects.filter(part_no=item['part_no']).first()
+        if not part:
+            continue
+
+        lot_date = None
+        if item.get('lot_no'):
+            try:
+                lot_date = datetime.strptime(item['lot_no'], '%Y-%m-%d').date()
+            except (ValueError, TypeError):
+                pass
+
+        total_qty = Decimal(str(item.get('quantity', 0)))
+        unit = (part.weight_unit or 'KG').strip() or 'KG'
+
+        # 분할 수량 계산
+        split_qtys = []
+        if pallet_unit_qty and total_qty > pallet_unit_qty:
+            full_count = int(total_qty // pallet_unit_qty)
+            remainder = total_qty - (pallet_unit_qty * full_count)
+            for _ in range(full_count):
+                split_qtys.append(pallet_unit_qty)
+            if remainder > 0:
+                split_qtys.append(remainder)
+        else:
+            split_qtys.append(total_qty)
+
+        for split_qty in split_qtys:
+            label = RawMaterialLabel.objects.create(
+                label_id=RawMaterialLabel.generate_pallet_label_id(),
+                label_type='PALLET',
+                part=part,
+                part_no=part.part_no,
+                part_name=part.part_name or '',
+                lot_no=lot_date,
+                quantity=split_qty,
+                unit=unit,
+                status='INSTOCK',
+                printed_by=request.user if request.user.is_authenticated else None,
+            )
+            all_labels.append(label)
+
+    if not all_labels:
+        messages.error(request, '출력할 라벨이 없습니다.')
+        return redirect('material:lot_allocation')
+
+    # 파렛트 라벨 출력 페이지 (ids로 복수 지원)
+    label_ids = ','.join([str(l.id) for l in all_labels])
+    return redirect(f'/wms/raw-material/pallet-label/print/?ids={label_ids}')
+
+
 # =============================================================================
 # 3-2. 현품표 스캔 API (중복 스캔 확인)
 # =============================================================================
