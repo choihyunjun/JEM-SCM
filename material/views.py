@@ -1915,18 +1915,24 @@ def api_process_tag_scan(request):
 
             available_lot = src_stock.quantity if src_stock else 0
 
-            # LOT 일치 재고가 없으면 라벨 사용 불가 (다른 LOT 재고가 있어도 차단)
+            # LOT 일치 재고가 없으면 라벨 사용 불가
             if available_lot <= 0:
-                # 같은 품번의 다른 LOT 재고 확인 (사용자 안내용)
+                # 같은 품번의 다른 LOT 재고 조회
                 other_lots = MaterialStock.objects.filter(
                     warehouse=wh_from, part=rm_label.part, lot_no__isnull=False, quantity__gt=0
                 ).exclude(lot_no=lot_no).values_list('lot_no', flat=True)[:3]
-                other_msg = ''
+
+                if src_stock is not None:
+                    # 해당 LOT 레코드는 있지만 수량 0 → 재고 없음
+                    err_msg = f'[재고 없음] 라벨 LOT({lot_no})의 3200 창고 재고가 0입니다.'
+                else:
+                    # 해당 LOT 레코드 자체가 없음 → LOT 불일치
+                    err_msg = f'[LOT 불일치] 라벨 LOT({lot_no}) 재고가 3200 창고에 없습니다.'
                 if other_lots:
-                    other_msg = f' (창고 내 다른 LOT: {", ".join(str(l) for l in other_lots)})'
+                    err_msg += f' (창고 내 다른 LOT: {", ".join(str(l) for l in other_lots)})'
                 return JsonResponse({
                     'success': False,
-                    'error': f'[LOT 불일치] 라벨 LOT({lot_no}) 재고가 3200 창고에 없습니다.{other_msg}',
+                    'error': err_msg,
                     'tag_info': {
                         'tag_id': rm_label.label_id,
                         'part_no': rm_label.part_no,
@@ -2233,17 +2239,21 @@ def api_process_tag_scan(request):
 
         avail_lot = src_stock_t.quantity if src_stock_t else 0
 
-        # LOT 일치 재고가 없으면 태그 사용 불가 (다른 LOT 재고가 있어도 차단)
+        # LOT 일치 재고가 없으면 태그 사용 불가
         if avail_lot <= 0:
             other_lots = MaterialStock.objects.filter(
                 warehouse=wh_from_tag, part=tag.part, lot_no__isnull=False, quantity__gt=0
             ).exclude(lot_no=lot_no_t).values_list('lot_no', flat=True)[:3]
-            other_msg = ''
+
+            if src_stock_t is not None:
+                err_msg_t = f'[재고 없음] 태그 LOT({lot_no_t})의 3200 창고 재고가 0입니다.'
+            else:
+                err_msg_t = f'[LOT 불일치] 태그 LOT({lot_no_t}) 재고가 3200 창고에 없습니다.'
             if other_lots:
-                other_msg = f' (창고 내 다른 LOT: {", ".join(str(l) for l in other_lots)})'
+                err_msg_t += f' (창고 내 다른 LOT: {", ".join(str(l) for l in other_lots)})'
             return JsonResponse({
                 'success': False,
-                'error': f'[LOT 불일치] 태그 LOT({lot_no_t}) 재고가 3200 창고에 없습니다.{other_msg}',
+                'error': err_msg_t,
                 'tag_info': {
                     'tag_id': tag.tag_id,
                     'part_no': tag.part_no,
