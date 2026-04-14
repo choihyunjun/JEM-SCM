@@ -9664,6 +9664,87 @@ def mold_repair_create(request):
 
 @login_required
 @wms_permission_required('can_wms_stock_view')
+def mold_repair_history_create(request):
+    """금형 수리 이력 직접 등록 (의뢰 단계 건너뛰고 완료 상태로)"""
+    from .models import MoldRepairRequest, MoldMaster
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST만 허용'}, status=405)
+
+    part_no = request.POST.get('part_no', '').strip()
+    if not part_no:
+        return JsonResponse({'success': False, 'error': '품번을 입력해주세요.'})
+
+    mold = MoldMaster.objects.filter(part_no=part_no).first()
+    repair_types = request.POST.getlist('repair_types')
+
+    def safe_decimal(val):
+        try:
+            return float(val) if val else 0
+        except (ValueError, TypeError):
+            return 0
+
+    def safe_int(val):
+        try:
+            return int(val) if val else 0
+        except (ValueError, TypeError):
+            return 0
+
+    def safe_date(val):
+        val = (val or '').strip()
+        if not val:
+            return None
+        try:
+            from datetime import datetime
+            return datetime.strptime(val, '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            return None
+
+    obj = MoldRepairRequest.objects.create(
+        mold=mold,
+        part_no=part_no,
+        mold_name=request.POST.get('mold_name', mold.mold_name if mold else '').strip(),
+        item_group=request.POST.get('item_group', mold.item_group if mold else '').strip(),
+        priority=request.POST.get('priority', 'B'),
+        status='COMPLETED',  # 바로 완료 상태
+        request_content=request.POST.get('request_content', '').strip(),
+        repair_types=','.join(repair_types),
+        requested_by=request.user,
+        received_date=safe_date(request.POST.get('received_date')),
+        repair_request_date=safe_date(request.POST.get('repair_request_date')),
+        completed_date=safe_date(request.POST.get('completed_date')) or timezone.now().date(),
+        repair_content=request.POST.get('repair_content', '').strip(),
+        repair_by=request.POST.get('repair_by', '').strip(),
+        hr_milling=safe_decimal(request.POST.get('hr_milling')),
+        hr_lathe=safe_decimal(request.POST.get('hr_lathe')),
+        hr_grinding=safe_decimal(request.POST.get('hr_grinding')),
+        hr_welding=safe_decimal(request.POST.get('hr_welding')),
+        hr_high_speed=safe_decimal(request.POST.get('hr_high_speed')),
+        hr_edm=safe_decimal(request.POST.get('hr_edm')),
+        hr_wire=safe_decimal(request.POST.get('hr_wire')),
+        hr_mt=safe_decimal(request.POST.get('hr_mt')),
+        hr_polishing=safe_decimal(request.POST.get('hr_polishing')),
+        hr_assembly=safe_decimal(request.POST.get('hr_assembly')),
+        hr_other=safe_decimal(request.POST.get('hr_other')),
+        cost_welding=safe_int(request.POST.get('cost_welding')),
+        cost_tapping=safe_int(request.POST.get('cost_tapping')),
+        cost_milpin=safe_int(request.POST.get('cost_milpin')),
+        cost_purchase=safe_int(request.POST.get('cost_purchase')),
+        cost_outsource=safe_int(request.POST.get('cost_outsource')),
+        shot_count=safe_int(request.POST.get('shot_count')),
+        first_article=request.POST.get('first_article', '').strip(),
+        ng_content=request.POST.get('ng_content', '').strip(),
+    )
+
+    return JsonResponse({
+        'success': True,
+        'message': f'{part_no} 수리이력 등록 완료 (완료 상태)',
+        'id': obj.pk,
+    })
+
+
+@login_required
+@wms_permission_required('can_wms_stock_view')
 def mold_repair_update(request, pk):
     """금형 수리 의뢰 수정 (접수/수리/완료 처리 포함)"""
     from .models import MoldRepairRequest

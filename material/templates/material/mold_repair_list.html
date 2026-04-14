@@ -82,9 +82,14 @@
         <h2><i class="bi bi-tools me-2"></i>금형 수리 의뢰</h2>
         <div class="subtitle">수리 의뢰 등록 / 접수 / 수리 진행 / 완료 관리</div>
     </div>
-    <button class="btn btn-sm btn-outline-light" onclick="openCreateModal()">
-        <i class="bi bi-plus-circle me-1"></i>수리의뢰 등록
-    </button>
+    <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-outline-light" onclick="openCreateModal()">
+            <i class="bi bi-plus-circle me-1"></i>수리의뢰 등록
+        </button>
+        <button class="btn btn-sm btn-light text-dark" onclick="openDirectHistoryModal()">
+            <i class="bi bi-journal-plus me-1"></i>수리이력 등록
+        </button>
+    </div>
 </div>
 
 <!-- Status Tabs -->
@@ -238,6 +243,133 @@
     </div>
 </div>
 
+<!-- Direct History Modal (수리이력 직접 등록) -->
+<div class="modal fade" id="directHistoryModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header modal-header-repair">
+                <h5 class="modal-title"><i class="bi bi-journal-plus me-2"></i>수리이력 직접 등록 (완료 상태)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="directHistoryForm">
+                    {% csrf_token %}
+                    <div class="alert alert-info small py-2 mb-2">
+                        <i class="bi bi-info-circle me-1"></i>
+                        이미 완료된 수리 건을 이력으로 직접 등록합니다. 상태는 <b>완료</b>로 저장되며 의뢰자에게 알림이 발송되지 않습니다.
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-4" style="position:relative;">
+                            <label>품번 <span class="text-danger">*</span></label>
+                            <input type="text" name="part_no" id="dhPartNo" class="form-control form-control-sm" required placeholder="품번 입력" autocomplete="off">
+                            <div id="dhPartNoDD" class="autocomplete-dropdown"></div>
+                        </div>
+                        <div class="col-4">
+                            <label>금형명</label>
+                            <input type="text" name="mold_name" id="dhMoldName" class="form-control form-control-sm" readonly style="background:#f7fafc;">
+                        </div>
+                        <div class="col-2">
+                            <label>품목</label>
+                            <input type="text" name="item_group" id="dhItemGroup" class="form-control form-control-sm" readonly style="background:#f7fafc;">
+                        </div>
+                        <div class="col-2">
+                            <label>중요도</label>
+                            <select name="priority" class="form-select form-select-sm">
+                                <option value="A">A (긴급)</option>
+                                <option value="B" selected>B (보통)</option>
+                                <option value="C">C (낮음)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mt-2">
+                        <label>의뢰내용 / 수리 원인</label>
+                        <textarea name="request_content" class="form-control form-control-sm" rows="2" placeholder="수리가 필요했던 사유"></textarea>
+                    </div>
+
+                    <div class="section-label">수리유형</div>
+                    <div class="repair-type-grid">
+                        <label class="repair-type-check"><input type="checkbox" name="repair_types" value="BURR"> BURR</label>
+                        <label class="repair-type-check"><input type="checkbox" name="repair_types" value="미각기"> 미각기</label>
+                        <label class="repair-type-check"><input type="checkbox" name="repair_types" value="가즈리"> 가즈리</label>
+                        <label class="repair-type-check"><input type="checkbox" name="repair_types" value="제품박힘"> 제품박힘</label>
+                        <label class="repair-type-check"><input type="checkbox" name="repair_types" value="놀림"> 놀림</label>
+                        <label class="repair-type-check"><input type="checkbox" name="repair_types" value="파손"> 파손</label>
+                        <label class="repair-type-check"><input type="checkbox" name="repair_types" value="설변개선"> 설변개선</label>
+                        <label class="repair-type-check"><input type="checkbox" name="repair_types" value="멘트요정"> 멘트요정</label>
+                        <label class="repair-type-check"><input type="checkbox" name="repair_types" value="안정화"> 안정화</label>
+                        <label class="repair-type-check"><input type="checkbox" name="repair_types" value="기타"> 기타</label>
+                    </div>
+
+                    <div class="section-label">수리내용</div>
+                    <div class="row g-2">
+                        <div class="col-8">
+                            <textarea name="repair_content" class="form-control form-control-sm" rows="2" placeholder="수리 수행 내용"></textarea>
+                        </div>
+                        <div class="col-4">
+                            <label class="small">수리담당자</label>
+                            <input type="text" name="repair_by" class="form-control form-control-sm" placeholder="담당자">
+                        </div>
+                    </div>
+
+                    <div class="section-label">일정</div>
+                    <div class="row g-2">
+                        <div class="col-4">
+                            <label class="small">접수일</label>
+                            <input type="date" name="received_date" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-4">
+                            <label class="small">수리요청일</label>
+                            <input type="date" name="repair_request_date" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-4">
+                            <label class="small">완료일</label>
+                            <input type="date" name="completed_date" class="form-control form-control-sm" id="dhCompletedDate">
+                        </div>
+                    </div>
+
+                    <div class="section-label">사내수리 (HR)</div>
+                    <div class="row g-2">
+                        <div class="col-2"><label class="small">밀링</label><input type="number" step="0.1" name="hr_milling" class="form-control form-control-sm" value="0"></div>
+                        <div class="col-2"><label class="small">선반</label><input type="number" step="0.1" name="hr_lathe" class="form-control form-control-sm" value="0"></div>
+                        <div class="col-2"><label class="small">연마</label><input type="number" step="0.1" name="hr_grinding" class="form-control form-control-sm" value="0"></div>
+                        <div class="col-2"><label class="small">사내용접</label><input type="number" step="0.1" name="hr_welding" class="form-control form-control-sm" value="0"></div>
+                        <div class="col-2"><label class="small">고속가공</label><input type="number" step="0.1" name="hr_high_speed" class="form-control form-control-sm" value="0"></div>
+                        <div class="col-2"><label class="small">방전</label><input type="number" step="0.1" name="hr_edm" class="form-control form-control-sm" value="0"></div>
+                        <div class="col-2"><label class="small">WIRE</label><input type="number" step="0.1" name="hr_wire" class="form-control form-control-sm" value="0"></div>
+                        <div class="col-2"><label class="small">M/T</label><input type="number" step="0.1" name="hr_mt" class="form-control form-control-sm" value="0"></div>
+                        <div class="col-2"><label class="small">사상</label><input type="number" step="0.1" name="hr_polishing" class="form-control form-control-sm" value="0"></div>
+                        <div class="col-2"><label class="small">조립</label><input type="number" step="0.1" name="hr_assembly" class="form-control form-control-sm" value="0"></div>
+                        <div class="col-2"><label class="small">기타HR</label><input type="number" step="0.1" name="hr_other" class="form-control form-control-sm" value="0"></div>
+                    </div>
+
+                    <div class="section-label">외주금액 (원)</div>
+                    <div class="row g-2">
+                        <div class="col-2"><label class="small">외주용접</label><input type="number" name="cost_welding" class="form-control form-control-sm" value="0"></div>
+                        <div class="col-2"><label class="small">탭핑</label><input type="number" name="cost_tapping" class="form-control form-control-sm" value="0"></div>
+                        <div class="col-2"><label class="small">밀핀</label><input type="number" name="cost_milpin" class="form-control form-control-sm" value="0"></div>
+                        <div class="col-2"><label class="small">구매품</label><input type="number" name="cost_purchase" class="form-control form-control-sm" value="0"></div>
+                        <div class="col-2"><label class="small">외주가공</label><input type="number" name="cost_outsource" class="form-control form-control-sm" value="0"></div>
+                    </div>
+
+                    <div class="section-label">기타</div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-3"><label class="small">SHOT수</label><input type="number" name="shot_count" class="form-control form-control-sm" value="0"></div>
+                        <div class="col-3"><label class="small">초물확인</label><input type="text" name="first_article" class="form-control form-control-sm"></div>
+                        <div class="col-6"><label class="small">NG내용 및 비고</label><input type="text" name="ng_content" class="form-control form-control-sm"></div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="submitDirectHistory()">
+                    <i class="bi bi-check-circle me-1"></i>이력 등록 (완료 상태)
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Detail/Edit Modal -->
 <div class="modal fade" id="detailModal" tabindex="-1">
     <div class="modal-dialog modal-xl">
@@ -303,6 +435,70 @@ function submitCreate() {
     var form = document.getElementById('createForm');
     var formData = new FormData(form);
     fetch('{% url "material:mold_repair_create" %}', { method: 'POST', body: formData })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) { alert(data.message); location.reload(); }
+        else { alert('오류: ' + data.error); }
+    })
+    .catch(err => alert('요청 실패: ' + err.message));
+}
+
+// 수리이력 직접 등록 모달 - 품번 자동완성
+(function() {
+    var input = document.getElementById('dhPartNo');
+    var dropdown = document.getElementById('dhPartNoDD');
+    if (!input || !dropdown) return;
+
+    input.addEventListener('input', function() {
+        var val = this.value.trim().toLowerCase();
+        dropdown.innerHTML = '';
+        if (val.length < 1) { dropdown.style.display = 'none'; return; }
+        var matches = moldData.filter(function(m) {
+            return m.part_no.toLowerCase().includes(val) || m.mold_name.toLowerCase().includes(val);
+        }).slice(0, 10);
+        if (!matches.length) { dropdown.style.display = 'none'; return; }
+        matches.forEach(function(m) {
+            var div = document.createElement('div');
+            div.className = 'autocomplete-item';
+            div.innerHTML = '<strong>' + m.part_no + '</strong> <span class="ac-sub">' + m.mold_name + ' / ' + m.item_group + '</span>';
+            div.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                input.value = m.part_no;
+                document.getElementById('dhMoldName').value = m.mold_name;
+                document.getElementById('dhItemGroup').value = m.item_group;
+                dropdown.style.display = 'none';
+            });
+            dropdown.appendChild(div);
+        });
+        dropdown.style.display = 'block';
+    });
+    input.addEventListener('blur', function() {
+        setTimeout(function() { dropdown.style.display = 'none'; }, 150);
+    });
+    input.addEventListener('focus', function() {
+        if (this.value.trim().length >= 1) this.dispatchEvent(new Event('input'));
+    });
+})();
+
+function openDirectHistoryModal() {
+    var form = document.getElementById('directHistoryForm');
+    form.reset();
+    document.getElementById('dhMoldName').value = '';
+    document.getElementById('dhItemGroup').value = '';
+    // 완료일 기본값 = 오늘
+    var today = new Date().toISOString().split('T')[0];
+    document.getElementById('dhCompletedDate').value = today;
+    new bootstrap.Modal(document.getElementById('directHistoryModal')).show();
+}
+
+function submitDirectHistory() {
+    var form = document.getElementById('directHistoryForm');
+    var formData = new FormData(form);
+    if (!formData.get('part_no').trim()) {
+        alert('품번을 입력하세요.');
+        return;
+    }
+    fetch('{% url "material:mold_repair_history_create" %}', { method: 'POST', body: formData })
     .then(r => r.json())
     .then(data => {
         if (data.success) { alert(data.message); location.reload(); }
