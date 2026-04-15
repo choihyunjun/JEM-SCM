@@ -1121,8 +1121,8 @@ class MoldMaster(models.Model):
 
     @property
     def shots_since_last_mt(self):
-        """최근 MT 이후 숏트수"""
-        return self.total_shots - self.last_mt_shots
+        """최근 MT 이후 숏트수 (음수 방지: ERP 재동기화로 누적이 줄어든 경우 0)"""
+        return max(self.total_shots - self.last_mt_shots, 0)
 
     @property
     def mt_interval(self):

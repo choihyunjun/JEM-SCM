@@ -8501,7 +8501,7 @@ def production_main(request):
     mt_need = 0
     for m in molds_qs:
         total = m.total_shots_prev + m._ms
-        since_mt = total - m.last_mt_shots
+        since_mt = max(total - m.last_mt_shots, 0)
         if m.mt_interval > 0 and since_mt >= m.mt_interval:
             mt_need += 1
 
@@ -9185,7 +9185,7 @@ def mold_mt_dashboard(request):
         interval = MT_INTERVAL_MAP.get(m.grade.upper(), 30000) if m.grade else 30000
         m.c_mt_interval = interval
 
-        shots_since = m.c_total_shots - m.last_mt_shots
+        shots_since = max(m.c_total_shots - m.last_mt_shots, 0)
         m.c_shots_since_mt = shots_since
         m.c_mt_pct = min(round(shots_since / interval * 100, 1), 100) if interval > 0 else 0
         m.c_is_mt_due = shots_since >= interval
