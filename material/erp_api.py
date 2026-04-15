@@ -2245,6 +2245,7 @@ def sync_erp_stock_transfer(date_from=None, date_to=None):
     from material.models import MaterialTransaction, Warehouse
     from orders.models import Part
     from django.utils import timezone as tz
+    from django.db.models import Sum
     from datetime import datetime, timedelta
 
     if date_from is None:
@@ -2345,8 +2346,44 @@ def sync_erp_stock_transfer(date_from=None, date_to=None):
                 if not to_wh:
                     to_wh = Warehouse.objects.filter(code='2000').first()
 
-                from_result = 0  # 재고 미반영 (sync_stock_from_erp에서 일괄 처리)
-                to_result = 0
+                # ── 실제 재고 이동: LOT FIFO → 부족분은 NULL LOT에서 ──
+                from material.models import MaterialStock
+                from django.db.models import F as _F
+                remaining = qty
+                # 1) LOT 재고 FIFO (오래된 LOT부터)
+                from_lots = list(MaterialStock.objects.filter(
+                    warehouse=from_wh, part=part, lot_no__isnull=False, quantity__gt=0
+                ).order_by('lot_no'))
+                for src in from_lots:
+                    if remaining <= 0:
+                        break
+                    take = min(src.quantity, remaining)
+                    # 출고창고 LOT 감소
+                    MaterialStock.objects.filter(pk=src.pk).update(quantity=_F('quantity') - take)
+                    # 입고창고 동일 LOT에 병합 (없으면 생성)
+                    dst, _cr = MaterialStock.objects.get_or_create(
+                        warehouse=to_wh, part=part, lot_no=src.lot_no,
+                        defaults={'quantity': 0}
+                    )
+                    MaterialStock.objects.filter(pk=dst.pk).update(quantity=_F('quantity') + take)
+                    remaining -= take
+                # 2) LOT으로 부족하면 NULL LOT에서 충당
+                if remaining > 0:
+                    src_null, _c1 = MaterialStock.objects.get_or_create(
+                        warehouse=from_wh, part=part, lot_no=None,
+                        defaults={'quantity': 0}
+                    )
+                    MaterialStock.objects.filter(pk=src_null.pk).update(quantity=_F('quantity') - remaining)
+                    dst_null, _c2 = MaterialStock.objects.get_or_create(
+                        warehouse=to_wh, part=part, lot_no=None,
+                        defaults={'quantity': 0}
+                    )
+                    MaterialStock.objects.filter(pk=dst_null.pk).update(quantity=_F('quantity') + remaining)
+
+                # 입고창고 최종 합계 조회 (result_stock용)
+                to_total = MaterialStock.objects.filter(
+                    warehouse=to_wh, part=part
+                ).aggregate(t=Sum('quantity'))['t'] or 0
 
                 fwh_nm = detail.get('fwhNm', '') or fwh_cd
                 twh_nm = detail.get('twhNm', '') or twh_cd
@@ -2360,7 +2397,7 @@ def sync_erp_stock_transfer(date_from=None, date_to=None):
                     quantity=qty,
                     warehouse_from=from_wh,
                     warehouse_to=to_wh,
-                    result_stock=to_result,
+                    result_stock=to_total,
                     remark=f'ERP재고이동({fwh_nm}→{twh_nm}) {detail_remark}'.strip(),
                     erp_incoming_no=trx_key,
                     erp_sync_status='SUCCESS',
