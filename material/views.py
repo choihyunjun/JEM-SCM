@@ -6883,7 +6883,7 @@ def molding_loss_excel(request):
 
     # Sheet 2: 상세 내역
     ws2 = wb.create_sheet('유실 상세 내역')
-    headers2 = ['일자', '호기', '톤수', '근무조', '사유', '유실시간(분)', '비고']
+    headers2 = ['일자', '호기', '톤수', '근무조', '사유', '유실시간(분)']
     for col, h in enumerate(headers2, 1):
         c = ws2.cell(row=1, column=col, value=h)
         c.fill = header_fill
@@ -6899,9 +6899,8 @@ def molding_loss_excel(request):
         ws2.cell(row=idx, column=4, value=r.shift).border = thin
         ws2.cell(row=idx, column=5, value=d.category).border = thin
         ws2.cell(row=idx, column=6, value=d.minutes).border = thin
-        ws2.cell(row=idx, column=7, value=r.remark or '').border = thin
 
-    for col_letter, w in [('A',12),('B',10),('C',8),('D',8),('E',16),('F',14),('G',30)]:
+    for col_letter, w in [('A',12),('B',10),('C',8),('D',8),('E',16),('F',14)]:
         ws2.column_dimensions[col_letter].width = w
 
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
