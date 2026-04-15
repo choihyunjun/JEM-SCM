@@ -6821,6 +6821,19 @@ def pallet_label_print(request):
 
 
 @wms_permission_required('can_wms_stock_view')
+def api_molding_cavity(request):
+    """성형 마스터에서 품번의 캐비티수 조회 (금형 등록 시 cv_count 자동입력용)"""
+    from .models import MoldingMaster
+    part_no = (request.GET.get('part_no') or '').strip()
+    if not part_no:
+        return JsonResponse({'success': False, 'error': '품번 필요'})
+    mm = MoldingMaster.objects.filter(part_no=part_no).order_by('-id').first()
+    if not mm or not mm.cavity:
+        return JsonResponse({'success': False, 'cavity': 0})
+    return JsonResponse({'success': True, 'cavity': mm.cavity})
+
+
+@wms_permission_required('can_wms_stock_view')
 def api_molding_master_lookup(request):
     """성형 마스터 등록용 품번 자동완성 정보 조회
     - 기존 MoldingMaster 동일 품번 있으면 그 정보 반환
@@ -9261,6 +9274,7 @@ def mold_mt_add(request):
         mold_name=request.POST.get('mold_name', '').strip(),
         grade=request.POST.get('grade', '').strip().upper(),
         material_type=request.POST.get('material_type', '').strip(),
+        cv_count=safe_int(request.POST.get('cv_count'), 1),
         guarantee_shots=safe_int(request.POST.get('guarantee_shots'), 500000),
         total_shots_prev=safe_int(request.POST.get('total_shots_prev'), 0),
         last_mt_shots=safe_int(request.POST.get('last_mt_shots'), 0),
