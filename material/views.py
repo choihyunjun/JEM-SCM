@@ -7951,6 +7951,24 @@ def molding_utilization(request):
                 tonnage_groups[tonnage]['total_days'] += active_days
             has_shift_data = True
 
+    # 호기별 시간가동률 통합 (주간+야간 합산)
+    # 같은 호기의 rows에 machine_time_rate (주+야 합산 %) + shift_span (rowspan 용) 세팅
+    for tonnage_data in tonnage_groups.values():
+        # 호기별 그룹핑
+        machine_rows_map = defaultdict(list)
+        for row in tonnage_data['rows']:
+            machine_rows_map[row['machine'].id].append(row)
+
+        for machine_id, rows_for_machine in machine_rows_map.items():
+            # 주+야 합산 시간가동률
+            combined_time = sum(r['avg_time'] or 0 for r in rows_for_machine)
+            shift_count = len(rows_for_machine)
+            for idx, r in enumerate(rows_for_machine):
+                r['machine_time_rate'] = combined_time
+                # 첫 번째 행에만 표시 (rowspan)
+                r['show_time_cell'] = (idx == 0)
+                r['time_rowspan'] = shift_count if idx == 0 else 0
+
     # 톤수별 전체 활성 호기 수 (비가동 포함)
     tonnage_all_count = {}
     for m in machines:

@@ -179,9 +179,11 @@
                             <td class="fw-bold {% if ms.avg_util >= 90 %}text-success{% elif ms.avg_util >= 70 %}text-warning{% elif ms.avg_util > 0 %}text-danger{% endif %}">
                                 {% if ms.avg_util > 0 %}{{ ms.avg_util|floatformat:1 }}%{% else %}-{% endif %}
                             </td>
-                            <td class="{% if ms.avg_time >= 90 %}text-success{% elif ms.avg_time >= 70 %}text-warning{% elif ms.avg_time > 0 %}text-danger{% endif %}">
-                                {% if ms.avg_time > 0 %}{{ ms.avg_time|floatformat:1 }}%{% else %}-{% endif %}
+                            {% if ms.show_time_cell %}
+                            <td rowspan="{{ ms.time_rowspan }}" class="align-middle {% if ms.machine_time_rate >= 90 %}text-success{% elif ms.machine_time_rate >= 70 %}text-warning{% elif ms.machine_time_rate > 0 %}text-danger{% endif %}">
+                                {% if ms.machine_time_rate > 0 %}{{ ms.machine_time_rate|floatformat:1 }}%{% else %}-{% endif %}
                             </td>
+                            {% endif %}
                             <td>{{ ms.active_days }}</td>
                             {% for dd in ms.daily %}
                             <td style="padding:2px;{% if dd %}cursor:pointer;{% endif %}"
