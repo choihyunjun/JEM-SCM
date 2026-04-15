@@ -80,6 +80,9 @@
                     <button type="button" class="btn btn-primary" onclick="printRMLabels()">
                         <i class="bi bi-qr-code me-1"></i>원재료 라벨 출력 (RM)
                     </button>
+                    <button type="button" class="btn btn-warning" onclick="printPLTLabels()">
+                        <i class="bi bi-box-seam me-1"></i>파렛트 라벨 출력 (PLT)
+                    </button>
                     <span class="text-muted small ms-2" id="totalSheetInfo"></span>
                 </div>
             </form>
@@ -968,6 +971,25 @@ function printRMLabels() {
     }
     document.getElementById('rmPrintItems').value = allocPrintItems.value;
     document.getElementById('rmPrintForm').submit();
+}
+
+// 파렛트 라벨 출력 (PLT)
+function printPLTLabels() {
+    var allocPrintItems = document.getElementById('allocPrintItems');
+    if (!allocPrintItems || !allocPrintItems.value) {
+        alert('출력할 배분 데이터가 없습니다.');
+        return;
+    }
+    var unit = prompt('파렛트 단위 수량(kg)을 입력하세요:', '1000');
+    if (unit === null) return;
+    unit = parseInt(unit, 10);
+    if (!unit || unit <= 0) {
+        alert('유효한 수량을 입력하세요.');
+        return;
+    }
+    document.getElementById('pltPrintItems').value = allocPrintItems.value;
+    document.getElementById('pltUnitQty').value = unit;
+    document.getElementById('pltPrintForm').submit();
 }
 </script>
 
