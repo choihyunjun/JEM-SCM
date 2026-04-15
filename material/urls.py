@@ -113,6 +113,7 @@ urlpatterns = [
     path('api/part-search/', views.api_part_search, name='api_part_search'),
     path('api/molding-master/lookup/', views.api_molding_master_lookup, name='api_molding_master_lookup'),
     path('api/molding-master/cavity/', views.api_molding_cavity, name='api_molding_cavity'),
+    path('molding/loss-excel/', views.molding_loss_excel, name='molding_loss_excel'),
     path('api/labels-for-lot/', views.api_labels_for_lot, name='api_labels_for_lot'),
     path('api/transfer-detail/<int:trx_id>/', views.api_transfer_detail, name='api_transfer_detail'),
     path('api/cancel-stock-move/<int:trx_id>/', views.cancel_stock_move, name='cancel_stock_move'),

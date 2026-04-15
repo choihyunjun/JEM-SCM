@@ -6821,6 +6821,96 @@ def pallet_label_print(request):
 
 
 @wms_permission_required('can_wms_stock_view')
+def molding_loss_excel(request):
+    """유실 사유별 상세 엑셀 다운로드"""
+    from .models import MoldingDailyRecord, MoldingLossDetail
+    from django.db.models import Sum
+    import openpyxl
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+
+    now = timezone.localtime()
+    year = int(request.GET.get('year', now.year))
+    month = int(request.GET.get('month', now.month))
+
+    # 유실 상세 조회
+    loss_details = MoldingLossDetail.objects.filter(
+        record__date__year=year, record__date__month=month
+    ).select_related('record__machine').order_by('record__date', 'record__machine__code', 'category')
+
+    # 요약: 사유별 합계
+    summary_qs = MoldingLossDetail.objects.filter(
+        record__date__year=year, record__date__month=month
+    ).values('category').annotate(total=Sum('minutes')).order_by('-total')
+    summary = list(summary_qs)
+    total_all = sum(s['total'] for s in summary) or 1
+
+    wb = openpyxl.Workbook()
+
+    # Sheet 1: 요약
+    ws1 = wb.active
+    ws1.title = '유실사유 요약'
+    header_fill = PatternFill(start_color='1F4E79', end_color='1F4E79', fill_type='solid')
+    header_font = Font(bold=True, color='FFFFFF', size=10)
+    thin = Border(left=Side(style='thin'), right=Side(style='thin'),
+                  top=Side(style='thin'), bottom=Side(style='thin'))
+
+    headers = ['순위', '사유', '유실시간(분)', '유실시간(시간)', '비율(%)']
+    for col, h in enumerate(headers, 1):
+        c = ws1.cell(row=1, column=col, value=h)
+        c.fill = header_fill
+        c.font = header_font
+        c.alignment = Alignment(horizontal='center')
+        c.border = thin
+
+    for idx, s in enumerate(summary, 1):
+        ws1.cell(row=idx+1, column=1, value=idx).border = thin
+        ws1.cell(row=idx+1, column=2, value=s['category']).border = thin
+        ws1.cell(row=idx+1, column=3, value=s['total']).border = thin
+        ws1.cell(row=idx+1, column=4, value=round(s['total']/60, 2)).border = thin
+        ws1.cell(row=idx+1, column=5, value=round(s['total']/total_all*100, 2)).border = thin
+
+    # 합계 행
+    total_row = len(summary) + 2
+    ws1.cell(row=total_row, column=1, value='합계').font = Font(bold=True)
+    ws1.cell(row=total_row, column=3, value=total_all).font = Font(bold=True)
+    ws1.cell(row=total_row, column=4, value=round(total_all/60, 2)).font = Font(bold=True)
+
+    ws1.column_dimensions['A'].width = 8
+    ws1.column_dimensions['B'].width = 18
+    ws1.column_dimensions['C'].width = 14
+    ws1.column_dimensions['D'].width = 14
+    ws1.column_dimensions['E'].width = 10
+
+    # Sheet 2: 상세 내역
+    ws2 = wb.create_sheet('유실 상세 내역')
+    headers2 = ['일자', '호기', '톤수', '근무조', '사유', '유실시간(분)', '비고']
+    for col, h in enumerate(headers2, 1):
+        c = ws2.cell(row=1, column=col, value=h)
+        c.fill = header_fill
+        c.font = header_font
+        c.alignment = Alignment(horizontal='center')
+        c.border = thin
+
+    for idx, d in enumerate(loss_details, 2):
+        r = d.record
+        ws2.cell(row=idx, column=1, value=r.date.strftime('%Y-%m-%d')).border = thin
+        ws2.cell(row=idx, column=2, value=r.machine.code if r.machine else '').border = thin
+        ws2.cell(row=idx, column=3, value=r.machine.tonnage if r.machine else '').border = thin
+        ws2.cell(row=idx, column=4, value=r.shift).border = thin
+        ws2.cell(row=idx, column=5, value=d.category).border = thin
+        ws2.cell(row=idx, column=6, value=d.minutes).border = thin
+        ws2.cell(row=idx, column=7, value=r.remark or '').border = thin
+
+    for col_letter, w in [('A',12),('B',10),('C',8),('D',8),('E',16),('F',14),('G',30)]:
+        ws2.column_dimensions[col_letter].width = w
+
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename="molding_loss_{year}{month:02d}.xlsx"'
+    wb.save(response)
+    return response
+
+
+@wms_permission_required('can_wms_stock_view')
 def api_molding_cavity(request):
     """성형 마스터에서 품번의 캐비티수 조회 (금형 등록 시 cv_count 자동입력용)"""
     from .models import MoldingMaster

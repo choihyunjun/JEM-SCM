@@ -304,7 +304,12 @@
 
     <!-- 3. Loss Breakdown -->
     <div class="chart-card">
-        <div class="chart-title"><i class="bi bi-pie-chart-fill"></i>유실 사유별 비율</div>
+        <div class="chart-title d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-pie-chart-fill"></i>유실 사유별 비율</span>
+            <a href="{% url 'material:molding_loss_excel' %}?year={{ year }}&month={{ month }}" class="btn btn-sm btn-outline-success py-0 px-2" style="font-size:0.75rem;font-weight:normal;">
+                <i class="bi bi-file-earmark-excel me-1"></i>엑셀
+            </a>
+        </div>
         <div class="chart-container">
             <canvas id="chartLoss"></canvas>
         </div>
