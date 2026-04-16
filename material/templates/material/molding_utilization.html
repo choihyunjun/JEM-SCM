@@ -60,6 +60,14 @@
                     <span class="badge bg-light text-dark border small">
                         기준시간: 주간 {{ setting.day_shift_minutes }}분 / 야간 {{ setting.night_shift_minutes }}분 / 근무일 {{ setting.work_days }}일
                     </span>
+                    <div class="btn-group btn-group-sm ms-2" role="group">
+                        <button type="button" class="btn btn-outline-secondary btn-sm active" id="btnTimeSettingU" onclick="toggleTimeBaseU('setting')" style="font-size:0.72rem;">
+                            설정 기준 ({{ setting.work_days }}일)
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnTimeActualU" onclick="toggleTimeBaseU('actual')" style="font-size:0.72rem;">
+                            실적 기준 ({{ actual_work_days }}일)
+                        </button>
+                    </div>
                 </div>
             </form>
         </div>
@@ -79,7 +87,8 @@
             <div class="card shadow-sm border-start border-success border-4">
                 <div class="card-body text-center">
                     <div class="text-muted small">시간가동률</div>
-                    <div class="fs-2 fw-bold text-success">{{ overall_time|floatformat:1 }}%</div>
+                    <div class="fs-2 fw-bold text-success" id="kpiTimeValueU"
+                         data-setting="{{ overall_time|floatformat:1 }}" data-actual="{{ overall_time_actual|floatformat:1 }}">{{ overall_time|floatformat:1 }}%</div>
                 </div>
             </div>
         </div>
@@ -180,7 +189,7 @@
                                 {% if ms.avg_util > 0 %}{{ ms.avg_util|floatformat:1 }}%{% else %}-{% endif %}
                             </td>
                             {% if ms.show_time_cell %}
-                            <td rowspan="{{ ms.time_rowspan }}" class="align-middle {% if ms.machine_time_rate >= 90 %}text-success{% elif ms.machine_time_rate >= 70 %}text-warning{% elif ms.machine_time_rate > 0 %}text-danger{% endif %}">
+                            <td rowspan="{{ ms.time_rowspan }}" class="align-middle machine-time-cell" data-setting="{{ ms.machine_time_rate|floatformat:1 }}" data-actual="{{ ms.machine_time_rate_actual|floatformat:1 }}">
                                 {% if ms.machine_time_rate > 0 %}{{ ms.machine_time_rate|floatformat:1 }}%{% else %}-{% endif %}
                             </td>
                             {% endif %}
@@ -205,7 +214,7 @@
                             <td style="background:#e9ecef;" class="{% if group.avg_util >= 90 %}text-success{% elif group.avg_util >= 70 %}text-warning{% elif group.avg_util > 0 %}text-danger{% endif %}">
                                 {% if group.avg_util > 0 %}{{ group.avg_util|floatformat:1 }}%{% else %}-{% endif %}
                             </td>
-                            <td style="background:#e9ecef;" class="{% if group.avg_time >= 90 %}text-success{% elif group.avg_time >= 70 %}text-warning{% elif group.avg_time > 0 %}text-danger{% endif %}">
+                            <td style="background:#e9ecef;" class="machine-time-cell" data-setting="{{ group.avg_time|floatformat:1 }}" data-actual="{{ group.avg_time_actual|floatformat:1 }}">
                                 {% if group.avg_time > 0 %}{{ group.avg_time|floatformat:1 }}%{% else %}-{% endif %}
                             </td>
                             <td style="background:#e9ecef;"></td>
@@ -220,7 +229,7 @@
                             <td class="text-start sticky-col">합계</td>
                             <td>{{ total_machines }}대</td>
                             <td>{% if overall_util > 0 %}{{ overall_util|floatformat:1 }}%{% else %}-{% endif %}</td>
-                            <td>{% if overall_time > 0 %}{{ overall_time|floatformat:1 }}%{% else %}-{% endif %}</td>
+                            <td class="machine-time-cell" data-setting="{{ overall_time|floatformat:1 }}" data-actual="{{ overall_time_actual|floatformat:1 }}">{% if overall_time > 0 %}{{ overall_time|floatformat:1 }}%{% else %}-{% endif %}</td>
                             <td></td>
                             {% for d in day_range %}<td></td>{% endfor %}
                         </tr>
@@ -727,6 +736,25 @@ function deleteMachine(id, code) {
     }).then(r=>r.json()).then(data => {
         if (data.success) loadMachineList();
         else alert(data.error);
+    });
+}
+
+function toggleTimeBaseU(mode) {
+    document.getElementById('btnTimeSettingU').classList.toggle('active', mode === 'setting');
+    document.getElementById('btnTimeActualU').classList.toggle('active', mode === 'actual');
+
+    // KPI 카드
+    var kpi = document.getElementById('kpiTimeValueU');
+    kpi.textContent = kpi.dataset[mode] + '%';
+
+    // 호기별 + 소계 + 합계
+    document.querySelectorAll('.machine-time-cell').forEach(function(td) {
+        var v = parseFloat(td.dataset[mode]);
+        td.textContent = v > 0 ? v.toFixed(1) + '%' : '-';
+        td.className = 'machine-time-cell align-middle';
+        if (v >= 90) td.classList.add('text-success');
+        else if (v >= 70) td.classList.add('text-warning');
+        else if (v > 0) td.classList.add('text-danger');
     });
 }
 </script>

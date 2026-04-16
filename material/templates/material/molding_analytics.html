@@ -201,6 +201,16 @@
         </select>
         <button type="submit" class="btn-search"><i class="bi bi-search me-1"></i>조회</button>
     </form>
+    <div class="ms-3 d-flex align-items-center gap-1">
+        <div class="btn-group btn-group-sm" role="group">
+            <button type="button" class="btn btn-outline-light btn-sm active" id="btnTimeSetting" onclick="toggleTimeBase('setting')" style="font-size:0.75rem;padding:4px 10px;">
+                설정 기준 ({{ setting_work_days }}일)
+            </button>
+            <button type="button" class="btn btn-outline-light btn-sm" id="btnTimeActual" onclick="toggleTimeBase('actual')" style="font-size:0.75rem;padding:4px 10px;">
+                실적 기준 ({{ actual_work_days }}일)
+            </button>
+        </div>
+    </div>
 </div>
 
 <!-- KPI -->
@@ -220,10 +230,12 @@
                         <div class="fw-bold {% if kpi_utilization >= 90 %}text-success{% elif kpi_utilization >= 70 %}text-warning{% else %}text-danger{% endif %}" style="font-size:1.6rem;">{{ kpi_utilization }}%</div>
                         <div style="font-size:0.65rem;color:#aaa;">가동시간 / 부하시간</div>
                     </td>
-                    <td style="width:20%;border-right:2px solid #dee2e6;">
+                    <td style="width:20%;border-right:2px solid #dee2e6;" id="kpiTimeCell">
                         <div class="text-muted" style="font-size:0.7rem;">시간가동률</div>
-                        <div class="fw-bold {% if kpi_time_rate >= 50 %}text-success{% elif kpi_time_rate >= 30 %}text-warning{% else %}text-danger{% endif %}" style="font-size:1.6rem;">{{ kpi_time_rate }}%</div>
-                        <div style="font-size:0.65rem;color:#aaa;">가동시간 / 전체근무시간</div>
+                        <div class="fw-bold" id="kpiTimeValue"
+                             data-setting="{{ kpi_time_rate }}" data-actual="{{ kpi_time_rate_actual }}"
+                             style="font-size:1.6rem;">{{ kpi_time_rate }}%</div>
+                        <div style="font-size:0.65rem;color:#aaa;" id="kpiTimeSub">가동시간 / 전체근무시간 ({{ setting_work_days }}일)</div>
                     </td>
                     <td style="width:20%;">
                         <div class="text-muted" style="font-size:0.7rem;">계획정지</div>
@@ -271,10 +283,10 @@
                     </td>
                     {% endfor %}
                 </tr>
-                <tr>
+                <tr id="tonnageTimeRow">
                     <td class="fw-bold">시간가동률</td>
                     {% for t in tonnage_table %}
-                    <td class="{% if t.time_rate >= 90 %}text-success{% elif t.time_rate >= 70 %}text-warning{% elif t.time_rate > 0 %}text-danger{% endif %}">
+                    <td class="tonnage-time-cell" data-setting="{{ t.time_rate }}" data-actual="{{ t.time_rate_actual }}">
                         {% if t.time_rate > 0 %}{{ t.time_rate }}%{% else %}-{% endif %}
                     </td>
                     {% endfor %}
@@ -897,5 +909,36 @@ document.addEventListener('DOMContentLoaded', function() {
     }, 700);
 
 });
+
+function toggleTimeBase(mode) {
+    var btnS = document.getElementById('btnTimeSetting');
+    var btnA = document.getElementById('btnTimeActual');
+    btnS.classList.toggle('active', mode === 'setting');
+    btnA.classList.toggle('active', mode === 'actual');
+
+    // KPI 카드
+    var kpiEl = document.getElementById('kpiTimeValue');
+    var val = parseFloat(kpiEl.dataset[mode]);
+    kpiEl.textContent = val + '%';
+    kpiEl.className = 'fw-bold';
+    if (val >= 50) kpiEl.classList.add('text-success');
+    else if (val >= 30) kpiEl.classList.add('text-warning');
+    else kpiEl.classList.add('text-danger');
+
+    var subEl = document.getElementById('kpiTimeSub');
+    subEl.textContent = mode === 'setting'
+        ? '가동시간 / 전체근무시간 ({{ setting_work_days }}일)'
+        : '가동시간 / 실적근무시간 ({{ actual_work_days }}일)';
+
+    // 톤수별 테이블
+    document.querySelectorAll('.tonnage-time-cell').forEach(function(td) {
+        var v = parseFloat(td.dataset[mode]);
+        td.textContent = v > 0 ? v + '%' : '-';
+        td.className = 'tonnage-time-cell';
+        if (v >= 90) td.classList.add('text-success');
+        else if (v >= 70) td.classList.add('text-warning');
+        else if (v > 0) td.classList.add('text-danger');
+    });
+}
 </script>
 {% endblock %}

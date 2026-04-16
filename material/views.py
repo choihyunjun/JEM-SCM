@@ -7977,6 +7977,7 @@ def molding_utilization(request):
     ).select_related('machine').prefetch_related('loss_details')
 
     setting = MoldingWorkSetting.get_setting(year, month)
+    actual_work_days_util = len(set(r.date for r in records))
 
     # 실적 있는 호기 ID
     active_machine_ids = set(r.machine_id for r in records)
@@ -8023,6 +8024,8 @@ def molding_utilization(request):
             # 시간가동률 = (부하시간 - 유실시간) / 근무시간 (주간+야간 전체)
             total_work = setting.work_days * (setting.day_shift_minutes + setting.night_shift_minutes)
             avg_time = ((total_load - total_loss) / total_work * 100) if total_work else 0
+            total_work_actual = actual_work_days_util * (setting.day_shift_minutes + setting.night_shift_minutes)
+            avg_time_actual = ((total_load - total_loss) / total_work_actual * 100) if total_work_actual else 0
 
             daily_map = {r.date.day: r for r in s_records}
             daily_list = []
@@ -8044,6 +8047,7 @@ def molding_utilization(request):
             tonnage_groups[tonnage]['rows'].append({
                 'machine': m, 'shift': shift,
                 'active_days': active_days, 'avg_util': avg_util, 'avg_time': avg_time,
+                'avg_time_actual': avg_time_actual,
                 'daily': daily_list,
             })
             if active_days > 0:
@@ -8064,9 +8068,11 @@ def molding_utilization(request):
         for machine_id, rows_for_machine in machine_rows_map.items():
             # 주+야 합산 시간가동률
             combined_time = sum(r['avg_time'] or 0 for r in rows_for_machine)
+            combined_time_actual = sum(r.get('avg_time_actual', 0) or 0 for r in rows_for_machine)
             shift_count = len(rows_for_machine)
             for idx, r in enumerate(rows_for_machine):
                 r['machine_time_rate'] = combined_time
+                r['machine_time_rate_actual'] = combined_time_actual
                 # 첫 번째 행에만 표시 (rowspan)
                 r['show_time_cell'] = (idx == 0)
                 r['time_rowspan'] = shift_count if idx == 0 else 0
@@ -8086,6 +8092,8 @@ def molding_utilization(request):
         all_count = tonnage_all_count.get(t, g['machine_count'])
         total_work_all = all_count * work_per_machine
         g['avg_time'] = (net / total_work_all * 100) if total_work_all else 0
+        total_work_all_actual = all_count * actual_work_days_util * (setting.day_shift_minutes + setting.night_shift_minutes)
+        g['avg_time_actual'] = (net / total_work_all_actual * 100) if total_work_all_actual else 0
         g['all_machine_count'] = all_count
 
     # 기존 machine_summary 호환 (플랫 리스트)
@@ -8103,6 +8111,11 @@ def molding_utilization(request):
     work_per_machine = setting.work_days * (setting.day_shift_minutes + setting.night_shift_minutes)
     overall_work = total_machines_count * work_per_machine
     overall_time = (net_all / overall_work * 100) if overall_work else 0
+    # 실적 기준 시간가동률
+    actual_work_days_util = len(set(r.date for r in records))
+    work_per_machine_actual = actual_work_days_util * (setting.day_shift_minutes + setting.night_shift_minutes)
+    overall_work_actual = total_machines_count * work_per_machine_actual
+    overall_time_actual = (net_all / overall_work_actual * 100) if overall_work_actual else 0
 
     # 톤수별 집계
     tonnage_summary = {}
@@ -8135,6 +8148,8 @@ def molding_utilization(request):
         'machine_summary': machine_summary,
         'overall_util': overall_util,
         'overall_time': overall_time,
+        'overall_time_actual': overall_time_actual,
+        'actual_work_days': actual_work_days_util,
         'tonnage_list': tonnage_list,
         'total_machines': machines.count(),
         'sync_logs': sync_logs,
@@ -8558,6 +8573,11 @@ def molding_analytics(request):
     work_per_machine = setting.work_days * (setting.day_shift_minutes + setting.night_shift_minutes)
     total_work_capacity = all_machines * work_per_machine
     kpi_time_rate = round(total_operating / total_work_capacity * 100, 1) if total_work_capacity else 0
+    # 실적 기준 시간가동률 (실제 데이터가 있는 일수 기준)
+    actual_work_days = len(set(r.date for r in records_list))
+    work_per_machine_actual = actual_work_days * (setting.day_shift_minutes + setting.night_shift_minutes)
+    total_work_capacity_actual = all_machines * work_per_machine_actual
+    kpi_time_rate_actual = round(total_operating / total_work_capacity_actual * 100, 1) if total_work_capacity_actual else 0
     kpi_total_loss_hours = round(total_loss / 60, 1)
 
     # 계획정지 = 유실사유 중 '계획정지'
@@ -8712,9 +8732,11 @@ def molding_analytics(request):
         util = round(td['operating'] / td['base'] * 100, 1) if td['base'] else 0
         time_cap = count * setting.work_days * (setting.day_shift_minutes + setting.night_shift_minutes)
         time_r = round(td['operating'] / time_cap * 100, 1) if time_cap else 0
+        time_cap_actual = count * actual_work_days * (setting.day_shift_minutes + setting.night_shift_minutes)
+        time_r_actual = round(td['operating'] / time_cap_actual * 100, 1) if time_cap_actual else 0
         tonnage_table.append({
             'tonnage': t, 'count': count, 'active_count': active_count,
-            'util': util, 'time_rate': time_r,
+            'util': util, 'time_rate': time_r, 'time_rate_actual': time_r_actual,
         })
 
     # ─── 년도 목록 ───
@@ -8727,7 +8749,10 @@ def molding_analytics(request):
         # KPI
         'kpi_utilization': kpi_utilization,
         'kpi_time_rate': kpi_time_rate,
+        'kpi_time_rate_actual': kpi_time_rate_actual,
         'kpi_total_loss_hours': kpi_total_loss_hours,
+        'actual_work_days': actual_work_days,
+        'setting_work_days': setting.work_days,
         'kpi_planned_hours': kpi_planned_hours,
         'kpi_actual_loss_hours': kpi_actual_loss_hours,
         'total_records': len(records_list),
