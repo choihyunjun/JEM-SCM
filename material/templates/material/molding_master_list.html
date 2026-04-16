@@ -224,11 +224,14 @@
                         <div class="col-12 mt-2"><h6 class="fw-bold text-primary border-bottom pb-1 mb-2">재료 정보</h6></div>
                         <div class="col-md-3">
                             <label class="form-label small fw-bold">재료품번</label>
-                            <input type="text" name="material_part_no" id="editMaterialPartNo" class="form-control form-control-sm">
+                            <div class="input-group input-group-sm">
+                                <input type="text" name="material_part_no" id="editMaterialPartNo" class="form-control form-control-sm" readonly style="background:#f7fafc;cursor:pointer;" placeholder="클릭하여 검색" onclick="openMaterialSearchModal()">
+                                <button type="button" class="btn btn-outline-secondary" onclick="openMaterialSearchModal()"><i class="bi bi-search"></i></button>
+                            </div>
                         </div>
                         <div class="col-md-3">
                             <label class="form-label small fw-bold">재료품명</label>
-                            <input type="text" name="material_name" id="editMaterialName" class="form-control form-control-sm">
+                            <input type="text" name="material_name" id="editMaterialName" class="form-control form-control-sm" readonly style="background:#f7fafc;">
                         </div>
                         <div class="col-md-3">
                             <label class="form-label small fw-bold">설비호기</label>
@@ -255,8 +258,8 @@
                             <input type="number" name="cavity" id="editCavity" class="form-control form-control-sm" value="0">
                         </div>
                         <div class="col-md-2">
-                            <label class="form-label small fw-bold">ST</label>
-                            <input type="number" step="0.01" name="shot_time" id="editShotTime" class="form-control form-control-sm" value="0">
+                            <label class="form-label small fw-bold">ST <small class="text-muted">자동</small></label>
+                            <input type="number" step="0.01" name="shot_time" id="editShotTime" class="form-control form-control-sm" value="0" readonly style="background:#f7fafc;">
                         </div>
                         <div class="col-md-2">
                             <label class="form-label small fw-bold">게이트</label>
@@ -324,6 +327,28 @@
                     <input type="text" id="partSearchInput" class="form-control form-control-sm" placeholder="품번 또는 품명을 2자 이상 입력하세요" autocomplete="off">
                 </div>
                 <div id="partSearchResults" style="max-height:400px;overflow-y:auto;">
+                    <div class="text-center text-muted py-3 small">
+                        <i class="bi bi-info-circle me-1"></i>검색어를 입력하면 결과가 표시됩니다.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 재료 검색 모달 -->
+<div class="modal fade" id="materialSearchModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title fw-bold"><i class="bi bi-search me-1"></i>재료 품번 검색</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2">
+                    <input type="text" id="materialSearchInput" class="form-control form-control-sm" placeholder="재료 품번 또는 품명을 2자 이상 입력하세요" autocomplete="off">
+                </div>
+                <div id="materialSearchResults" style="max-height:400px;overflow-y:auto;">
                     <div class="text-center text-muted py-3 small">
                         <i class="bi bi-info-circle me-1"></i>검색어를 입력하면 결과가 표시됩니다.
                     </div>
@@ -460,23 +485,37 @@ function toggleManualMode() {
     var checked = document.getElementById('manualModeCheck').checked;
     var partInput = document.getElementById('editPartNo');
     var searchBtn = document.getElementById('partSearchBtn');
+    var matInput = document.getElementById('editMaterialPartNo');
+    var matNameInput = document.getElementById('editMaterialName');
 
     if (checked) {
-        // 수기입력 모드: 품번 직접 편집 가능, 검색 버튼 비활성화
         partInput.readOnly = false;
         partInput.style.background = '';
         partInput.style.cursor = '';
         partInput.placeholder = '품번 직접 입력';
         partInput.onclick = null;
         if (searchBtn) searchBtn.disabled = true;
+        matInput.readOnly = false;
+        matInput.style.background = '';
+        matInput.style.cursor = '';
+        matInput.placeholder = '재료품번 직접 입력';
+        matInput.onclick = null;
+        matNameInput.readOnly = false;
+        matNameInput.style.background = '';
     } else {
-        // 검색 모드: 품번 검색만 가능
         partInput.readOnly = true;
         partInput.style.background = '#f7fafc';
         partInput.style.cursor = 'pointer';
         partInput.placeholder = '클릭하여 검색';
         partInput.onclick = openPartSearchModal;
         if (searchBtn) searchBtn.disabled = false;
+        matInput.readOnly = true;
+        matInput.style.background = '#f7fafc';
+        matInput.style.cursor = 'pointer';
+        matInput.placeholder = '클릭하여 검색';
+        matInput.onclick = openMaterialSearchModal;
+        matNameInput.readOnly = true;
+        matNameInput.style.background = '#f7fafc';
     }
 }
 
@@ -602,6 +641,62 @@ function setupAutocomplete(inputId, dropdownId, dataList) {
 
 setupAutocomplete('searchPartNo', 'partNoDropdown', partNos);
 setupAutocomplete('searchMaterialNo', 'materialNoDropdown', materialNos);
+
+// ─── 재료 검색 모달 ───
+function openMaterialSearchModal() {
+    if (document.getElementById('manualModeCheck').checked) return;
+    document.getElementById('materialSearchInput').value = '';
+    document.getElementById('materialSearchResults').innerHTML = '<div class="text-center text-muted py-3 small"><i class="bi bi-info-circle me-1"></i>검색어를 입력하면 결과가 표시됩니다.</div>';
+    new bootstrap.Modal(document.getElementById('materialSearchModal')).show();
+    setTimeout(function() { document.getElementById('materialSearchInput').focus(); }, 300);
+}
+
+var matSearchTimer;
+document.getElementById('materialSearchInput').addEventListener('input', function() {
+    clearTimeout(matSearchTimer);
+    var q = this.value.trim();
+    if (q.length < 2) {
+        document.getElementById('materialSearchResults').innerHTML = '<div class="text-center text-muted py-3 small">2자 이상 입력하세요.</div>';
+        return;
+    }
+    matSearchTimer = setTimeout(function() {
+        fetch('{% url "material:api_part_search" %}?q=' + encodeURIComponent(q) + '&limit=30')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var html = '';
+                if (!data.results || !data.results.length) {
+                    html = '<div class="text-center text-muted py-3">검색 결과가 없습니다.</div>';
+                } else {
+                    html = '<table class="table table-sm table-hover mb-0" style="font-size:0.8rem;"><thead><tr><th>품번</th><th>품명</th><th>품목</th></tr></thead><tbody>';
+                    data.results.forEach(function(p) {
+                        html += '<tr style="cursor:pointer;" onclick="selectMaterial(\'' + p.part_no + '\',\'' + (p.part_name||'').replace(/'/g,"\\'") + '\')">';
+                        html += '<td class="fw-bold text-primary">' + p.part_no + '</td>';
+                        html += '<td>' + (p.part_name||'') + '</td>';
+                        html += '<td>' + (p.part_group||'') + '</td>';
+                        html += '</tr>';
+                    });
+                    html += '</tbody></table>';
+                }
+                document.getElementById('materialSearchResults').innerHTML = html;
+            });
+    }, 300);
+});
+
+function selectMaterial(partNo, partName) {
+    document.getElementById('editMaterialPartNo').value = partNo;
+    document.getElementById('editMaterialName').value = partName;
+    bootstrap.Modal.getInstance(document.getElementById('materialSearchModal')).hide();
+}
+
+// ─── ST 자동 계산: CT / 캐비티수 ───
+function calcST() {
+    var ct = parseFloat(document.getElementById('editCycleTime').value) || 0;
+    var cavity = parseInt(document.getElementById('editCavity').value) || 0;
+    var st = (ct > 0 && cavity > 0) ? (ct / cavity) : 0;
+    document.getElementById('editShotTime').value = Math.round(st * 100) / 100;
+}
+document.getElementById('editCycleTime').addEventListener('input', calcST);
+document.getElementById('editCavity').addEventListener('input', calcST);
 </script>
 
 <style>
