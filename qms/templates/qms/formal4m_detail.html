@@ -281,7 +281,7 @@
                     {% for it in items %}
                     <tr>
                         <td class="text-center fw-bold bg-light">{{ it.seq }}</td>
-                        <td><div class="fw-semibold">{{ it.name }}</div><div class="text-muted" style="font-size: 0.8rem;">{% if it.is_required %}필수{% else %}선택{% endif %}</div></td>
+                        <td class="fw-semibold">{{ it.name }}</td>
                         <td>
                             {% if it.attachments.all %}<ul class="mb-2 ps-3">{% for a in it.attachments.all %}<li><a href="{{ a.file.url }}" target="_blank">파일보기</a> <span class="text-muted" style="font-size: 0.75rem;">({{ a.uploaded_at|date:"m-d" }})</span></li>{% endfor %}</ul>{% else %}<div class="text-muted">-</div>{% endif %}
                             {% if formal.approval_status != 'APPROVED' and formal.approval_status != 'PENDING_APPROVE' %}
