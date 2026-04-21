@@ -9705,15 +9705,13 @@ def mold_mt_erp_sync(request):
     for m in MoldMasterModel.objects.filter(is_active=True):
         mold_map[m.part_no] = m
 
-    # ERP 데이터 집계: part_no별 생산수량 합계 (양품 + 불량)
+    # ERP 데이터 집계: part_no별 총 생산수량 (workQt = 양품+불량 포함)
     part_qty_agg = {}
     for r in data:
         item_cd = (r.get('itemCd') or '').strip()
-        good_qt = int(float(r.get('goodQt', 0) or 0))
-        bad_qt = int(float(r.get('badQt', 0) or 0))
-        total_qt = good_qt + bad_qt
-        if item_cd and total_qt > 0:
-            part_qty_agg[item_cd] = part_qty_agg.get(item_cd, 0) + total_qt
+        work_qt = int(float(r.get('workQt', 0) or 0))
+        if item_cd and work_qt > 0:
+            part_qty_agg[item_cd] = part_qty_agg.get(item_cd, 0) + work_qt
 
     synced = 0
     skipped = 0

@@ -178,11 +178,9 @@ class Command(BaseCommand):
         part_qty_agg = {}
         for r in data:
             item_cd = (r.get('itemCd') or '').strip()
-            good_qt = int(float(r.get('goodQt', 0) or 0))
-            bad_qt = int(float(r.get('badQt', 0) or 0))
-            total_qt = good_qt + bad_qt
-            if item_cd and total_qt > 0:
-                part_qty_agg[item_cd] = part_qty_agg.get(item_cd, 0) + total_qt
+            work_qt = int(float(r.get('workQt', 0) or 0))
+            if item_cd and work_qt > 0:
+                part_qty_agg[item_cd] = part_qty_agg.get(item_cd, 0) + work_qt
 
         synced = 0
         with transaction.atomic():
