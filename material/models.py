@@ -927,6 +927,7 @@ class MoldingDailyRecord(models.Model):
     time_rate = models.FloatField("시간가동률(%)", default=0)
     product_part_no = models.CharField("생산품번", max_length=500, blank=True)
     product_qty = models.IntegerField("생산수량", default=0)
+    defect_qty = models.IntegerField("불량수량", default=0)
     shift = models.CharField("근무구분", max_length=10, choices=[('주간', '주간'), ('야간', '야간')], default='주간')
     erp_synced = models.BooleanField("ERP동기화여부", default=False)
     input_completed = models.BooleanField("입력완료", default=False)

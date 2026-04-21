@@ -8237,10 +8237,11 @@ def molding_erp_sync(request):
 
                 key = (machine_code, rcv_dt, shift)
                 if key not in daily_agg:
-                    daily_agg[key] = {'part_qty': {}, 'tonnage': 0}
+                    daily_agg[key] = {'part_qty': {}, 'tonnage': 0, 'bad_qty': 0}
                 item_cd = r.get('itemCd', '')
                 qty = int(r.get('rcvQt', 0) or 0)
                 daily_agg[key]['part_qty'][item_cd] = daily_agg[key]['part_qty'].get(item_cd, 0) + qty
+                daily_agg[key]['bad_qty'] += int(float(r.get('badQt', 0) or 0))
 
             # 호기 마스터 갱신 및 레코드 생성
             record_count = 0
@@ -8274,6 +8275,7 @@ def molding_erp_sync(request):
                     f"{p}: {q:,}" for p, q in sorted(part_qty.items())
                 )[:500]
                 record.product_qty = sum(part_qty.values())
+                record.defect_qty = agg['bad_qty']
                 record.erp_synced = True
                 if not record.input_completed:
                     record.base_minutes = base_min
@@ -9693,13 +9695,15 @@ def mold_mt_erp_sync(request):
     for m in MoldMasterModel.objects.filter(is_active=True):
         mold_map[m.part_no] = m
 
-    # ERP 데이터 집계: part_no별 생산수량 합계
+    # ERP 데이터 집계: part_no별 생산수량 합계 (양품 + 불량)
     part_qty_agg = {}
     for r in data:
         item_cd = (r.get('itemCd') or '').strip()
         rcv_qt = int(r.get('rcvQt', 0) or 0)
-        if item_cd and rcv_qt > 0:
-            part_qty_agg[item_cd] = part_qty_agg.get(item_cd, 0) + rcv_qt
+        bad_qt = int(float(r.get('badQt', 0) or 0))
+        total_qt = rcv_qt + bad_qt  # 양품 + 불량 = 총 생산수량
+        if item_cd and total_qt > 0:
+            part_qty_agg[item_cd] = part_qty_agg.get(item_cd, 0) + total_qt
 
     synced = 0
     skipped = 0
