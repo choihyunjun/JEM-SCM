@@ -2146,7 +2146,7 @@ def api_process_tag_scan(request):
                     'lot_no': str(lot_no) if lot_no else '',
                     'status': rm_label.get_status_display(),
                     'scan_count': 1,
-                    'printed_at': rm_label.printed_at.strftime('%Y-%m-%d %H:%M') if rm_label.printed_at else '',
+                    'printed_at': timezone.localtime(rm_label.printed_at).strftime('%Y-%m-%d %H:%M') if rm_label.printed_at else '',
                     'used_at': timezone.now().strftime('%Y-%m-%d %H:%M'),
                     'target_warehouse': wh_to.code,
                 }
@@ -2474,7 +2474,7 @@ def api_process_tag_scan(request):
                 'lot_no': str(lot_no_t) if lot_no_t else '',
                 'status': tag.get_status_display(),
                 'scan_count': tag.scan_count,
-                'printed_at': tag.printed_at.strftime('%Y-%m-%d %H:%M') if tag.printed_at else '',
+                'printed_at': timezone.localtime(tag.printed_at).strftime('%Y-%m-%d %H:%M') if tag.printed_at else '',
                 'used_at': timezone.now().strftime('%Y-%m-%d %H:%M'),
                 'target_warehouse': wh_to_tag.code,
             }
@@ -2513,7 +2513,7 @@ def api_process_tag_info(request, tag_id):
     # 스캔 이력 조회 (최근 10건)
     scan_logs = tag.scan_logs.select_related('scanned_by', 'warehouse')[:10]
     logs_data = [{
-        'scanned_at': log.scanned_at.strftime('%Y-%m-%d %H:%M:%S'),
+        'scanned_at': timezone.localtime(log.scanned_at).strftime('%Y-%m-%d %H:%M:%S'),
         'scanned_by': log.scanned_by.username if log.scanned_by else '-',
         'warehouse': log.warehouse.name if log.warehouse else '-',
         'is_first_scan': log.is_first_scan,
@@ -2529,9 +2529,9 @@ def api_process_tag_info(request, tag_id):
             'lot_no': str(tag.lot_no) if tag.lot_no else '',
             'status': tag.get_status_display(),
             'scan_count': tag.scan_count,
-            'printed_at': tag.printed_at.strftime('%Y-%m-%d %H:%M'),
+            'printed_at': timezone.localtime(tag.printed_at).strftime('%Y-%m-%d %H:%M'),
             'printed_by': tag.printed_by.username if tag.printed_by else '-',
-            'used_at': tag.used_at.strftime('%Y-%m-%d %H:%M') if tag.used_at else None,
+            'used_at': timezone.localtime(tag.used_at).strftime('%Y-%m-%d %H:%M') if tag.used_at else None,
             'used_by': tag.used_by.username if tag.used_by else '-',
         },
         'scan_logs': logs_data
@@ -2562,7 +2562,7 @@ def api_scan_history_by_part(request):
                 'part_name': t.part_name,
                 'lot_no': str(t.lot_no) if t.lot_no else '-',
                 'quantity': t.quantity,
-                'used_at': t.used_at.strftime('%Y-%m-%d %H:%M') if t.used_at else '-',
+                'used_at': timezone.localtime(t.used_at).strftime('%Y-%m-%d %H:%M') if t.used_at else '-',
                 'used_by': t.used_by.username if t.used_by else '-',
                 'stock_reflected': t.stock_reflected,
             })
@@ -2576,7 +2576,7 @@ def api_scan_history_by_part(request):
                 'part_name': lbl.part_name,
                 'lot_no': lbl.lot_no.strftime('%Y-%m-%d') if lbl.lot_no else '-',
                 'quantity': float(lbl.quantity),
-                'used_at': lbl.used_at.strftime('%Y-%m-%d %H:%M') if lbl.used_at else '-',
+                'used_at': timezone.localtime(lbl.used_at).strftime('%Y-%m-%d %H:%M') if lbl.used_at else '-',
                 'used_by': lbl.used_by.username if lbl.used_by else '-',
                 'stock_reflected': False,
             })
@@ -2594,7 +2594,7 @@ def api_scan_history_by_part(request):
             'tag_id': t.tag_id,
             'lot_no': str(t.lot_no) if t.lot_no else '-',
             'quantity': t.quantity,
-            'used_at': t.used_at.strftime('%Y-%m-%d %H:%M') if t.used_at else '-',
+            'used_at': timezone.localtime(t.used_at).strftime('%Y-%m-%d %H:%M') if t.used_at else '-',
             'used_by': t.used_by.username if t.used_by else '-',
             'stock_reflected': t.stock_reflected,
         })
@@ -2608,7 +2608,7 @@ def api_scan_history_by_part(request):
             'tag_id': lbl.label_id,
             'lot_no': lbl.lot_no.strftime('%Y-%m-%d') if lbl.lot_no else '-',
             'quantity': float(lbl.quantity),
-            'used_at': lbl.used_at.strftime('%Y-%m-%d %H:%M') if lbl.used_at else '-',
+            'used_at': timezone.localtime(lbl.used_at).strftime('%Y-%m-%d %H:%M') if lbl.used_at else '-',
             'used_by': lbl.used_by.username if lbl.used_by else '-',
             'stock_reflected': False,
         })
@@ -7055,7 +7055,7 @@ def api_labels_for_lot(request):
             'unit': lb.get_unit_display(),
             'expiry_date': lb.expiry_date.strftime('%Y-%m-%d') if lb.expiry_date else None,
             'd_day': d_day,
-            'printed_at': lb.printed_at.strftime('%Y-%m-%d %H:%M') if lb.printed_at else None,
+            'printed_at': timezone.localtime(lb.printed_at).strftime('%Y-%m-%d %H:%M') if lb.printed_at else None,
         })
 
     for tag in tags:
@@ -7067,7 +7067,7 @@ def api_labels_for_lot(request):
             'unit': 'EA',
             'expiry_date': None,
             'd_day': None,
-            'printed_at': tag.printed_at.strftime('%Y-%m-%d %H:%M') if tag.printed_at else None,
+            'printed_at': timezone.localtime(tag.printed_at).strftime('%Y-%m-%d %H:%M') if tag.printed_at else None,
         })
 
     # 발행일 기준 정렬 (오래된 것 먼저 = FIFO)
@@ -7214,7 +7214,7 @@ def api_transfer_detail(request, trx_id):
         'trx': {
             'transaction_no': trx.transaction_no,
             'transaction_type': trx.transaction_type,
-            'date': trx.date.strftime('%Y-%m-%d %H:%M'),
+            'date': timezone.localtime(trx.date).strftime('%Y-%m-%d %H:%M'),
             'part_no': trx.part.part_no,
             'part_name': trx.part.part_name,
             'quantity': int(trx.quantity),
@@ -10064,7 +10064,7 @@ def mold_repair_detail(request, pk):
         'request_content': obj.request_content,
         'repair_types': obj.repair_type_list,
         'requested_by': obj.requested_by.get_full_name() or obj.requested_by.username if obj.requested_by else '-',
-        'requested_at': obj.requested_at.strftime('%Y-%m-%d %H:%M') if obj.requested_at else '',
+        'requested_at': timezone.localtime(obj.requested_at).strftime('%Y-%m-%d %H:%M') if obj.requested_at else '',
         'received_date': str(obj.received_date or ''),
         'repair_request_date': str(obj.repair_request_date or ''),
         'expected_date': str(obj.expected_date or ''),
