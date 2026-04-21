@@ -357,33 +357,38 @@ def m4_create(request):
             del form.errors["request_no"]
 
         if form.is_valid():
-            m4_instance = form.save(commit=False)
-            m4_instance.user = request.user
-            m4_instance.status = "DRAFT"
+            try:
+                m4_instance = form.save(commit=False)
+                m4_instance.user = request.user
+                m4_instance.status = "DRAFT"
 
-            if not m4_instance.request_no:
-                today_str = datetime.date.today().strftime("%Y%m%d")
-                category = request.POST.get("quality_rank", "미분류")
-                prefix = f"4M-{category}-{today_str}"
-                last_entry = (
-                    M4Request.objects.filter(request_no__startswith=prefix)
-                    .order_by("request_no")
-                    .last()
-                )
+                if not m4_instance.request_no:
+                    today_str = datetime.date.today().strftime("%Y%m%d")
+                    category = request.POST.get("quality_rank", "미분류")
+                    prefix = f"4M-{category}-{today_str}"
+                    last_entry = (
+                        M4Request.objects.filter(request_no__startswith=prefix)
+                        .order_by("request_no")
+                        .last()
+                    )
 
-                if last_entry:
-                    try:
-                        last_no = int(last_entry.request_no.split("-")[-1])
-                        new_no = f"{prefix}-{str(last_no + 1).zfill(2)}"
-                    except (ValueError, IndexError):
+                    if last_entry:
+                        try:
+                            last_no = int(last_entry.request_no.split("-")[-1])
+                            new_no = f"{prefix}-{str(last_no + 1).zfill(2)}"
+                        except (ValueError, IndexError):
+                            new_no = f"{prefix}-01"
+                    else:
                         new_no = f"{prefix}-01"
-                else:
-                    new_no = f"{prefix}-01"
-                m4_instance.request_no = new_no
+                    m4_instance.request_no = new_no
 
-            m4_instance.save()
-            messages.success(request, f"기안이 저장되었습니다. (번호: {m4_instance.request_no})")
-            return redirect("qms:m4_detail", pk=m4_instance.pk)
+                m4_instance.save()
+                messages.success(request, f"기안이 저장되었습니다. (번호: {m4_instance.request_no})")
+                return redirect("qms:m4_detail", pk=m4_instance.pk)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                messages.error(request, f"저장 중 오류: {e}")
         else:
             messages.error(request, f"등록 실패: {form.errors.as_text()}")
     else:
