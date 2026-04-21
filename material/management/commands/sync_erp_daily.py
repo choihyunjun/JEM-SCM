@@ -69,6 +69,7 @@ class Command(BaseCommand):
         }
         wr_ok, wr_data, wr_err = call_erp_api('/apiproxy/api20A03S00901', wr_body)
         work_time_agg = {}
+        bad_qty_agg = {}
         if wr_ok and wr_data:
             for r in wr_data.get('resultData', []) or []:
                 en = (r.get('equipNm') or '').strip()
@@ -82,7 +83,9 @@ class Command(BaseCommand):
                 key = (en, wr_dt, shift)
                 if key not in work_time_agg:
                     work_time_agg[key] = 0
+                    bad_qty_agg[key] = 0
                 work_time_agg[key] += int(float(r.get('workTm', 0) or 0))
+                bad_qty_agg[key] += int(float(r.get('badQt', 0) or 0))
 
         with transaction.atomic():
             molding_data = [r for r in data if re.match(r'^M\d', (r.get('equipNm') or ''))]
@@ -97,11 +100,10 @@ class Command(BaseCommand):
                 shift = '야간' if shift_nm == '야간' else '주간'
                 key = (machine_code, rcv_dt, shift)
                 if key not in daily_agg:
-                    daily_agg[key] = {'part_qty': {}, 'tonnage': 0, 'bad_qty': 0}
+                    daily_agg[key] = {'part_qty': {}, 'tonnage': 0}
                 item_cd = r.get('itemCd', '')
                 qty = int(r.get('rcvQt', 0) or 0)
                 daily_agg[key]['part_qty'][item_cd] = daily_agg[key]['part_qty'].get(item_cd, 0) + qty
-                daily_agg[key]['bad_qty'] += int(float(r.get('badQt', 0) or 0))
 
             record_count = 0
             machine_codes = set()
@@ -123,7 +125,7 @@ class Command(BaseCommand):
                     f"{p}: {q:,}" for p, q in sorted(part_qty.items())
                 )[:500]
                 record.product_qty = sum(part_qty.values())
-                record.defect_qty = agg['bad_qty']
+                record.defect_qty = bad_qty_agg.get((mc, dt_str, shift), 0)
                 record.erp_synced = True
                 if not record.input_completed:
                     record.base_minutes = base_min
@@ -149,17 +151,25 @@ class Command(BaseCommand):
         return f'{record_count}개 가동일 동기화 (호기 {len(machine_codes)}대)'
 
     def sync_mold_mt(self, year, month):
-        """금형 MT 숏트수 ERP 동기화"""
+        """금형 MT 숏트수 ERP 동기화 (생산실적 API - 양품+불량 포함)"""
         from material.models import MoldMaster, MoldShotRecord
-        from material.erp_api import fetch_erp_receipt_list
+        from material.erp_api import call_erp_api
+        from django.conf import settings as django_settings
 
         _, days_in_month = calendar.monthrange(year, month)
         date_from = f"{year}{month:02d}01"
         date_to = f"{year}{month:02d}{days_in_month:02d}"
 
-        ok, data, err = fetch_erp_receipt_list(date_from, date_to)
+        # 생산실적 API 사용 (badQt 포함)
+        body = {
+            'coCd': django_settings.ERP_COMPANY_CODE,
+            'wrDtFrom': date_from,
+            'wrDtTo': date_to,
+        }
+        ok, raw, err = call_erp_api('/apiproxy/api20A03S00901', body)
         if not ok:
             return f'ERP 조회 실패: {err}'
+        data = (raw.get('resultData', []) or []) if raw else []
         if not data:
             return '해당 기간 데이터 없음'
 
@@ -168,9 +178,9 @@ class Command(BaseCommand):
         part_qty_agg = {}
         for r in data:
             item_cd = (r.get('itemCd') or '').strip()
-            rcv_qt = int(r.get('rcvQt', 0) or 0)
+            good_qt = int(float(r.get('goodQt', 0) or 0))
             bad_qt = int(float(r.get('badQt', 0) or 0))
-            total_qt = rcv_qt + bad_qt  # 양품 + 불량 = 총 생산수량
+            total_qt = good_qt + bad_qt
             if item_cd and total_qt > 0:
                 part_qty_agg[item_cd] = part_qty_agg.get(item_cd, 0) + total_qt
 

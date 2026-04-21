@@ -8202,6 +8202,7 @@ def molding_erp_sync(request):
     }
     wr_ok, wr_data, wr_err = call_erp_api('/apiproxy/api20A03S00901', wr_body)
     work_time_agg = {}  # {(machine_code, date_str, shift): work_minutes}
+    bad_qty_agg = {}   # {(machine_code, date_str, shift): bad_qty}
     if wr_ok and wr_data:
         import re as _re2
         for r in wr_data.get('resultData', []) or []:
@@ -8216,7 +8217,9 @@ def molding_erp_sync(request):
             key = (en, wr_dt, shift)
             if key not in work_time_agg:
                 work_time_agg[key] = 0
+                bad_qty_agg[key] = 0
             work_time_agg[key] += int(float(r.get('workTm', 0) or 0))
+            bad_qty_agg[key] += int(float(r.get('badQt', 0) or 0))
 
     try:
         with transaction.atomic():
@@ -8237,11 +8240,10 @@ def molding_erp_sync(request):
 
                 key = (machine_code, rcv_dt, shift)
                 if key not in daily_agg:
-                    daily_agg[key] = {'part_qty': {}, 'tonnage': 0, 'bad_qty': 0}
+                    daily_agg[key] = {'part_qty': {}, 'tonnage': 0}
                 item_cd = r.get('itemCd', '')
                 qty = int(r.get('rcvQt', 0) or 0)
                 daily_agg[key]['part_qty'][item_cd] = daily_agg[key]['part_qty'].get(item_cd, 0) + qty
-                daily_agg[key]['bad_qty'] += int(float(r.get('badQt', 0) or 0))
 
             # 호기 마스터 갱신 및 레코드 생성
             record_count = 0
@@ -8275,7 +8277,7 @@ def molding_erp_sync(request):
                     f"{p}: {q:,}" for p, q in sorted(part_qty.items())
                 )[:500]
                 record.product_qty = sum(part_qty.values())
-                record.defect_qty = agg['bad_qty']
+                record.defect_qty = bad_qty_agg.get((mc, dt_str, shift), 0)
                 record.erp_synced = True
                 if not record.input_completed:
                     record.base_minutes = base_min
@@ -9668,9 +9670,10 @@ def api_mold_mt_edit(request, pk):
 @login_required
 @wms_permission_required('can_wms_stock_view')
 def mold_mt_erp_sync(request):
-    """ERP 생산입고 데이터로 금형 숏트수 동기화"""
+    """ERP 생산실적 데이터로 금형 숏트수 동기화 (양품+불량 포함)"""
     from .models import MoldMaster as MoldMasterModel, MoldShotRecord
-    from .erp_api import fetch_erp_receipt_list
+    from .erp_api import call_erp_api
+    from django.conf import settings as django_settings
     import calendar
 
     if request.method != 'POST':
@@ -9683,12 +9686,19 @@ def mold_mt_erp_sync(request):
     date_from = f"{year}{month:02d}01"
     date_to = f"{year}{month:02d}{days_in_month:02d}"
 
-    ok, data, err = fetch_erp_receipt_list(date_from, date_to)
+    # 생산실적 API 사용 (badQt 포함)
+    body = {
+        'coCd': django_settings.ERP_COMPANY_CODE,
+        'wrDtFrom': date_from,
+        'wrDtTo': date_to,
+    }
+    ok, raw, err = call_erp_api('/apiproxy/api20A03S00901', body)
     if not ok:
         return JsonResponse({'success': False, 'error': f'ERP 조회 실패: {err}'})
 
+    data = (raw.get('resultData', []) or []) if raw else []
     if not data:
-        return JsonResponse({'success': False, 'error': '해당 기간 생산입고 데이터가 없습니다.'})
+        return JsonResponse({'success': False, 'error': '해당 기간 생산실적 데이터가 없습니다.'})
 
     # 금형 마스터 매핑 (part_no -> MoldMaster)
     mold_map = {}
@@ -9699,9 +9709,9 @@ def mold_mt_erp_sync(request):
     part_qty_agg = {}
     for r in data:
         item_cd = (r.get('itemCd') or '').strip()
-        rcv_qt = int(r.get('rcvQt', 0) or 0)
+        good_qt = int(float(r.get('goodQt', 0) or 0))
         bad_qt = int(float(r.get('badQt', 0) or 0))
-        total_qt = rcv_qt + bad_qt  # 양품 + 불량 = 총 생산수량
+        total_qt = good_qt + bad_qt
         if item_cd and total_qt > 0:
             part_qty_agg[item_cd] = part_qty_agg.get(item_cd, 0) + total_qt
 
