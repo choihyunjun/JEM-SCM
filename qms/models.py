@@ -86,7 +86,14 @@ class M4Request(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     # 상세 정보 필드
-    factory = models.CharField(max_length=50, blank=True, null=True, verbose_name="공장")
+    FACTORY_CHOICES = [
+        ('1공장', '1공장'),
+        ('2공장', '2공장'),
+        ('3공장', '3공장'),
+        ('4공장', '4공장'),
+        ('외주', '외주'),
+    ]
+    factory = models.CharField(max_length=50, blank=True, null=True, verbose_name="공장", choices=FACTORY_CHOICES)
     product = models.CharField(max_length=50, blank=True, null=True, verbose_name="제품")
     model_name = models.CharField(max_length=50, blank=True, null=True, verbose_name="품목군")  # 차종 → 품목군
     quality_rank = models.CharField(max_length=10, blank=True, null=True, verbose_name="품질RANK")
