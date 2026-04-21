@@ -291,16 +291,18 @@
                             {% endif %}
                         </td>
                         <td class="text-center align-middle">
-                            <span class="badge {% if it.review_status == 'OK' %}bg-success{% elif it.review_status == 'REJECT' %}bg-danger{% else %}bg-secondary{% endif %} mb-2">{{ it.get_review_status_display }}</span>
-                            {% if actor.is_internal %}{% if formal.approval_status != 'APPROVED' and formal.approval_status != 'PENDING_APPROVE' %}
-                            <form class="d-print-none" action="{% url 'qms:formal4m_review_update' formal.id it.id %}" method="POST">
-                                {% csrf_token %}
-                                <div class="d-flex justify-content-center gap-1 align-items-center">
-                                    <select name="review_status" class="form-select form-select-sm" style="width: auto; min-width: 85px; font-size: 0.75rem;">{% for v, lbl in it.REVIEW_STATUS_CHOICES %}<option value="{{ v }}" {% if it.review_status == v %}selected{% endif %}>{{ lbl }}</option>{% endfor %}</select>
-                                    <button class="btn btn-sm btn-dark" type="submit" style="padding: 2px 8px; font-size: 0.75rem;">저장</button>
-                                </div>
-                            </form>
-                            {% endif %}{% endif %}
+                            <div class="d-flex justify-content-center align-items-center gap-2">
+                                <span class="badge {% if it.review_status == 'OK' %}bg-success{% elif it.review_status == 'REJECT' %}bg-danger{% else %}bg-secondary{% endif %}">{{ it.get_review_status_display }}</span>
+                                {% if actor.is_internal %}{% if formal.approval_status != 'APPROVED' and formal.approval_status != 'PENDING_APPROVE' %}
+                                <form class="d-print-none" action="{% url 'qms:formal4m_review_update' formal.id it.id %}" method="POST">
+                                    {% csrf_token %}
+                                    <div class="d-flex gap-1 align-items-center">
+                                        <select name="review_status" class="form-select form-select-sm" style="width: auto; min-width: 85px; font-size: 0.75rem;">{% for v, lbl in it.REVIEW_STATUS_CHOICES %}<option value="{{ v }}" {% if it.review_status == v %}selected{% endif %}>{{ lbl }}</option>{% endfor %}</select>
+                                        <button class="btn btn-sm btn-dark" type="submit" style="padding: 2px 8px; font-size: 0.75rem;">저장</button>
+                                    </div>
+                                </form>
+                                {% endif %}{% endif %}
+                            </div>
                         </td>
                         <td class="align-middle">
                             {% if it.remark %}<div class="mb-2" style="white-space: pre-wrap;">{{ it.remark }}</div>{% endif %}
