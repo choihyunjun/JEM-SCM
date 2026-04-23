@@ -1179,6 +1179,9 @@ def inspection_attachment_list(request):
             Q(inbound_transaction__part__part_no__icontains=q) |
             Q(inbound_transaction__part__part_name__icontains=q)
         )
+    q_vendor = request.GET.get('q_vendor', '').strip()
+    if q_vendor:
+        qs = qs.filter(inbound_transaction__vendor__name__icontains=q_vendor)
     start_date = request.GET.get('start_date', '')
     end_date = request.GET.get('end_date', '')
     if start_date:
@@ -1192,6 +1195,7 @@ def inspection_attachment_list(request):
     return render(request, 'qms/inspection_attachment_list.html', {
         'page_obj': page_obj,
         'q': q,
+        'q_vendor': q_vendor,
         'start_date': start_date,
         'end_date': end_date,
     })

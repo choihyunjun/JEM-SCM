@@ -3,34 +3,47 @@
 
 {% block qms_content %}
 <div class="container" style="max-width: 1200px;">
-    <h4 class="fw-bold mb-4"><i class="bi bi-file-earmark-text me-2"></i>성적서 조회</h4>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="fw-bold mb-0"><i class="bi bi-file-earmark-text me-2"></i>성적서 조회</h4>
+    </div>
 
-    <!-- 검색 -->
-    <form method="get" class="card border-0 shadow-sm mb-4">
-        <div class="card-body py-3">
-            <div class="row g-2 align-items-end">
-                <div class="col-md-3">
-                    <label class="form-label small text-muted mb-1">시작일</label>
-                    <input type="date" name="start_date" class="form-control form-control-sm" value="{{ start_date }}">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label small text-muted mb-1">종료일</label>
-                    <input type="date" name="end_date" class="form-control form-control-sm" value="{{ end_date }}">
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label small text-muted mb-1">품번 / 품명 검색</label>
-                    <input type="text" name="q" class="form-control form-control-sm" value="{{ q }}" placeholder="품번 또는 품명...">
-                </div>
-                <div class="col-md-2 d-flex gap-1">
-                    <button type="submit" class="btn btn-primary btn-sm flex-grow-1"><i class="bi bi-search me-1"></i>조회</button>
-                    <a href="{% url 'qms:inspection_attachment_list' %}" class="btn btn-outline-secondary btn-sm">초기화</a>
-                </div>
-            </div>
+    <!-- 검색 조건 -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white fw-bold">
+            <i class="bi bi-search me-1 text-secondary"></i> 검색 조건
         </div>
-    </form>
+        <div class="card-body">
+            <form method="get" class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">시작일</label>
+                    <input type="date" name="start_date" class="form-control form-control-sm" value="{{ start_date|default:'' }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">종료일</label>
+                    <input type="date" name="end_date" class="form-control form-control-sm" value="{{ end_date|default:'' }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small mb-1">품번/품명</label>
+                    <input type="text" name="q" class="form-control form-control-sm" placeholder="품번 또는 품명 입력" value="{{ q }}" autocomplete="off">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small mb-1">공급처</label>
+                    <input type="text" name="q_vendor" class="form-control form-control-sm" placeholder="공급처명 입력" value="{{ q_vendor }}" autocomplete="off">
+                </div>
+                <div class="col-md-1">
+                    <button type="submit" class="btn btn-outline-secondary btn-sm w-100">
+                        <i class="bi bi-search"></i> 조회
+                    </button>
+                </div>
+                <div class="col-md-1">
+                    <a href="{% url 'qms:inspection_attachment_list' %}" class="btn btn-outline-light btn-sm w-100 text-muted">초기화</a>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <!-- 목록 -->
-    <div class="card border-0 shadow-sm">
+    <div class="card shadow-sm">
         <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
             <span class="fw-bold small"><i class="bi bi-paperclip me-1"></i>성적서 첨부 목록</span>
             <span class="badge bg-primary">{{ page_obj.paginator.count }}건</span>
@@ -92,7 +105,7 @@
         <ul class="pagination pagination-sm justify-content-center">
             {% if page_obj.has_previous %}
             <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ q }}&start_date={{ start_date }}&end_date={{ end_date }}">이전</a>
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ q }}&q_vendor={{ q_vendor }}&start_date={{ start_date }}&end_date={{ end_date }}">이전</a>
             </li>
             {% endif %}
             <li class="page-item disabled">
@@ -100,7 +113,7 @@
             </li>
             {% if page_obj.has_next %}
             <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ q }}&start_date={{ start_date }}&end_date={{ end_date }}">다음</a>
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ q }}&q_vendor={{ q_vendor }}&start_date={{ start_date }}&end_date={{ end_date }}">다음</a>
             </li>
             {% endif %}
         </ul>
