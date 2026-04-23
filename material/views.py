@@ -1393,10 +1393,26 @@ def incoming_history(request):
         item.label_issued = RawMaterialLabel.objects.filter(
             incoming_transaction=item
         ).exclude(status='CANCELLED').exists()
+        # 수입검사 첨부파일 조회
+        item.inspection_attachment_url = ''
+        item.inspection_attachment_name = ''
         try:
-            item.inspection_status_display = item.inspection.get_status_display()
+            insp = item.inspection
+            if insp.attachment:
+                item.inspection_attachment_url = insp.attachment.url
+                item.inspection_attachment_name = insp.attachment.name.split('/')[-1]
         except Exception:
-            item.inspection_status_display = None
+            # TRANSFER(검사입고)는 원본 입고 건에서 조회
+            if item.transaction_type == 'TRANSFER':
+                from qms.models import ImportInspection
+                origin = ImportInspection.objects.filter(
+                    inbound_transaction__part=item.part,
+                    inbound_transaction__lot_no=item.lot_no,
+                    attachment__isnull=False,
+                ).exclude(attachment='').first()
+                if origin and origin.attachment:
+                    item.inspection_attachment_url = origin.attachment.url
+                    item.inspection_attachment_name = origin.attachment.name.split('/')[-1]
 
         # 수입검사 대기장이면 최종 입고 창고 표시
         if item.warehouse_to and item.warehouse_to.code == '1000':
