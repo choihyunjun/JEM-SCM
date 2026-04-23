@@ -1,14 +1,14 @@
 {% extends 'qms/qms_base.html' %}
 {% load humanize %}
 
-{% block title %}시정조치(CAPA) 관리{% endblock %}
+{% block title %}시정조치 관리{% endblock %}
 
 {% block qms_content %}
 <div class="container-fluid p-0">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="fw-bold">시정조치(CAPA) 관리</h3>
+        <h3 class="fw-bold">시정조치 관리</h3>
         <a href="{% url 'qms:capa_create' %}" class="btn btn-warning">
-            <i class="bi bi-plus-lg me-1"></i>CAPA 요청
+            <i class="bi bi-plus-lg me-1"></i>시정조치 요청
         </a>
     </div>
 
@@ -93,7 +93,7 @@
             <table class="table table-hover mb-0">
                 <thead class="table-dark">
                     <tr>
-                        <th>CAPA번호</th>
+                        <th>시정조치번호</th>
                         <th>유형</th>
                         <th>협력사</th>
                         <th>품번</th>
@@ -136,7 +136,7 @@
                     <tr>
                         <td colspan="9" class="text-center py-5 text-muted">
                             <i class="bi bi-inbox fs-1 d-block mb-2"></i>
-                            CAPA 내역이 없습니다.
+                            시정조치 내역이 없습니다.
                         </td>
                     </tr>
                     {% endfor %}
