@@ -1381,6 +1381,13 @@ def incoming_history(request):
         item.has_label = RawMaterialLabel.objects.filter(
             incoming_transaction=item
         ).exclude(status='CANCELLED').exists() if item.can_delete else False
+        item.label_issued = RawMaterialLabel.objects.filter(
+            incoming_transaction=item
+        ).exclude(status='CANCELLED').exists()
+        try:
+            item.inspection_status_display = item.inspection.get_status_display()
+        except Exception:
+            item.inspection_status_display = None
 
         # 수입검사 대기장이면 최종 입고 창고 표시
         if item.warehouse_to and item.warehouse_to.code == '1000':

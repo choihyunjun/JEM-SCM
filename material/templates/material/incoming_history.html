@@ -127,6 +127,8 @@
                             data-erp-no="{{ item.erp_incoming_no|default:'' }}"
                             data-remark="{{ item.display_remark|default:'' }}"
                             data-actor="{{ item.actor.username|default:'' }}"
+                            data-label-issued="{{ item.label_issued|yesno:'발행,미발행' }}"
+                            data-inspection-status="{{ item.inspection_status_display|default:'' }}"
                             data-can-edit="{{ item.can_edit|yesno:'1,0' }}"
                             data-can-delete="{{ item.can_delete|yesno:'1,0' }}"
                             data-can-reregister="{{ item.can_reregister|yesno:'1,0' }}"
@@ -208,18 +210,17 @@
                 <input type="hidden" id="detailCanEdit">
                 <input type="hidden" id="detailCanDelete">
 
-                <table class="table table-sm mb-0">
-                    <tr><th class="text-muted" style="width:100px;">구분</th><td><span id="detailType" class="badge"></span></td></tr>
-                    <tr><th class="text-muted">수불번호</th><td id="detailTrxNo" class="fw-bold"></td></tr>
-                    <tr><th class="text-muted">입고일자</th><td>
+                <table class="table table-borderless mb-0">
+                    <tr><th class="text-muted" width="30%">구분</th><td><span id="detailType" class="badge"></span></td></tr>
+                    <tr><th class="text-muted">수불번호</th><td id="detailTrxNo" class="fw-bold text-primary"></td></tr>
+                    <tr><th class="text-muted">입고일시</th><td>
                         <span id="detailDateText"></span>
                         <input type="date" id="detailDateInput" class="form-control form-control-sm d-none" style="width:160px;">
                     </td></tr>
-                    <tr><th class="text-muted">입고처</th><td id="detailVendor"></td></tr>
                     <tr><th class="text-muted">품번</th><td id="detailPartNo" class="fw-bold"></td></tr>
                     <tr><th class="text-muted">품명</th><td id="detailPartName"></td></tr>
                     <tr><th class="text-muted">수량</th><td>
-                        <span id="detailQtyText" class="fw-bold"></span>
+                        <span id="detailQtyText" class="fw-bold fs-5"></span>
                         <input type="number" id="detailQtyInput" class="form-control form-control-sm d-none" style="width:120px;" min="1">
                     </td></tr>
                     <tr><th class="text-muted">LOT 번호</th><td>
@@ -227,12 +228,15 @@
                         <input type="date" id="detailLotInput" class="form-control form-control-sm d-none" style="width:160px;">
                     </td></tr>
                     <tr><th class="text-muted">입고 창고</th><td id="detailWarehouse"></td></tr>
+                    <tr><th class="text-muted">공급처</th><td id="detailVendor"></td></tr>
                     <tr><th class="text-muted">ERP 번호</th><td id="detailErpNo"></td></tr>
                     <tr><th class="text-muted">처리자</th><td id="detailActor"></td></tr>
                     <tr><th class="text-muted">비고</th><td>
                         <span id="detailRemarkText"></span>
                         <input type="text" id="detailRemarkInput" class="form-control form-control-sm d-none">
                     </td></tr>
+                    <tr><th class="text-muted">라벨 발행</th><td id="detailLabelStatus"></td></tr>
+                    <tr><th class="text-muted">검사 상태</th><td id="detailInspectionStatus"></td></tr>
                 </table>
             </div>
             <div class="modal-footer border-top" id="detailFooter">
@@ -458,6 +462,8 @@ function openDetail(row) {
     document.getElementById('detailActor').textContent = d.actor || '-';
     document.getElementById('detailRemarkText').textContent = d.remark || '-';
     document.getElementById('detailRemarkInput').value = d.remark || '';
+    document.getElementById('detailLabelStatus').textContent = d.labelIssued || '-';
+    document.getElementById('detailInspectionStatus').textContent = d.inspectionStatus || '-';
 
     // 버튼 표시/숨김
     document.getElementById('btnEdit').classList.toggle('d-none', d.canEdit !== '1');
