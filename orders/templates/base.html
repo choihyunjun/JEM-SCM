@@ -416,17 +416,17 @@
 
                             {# 검사 관리 - can_qms_inspection_view 또는 can_qms_inspection 권한 필요 #}
                             {% if user|has_perm:'can_qms_inspection_view' or user|has_perm:'can_qms_inspection' %}
-                            <a class="nav-link collapsed {% if 'inspection' in request.resolver_match.url_name or 'outgoing' in request.resolver_match.url_name %}active{% endif %}"
+                            <a class="nav-link collapsed {% if 'inspection' in request.resolver_match.url_name or 'outgoing' in request.resolver_match.url_name or 'attachment' in request.resolver_match.url_name %}active{% endif %}"
                                href="#"
                                data-bs-toggle="collapse"
                                data-bs-target="#collapseInspection"
-                               aria-expanded="{% if 'inspection' in request.resolver_match.url_name or 'outgoing' in request.resolver_match.url_name %}true{% else %}false{% endif %}"
+                               aria-expanded="{% if 'inspection' in request.resolver_match.url_name or 'outgoing' in request.resolver_match.url_name or 'attachment' in request.resolver_match.url_name %}true{% else %}false{% endif %}"
                                aria-controls="collapseInspection">
                                 <div class="sb-nav-link-icon"><i class="bi bi-clipboard-check"></i></div>
                                 검사 관리
                                 <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
                             </a>
-                            <div class="collapse {% if 'inspection' in request.resolver_match.url_name or 'outgoing' in request.resolver_match.url_name %}show{% endif %}"
+                            <div class="collapse {% if 'inspection' in request.resolver_match.url_name or 'outgoing' in request.resolver_match.url_name or 'attachment' in request.resolver_match.url_name %}show{% endif %}"
                                  id="collapseInspection"
                                  aria-labelledby="headingInspection"
                                  data-bs-parent="#sidenavAccordion">
@@ -435,6 +435,8 @@
                                        href="{% url 'qms:import_inspection_list' %}">수입검사 현황</a>
                                     <a class="nav-link {% if 'outgoing' in request.resolver_match.url_name %}active{% endif %}"
                                        href="{% url 'qms:outgoing_list' %}">출하검사 관리</a>
+                                    <a class="nav-link {% if 'inspection_attachment' in request.resolver_match.url_name %}active{% endif %}"
+                                       href="{% url 'qms:inspection_attachment_list' %}">성적서 조회</a>
                                 </nav>
                             </div>
                             {% endif %}

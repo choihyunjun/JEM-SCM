@@ -50,6 +50,7 @@ urlpatterns = [
     path('formal/<int:formal_id>/schedule/add/', views.formal4m_schedule_add, name='formal4m_schedule_add'),
 
     path('inspection/list/', views.import_inspection_list, name='import_inspection_list'),
+    path('inspection/attachments/', views.inspection_attachment_list, name='inspection_attachment_list'),
     path('inspection/<int:pk>/', views.import_inspection_detail, name='import_inspection_detail'),
 
     # ============================================

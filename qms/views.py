@@ -1164,6 +1164,40 @@ def m4_delete(request, pk):
 # =============================================================================
 
 @qms_permission_required('can_qms_inspection_view')
+def inspection_attachment_list(request):
+    """성적서 조회 - 수입검사 첨부파일이 있는 건만 조회"""
+    qs = ImportInspection.objects.filter(
+        attachment__isnull=False,
+    ).exclude(attachment='').select_related(
+        'inbound_transaction__part',
+        'inbound_transaction__vendor',
+    ).order_by('-inspected_at', '-created_at')
+
+    q = request.GET.get('q', '').strip()
+    if q:
+        qs = qs.filter(
+            Q(inbound_transaction__part__part_no__icontains=q) |
+            Q(inbound_transaction__part__part_name__icontains=q)
+        )
+    start_date = request.GET.get('start_date', '')
+    end_date = request.GET.get('end_date', '')
+    if start_date:
+        qs = qs.filter(inbound_transaction__date__date__gte=start_date)
+    if end_date:
+        qs = qs.filter(inbound_transaction__date__date__lte=end_date)
+
+    paginator = Paginator(qs, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'qms/inspection_attachment_list.html', {
+        'page_obj': page_obj,
+        'q': q,
+        'start_date': start_date,
+        'end_date': end_date,
+    })
+
+
+@qms_permission_required('can_qms_inspection_view')
 def import_inspection_list(request):
     """
     [QMS] 수입검사 대기/완료 목록 조회 (필터 + 페이징)
