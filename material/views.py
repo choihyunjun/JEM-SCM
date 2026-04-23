@@ -1367,7 +1367,16 @@ def incoming_history(request):
         elif item.transaction_type == 'TRANSFER':
             item.display_type = "검사입고"
             item.badge_color = "warning"
-            item.display_remark = item.ref_delivery_order or ""
+            # 원본 입고 건의 비고를 가져옴
+            origin_remark = ""
+            origin_trx = MaterialTransaction.objects.filter(
+                part=item.part, lot_no=item.lot_no,
+                transaction_type__in=('IN_MANUAL', 'IN_SCM'),
+            ).order_by('-date').first()
+            if origin_trx and origin_trx.remark:
+                origin_remark = re.sub(r'\[수입검사 대상\]\s*', '', origin_trx.remark)
+                origin_remark = re.sub(r'\[발주입고\]\s*ERP:\S*\s*', '', origin_remark).strip()
+            item.display_remark = origin_remark or item.remark or ""
         else:
             item.display_type = item.transaction_type
             item.badge_color = "secondary"
