@@ -1,8 +1,7 @@
 """
-알림 발송 유틸리티
-- NotificationRule에 설정된 수신자에게 이메일 발송
-- 메시지 템플릿 변수 치환 지원
-- NotificationLog에 이력 기록
+알림 발송 유틸리티 (단순화 버전)
+- NotificationRule → User 직접 연결
+- 기본 템플릿 자동 사용
 """
 import logging
 from django.core.mail import send_mail
@@ -10,7 +9,6 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-# 상태별 기본 메시지
 DEFAULT_MESSAGES = {
     'MOLD_REPAIR_REQUESTED': {
         'subject': '[금형 수리의뢰] {part_no} {mold_name}',
@@ -31,6 +29,11 @@ DEFAULT_MESSAGES = {
         'subject': '[금형 수리완료] {part_no} {mold_name}',
         'title': '수리가 완료되었습니다',
         'color': '#22543d',
+    },
+    'ORDER_CREATED': {
+        'subject': '[발주 등록] {part_no}',
+        'title': '발주가 등록되었습니다',
+        'color': '#2b6cb0',
     },
 }
 
@@ -71,25 +74,15 @@ def build_email_body(title, color, context_vars):
 
 
 def send_notification(event_type, context_vars=None, reference_id='', requester_email=''):
-    """
-    이벤트 타입에 맞는 알림 규칙을 조회하여 이메일 발송
-
-    Args:
-        event_type: 이벤트 코드 (예: 'MOLD_REPAIR_REQUESTED')
-        context_vars: 템플릿 변수 dict (part_no, mold_name, status 등)
-        reference_id: 참조 ID
-        requester_email: 의뢰자 이메일 (send_to_requester 용)
-    """
+    """이벤트 타입에 맞는 알림 규칙을 조회하여 이메일 발송"""
     from .models import NotificationRule, NotificationLog
 
     if context_vars is None:
         context_vars = {}
 
-    rules = NotificationRule.objects.filter(
-        event_type=event_type, is_active=True
-    ).prefetch_related('recipients')
-
-    if not rules.exists():
+    try:
+        rule = NotificationRule.objects.get(event_type=event_type, is_active=True)
+    except NotificationRule.DoesNotExist:
         return 0
 
     # 기본 메시지
@@ -99,77 +92,62 @@ def send_notification(event_type, context_vars=None, reference_id='', requester_
         'color': '#4a5568',
     })
 
+    try:
+        subject = defaults['subject'].format(**context_vars)
+    except (KeyError, ValueError):
+        subject = defaults['subject']
+
+    body = build_email_body(defaults['title'], defaults['color'], context_vars)
+
+    # 수신자 이메일 수집
+    email_map = {}  # {email: name}
+
+    # 1) 내부 수신자 (User)
+    for user in rule.recipients.filter(is_active=True):
+        if user.email:
+            profile = getattr(user, 'profile', None)
+            name = ''
+            if profile:
+                name = getattr(profile, 'display_name', '') or ''
+            if not name:
+                name = user.get_full_name() or user.username
+            email_map[user.email] = name
+
+    # 2) 의뢰자
+    if rule.send_to_requester and requester_email:
+        if requester_email not in email_map:
+            email_map[requester_email] = '의뢰자'
+
+    # 발송
     sent_count = 0
+    for email, name in email_map.items():
+        log = NotificationLog.objects.create(
+            event_type=event_type,
+            recipient_email=email,
+            recipient_name=name,
+            subject=subject,
+            body=body,
+            status='PENDING',
+            reference_id=str(reference_id),
+        )
 
-    for rule in rules:
-        # 제목 결정: 커스텀 템플릿 > 기본
-        if rule.subject_template:
-            try:
-                subject = rule.subject_template.format(**context_vars)
-            except (KeyError, ValueError):
-                subject = rule.subject_template
-        else:
-            try:
-                subject = defaults['subject'].format(**context_vars)
-            except (KeyError, ValueError):
-                subject = defaults['subject']
-
-        # 본문 결정: 커스텀 템플릿 > 기본 HTML
-        if rule.body_template:
-            try:
-                body = f'<div style="font-family:sans-serif;max-width:560px;margin:0 auto;"><p>{rule.body_template.format(**context_vars)}</p></div>'
-            except (KeyError, ValueError):
-                body = f'<div style="font-family:sans-serif;"><p>{rule.body_template}</p></div>'
-        else:
-            body = build_email_body(defaults['title'], defaults['color'], context_vars)
-
-        # 수신자 목록 수집
-        email_list = []
-        recipients_for_log = []
-
-        # 등록된 내부 수신자
-        for recipient in rule.recipients.filter(is_active=True):
-            if recipient.email not in email_list:
-                email_list.append(recipient.email)
-                recipients_for_log.append(recipient)
-
-        # 의뢰자에게 발송
-        if rule.send_to_requester and requester_email:
-            if requester_email not in email_list:
-                email_list.append(requester_email)
-                recipients_for_log.append(None)  # 로그에 수신자 없음
-
-        # 발송
-        for i, email in enumerate(email_list):
-            recipient_obj = recipients_for_log[i] if i < len(recipients_for_log) else None
-
-            log = NotificationLog.objects.create(
-                event_type=event_type,
-                recipient=recipient_obj,
-                recipient_email=email,
+        try:
+            send_mail(
                 subject=subject,
-                body=body,
-                status='PENDING',
-                reference_id=str(reference_id),
+                message='',
+                html_message=body,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[email],
+                fail_silently=False,
             )
-
-            try:
-                send_mail(
-                    subject=subject,
-                    message='',
-                    html_message=body,
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[email],
-                    fail_silently=False,
-                )
-                log.status = 'SENT'
-                log.save(update_fields=['status', 'updated_at'])
-                sent_count += 1
-                logger.info(f'알림 발송 성공: {event_type} → {email}')
-            except Exception as e:
-                logger.error(f'알림 발송 실패 [{email}]: {e}')
-                log.status = 'FAILED'
-                log.error_message = str(e)
-                log.save(update_fields=['status', 'error_message', 'updated_at'])
+            log.status = 'SENT'
+            log.save(update_fields=['status'])
+            sent_count += 1
+            logger.info(f'알림 발송 성공: {event_type} → {email}')
+        except Exception as e:
+            logger.error(f'알림 발송 실패 [{email}]: {e}')
+            log.status = 'FAILED'
+            log.error_message = str(e)
+            log.save(update_fields=['status', 'error_message'])
 
     return sent_count

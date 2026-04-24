@@ -2,11 +2,18 @@ from django.db import models
 from django.contrib.auth.models import User
 
 
-NOTIFICATION_EVENT_CHOICES = [
-    # SCM
+# 실제 트리거가 연결된 이벤트만 노출
+ACTIVE_EVENT_CHOICES = [
+    ('MOLD_REPAIR_REQUESTED', '금형 수리의뢰 등록'),
+    ('MOLD_REPAIR_RECEIVED', '금형 수리 접수'),
+    ('MOLD_REPAIR_IN_PROGRESS', '금형 수리 진행'),
+    ('MOLD_REPAIR_COMPLETED', '금형 수리 완료'),
     ('ORDER_CREATED', '발주 등록'),
+]
+
+# 전체 이벤트 (하위 호환 + 향후 확장용, DB choices)
+NOTIFICATION_EVENT_CHOICES = ACTIVE_EVENT_CHOICES + [
     ('ORDER_APPROVED', '발주 승인'),
-    # QMS
     ('INSPECTION_CREATED', '수입검사 등록'),
     ('INSPECTION_PASSED', '수입검사 합격'),
     ('INSPECTION_FAILED', '수입검사 불합격'),
@@ -21,57 +28,21 @@ NOTIFICATION_EVENT_CHOICES = [
     ('ISIR_APPROVED', 'ISIR 승인'),
     ('ISIR_REJECTED', 'ISIR 반려'),
     ('OUTGOING_FAILED', '출하검사 불합격'),
-    # WMS
     ('DELIVERY_RECEIVED', '납품서 접수'),
     ('LOW_STOCK', '재고 부족 경고'),
     ('VENDOR_DOWNGRADED', '협력사 등급 하락'),
-    # 생산현장 - 금형 수리
-    ('MOLD_REPAIR_REQUESTED', '금형 수리의뢰 등록'),
-    ('MOLD_REPAIR_RECEIVED', '금형 수리 접수'),
-    ('MOLD_REPAIR_IN_PROGRESS', '금형 수리 진행'),
-    ('MOLD_REPAIR_COMPLETED', '금형 수리 완료'),
 ]
-
-RECIPIENT_TYPE_CHOICES = [
-    ('INTERNAL', '내부 직원'),
-    ('VENDOR', '협력사'),
-]
-
-
-class NotificationRecipient(models.Model):
-    """알림 수신자"""
-    name = models.CharField("이름", max_length=50)
-    organization = models.CharField("소속", max_length=100, blank=True)
-    position = models.CharField("직함", max_length=50, blank=True)
-    email = models.EmailField("이메일")
-    recipient_type = models.CharField("구분", max_length=10, choices=RECIPIENT_TYPE_CHOICES, default='INTERNAL')
-    is_active = models.BooleanField("활성", default=True)
-    created_at = models.DateTimeField("등록일", auto_now_add=True)
-
-    class Meta:
-        verbose_name = "알림 수신자"
-        verbose_name_plural = "알림 수신자"
-        ordering = ['organization', 'name']
-
-    def __str__(self):
-        org = f" ({self.organization})" if self.organization else ""
-        return f"{self.name}{org}"
 
 
 class NotificationRule(models.Model):
-    """알림 규칙 (이벤트 × 수신자 매핑)"""
-    event_type = models.CharField("이벤트", max_length=30, choices=NOTIFICATION_EVENT_CHOICES)
-    send_to_vendor = models.BooleanField("협력사 자동 발송", default=False,
-        help_text="해당 건의 협력사 이메일로 자동 발송")
-    send_to_requester = models.BooleanField("의뢰자에게 발송", default=False,
-        help_text="해당 건의 의뢰자(등록자) 이메일로 자동 발송")
-    recipients = models.ManyToManyField(NotificationRecipient, verbose_name="내부 수신자",
-        related_name='rules', blank=True)
+    """알림 규칙 (이벤트 × 수신자 매핑) - 단순화 버전"""
+    event_type = models.CharField("이벤트", max_length=30, choices=NOTIFICATION_EVENT_CHOICES, unique=True)
+    recipients = models.ManyToManyField(User, verbose_name="내부 수신자",
+        related_name='notification_rules', blank=True,
+        limit_choices_to={'is_active': True})
+    send_to_vendor = models.BooleanField("협력사 자동 발송", default=False)
+    send_to_requester = models.BooleanField("의뢰자에게 발송", default=False)
     is_active = models.BooleanField("활성", default=True)
-    subject_template = models.CharField("제목 템플릿", max_length=300, blank=True,
-        help_text="변수: {part_no}, {mold_name}, {status}, {priority} 등. 비워두면 기본 제목 사용")
-    body_template = models.TextField("본문 템플릿", blank=True,
-        help_text="변수: {part_no}, {mold_name}, {status}, {requester}, {repair_by} 등. 비워두면 기본 본문 사용")
     description = models.CharField("설명", max_length=200, blank=True)
     created_at = models.DateTimeField("등록일", auto_now_add=True)
     updated_at = models.DateTimeField("수정일", auto_now=True)
@@ -94,8 +65,8 @@ class NotificationLog(models.Model):
     ]
 
     event_type = models.CharField("이벤트", max_length=30, choices=NOTIFICATION_EVENT_CHOICES)
-    recipient = models.ForeignKey(NotificationRecipient, on_delete=models.SET_NULL, null=True, verbose_name="수신자")
     recipient_email = models.EmailField("수신 이메일")
+    recipient_name = models.CharField("수신자명", max_length=100, blank=True)
     subject = models.CharField("제목", max_length=300)
     body = models.TextField("내용", blank=True)
     status = models.CharField("상태", max_length=10, choices=STATUS_CHOICES, default='PENDING')
