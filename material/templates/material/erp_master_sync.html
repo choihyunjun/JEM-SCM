@@ -144,11 +144,11 @@
                 <div class="card-body">
                     <p class="text-muted small mb-2">
                         ERP 입고 내역에서 품번↔거래처 매핑을 추출하여<br>
-                        업체 미연결 품목에 <strong>자동 연결</strong>합니다.
+                        <strong>전체 품목</strong>의 업체를 최신 입고이력 기준으로 <strong>자동 갱신</strong>합니다.
                     </p>
                     <ul class="small text-muted mb-3">
                         <li>입고 헤더의 거래처코드 + 디테일의 품번 매핑</li>
-                        <li>업체 미연결(<code>vendor=null</code>) 품목만 대상</li>
+                        <li>기존 업체가 있어도 최신 입고 기준으로 변경</li>
                         <li>현재 미연결: <strong class="text-danger">{{ no_vendor_count|intcomma }}건</strong></li>
                     </ul>
                     <form id="linkVendorForm" method="post">
@@ -206,7 +206,7 @@
             <ol class="small text-muted mb-0">
                 <li><strong>거래처 동기화</strong> 먼저 실행 → ERP 거래처코드가 SCM에 등록됩니다</li>
                 <li><strong>품목 동기화</strong> 실행 → 품목의 주거래처(trmainCd)가 위에서 등록된 거래처와 자동 연결됩니다</li>
-                <li><strong>입고이력 업체 연결</strong> 실행 → 주거래처가 없는 품목도 실제 입고 이력 기반으로 업체 연결됩니다</li>
+                <li><strong>입고이력 업체 연결</strong> 실행 → 전체 품목의 업체를 최신 입고이력 기준으로 갱신합니다</li>
                 <li>필요 시 <strong>ERP 재고 관리</strong>에서 기초재고 셋팅 또는 재고 비교를 진행합니다</li>
             </ol>
         </div>
@@ -225,14 +225,15 @@
             <div class="modal-body p-0">
                 <table class="table table-sm table-hover mb-0">
                     <thead class="table-light sticky-top">
-                        <tr><th>품번</th><th>품명</th><th>연결 업체</th><th>거래처코드</th></tr>
+                        <tr><th>품번</th><th>품명</th><th>이전 업체</th><th>변경 업체</th><th>거래처코드</th></tr>
                     </thead>
                     <tbody>
                         {% for item in link_result.updated_list %}
                         <tr>
                             <td class="small fw-bold">{{ item.part_no }}</td>
                             <td class="small">{{ item.part_name }}</td>
-                            <td class="small text-success">{{ item.vendor_name }}</td>
+                            <td class="small text-muted">{{ item.old_vendor }}</td>
+                            <td class="small text-success fw-bold">{{ item.vendor_name }}</td>
                             <td class="small text-muted">{{ item.vendor_code }}</td>
                         </tr>
                         {% endfor %}

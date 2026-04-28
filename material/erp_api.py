@@ -1318,7 +1318,7 @@ def sync_erp_items():
 def link_vendor_by_incoming(months=6):
     """
     ERP 입고이력에서 품번↔거래처 매핑을 추출하여
-    SCM Part.vendor가 null인 품목에 자동 연결
+    모든 SCM Part의 vendor를 최신 입고이력 기준으로 갱신
     Returns: dict {total_headers, matched, updated, skipped_no_vendor, errors}
     """
     from orders.models import Part, Vendor
@@ -1377,7 +1377,7 @@ def link_vendor_by_incoming(months=6):
     result['matched'] = len(item_vendor_map)
 
     cache.set('erp_sync_progress', {
-        'stage': '업체 미연결 품목 업데이트 중...',
+        'stage': '전체 품목 업체 갱신 중...',
         'percent': 75,
         'detail': f'매핑 {len(item_vendor_map)}건',
     }, timeout=600)
@@ -1387,26 +1387,29 @@ def link_vendor_by_incoming(months=6):
     for v in Vendor.objects.filter(erp_code__isnull=False).exclude(erp_code=''):
         vendor_cache[v.erp_code] = v
 
-    # 미연결 Part 업데이트
-    no_vendor_parts = Part.objects.filter(vendor__isnull=True)
-    total_parts = no_vendor_parts.count()
+    # 전체 Part 대상 업데이트 (기존 업체도 최신 입고이력 기준으로 갱신)
+    all_parts = Part.objects.all()
+    total_parts = all_parts.count()
     updated = 0
 
-    for idx, part in enumerate(no_vendor_parts):
+    for idx, part in enumerate(all_parts):
         mapping = item_vendor_map.get(part.part_no)
         if mapping:
             tr_cd, vendor_nm = mapping
             vendor = vendor_cache.get(tr_cd)
             if vendor:
-                part.vendor = vendor
-                part.save(update_fields=['vendor'])
-                updated += 1
-                result['updated_list'].append({
-                    'part_no': part.part_no,
-                    'part_name': part.part_name,
-                    'vendor_name': vendor.name,
-                    'vendor_code': tr_cd,
-                })
+                if part.vendor_id != vendor.id:
+                    old_vendor_name = part.vendor.name if part.vendor else '미연결'
+                    part.vendor = vendor
+                    part.save(update_fields=['vendor'])
+                    updated += 1
+                    result['updated_list'].append({
+                        'part_no': part.part_no,
+                        'part_name': part.part_name,
+                        'vendor_name': vendor.name,
+                        'vendor_code': tr_cd,
+                        'old_vendor': old_vendor_name,
+                    })
             else:
                 result['skipped_no_vendor'] += 1
                 result['skipped_list'].append({
