@@ -281,7 +281,7 @@
 {% endif %}
 
 <script>
-function startProgress(formId, btnId, progressAreaId, cacheKey) {
+function startProgress(formId, btnId, progressAreaId, cacheKey, reloadOnDone) {
     const form = document.getElementById(formId);
     const btn = document.getElementById(btnId);
     const area = document.getElementById(progressAreaId);
@@ -297,6 +297,31 @@ function startProgress(formId, btnId, progressAreaId, cacheKey) {
         const pct = area.querySelector('.progress-pct');
         const detail = area.querySelector('.progress-detail');
 
+        // 백그라운드 실행인 경우 폼 submit 후 바로 폴링 시작
+        if (reloadOnDone) {
+            setTimeout(function() {
+                const poll = setInterval(function() {
+                    fetch(progressUrl)
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data.percent > 0) {
+                                bar.style.width = data.percent + '%';
+                                pct.textContent = data.percent + '%';
+                                stage.textContent = data.stage || '';
+                                if (data.detail) detail.textContent = data.detail;
+                            }
+                            if (data.percent >= 100) {
+                                clearInterval(poll);
+                                bar.classList.remove('progress-bar-animated');
+                                setTimeout(() => location.reload(), 1500);
+                            }
+                        })
+                        .catch(() => {});
+                }, 1500);
+            }, 2000);
+            return;
+        }
+
         const poll = setInterval(function() {
             fetch(progressUrl)
                 .then(r => r.json())
@@ -305,9 +330,7 @@ function startProgress(formId, btnId, progressAreaId, cacheKey) {
                         bar.style.width = data.percent + '%';
                         pct.textContent = data.percent + '%';
                         stage.textContent = data.stage || '';
-                        if (data.detail) {
-                            detail.textContent = data.detail;
-                        }
+                        if (data.detail) detail.textContent = data.detail;
                     }
                     if (data.percent >= 100) {
                         clearInterval(poll);
@@ -319,8 +342,8 @@ function startProgress(formId, btnId, progressAreaId, cacheKey) {
     });
 }
 
-startProgress('vendorSyncForm', 'btnVendorSync', 'vendorProgress', 'erp_sync_progress');
-startProgress('itemSyncForm', 'btnItemSync', 'itemProgress', 'erp_sync_progress');
-startProgress('linkVendorForm', 'btnLinkVendor', 'linkProgress', 'erp_link_vendor_progress');
+startProgress('vendorSyncForm', 'btnVendorSync', 'vendorProgress', 'erp_sync_progress', false);
+startProgress('itemSyncForm', 'btnItemSync', 'itemProgress', 'erp_sync_progress', false);
+startProgress('linkVendorForm', 'btnLinkVendor', 'linkProgress', 'erp_link_vendor_progress', true);
 </script>
 {% endblock %}

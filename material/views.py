@@ -7412,12 +7412,20 @@ def erp_master_sync(request):
     """ERP 마스터 데이터 동기화 (거래처, 품목)"""
     from django.conf import settings as django_settings
 
+    from django.core.cache import cache as _cache
+
     context = {
         'erp_enabled': getattr(django_settings, 'ERP_ENABLED', False),
         'vendor_count': Vendor.objects.count(),
         'part_count': Part.objects.count(),
         'no_vendor_count': Part.objects.filter(vendor__isnull=True).count(),
     }
+
+    # 백그라운드 업체 연결 결과가 있으면 표시
+    link_result = _cache.get('erp_link_vendor_result')
+    if link_result:
+        context['link_result'] = link_result
+        _cache.delete('erp_link_vendor_result')
 
     if request.method == 'POST':
         action = request.POST.get('action', '')
@@ -7451,20 +7459,20 @@ def erp_master_sync(request):
             context['item_result'] = result
 
         elif action == 'link_vendors':
+            import threading
+            from django.core.cache import cache as _cache
             from material.erp_api import link_vendor_by_incoming
             months = int(request.POST.get('months', 6))
-            result = link_vendor_by_incoming(months=months)
-            if result['errors']:
-                for err in result['errors'][:5]:
-                    messages.warning(request, err)
-            messages.success(
-                request,
-                f"입고이력 기반 업체 연결 완료: "
-                f"입고 {result['total_headers']}건 분석, "
-                f"매핑 {result['matched']}건, "
-                f"연결 {result['updated']}건"
-            )
-            context['link_result'] = result
+
+            def _run_link():
+                import django
+                django.db.connections.close_all()
+                result = link_vendor_by_incoming(months=months)
+                _cache.set('erp_link_vendor_result', result, timeout=600)
+
+            threading.Thread(target=_run_link, daemon=True).start()
+            messages.info(request, "업체 연결을 백그라운드에서 실행 중입니다. 진행률을 확인하세요.")
+            return redirect('material:erp_master_sync')
 
         # 동기화 후 카운트 갱신
         context['vendor_count'] = Vendor.objects.count()
