@@ -800,7 +800,7 @@ def inventory_list(request):
         part_ids = [p.id for p in parts]
 
         # 2. 자재창고(2000, 4200) 조회
-        target_warehouses = Warehouse.objects.filter(code__in=['2000', '4200'])
+        target_warehouses = Warehouse.objects.filter(code__in=['2000', '4200', '4300'])
         target_wh_ids = list(target_warehouses.values_list('id', flat=True))
 
         # 3. MaterialStock 일괄 조회 (part별 재고 합계)
