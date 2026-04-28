@@ -1350,7 +1350,10 @@ def link_vendor_by_incoming(months=6):
         'percent': 10,
     }, timeout=600)
 
-    # 품번 → 거래처코드 매핑 수집
+    # 입고일 기준 오름차순 정렬 (최신 입고가 마지막에 → 최종값이 됨)
+    headers.sort(key=lambda h: h.get('rcvDt', '') or h.get('rcvNb', ''))
+
+    # 품번 → 거래처코드 매핑 수집 (마지막 = 최신 입고 기준)
     item_vendor_map = {}  # itemCd -> (trCd, vendorName)
     for idx, h in enumerate(headers):
         rcv_nb = h.get('rcvNb', '')
@@ -1387,37 +1390,37 @@ def link_vendor_by_incoming(months=6):
     for v in Vendor.objects.filter(erp_code__isnull=False).exclude(erp_code=''):
         vendor_cache[v.erp_code] = v
 
-    # 전체 Part 대상 업데이트 (기존 업체도 최신 입고이력 기준으로 갱신)
-    all_parts = Part.objects.all()
-    total_parts = all_parts.count()
+    # 매핑에 해당하는 Part만 조회 (전체 순회 대신 효율적 필터링)
+    target_parts = Part.objects.select_related('vendor').filter(
+        part_no__in=item_vendor_map.keys()
+    )
+    total_parts = target_parts.count()
     updated = 0
 
-    for idx, part in enumerate(all_parts):
-        mapping = item_vendor_map.get(part.part_no)
-        if mapping:
-            tr_cd, vendor_nm = mapping
-            vendor = vendor_cache.get(tr_cd)
-            if vendor:
-                if part.vendor_id != vendor.id:
-                    old_vendor_name = part.vendor.name if part.vendor else '미연결'
-                    part.vendor = vendor
-                    part.save(update_fields=['vendor'])
-                    updated += 1
-                    result['updated_list'].append({
-                        'part_no': part.part_no,
-                        'part_name': part.part_name,
-                        'vendor_name': vendor.name,
-                        'vendor_code': tr_cd,
-                        'old_vendor': old_vendor_name,
-                    })
-            else:
-                result['skipped_no_vendor'] += 1
-                result['skipped_list'].append({
+    for idx, part in enumerate(target_parts):
+        tr_cd, vendor_nm = item_vendor_map[part.part_no]
+        vendor = vendor_cache.get(tr_cd)
+        if vendor:
+            if part.vendor_id != vendor.id:
+                old_vendor_name = part.vendor.name if part.vendor else '미연결'
+                part.vendor = vendor
+                part.save(update_fields=['vendor'])
+                updated += 1
+                result['updated_list'].append({
                     'part_no': part.part_no,
                     'part_name': part.part_name,
-                    'erp_vendor_code': tr_cd,
-                    'erp_vendor_name': vendor_nm,
+                    'vendor_name': vendor.name,
+                    'vendor_code': tr_cd,
+                    'old_vendor': old_vendor_name,
                 })
+        else:
+            result['skipped_no_vendor'] += 1
+            result['skipped_list'].append({
+                'part_no': part.part_no,
+                'part_name': part.part_name,
+                'erp_vendor_code': tr_cd,
+                'erp_vendor_name': vendor_nm,
+            })
 
         if (idx + 1) % 200 == 0 or idx == total_parts - 1:
             pct = 75 + int((idx + 1) / max(total_parts, 1) * 20)
