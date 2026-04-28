@@ -1336,16 +1336,17 @@ def link_vendor_by_incoming(months=6):
     date_to = datetime.now().strftime('%Y%m%d')
     date_from = (datetime.now() - timedelta(days=months * 30)).strftime('%Y%m%d')
 
-    cache.set('erp_sync_progress', {'stage': f'ERP 입고 헤더 조회 중... ({months}개월)', 'percent': 5}, timeout=600)
+    PROGRESS_KEY = 'erp_link_vendor_progress'
+    cache.set(PROGRESS_KEY, {'stage': f'ERP 입고 헤더 조회 중... ({months}개월)', 'percent': 5}, timeout=600)
 
     ok, headers, err = fetch_erp_incoming_headers(date_from, date_to)
     if not ok:
         result['errors'].append(f'ERP 입고 조회 실패: {err}')
-        cache.delete('erp_sync_progress')
+        cache.delete(PROGRESS_KEY)
         return result
 
     result['total_headers'] = len(headers)
-    cache.set('erp_sync_progress', {
+    cache.set(PROGRESS_KEY, {
         'stage': f'입고 {len(headers)}건 디테일 조회 중...',
         'percent': 10,
     }, timeout=600)
@@ -1371,7 +1372,7 @@ def link_vendor_by_incoming(months=6):
 
         if (idx + 1) % 50 == 0 or idx == len(headers) - 1:
             pct = 10 + int((idx + 1) / len(headers) * 60)
-            cache.set('erp_sync_progress', {
+            cache.set(PROGRESS_KEY, {
                 'stage': f'입고 디테일 조회 중... ({idx + 1}/{len(headers)})',
                 'percent': pct,
                 'detail': f'품번-거래처 매핑: {len(item_vendor_map)}건',
@@ -1379,7 +1380,7 @@ def link_vendor_by_incoming(months=6):
 
     result['matched'] = len(item_vendor_map)
 
-    cache.set('erp_sync_progress', {
+    cache.set(PROGRESS_KEY, {
         'stage': '전체 품목 업체 갱신 중...',
         'percent': 75,
         'detail': f'매핑 {len(item_vendor_map)}건',
@@ -1424,14 +1425,14 @@ def link_vendor_by_incoming(months=6):
 
         if (idx + 1) % 200 == 0 or idx == total_parts - 1:
             pct = 75 + int((idx + 1) / max(total_parts, 1) * 20)
-            cache.set('erp_sync_progress', {
+            cache.set(PROGRESS_KEY, {
                 'stage': f'업체 연결 중... ({idx + 1}/{total_parts})',
                 'percent': pct,
                 'detail': f'연결: {updated}건',
             }, timeout=600)
 
     result['updated'] = updated
-    cache.set('erp_sync_progress', {
+    cache.set(PROGRESS_KEY, {
         'stage': '완료!',
         'percent': 100,
         'detail': f'연결: {updated}건 (매핑 {len(item_vendor_map)}건 중)',

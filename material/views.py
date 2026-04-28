@@ -7392,7 +7392,12 @@ def erp_sync_progress(request):
     """범용 ERP 동기화 진행률 조회 API (AJAX 폴링용)"""
     from django.core.cache import cache
     from django.http import JsonResponse
-    progress = cache.get('erp_sync_progress')
+    key = request.GET.get('key', 'erp_sync_progress')
+    # 허용된 키만 조회
+    allowed_keys = {'erp_sync_progress', 'erp_link_vendor_progress'}
+    if key not in allowed_keys:
+        key = 'erp_sync_progress'
+    progress = cache.get(key)
     if progress:
         return JsonResponse(progress)
     return JsonResponse({'stage': '', 'percent': 0})

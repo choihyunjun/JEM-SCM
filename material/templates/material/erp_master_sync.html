@@ -281,10 +281,11 @@
 {% endif %}
 
 <script>
-function startProgress(formId, btnId, progressAreaId) {
+function startProgress(formId, btnId, progressAreaId, cacheKey) {
     const form = document.getElementById(formId);
     const btn = document.getElementById(btnId);
     const area = document.getElementById(progressAreaId);
+    const progressUrl = '{% url "material:erp_sync_progress" %}' + '?key=' + (cacheKey || 'erp_sync_progress');
 
     form.addEventListener('submit', function() {
         btn.disabled = true;
@@ -297,7 +298,7 @@ function startProgress(formId, btnId, progressAreaId) {
         const detail = area.querySelector('.progress-detail');
 
         const poll = setInterval(function() {
-            fetch('{% url "material:erp_sync_progress" %}')
+            fetch(progressUrl)
                 .then(r => r.json())
                 .then(data => {
                     if (data.percent > 0) {
@@ -318,8 +319,8 @@ function startProgress(formId, btnId, progressAreaId) {
     });
 }
 
-startProgress('vendorSyncForm', 'btnVendorSync', 'vendorProgress');
-startProgress('itemSyncForm', 'btnItemSync', 'itemProgress');
-startProgress('linkVendorForm', 'btnLinkVendor', 'linkProgress');
+startProgress('vendorSyncForm', 'btnVendorSync', 'vendorProgress', 'erp_sync_progress');
+startProgress('itemSyncForm', 'btnItemSync', 'itemProgress', 'erp_sync_progress');
+startProgress('linkVendorForm', 'btnLinkVendor', 'linkProgress', 'erp_link_vendor_progress');
 </script>
 {% endblock %}
