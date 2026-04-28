@@ -9260,9 +9260,9 @@ def mold_mt_dashboard(request):
     for m in molds_list:
         if m.c_over_guarantee:
             over_guarantee_count += 1
-        elif m.c_is_mt_due or m.c_mt_pct >= 80:
+        if m.c_is_mt_due or m.c_mt_pct >= 80:
             mt_due_count += 1
-        else:
+        if not m.c_over_guarantee and not m.c_is_mt_due and m.c_mt_pct < 80:
             normal_count += 1
 
     # 상태 필터 (다중)
