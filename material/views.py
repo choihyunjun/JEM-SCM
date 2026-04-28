@@ -4058,7 +4058,15 @@ def bom_detail(request, part_no):
     [WMS] 특정 제품의 BOM 상세 조회
     """
     product = get_object_or_404(Product, part_no=part_no)
-    bom_items = product.bom_items.filter(is_active=True).order_by('seq')
+    bom_items = list(product.bom_items.filter(is_active=True).order_by('seq'))
+
+    # Part.vendor 기준 최신 업체명 반영
+    child_part_nos = [item.child_part_no for item in bom_items]
+    part_vendor_map = {}
+    for p in Part.objects.select_related('vendor').filter(part_no__in=child_part_nos):
+        part_vendor_map[p.part_no] = p.vendor.name if p.vendor else None
+    for item in bom_items:
+        item.current_vendor_name = part_vendor_map.get(item.child_part_no) or item.vendor_name
 
     context = {
         'product': product,
@@ -4390,8 +4398,16 @@ def _explode_bom(part_no, production_qty, aggregated, visited,
 
     bom_items = product.bom_items.filter(is_active=True, is_bom_active=True).order_by('seq')
 
+    # Part.vendor 기준 업체명 조회 (BOMItem.vendor_name 대신 최신 Part.vendor 사용)
+    child_part_nos = [item.child_part_no for item in bom_items]
+    part_vendor_map = {}
+    for p in Part.objects.select_related('vendor').filter(part_no__in=child_part_nos):
+        part_vendor_map[p.part_no] = p.vendor.name if p.vendor else None
+
     for item in bom_items:
         required_qty = float(item.required_qty) * float(production_qty)
+        # Part.vendor 우선, 없으면 BOMItem.vendor_name 사용
+        vendor_name = part_vendor_map.get(item.child_part_no) or item.vendor_name
 
         # 자품번이 Product로 등록되어 있고 하위 BOM이 있는지 확인
         child_product = Product.objects.filter(part_no=item.child_part_no, is_active=True).first()
@@ -4411,7 +4427,7 @@ def _explode_bom(part_no, production_qty, aggregated, visited,
                     'unit_qty': float(item.required_qty),
                     'required_qty': required_qty,
                     'supply_type': item.supply_type,
-                    'vendor_name': item.vendor_name,
+                    'vendor_name': vendor_name,
                 })
             # 반제품 → 하위 BOM 재귀 전개 (소요량을 곱해서 전달)
             _explode_bom(item.child_part_no, required_qty, aggregated, visited.copy(),
@@ -4428,7 +4444,7 @@ def _explode_bom(part_no, production_qty, aggregated, visited,
                     'unit_qty': float(item.required_qty),
                     'required_qty': required_qty,
                     'supply_type': item.supply_type,
-                    'vendor_name': item.vendor_name,
+                    'vendor_name': vendor_name,
                 }
             # structured_items에도 추가
             if structured_items is not None:
@@ -4441,7 +4457,7 @@ def _explode_bom(part_no, production_qty, aggregated, visited,
                     'unit_qty': float(item.required_qty),
                     'required_qty': required_qty,
                     'supply_type': item.supply_type,
-                    'vendor_name': item.vendor_name,
+                    'vendor_name': vendor_name,
                     'parent_part_no': parent_info['part_no'] if parent_info else None,
                 })
 
