@@ -307,10 +307,35 @@
                 </button>
             </div>
         </div>
+        <!-- 페이지네이션 + 필터 컨트롤 -->
+        <div class="card-body border-bottom py-2 d-flex justify-content-between align-items-center" id="batchPaginationTop">
+            <div class="d-flex align-items-center gap-2">
+                <button class="btn btn-sm btn-outline-secondary batch-filter-btn active" data-filter="all" onclick="setBatchFilter('all')">
+                    전체 <span class="badge bg-secondary ms-1">{{ batch_results|length }}</span>
+                </button>
+                <button class="btn btn-sm btn-outline-warning batch-filter-btn" data-filter="missing" onclick="setBatchFilter('missing')" style="display:none;" id="btnFilterMissing">
+                    <i class="bi bi-exclamation-triangle me-1"></i>BOM 없음 <span class="badge bg-warning text-dark ms-1" id="missingFilterCount">0</span>
+                </button>
+            </div>
+            <div class="d-flex align-items-center gap-2" id="paginationControls">
+                <button class="btn btn-sm btn-outline-primary" onclick="changeBatchPage(-1)" id="btnPrevPage">
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+                <span class="small fw-bold" id="pageInfo">1 / 1</span>
+                <button class="btn btn-sm btn-outline-primary" onclick="changeBatchPage(1)" id="btnNextPage">
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+                <select class="form-select form-select-sm" style="width:80px;" id="pageSizeSelect" onchange="changePageSize(this.value)">
+                    <option value="30">30개</option>
+                    <option value="50" selected>50개</option>
+                    <option value="100">100개</option>
+                </select>
+            </div>
+        </div>
         <div class="card-body p-0">
-            <div class="table-responsive">
+            <div class="table-responsive" style="max-height: 70vh; overflow-y: auto;" id="batchTableWrap">
                 <table class="table table-hover mb-0" id="batchResultTable">
-                    <thead class="table-light">
+                    <thead class="table-light sticky-top">
                         <tr>
                             <th style="width:12%">모품번</th>
                             <th style="width:15%">모품명</th>
@@ -324,78 +349,78 @@
                             <th style="width:10%">거래처</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        {% for batch in batch_results %}
-                            {% if batch.structured_items %}
-                                {% for item in batch.structured_items %}
-                                {% if item.is_semi %}
-                                <tr class="table-primary">
-                                    {% if forloop.first %}
-                                    <td rowspan="{{ batch.structured_items|length }}" class="align-middle fw-bold">{{ batch.part_no }}</td>
-                                    <td rowspan="{{ batch.structured_items|length }}" class="align-middle">{{ batch.part_name }}</td>
-                                    <td rowspan="{{ batch.structured_items|length }}" class="align-middle text-center">{{ batch.qty }}</td>
-                                    <td rowspan="{{ batch.structured_items|length }}" class="align-middle">{{ batch.need_date|default:"-" }}</td>
-                                    {% endif %}
-                                    <td class="fw-bold">
-                                        <i class="bi bi-box-seam me-1"></i>{{ item.child_part_no }}
-                                        <span class="badge bg-warning text-dark ms-1">반제품</span>
-                                    </td>
-                                    <td class="fw-bold">{{ item.child_part_name }}</td>
-                                    <td class="text-end fw-bold">{{ item.required_qty|floatformat:2 }}</td>
-                                    <td class="text-end text-muted">-</td>
-                                    <td class="text-end text-muted">-</td>
-                                    <td>{{ item.vendor_name|default:"-" }}</td>
-                                </tr>
-                                {% else %}
-                                <tr class="{% if item.shortage > 0 %}table-danger{% endif %}">
-                                    {% if forloop.first %}
-                                    <td rowspan="{{ batch.structured_items|length }}" class="align-middle fw-bold">{{ batch.part_no }}</td>
-                                    <td rowspan="{{ batch.structured_items|length }}" class="align-middle">{{ batch.part_name }}</td>
-                                    <td rowspan="{{ batch.structured_items|length }}" class="align-middle text-center">{{ batch.qty }}</td>
-                                    <td rowspan="{{ batch.structured_items|length }}" class="align-middle">{{ batch.need_date|default:"-" }}</td>
-                                    {% endif %}
-                                    <td>
-                                        {% if item.level > 1 %}<span class="text-muted">└ </span>{% endif %}
-                                        {{ item.child_part_no }}
-                                    </td>
-                                    <td>{{ item.child_part_name }}</td>
-                                    <td class="text-end">{{ item.required_qty|floatformat:2 }}</td>
-                                    <td class="text-end">{{ item.stock_qty }}</td>
-                                    <td class="text-end">
-                                        {% if item.shortage > 0 %}
-                                        <span class="badge bg-danger">{{ item.shortage|floatformat:0 }}</span>
-                                        {% else %}
-                                        <span class="badge bg-success">OK</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>{{ item.vendor_name|default:"-" }}</td>
-                                </tr>
+                    {% for batch in batch_results %}
+                    <tbody class="batch-group" data-batch-idx="{{ forloop.counter0 }}" data-has-bom="{% if batch.structured_items or batch.items %}true{% else %}false{% endif %}">
+                        {% if batch.structured_items %}
+                            {% for item in batch.structured_items %}
+                            {% if item.is_semi %}
+                            <tr class="table-primary">
+                                {% if forloop.first %}
+                                <td rowspan="{{ batch.structured_items|length }}" class="align-middle fw-bold">{{ batch.part_no }}</td>
+                                <td rowspan="{{ batch.structured_items|length }}" class="align-middle">{{ batch.part_name }}</td>
+                                <td rowspan="{{ batch.structured_items|length }}" class="align-middle text-center">{{ batch.qty }}</td>
+                                <td rowspan="{{ batch.structured_items|length }}" class="align-middle">{{ batch.need_date|default:"-" }}</td>
                                 {% endif %}
-                                {% endfor %}
-                            {% elif batch.items %}
-                                {% for item in batch.items %}
-                                <tr class="{% if item.shortage > 0 %}table-danger{% endif %}">
-                                    {% if forloop.first %}
-                                    <td rowspan="{{ batch.items|length }}" class="align-middle fw-bold">{{ batch.part_no }}</td>
-                                    <td rowspan="{{ batch.items|length }}" class="align-middle">{{ batch.part_name }}</td>
-                                    <td rowspan="{{ batch.items|length }}" class="align-middle text-center">{{ batch.qty }}</td>
-                                    <td rowspan="{{ batch.items|length }}" class="align-middle">{{ batch.need_date|default:"-" }}</td>
-                                    {% endif %}
-                                    <td>{{ item.child_part_no }}</td>
-                                    <td>{{ item.child_part_name }}</td>
-                                    <td class="text-end">{{ item.required_qty|floatformat:2 }}</td>
-                                    <td class="text-end">{{ item.stock_qty }}</td>
-                                    <td class="text-end">
-                                        {% if item.shortage > 0 %}
-                                        <span class="badge bg-danger">{{ item.shortage|floatformat:0 }}</span>
-                                        {% else %}
-                                        <span class="badge bg-success">OK</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>{{ item.vendor_name|default:"-" }}</td>
-                                </tr>
-                                {% endfor %}
+                                <td class="fw-bold">
+                                    <i class="bi bi-box-seam me-1"></i>{{ item.child_part_no }}
+                                    <span class="badge bg-warning text-dark ms-1">반제품</span>
+                                </td>
+                                <td class="fw-bold">{{ item.child_part_name }}</td>
+                                <td class="text-end fw-bold">{{ item.required_qty|floatformat:2 }}</td>
+                                <td class="text-end text-muted">-</td>
+                                <td class="text-end text-muted">-</td>
+                                <td>{{ item.vendor_name|default:"-" }}</td>
+                            </tr>
                             {% else %}
+                            <tr class="{% if item.shortage > 0 %}table-danger{% endif %}">
+                                {% if forloop.first %}
+                                <td rowspan="{{ batch.structured_items|length }}" class="align-middle fw-bold">{{ batch.part_no }}</td>
+                                <td rowspan="{{ batch.structured_items|length }}" class="align-middle">{{ batch.part_name }}</td>
+                                <td rowspan="{{ batch.structured_items|length }}" class="align-middle text-center">{{ batch.qty }}</td>
+                                <td rowspan="{{ batch.structured_items|length }}" class="align-middle">{{ batch.need_date|default:"-" }}</td>
+                                {% endif %}
+                                <td>
+                                    {% if item.level > 1 %}<span class="text-muted">└ </span>{% endif %}
+                                    {{ item.child_part_no }}
+                                </td>
+                                <td>{{ item.child_part_name }}</td>
+                                <td class="text-end">{{ item.required_qty|floatformat:2 }}</td>
+                                <td class="text-end">{{ item.stock_qty }}</td>
+                                <td class="text-end">
+                                    {% if item.shortage > 0 %}
+                                    <span class="badge bg-danger">{{ item.shortage|floatformat:0 }}</span>
+                                    {% else %}
+                                    <span class="badge bg-success">OK</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ item.vendor_name|default:"-" }}</td>
+                            </tr>
+                            {% endif %}
+                            {% endfor %}
+                        {% elif batch.items %}
+                            {% for item in batch.items %}
+                            <tr class="{% if item.shortage > 0 %}table-danger{% endif %}">
+                                {% if forloop.first %}
+                                <td rowspan="{{ batch.items|length }}" class="align-middle fw-bold">{{ batch.part_no }}</td>
+                                <td rowspan="{{ batch.items|length }}" class="align-middle">{{ batch.part_name }}</td>
+                                <td rowspan="{{ batch.items|length }}" class="align-middle text-center">{{ batch.qty }}</td>
+                                <td rowspan="{{ batch.items|length }}" class="align-middle">{{ batch.need_date|default:"-" }}</td>
+                                {% endif %}
+                                <td>{{ item.child_part_no }}</td>
+                                <td>{{ item.child_part_name }}</td>
+                                <td class="text-end">{{ item.required_qty|floatformat:2 }}</td>
+                                <td class="text-end">{{ item.stock_qty }}</td>
+                                <td class="text-end">
+                                    {% if item.shortage > 0 %}
+                                    <span class="badge bg-danger">{{ item.shortage|floatformat:0 }}</span>
+                                    {% else %}
+                                    <span class="badge bg-success">OK</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ item.vendor_name|default:"-" }}</td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
                             <tr class="table-warning" data-missing-partno="{{ batch.part_no }}">
                                 <td class="fw-bold">{{ batch.part_no }}</td>
                                 <td>-</td>
@@ -403,9 +428,9 @@
                                 <td>{{ batch.need_date|default:"-" }}</td>
                                 <td colspan="6" class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>BOM 데이터 없음</td>
                             </tr>
-                            {% endif %}
-                        {% endfor %}
+                        {% endif %}
                     </tbody>
+                    {% endfor %}
                 </table>
             </div>
         </div>
@@ -555,6 +580,17 @@
     color: #999;
 }
 
+.batch-filter-btn.active {
+    font-weight: bold;
+}
+.batch-filter-btn[data-filter="all"].active {
+    background-color: #6c757d;
+    color: white;
+}
+.batch-filter-btn[data-filter="missing"].active {
+    background-color: #ffc107;
+    color: #000;
+}
 @media print {
     .sidebar, .navbar, form, .btn, nav, .nav-tabs, .tab-pane:not(.show) {
         display: none !important;
@@ -692,8 +728,84 @@ document.getElementById('batchForm').addEventListener('submit', function() {
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>계산 중...';
 });
 
+// ── 페이지네이션 ──
+var batchGroups = [];      // 전체 batch-group 목록
+var filteredGroups = [];   // 현재 필터 적용된 목록
+var currentPage = 0;
+var pageSize = 50;
+var currentFilter = 'all'; // 'all' | 'missing'
+
+function initPagination() {
+    batchGroups = Array.from(document.querySelectorAll('.batch-group'));
+    // BOM 없음 필터 버튼 표시
+    var missingCount = batchGroups.filter(function(g) { return g.dataset.hasBom === 'false'; }).length;
+    if (missingCount > 0) {
+        document.getElementById('btnFilterMissing').style.display = '';
+        document.getElementById('missingFilterCount').textContent = missingCount;
+    }
+    applyFilter();
+}
+
+function applyFilter() {
+    if (currentFilter === 'missing') {
+        filteredGroups = batchGroups.filter(function(g) { return g.dataset.hasBom === 'false'; });
+    } else {
+        filteredGroups = batchGroups.slice();
+    }
+    currentPage = 0;
+    renderPage();
+}
+
+function renderPage() {
+    var start = currentPage * pageSize;
+    var end = start + pageSize;
+    var totalPages = Math.max(1, Math.ceil(filteredGroups.length / pageSize));
+
+    // 모든 batch-group 숨기기
+    batchGroups.forEach(function(g) { g.style.display = 'none'; });
+    // 현재 페이지만 표시
+    filteredGroups.slice(start, end).forEach(function(g) { g.style.display = ''; });
+
+    // 컨트롤 업데이트
+    document.getElementById('pageInfo').textContent = (currentPage + 1) + ' / ' + totalPages;
+    document.getElementById('btnPrevPage').disabled = (currentPage === 0);
+    document.getElementById('btnNextPage').disabled = (currentPage >= totalPages - 1);
+
+    // 스크롤 맨 위로
+    var wrap = document.getElementById('batchTableWrap');
+    if (wrap) wrap.scrollTop = 0;
+}
+
+function changeBatchPage(delta) {
+    var totalPages = Math.max(1, Math.ceil(filteredGroups.length / pageSize));
+    var newPage = currentPage + delta;
+    if (newPage >= 0 && newPage < totalPages) {
+        currentPage = newPage;
+        renderPage();
+    }
+}
+
+function changePageSize(val) {
+    pageSize = parseInt(val) || 50;
+    currentPage = 0;
+    renderPage();
+}
+
+function setBatchFilter(filter) {
+    currentFilter = filter;
+    document.querySelectorAll('.batch-filter-btn').forEach(function(btn) {
+        btn.classList.toggle('active', btn.dataset.filter === filter);
+    });
+    applyFilter();
+}
+
 // BOM 누락 품번 감지 및 동기화
 document.addEventListener('DOMContentLoaded', function() {
+    // 페이지네이션 초기화
+    if (document.querySelector('.batch-group')) {
+        initPagination();
+    }
+
     var missingRows = document.querySelectorAll('#batchResultTable tr[data-missing-partno]');
     if (missingRows.length > 0) {
         document.getElementById('bomSyncArea').style.display = '';
@@ -702,9 +814,11 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 async function syncMissingBom() {
-    var missingRows = document.querySelectorAll('#batchResultTable tr[data-missing-partno]');
+    // 전체 (숨겨진 페이지 포함) 에서 BOM 누락 품번 수집
     var partNos = [];
-    missingRows.forEach(function(tr) { partNos.push(tr.dataset.missingPartno); });
+    document.querySelectorAll('#batchResultTable .batch-group[data-has-bom="false"] tr[data-missing-partno]').forEach(function(tr) {
+        partNos.push(tr.dataset.missingPartno);
+    });
 
     if (partNos.length === 0) { alert('동기화할 품번이 없습니다.'); return; }
 
@@ -776,9 +890,9 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function confirmRegisterDemand() {
-    // 배치 결과 테이블에서 거래처 목록 추출 (중복 제거)
+    // 전체 batch-group에서 거래처 목록 추출 (숨겨진 페이지 포함)
     var vendorSet = {};
-    document.querySelectorAll('#batchResultTable tbody tr td:last-child').forEach(function(td) {
+    document.querySelectorAll('#batchResultTable .batch-group tr td:last-child').forEach(function(td) {
         var name = td.textContent.trim();
         if (name && name !== '-') vendorSet[name] = (vendorSet[name] || 0) + 1;
     });
