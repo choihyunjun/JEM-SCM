@@ -5146,14 +5146,8 @@ def bom_register_demand(request):
             part_vendor_cache[p.part_no] = p.vendor.name
 
     # 동일 자품번+필요일자 기준으로 필요수량 합산
+    # items(최하위 원자재) + structured_items의 반제품도 포함
     demand_map = {}  # key: (child_part_no, need_date), value: required_qty 합계
-
-    # 디버깅 카운터
-    debug_total_batches = len(batch_results)
-    debug_no_date = 0
-    debug_no_items = 0
-    debug_total_items = 0
-    debug_vendor_filtered = 0
 
     for batch in batch_results:
         need_date = batch.get('need_date', '')
@@ -5171,27 +5165,25 @@ def bom_register_demand(request):
             need_date = None
 
         if not need_date:
-            debug_no_date += 1
             continue  # 필요일자 없는 항목은 스킵
 
-        items = batch.get('items', [])
-        if not items:
-            debug_no_items += 1
+        # 원자재 (items) + 반제품 (structured_items에서 is_semi=True) 모두 수집
+        all_items = list(batch.get('items', []))
+        for si in batch.get('structured_items', []):
+            if si.get('is_semi'):
+                all_items.append(si)
 
-        for item in items:
+        for item in all_items:
             child_part_no = item.get('child_part_no', '')
             required_qty = item.get('required_qty', 0)
 
             if not child_part_no or required_qty <= 0:
                 continue
 
-            debug_total_items += 1
-
             # 거래처 필터 적용: Part 마스터의 실제 vendor.name 기준으로 매칭
             if selected_vendors is not None:
                 actual_vendor_name = part_vendor_cache.get(child_part_no, '')
                 if not actual_vendor_name or actual_vendor_name not in selected_vendors:
-                    debug_vendor_filtered += 1
                     continue
 
             key = (child_part_no, need_date)
@@ -5201,14 +5193,7 @@ def bom_register_demand(request):
                 demand_map[key] = required_qty
 
     if not demand_map:
-        debug_msg = (
-            f"등록할 소요량 데이터가 없습니다. "
-            f"[전체 {debug_total_batches}건 중 날짜없음 {debug_no_date}건, "
-            f"자재없음 {debug_no_items}건, "
-            f"유효자재 {debug_total_items}건, "
-            f"거래처필터 제외 {debug_vendor_filtered}건]"
-        )
-        messages.warning(request, debug_msg)
+        messages.warning(request, "등록할 소요량 데이터가 없습니다. 필요일자가 입력된 항목이 있는지 확인해주세요.")
         return redirect('material:bom_calculate')
 
     # SCM 소요량 등록
