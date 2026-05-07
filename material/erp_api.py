@@ -1728,23 +1728,19 @@ def fetch_erp_item_price(item_cd, tr_cd='', use_integrated_only=False):
         from datetime import date as _date
         today_str = _date.today().strftime('%Y%m%d')
         items = data.get('resultData', [])
-        # 디버그: 응답 raw 출력 (필드명 확인용)
-        print(f'[통합단가DEBUG] item_cd={item_cd}, tr_cd={tr_cd}, 응답건수={len(items)}', flush=True)
-        for _i, _it in enumerate(items):
-            print(f'[통합단가DEBUG] [{_i}] {_it}', flush=True)
-        # 적용일자(baseDt) 기준 최신순 정렬 후 오늘 이전인 것 중 첫 번째 사용
+        # 적용일자(appDt) 기준 최신순 정렬 후 오늘 이전인 것 중 첫 번째 사용
         candidates = [
             it for it in items
             if it.get('useYn') == '1'
             and float(it.get('unitUm', 0) or 0) > 0
-            and (it.get('baseDt') or '00000000') <= today_str
+            and (it.get('appDt') or '00000000') <= today_str
         ]
-        candidates.sort(key=lambda it: it.get('baseDt') or '00000000', reverse=True)
+        candidates.sort(key=lambda it: it.get('appDt') or '00000000', reverse=True)
         if candidates:
             best = candidates[0]
             unit_um = float(best.get('unitUm', 0))
             vat_um = float(best.get('vatUm', 0) or 0)
-            logger.info(f'ERP 통합단가 조회 성공: {item_cd} -> unitUm={unit_um} (baseDt={best.get("baseDt")})')
+            logger.info(f'ERP 통합단가 조회 성공: {item_cd} -> unitUm={unit_um} (appDt={best.get("appDt")})')
             return unit_um, vat_um
 
     logger.warning(f'ERP 단가 조회 실패 (모든 API): {item_cd}/{tr_cd}')
