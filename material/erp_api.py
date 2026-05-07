@@ -1725,14 +1725,23 @@ def fetch_erp_item_price(item_cd, tr_cd='', use_integrated_only=False):
         body['trCd'] = tr_cd
     success, data, error = call_erp_api('/apiproxy/api20A00S01801', body)
     if success and data:
+        from datetime import date as _date
+        today_str = _date.today().strftime('%Y%m%d')
         items = data.get('resultData', [])
-        for item in items:
-            if item.get('useYn') == '1':
-                unit_um = float(item.get('unitUm', 0) or 0)
-                vat_um = float(item.get('vatUm', 0) or 0)
-                if unit_um > 0:
-                    logger.info(f'ERP 통합단가 조회 성공: {item_cd} -> unitUm={unit_um}')
-                    return unit_um, vat_um
+        # 적용일자(baseDt) 기준 최신순 정렬 후 오늘 이전인 것 중 첫 번째 사용
+        candidates = [
+            it for it in items
+            if it.get('useYn') == '1'
+            and float(it.get('unitUm', 0) or 0) > 0
+            and (it.get('baseDt') or '00000000') <= today_str
+        ]
+        candidates.sort(key=lambda it: it.get('baseDt') or '00000000', reverse=True)
+        if candidates:
+            best = candidates[0]
+            unit_um = float(best.get('unitUm', 0))
+            vat_um = float(best.get('vatUm', 0) or 0)
+            logger.info(f'ERP 통합단가 조회 성공: {item_cd} -> unitUm={unit_um} (baseDt={best.get("baseDt")})')
+            return unit_um, vat_um
 
     logger.warning(f'ERP 단가 조회 실패 (모든 API): {item_cd}/{tr_cd}')
     return 0, 0
