@@ -141,7 +141,7 @@ def _build_erp_remark(trx):
     return 'SCM 입고'
 
 
-def register_erp_incoming(trx, qty, warehouse_code, erp_order_no='', erp_order_seq=''):
+def register_erp_incoming(trx, qty, warehouse_code, erp_order_no='', erp_order_seq='', use_integrated_only=False):
     """
     ERP 입고정보 등록
     - trx: MaterialTransaction 객체
@@ -149,6 +149,7 @@ def register_erp_incoming(trx, qty, warehouse_code, erp_order_no='', erp_order_s
     - warehouse_code: 입고창고 코드 (예: '2000')
     - erp_order_no: ERP 발주번호 (있으면 발주입고, 없으면 예외입고)
     - erp_order_seq: ERP 발주순번
+    - use_integrated_only: True면 거래처단가/품목단가를 건너뛰고 통합단가만 사용
     Returns: (success: bool, erp_no: str or None, error: str or None)
     """
     if not getattr(settings, 'ERP_ENABLED', False):
@@ -168,8 +169,8 @@ def register_erp_incoming(trx, qty, warehouse_code, erp_order_no='', erp_order_s
     else:
         key_dt = str(trx.date).replace('-', '')[:8]
 
-    # 품목 단가 조회 (통합단가 API)
-    unit_price, vat_price = fetch_erp_item_price(trx.part.part_no, vendor.erp_code)
+    # 품목 단가 조회
+    unit_price, vat_price = fetch_erp_item_price(trx.part.part_no, vendor.erp_code, use_integrated_only=use_integrated_only)
     if unit_price <= 0:
         return False, None, f'단가 미등록 ({trx.part.part_no}/{vendor.erp_code})'
     supply_amount = round(unit_price * qty)      # 공급가액
@@ -1661,18 +1662,19 @@ def sync_erp_adjustments(date_from=None, date_to=None):
 
 # ── ERP 품목 단가 조회 API ─────────────────────────────────────────
 
-def fetch_erp_item_price(item_cd, tr_cd=''):
+def fetch_erp_item_price(item_cd, tr_cd='', use_integrated_only=False):
     """
     ERP 구매단가 조회 (3단계 fallback)
     1) 거래처단가정보 (api20A00S01501) - 거래처별 구매단가
     2) 품목단가정보 (api20A00S01401) - 품목 구매단가
     3) 통합단가정보 (api20A00S01801) - 통합단가
+    use_integrated_only=True 이면 1·2 단계를 건너뛰고 통합단가만 조회 (입고단가조정 동작과 동일)
     Returns: (unit_price, vat_price) or (0, 0)
     """
     from datetime import datetime
 
     # 1) 거래처단가정보 조회 (거래처코드 필수)
-    if tr_cd:
+    if tr_cd and not use_integrated_only:
         body = {
             'coCd': settings.ERP_COMPANY_CODE,
             'trCd': tr_cd,
@@ -1691,26 +1693,27 @@ def fetch_erp_item_price(item_cd, tr_cd=''):
         logger.info(f'ERP 거래처단가 없음: {item_cd}/{tr_cd}')
 
     # 2) 품목단가정보 조회
-    body = {
-        'coCd': settings.ERP_COMPANY_CODE,
-        'itemCd': item_cd,
-        'useYn': '1',
-    }
-    success, data, error = call_erp_api('/apiproxy/api20A00S01401', body)
-    if success and data:
-        items = data.get('resultData', [])
-        for item in items:
-            purch_um = float(item.get('purchUm', 0) or 0)
-            purch_vat_um = float(item.get('purchvatUm', 0) or 0)
-            if purch_um > 0:
-                logger.info(f'ERP 품목단가 조회 성공: {item_cd} -> purchUm={purch_um}')
-                return purch_um, purch_vat_um
-            # purchUm이 0이면 standardUm(표준원가) 시도
-            std_um = float(item.get('standardUm', 0) or 0)
-            if std_um > 0:
-                logger.info(f'ERP 표준원가 조회 성공: {item_cd} -> standardUm={std_um}')
-                return std_um, round(std_um * 1.1)
-    logger.info(f'ERP 품목단가 없음: {item_cd}')
+    if not use_integrated_only:
+        body = {
+            'coCd': settings.ERP_COMPANY_CODE,
+            'itemCd': item_cd,
+            'useYn': '1',
+        }
+        success, data, error = call_erp_api('/apiproxy/api20A00S01401', body)
+        if success and data:
+            items = data.get('resultData', [])
+            for item in items:
+                purch_um = float(item.get('purchUm', 0) or 0)
+                purch_vat_um = float(item.get('purchvatUm', 0) or 0)
+                if purch_um > 0:
+                    logger.info(f'ERP 품목단가 조회 성공: {item_cd} -> purchUm={purch_um}')
+                    return purch_um, purch_vat_um
+                # purchUm이 0이면 standardUm(표준원가) 시도
+                std_um = float(item.get('standardUm', 0) or 0)
+                if std_um > 0:
+                    logger.info(f'ERP 표준원가 조회 성공: {item_cd} -> standardUm={std_um}')
+                    return std_um, round(std_um * 1.1)
+        logger.info(f'ERP 품목단가 없음: {item_cd}')
 
     # 3) 통합단가정보 조회 (baseDt 제외 - 전체 조회)
     body = {

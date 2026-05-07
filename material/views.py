@@ -1121,6 +1121,13 @@ def reregister_erp_price(request, trx_id):
     if trx.transaction_type in ('IN_ERP', 'RCV_ERP'):
         return JsonResponse({'success': False, 'error': 'ERP입고 건은 아마란스에서 직접 수정하세요.'})
 
+    import json as _json
+    try:
+        body_data = _json.loads(request.body)
+    except Exception:
+        body_data = {}
+    use_integrated_only = body_data.get('use_integrated_only', False)
+
     try:
         from material.erp_api import delete_erp_incoming, register_erp_incoming
 
@@ -1173,10 +1180,12 @@ def reregister_erp_price(request, trx_id):
             trx.save(update_fields=['erp_incoming_no', 'erp_sync_status'])
 
         # 2) 최신 단가로 (재)등록
-        print(f'[단가재반영] trx={trx.id}, part={trx.part.part_no}, qty={trx.quantity}, wh={warehouse_code}, vendor={trx.vendor.erp_code if trx.vendor else None}', flush=True)
+        price_mode = '통합단가전용' if use_integrated_only else '일반(fallback)'
+        print(f'[단가재반영] trx={trx.id}, part={trx.part.part_no}, qty={trx.quantity}, wh={warehouse_code}, vendor={trx.vendor.erp_code if trx.vendor else None}, 단가모드={price_mode}', flush=True)
         reg_ok, reg_no, reg_err = register_erp_incoming(
             trx, trx.quantity, warehouse_code,
-            erp_order_no=erp_order_no, erp_order_seq=erp_order_seq
+            erp_order_no=erp_order_no, erp_order_seq=erp_order_seq,
+            use_integrated_only=use_integrated_only,
         )
         print(f'[단가재반영] 결과: ok={reg_ok}, no={reg_no}, err={reg_err}', flush=True)
 

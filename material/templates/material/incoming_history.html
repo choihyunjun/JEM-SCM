@@ -81,9 +81,15 @@
                 <input type="checkbox" id="checkAll" onclick="toggleCheckAll(this)" class="form-check-input me-2" style="cursor:pointer;">
                 <span class="small" id="selectedCount">전체 선택</span>
             </div>
-            <button class="btn btn-warning btn-sm px-3" id="btnBatchReregister" onclick="batchReregister()" disabled>
-                <i class="fas fa-sync-alt me-1"></i>단가 재반영 (<span id="batchCount">0</span>건)
-            </button>
+            <div class="d-flex align-items-center gap-3">
+                <div class="form-check form-switch mb-0" title="통합단가만 사용 시 거래처단가·품목단가를 무시하고 ERP 통합단가를 직접 적용합니다 (입고단가조정과 동일한 동작)">
+                    <input class="form-check-input" type="checkbox" id="useIntegratedOnly" checked>
+                    <label class="form-check-label small fw-semibold text-warning-emphasis" for="useIntegratedOnly">통합단가만 적용</label>
+                </div>
+                <button class="btn btn-warning btn-sm px-3" id="btnBatchReregister" onclick="batchReregister()" disabled>
+                    <i class="fas fa-sync-alt me-1"></i>단가 재반영 (<span id="batchCount">0</span>건)
+                </button>
+            </div>
         </div>
     </div>
 
@@ -386,7 +392,9 @@ function batchReregister() {
     const ids = Array.from(document.querySelectorAll('.row-check:checked')).map(cb => cb.value);
     if (ids.length === 0) return;
 
-    if (!confirm(`선택한 ${ids.length}건의 단가를 최신 통합단가로 재반영하시겠습니까?\n(ERP 입고 삭제 후 재등록됩니다)`)) return;
+    const useIntegratedOnly = document.getElementById('useIntegratedOnly').checked;
+    const modeLabel = useIntegratedOnly ? '통합단가만' : '기존 우선순위(거래처단가→품목단가→통합단가)';
+    if (!confirm(`선택한 ${ids.length}건의 단가를 재반영하시겠습니까?\n적용 방식: ${modeLabel}\n(ERP 입고 삭제 후 재등록됩니다)`)) return;
 
     const btn = document.getElementById('btnBatchReregister');
     btn.disabled = true;
@@ -402,7 +410,8 @@ function batchReregister() {
             headers: {
                 'X-CSRFToken': '{{ csrf_token }}',
                 'Content-Type': 'application/json'
-            }
+            },
+            body: JSON.stringify({ use_integrated_only: useIntegratedOnly }),
         })
         .then(r => r.json())
         .then(data => {
