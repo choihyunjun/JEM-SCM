@@ -1728,6 +1728,10 @@ def fetch_erp_item_price(item_cd, tr_cd='', use_integrated_only=False):
         from datetime import date as _date
         today_str = _date.today().strftime('%Y%m%d')
         items = data.get('resultData', [])
+        # 디버그: 응답 raw 출력 (필드명 확인용)
+        print(f'[통합단가DEBUG] item_cd={item_cd}, tr_cd={tr_cd}, 응답건수={len(items)}', flush=True)
+        for _i, _it in enumerate(items):
+            print(f'[통합단가DEBUG] [{_i}] {_it}', flush=True)
         # 적용일자(baseDt) 기준 최신순 정렬 후 오늘 이전인 것 중 첫 번째 사용
         candidates = [
             it for it in items
