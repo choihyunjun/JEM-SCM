@@ -8949,14 +8949,18 @@ def molding_ai_analysis(request):
     def collect_month_data(y, m):
         records = MoldingDailyRecord.objects.filter(date__year=y, date__month=m).select_related('machine')
         records_list = list(records)
+        recorded_days = records.values('date').distinct().count()
+
         total_base = sum(r.base_minutes for r in records_list) or 1
         total_op = sum(r.operating_minutes for r in records_list)
         util = round(total_op / total_base * 100, 1)
 
         setting = MoldingWorkSetting.get_setting(y, m)
+        expected_days = setting.work_days
         from .models import MoldingMachine
         machine_count = MoldingMachine.objects.filter(is_active=True).count()
-        work_cap = machine_count * setting.work_days * (setting.day_shift_minutes + setting.night_shift_minutes)
+        # 시간가동률: 실제 입력된 날 기준 (미완료 월도 올바르게 비교)
+        work_cap = machine_count * recorded_days * (setting.day_shift_minutes + setting.night_shift_minutes)
         time_rate = round(total_op / work_cap * 100, 1) if work_cap else 0
 
         # 유실항목별 합계 (시간)
@@ -8966,6 +8970,7 @@ def molding_ai_analysis(request):
 
         mgmt_loss = sum(loss_by_cat.get(c, 0) for c in MOLDING_MGMT_LOSS)
         time_loss = sum(v for c, v in loss_by_cat.items() if c not in MOLDING_MGMT_LOSS)
+        days_for_avg = recorded_days or 1
 
         # TON별 설비가동률
         ton_data = defaultdict(lambda: {'base': 0, 'op': 0})
@@ -8979,8 +8984,13 @@ def molding_ai_analysis(request):
             'util': util, 'time_rate': time_rate,
             'mgmt_loss_h': round(mgmt_loss / 60, 1),
             'time_loss_h': round(time_loss / 60, 1),
+            'mgmt_loss_h_per_day': round(mgmt_loss / 60 / days_for_avg, 1),
+            'time_loss_h_per_day': round(time_loss / 60 / days_for_avg, 1),
             'loss_by_cat': {c: round(v / 60, 1) for c, v in loss_by_cat.items()},
             'ton_util': ton_util,
+            'recorded_days': recorded_days,
+            'expected_days': expected_days,
+            'is_complete': recorded_days >= expected_days,
         }
 
     cur = collect_month_data(year, month)
@@ -8990,8 +9000,19 @@ def molding_ai_analysis(request):
     # 전월 대비 변화 계산
     util_diff = round(cur['util'] - prv['util'], 1)
     time_diff = round(cur['time_rate'] - prv['time_rate'], 1)
-    mgmt_diff = round(cur['mgmt_loss_h'] - prv['mgmt_loss_h'], 1)
-    time_loss_diff = round(cur['time_loss_h'] - prv['time_loss_h'], 1)
+
+    # 당월 완료 여부에 따라 시간 지표 단위 결정
+    cur_incomplete = not cur['is_complete']
+    if cur_incomplete:
+        mgmt_cur_str = f"{cur['mgmt_loss_h_per_day']}h/일(일평균)"
+        mgmt_prv_str = f"{prv['mgmt_loss_h_per_day']}h/일(일평균)"
+        time_loss_cur_str = f"{cur['time_loss_h_per_day']}h/일(일평균)"
+        time_loss_prv_str = f"{prv['time_loss_h_per_day']}h/일(일평균)"
+    else:
+        mgmt_cur_str = f"{cur['mgmt_loss_h']}h"
+        mgmt_prv_str = f"{prv['mgmt_loss_h']}h"
+        time_loss_cur_str = f"{cur['time_loss_h']}h"
+        time_loss_prv_str = f"{prv['time_loss_h']}h"
 
     # TON별 가동률 변화 (눈에 띄는 것)
     ton_changes = []
@@ -9007,15 +9028,26 @@ def molding_ai_analysis(request):
     time_loss_cats = [(c, cur['loss_by_cat'].get(c, 0)) for c in all_cats if c not in MOLDING_MGMT_LOSS]
     top3_loss = sorted(time_loss_cats, key=lambda x: -x[1])[:3]
 
+    cur_label = f"{cur['year']}년 {cur['month']}월"
+    prv_label = f"{prv['year']}년 {prv['month']}월"
+    if cur_incomplete:
+        cur_label += f" (⚠ {cur['recorded_days']}일치 입력 / 기준 {cur['expected_days']}일, 미완료)"
+
+    caution = (
+        f"\n⚠ 주의: 당월은 {cur['recorded_days']}일치만 입력된 미완료 데이터입니다. "
+        "가동률(%) 위주로 분석하고, 시간 지표는 일평균 기준임을 명시하며, "
+        "당월 데이터는 확정치가 아닌 참고용임을 반드시 언급해주세요.\n"
+    ) if cur_incomplete else ""
+
     prompt = f"""당신은 제조업 생산관리 전문가입니다. 아래 성형 가동률 데이터를 분석하여 한국어로 5~7줄의 코멘트를 작성해주세요.
 간결하고 실무적으로, 불필요한 인사말 없이 바로 분석 내용만 작성하세요.
-
-[{prv['year']}년 {prv['month']}월 → {cur['year']}년 {cur['month']}월 비교]
+{caution}
+[{prv_label} → {cur_label} 비교]
 
 ■ 설비가동률: {prv['util']}% → {cur['util']}% ({'+' if util_diff>0 else ''}{util_diff}%p)
-■ 시간가동률: {prv['time_rate']}% → {cur['time_rate']}% ({'+' if time_diff>0 else ''}{time_diff}%p)
-■ 관리LOSS: {prv['mgmt_loss_h']}h → {cur['mgmt_loss_h']}h ({'+' if mgmt_diff>0 else ''}{mgmt_diff}h)
-■ 시간LOSS: {prv['time_loss_h']}h → {cur['time_loss_h']}h ({'+' if time_loss_diff>0 else ''}{time_loss_diff}h)
+■ 시간가동률(입력일 기준): {prv['time_rate']}% → {cur['time_rate']}% ({'+' if time_diff>0 else ''}{time_diff}%p)
+■ 관리LOSS: {mgmt_prv_str} → {mgmt_cur_str}
+■ 시간LOSS: {time_loss_prv_str} → {time_loss_cur_str}
 
 ■ TON별 가동률 주요 변화 (±5%p 이상):
 {chr(10).join(ton_changes) if ton_changes else '큰 변화 없음'}
