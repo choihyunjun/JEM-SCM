@@ -10,6 +10,7 @@ from django.db import transaction
 from django.db.models import F, Sum, Q, Value
 from django.db.models.functions import Greatest
 from django.utils import timezone
+from django.conf import settings
 from functools import wraps
 
 logger = logging.getLogger(__name__)
