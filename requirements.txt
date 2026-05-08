@@ -1,3 +1,4 @@
 Django>=5.1,<6.0
 openpyxl
 gunicorn
+anthropic>=0.40.0

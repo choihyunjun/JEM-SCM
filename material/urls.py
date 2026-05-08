@@ -133,6 +133,7 @@ urlpatterns = [
 
     # 성형 가동률 분석 대시보드
     path('molding/analytics/', views.molding_analytics, name='molding_analytics'),
+    path('molding/analytics/ai/', views.molding_ai_analysis, name='molding_ai_analysis'),
 
     # 성형 마스터
     path('molding/master/', views.molding_master_list, name='molding_master_list'),

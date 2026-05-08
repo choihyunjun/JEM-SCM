@@ -8922,6 +8922,124 @@ def molding_analytics(request):
 
 
 # =============================================================================
+# 성형 가동률 AI 분석
+# =============================================================================
+
+@login_required
+def molding_ai_analysis(request):
+    """성형 가동률 AI 분석 — Claude Haiku로 전월 대비 코멘트 생성"""
+    from django.http import JsonResponse
+    from .models import MoldingDailyRecord, MoldingLossDetail, MoldingWorkSetting, MOLDING_LOSS_CATEGORIES, MOLDING_MGMT_LOSS
+    from collections import defaultdict
+    from django.db.models import Sum
+    from dateutil.relativedelta import relativedelta
+    from datetime import date
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST만 허용'}, status=405)
+
+    year = int(request.POST.get('year', timezone.localtime().year))
+    month = int(request.POST.get('month', timezone.localtime().month))
+
+    api_key = getattr(settings, 'ANTHROPIC_API_KEY', '')
+    if not api_key:
+        return JsonResponse({'success': False, 'error': 'ANTHROPIC_API_KEY 미설정'})
+
+    def collect_month_data(y, m):
+        records = MoldingDailyRecord.objects.filter(date__year=y, date__month=m).select_related('machine')
+        records_list = list(records)
+        total_base = sum(r.base_minutes for r in records_list) or 1
+        total_op = sum(r.operating_minutes for r in records_list)
+        util = round(total_op / total_base * 100, 1)
+
+        setting = MoldingWorkSetting.get_setting(y, m)
+        from .models import MoldingMachine
+        machine_count = MoldingMachine.objects.filter(is_active=True).count()
+        work_cap = machine_count * setting.work_days * (setting.day_shift_minutes + setting.night_shift_minutes)
+        time_rate = round(total_op / work_cap * 100, 1) if work_cap else 0
+
+        # 유실항목별 합계 (시간)
+        loss_by_cat = defaultdict(int)
+        for d in MoldingLossDetail.objects.filter(record__date__year=y, record__date__month=m).values('category').annotate(total=Sum('minutes')):
+            loss_by_cat[d['category']] = d['total']
+
+        mgmt_loss = sum(loss_by_cat.get(c, 0) for c in MOLDING_MGMT_LOSS)
+        time_loss = sum(v for c, v in loss_by_cat.items() if c not in MOLDING_MGMT_LOSS)
+
+        # TON별 설비가동률
+        ton_data = defaultdict(lambda: {'base': 0, 'op': 0})
+        for r in records_list:
+            ton_data[r.machine.tonnage]['base'] += r.base_minutes
+            ton_data[r.machine.tonnage]['op'] += r.operating_minutes
+        ton_util = {t: round(v['op'] / v['base'] * 100, 1) for t, v in ton_data.items() if v['base']}
+
+        return {
+            'year': y, 'month': m,
+            'util': util, 'time_rate': time_rate,
+            'mgmt_loss_h': round(mgmt_loss / 60, 1),
+            'time_loss_h': round(time_loss / 60, 1),
+            'loss_by_cat': {c: round(v / 60, 1) for c, v in loss_by_cat.items()},
+            'ton_util': ton_util,
+        }
+
+    cur = collect_month_data(year, month)
+    prev_date = date(year, month, 1) - relativedelta(months=1)
+    prv = collect_month_data(prev_date.year, prev_date.month)
+
+    # 전월 대비 변화 계산
+    util_diff = round(cur['util'] - prv['util'], 1)
+    time_diff = round(cur['time_rate'] - prv['time_rate'], 1)
+    mgmt_diff = round(cur['mgmt_loss_h'] - prv['mgmt_loss_h'], 1)
+    time_loss_diff = round(cur['time_loss_h'] - prv['time_loss_h'], 1)
+
+    # TON별 가동률 변화 (눈에 띄는 것)
+    ton_changes = []
+    for t in set(list(cur['ton_util'].keys()) + list(prv['ton_util'].keys())):
+        c_val = cur['ton_util'].get(t, 0)
+        p_val = prv['ton_util'].get(t, 0)
+        diff = round(c_val - p_val, 1)
+        if abs(diff) >= 5:
+            ton_changes.append(f"{t}t: {p_val}% → {c_val}% ({'+' if diff>0 else ''}{diff}%)")
+
+    # 유실항목 변화 (시간LOSS 상위)
+    all_cats = set(list(cur['loss_by_cat'].keys()) + list(prv['loss_by_cat'].keys()))
+    time_loss_cats = [(c, cur['loss_by_cat'].get(c, 0)) for c in all_cats if c not in MOLDING_MGMT_LOSS]
+    top3_loss = sorted(time_loss_cats, key=lambda x: -x[1])[:3]
+
+    prompt = f"""당신은 제조업 생산관리 전문가입니다. 아래 성형 가동률 데이터를 분석하여 한국어로 5~7줄의 코멘트를 작성해주세요.
+간결하고 실무적으로, 불필요한 인사말 없이 바로 분석 내용만 작성하세요.
+
+[{prv['year']}년 {prv['month']}월 → {cur['year']}년 {cur['month']}월 비교]
+
+■ 설비가동률: {prv['util']}% → {cur['util']}% ({'+' if util_diff>0 else ''}{util_diff}%p)
+■ 시간가동률: {prv['time_rate']}% → {cur['time_rate']}% ({'+' if time_diff>0 else ''}{time_diff}%p)
+■ 관리LOSS: {prv['mgmt_loss_h']}h → {cur['mgmt_loss_h']}h ({'+' if mgmt_diff>0 else ''}{mgmt_diff}h)
+■ 시간LOSS: {prv['time_loss_h']}h → {cur['time_loss_h']}h ({'+' if time_loss_diff>0 else ''}{time_loss_diff}h)
+
+■ TON별 가동률 주요 변화 (±5%p 이상):
+{chr(10).join(ton_changes) if ton_changes else '큰 변화 없음'}
+
+■ 시간LOSS 상위 항목 (당월):
+{chr(10).join(f"  - {c}: {v}h" for c, v in top3_loss if v > 0)}
+
+분석 포인트: 전월 대비 개선/악화 원인, 주요 LOSS 항목, 다음 달 주의사항을 포함해주세요."""
+
+    try:
+        import anthropic as _anthropic
+        client = _anthropic.Anthropic(api_key=api_key)
+        message = client.messages.create(
+            model='claude-haiku-4-5-20251001',
+            max_tokens=600,
+            messages=[{'role': 'user', 'content': prompt}],
+        )
+        analysis = message.content[0].text.strip()
+        return JsonResponse({'success': True, 'analysis': analysis})
+    except Exception as e:
+        logger.error(f'AI 분석 오류: {e}', exc_info=True)
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+# =============================================================================
 # 성형 마스터 (Molding Master)
 # =============================================================================
 
