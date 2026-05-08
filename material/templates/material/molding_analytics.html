@@ -460,38 +460,37 @@
     <div class="table-responsive">
         <table class="table table-sm table-bordered text-center mb-0" style="font-size:0.82rem;">
             <thead>
-                <tr class="table-dark">
+                <tr style="background:#2d3748;color:#fff;">
                     <th style="min-width:90px;">구분</th>
                     {% for t in tonnage_table %}<th>{{ t.tonnage }}t</th>{% endfor %}
-                    <th class="table-secondary">TOTAL</th>
+                    <th style="background:#4a5568;">TOTAL</th>
                 </tr>
             </thead>
             <tbody>
-                <tr class="table-light">
-                    <td class="fw-bold text-start ps-2">보유대수</td>
-                    {% for t in tonnage_table %}<td>{{ t.count }}대</td>{% endfor %}
-                    <td class="fw-bold table-secondary">{{ tonnage_table|length }}대</td>
+                <tr style="background:#f7fafc;">
+                    <td class="fw-bold text-start ps-2 text-muted">보유대수</td>
+                    {% for t in tonnage_table %}<td class="text-muted">{{ t.count }}대</td>{% endfor %}
+                    <td class="fw-bold" style="background:#edf2f7;">{{ tonnage_table|length }}대</td>
                 </tr>
                 <tr>
                     <td class="fw-bold text-start ps-2">설비가동률</td>
                     {% for t in tonnage_table %}
                     <td class="fw-bold {% if t.util >= 90 %}text-success{% elif t.util >= 70 %}text-warning{% elif t.util > 0 %}text-danger{% endif %}">
-                        {% if t.util > 0 %}{{ t.util }}%{% else %}-{% endif %}
+                        {% if t.util > 0 %}{{ t.util }}%{% else %}<span class="text-muted">-</span>{% endif %}
                     </td>
                     {% endfor %}
-                    <td class="fw-bold table-secondary {% if kpi_utilization >= 90 %}text-success{% elif kpi_utilization >= 70 %}text-warning{% elif kpi_utilization > 0 %}text-danger{% endif %}">
+                    <td class="fw-bold {% if kpi_utilization >= 90 %}text-success{% elif kpi_utilization >= 70 %}text-warning{% elif kpi_utilization > 0 %}text-danger{% endif %}" style="background:#edf2f7;">
                         {{ kpi_utilization }}%
                     </td>
                 </tr>
-                <tr>
+                <tr style="background:#f7fafc;">
                     <td class="fw-bold text-start ps-2">시간가동률</td>
                     {% for t in tonnage_table %}
-                    <td class="tonnage-time-cell2 {% if t.time_rate >= 50 %}text-success{% elif t.time_rate >= 30 %}text-warning{% elif t.time_rate > 0 %}text-danger{% endif %}"
-                        data-setting="{{ t.time_rate }}" data-actual="{{ t.time_rate_actual }}">
-                        {% if t.time_rate > 0 %}{{ t.time_rate }}%{% else %}-{% endif %}
+                    <td class="tonnage-time-cell2" data-setting="{{ t.time_rate }}" data-actual="{{ t.time_rate_actual }}">
+                        {% if t.time_rate > 0 %}{{ t.time_rate }}%{% else %}<span class="text-muted">-</span>{% endif %}
                     </td>
                     {% endfor %}
-                    <td class="fw-bold table-secondary">{{ kpi_time_rate }}%</td>
+                    <td class="fw-bold" style="background:#edf2f7;">{{ kpi_time_rate }}%</td>
                 </tr>
             </tbody>
         </table>
@@ -506,50 +505,55 @@
     <div class="table-responsive">
         <table class="table table-sm table-bordered text-center mb-0" style="font-size:0.82rem;">
             <thead>
-                <tr class="table-dark">
+                <tr style="background:#2d3748;color:#fff;">
                     <th style="min-width:110px;">구분</th>
                     {% for row in tonnage_time_table %}<th>{{ row.tonnage }}t</th>{% endfor %}
-                    <th class="table-secondary">평균</th>
+                    <th style="background:#4a5568;">평균</th>
                 </tr>
             </thead>
             <tbody>
-                <tr class="table-light">
-                    <td class="fw-bold text-start ps-2">보유대수</td>
-                    {% for row in tonnage_time_table %}<td>{{ row.count }}대</td>{% endfor %}
-                    <td class="table-secondary fw-bold">-</td>
+                <tr style="background:#f7fafc;">
+                    <td class="text-start ps-2 text-muted">보유대수</td>
+                    {% for row in tonnage_time_table %}<td class="text-muted">{{ row.count }}대</td>{% endfor %}
+                    <td style="background:#edf2f7;" class="text-muted">-</td>
                 </tr>
                 <tr>
-                    <td class="fw-bold text-start ps-2">근무시간</td>
-                    {% for row in tonnage_time_table %}<td>{{ row.work_h }}h</td>{% endfor %}
-                    <td class="table-secondary fw-bold">{{ tonnage_time_total.work_h }}h</td>
+                    <td class="text-start ps-2 text-muted">근무시간</td>
+                    {% for row in tonnage_time_table %}<td class="text-muted">{{ row.work_h }}h</td>{% endfor %}
+                    <td class="text-muted" style="background:#edf2f7;">{{ tonnage_time_total.work_h }}h</td>
                 </tr>
-                <tr class="table-success bg-opacity-25">
-                    <td class="fw-bold text-start ps-2 text-success">가동시간</td>
-                    {% for row in tonnage_time_table %}<td class="fw-bold text-success">{{ row.operating_h }}h</td>{% endfor %}
-                    <td class="table-secondary fw-bold text-success">{{ tonnage_time_total.operating_h }}h</td>
+                <tr style="border-left:3px solid #38a169;">
+                    <td class="fw-bold text-start ps-2">가동시간</td>
+                    {% for row in tonnage_time_table %}<td class="fw-bold">{{ row.operating_h }}h</td>{% endfor %}
+                    <td class="fw-bold" style="background:#edf2f7;">{{ tonnage_time_total.operating_h }}h</td>
                 </tr>
-                <tr class="table-warning bg-opacity-10">
-                    <td class="fw-bold text-start ps-2 text-warning-emphasis">관리LOSS</td>
-                    {% for row in tonnage_time_table %}<td class="text-warning-emphasis">{{ row.mgmt_loss_h }}h</td>{% endfor %}
-                    <td class="table-secondary fw-bold">{{ tonnage_time_total.mgmt_loss_h }}h</td>
+                <tr style="border-left:3px solid #e2a317;">
+                    <td class="text-start ps-2">
+                        관리LOSS
+                        <span class="badge ms-1" style="background:#e2a317;font-size:0.62rem;vertical-align:middle;">계획정지 등</span>
+                    </td>
+                    {% for row in tonnage_time_table %}<td>{{ row.mgmt_loss_h }}h</td>{% endfor %}
+                    <td style="background:#edf2f7;">{{ tonnage_time_total.mgmt_loss_h }}h</td>
                 </tr>
-                <tr class="table-danger bg-opacity-10">
-                    <td class="fw-bold text-start ps-2 text-danger">시간LOSS</td>
-                    {% for row in tonnage_time_table %}<td class="text-danger">{{ row.time_loss_h }}h</td>{% endfor %}
-                    <td class="table-secondary fw-bold text-danger">{{ tonnage_time_total.time_loss_h }}h</td>
+                <tr style="border-left:3px solid #e53e3e;">
+                    <td class="text-start ps-2">
+                        시간LOSS
+                        <span class="badge ms-1" style="background:#e53e3e;font-size:0.62rem;vertical-align:middle;">설비고장 등</span>
+                    </td>
+                    {% for row in tonnage_time_table %}<td>{{ row.time_loss_h }}h</td>{% endfor %}
+                    <td style="background:#edf2f7;">{{ tonnage_time_total.time_loss_h }}h</td>
                 </tr>
-                <tr>
+                <tr style="background:#f7fafc;border-top:2px solid #cbd5e0;">
                     <td class="fw-bold text-start ps-2">유실시간 합계</td>
                     {% for row in tonnage_time_table %}<td class="fw-bold">{{ row.loss_h }}h</td>{% endfor %}
-                    <td class="table-secondary fw-bold">{{ tonnage_time_total.loss_h }}h</td>
+                    <td class="fw-bold" style="background:#edf2f7;">{{ tonnage_time_total.loss_h }}h</td>
                 </tr>
             </tbody>
         </table>
     </div>
-    <div class="mt-2 px-1" style="font-size:0.72rem;color:#718096;line-height:1.6;">
-        <span class="badge bg-warning text-dark me-1">관리LOSS</span>계획정지 / 생산종료 / 식사·휴식 / 청소
-        &nbsp;|&nbsp;
-        <span class="badge bg-danger me-1">시간LOSS</span>금형예열·수리 / 기종변경 / 설비고장 / 재료결품·건조 / 품질이상 / 자재부족 / TRY 등
+    <div class="mt-2 px-1 d-flex gap-3" style="font-size:0.72rem;color:#718096;">
+        <span><span style="display:inline-block;width:10px;height:10px;background:#e2a317;border-radius:2px;margin-right:4px;"></span>관리LOSS: 계획정지·생산종료·식사휴식·청소</span>
+        <span><span style="display:inline-block;width:10px;height:10px;background:#e53e3e;border-radius:2px;margin-right:4px;"></span>시간LOSS: 금형수리·기종변경·설비고장·재료결품 등</span>
     </div>
 </div>
 
@@ -561,36 +565,36 @@
     <div class="table-responsive">
         <table class="table table-sm table-bordered text-center mb-0" style="font-size:0.82rem;">
             <thead>
-                <tr class="table-dark">
-                    <th style="min-width:90px;">구분</th>
-                    <th style="min-width:70px;">유실항목</th>
+                <tr style="background:#2d3748;color:#fff;">
+                    <th style="min-width:70px;width:80px;">구분</th>
+                    <th style="min-width:80px;">유실항목</th>
                     {% for t in all_tonnages %}<th>{{ t }}t</th>{% endfor %}
-                    <th class="table-secondary">TOTAL</th>
+                    <th style="background:#4a5568;">TOTAL</th>
                 </tr>
             </thead>
             <tbody>
                 {% for row in loss_category_table %}
-                <tr {% if row.is_mgmt %}class="table-warning bg-opacity-10"{% endif %}>
+                <tr>
                     {% if forloop.first %}
-                    <td rowspan="{{ loss_category_table|length }}" class="fw-bold align-middle" style="background:#f8f9fa;">
-                        <div style="writing-mode:vertical-rl;transform:rotate(180deg);letter-spacing:2px;font-size:0.75rem;">유실항목별 유실시간</div>
+                    <td rowspan="4" class="align-middle fw-bold" style="background:#fff8e1;border-right:2px solid #e2a317;font-size:0.72rem;color:#7b5e00;">
+                        관리<br>LOSS
+                    </td>
+                    {% elif forloop.counter == 5 %}
+                    <td rowspan="{{ loss_category_table|length|add:'-4' }}" class="align-middle fw-bold" style="background:#fff5f5;border-right:2px solid #e53e3e;font-size:0.72rem;color:#9b1c1c;">
+                        시간<br>LOSS
                     </td>
                     {% endif %}
-                    <td class="text-start ps-2 fw-bold {% if row.is_mgmt %}text-warning-emphasis{% else %}text-danger{% endif %}">
-                        {{ row.label }}
-                    </td>
+                    <td class="text-start ps-2" style="{% if row.is_mgmt %}background:#fffdf0;{% endif %}">{{ row.label }}</td>
                     {% for v in row.values %}
-                    <td>{% if v > 0 %}{{ v }}{% else %}-{% endif %}</td>
+                    <td style="{% if row.is_mgmt %}background:#fffdf0;{% endif %}{% if v > 0 %}font-weight:500;{% endif %}">
+                        {% if v > 0 %}{{ v }}{% else %}<span style="color:#cbd5e0;">-</span>{% endif %}
+                    </td>
                     {% endfor %}
-                    <td class="fw-bold table-secondary">{% if row.total > 0 %}{{ row.total }}{% else %}-{% endif %}</td>
+                    <td class="fw-bold" style="background:#edf2f7;">{% if row.total > 0 %}{{ row.total }}{% else %}<span style="color:#cbd5e0;">-</span>{% endif %}</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
-    </div>
-    <div class="mt-2 px-1" style="font-size:0.72rem;color:#718096;">
-        <span class="badge bg-warning text-dark me-1">노란 행</span>관리LOSS (계획정지·생산종료·식사휴식·청소)
-        &nbsp;|&nbsp;흰 행: 시간LOSS
     </div>
 </div>
 
