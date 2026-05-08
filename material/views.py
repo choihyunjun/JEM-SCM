@@ -9011,6 +9011,14 @@ def molding_ai_analysis(request):
         }
 
     cur = collect_month_data(year, month)
+
+    # 당월 데이터가 전혀 없으면 분석 불가
+    if cur['recorded_days'] == 0:
+        return JsonResponse({
+            'success': False,
+            'error': f'{year}년 {month}월 입력된 데이터가 없습니다. 가동률 데이터를 먼저 입력해주세요.'
+        })
+
     prev_date = date(year, month, 1) - relativedelta(months=1)
     prv = collect_month_data(prev_date.year, prev_date.month)
 
