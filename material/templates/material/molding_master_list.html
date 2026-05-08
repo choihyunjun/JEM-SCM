@@ -564,7 +564,7 @@ function openAddModal() {
 }
 
 function openEditModal(pk) {
-    fetch(`/material/api/molding/master/${pk}/`)
+    fetch(`/wms/api/molding/master/${pk}/`)
         .then(r => r.json())
         .then(data => {
             document.getElementById('editPk').value = data.pk;
