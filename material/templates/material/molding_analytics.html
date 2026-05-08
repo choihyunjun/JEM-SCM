@@ -519,34 +519,34 @@
                 </tr>
                 <tr>
                     <td class="text-start ps-2 text-muted">근무시간</td>
-                    {% for row in tonnage_time_table %}<td class="text-muted">{{ row.work_h }}h</td>{% endfor %}
-                    <td class="text-muted" style="background:#edf2f7;">{{ tonnage_time_total.work_h }}h</td>
+                    {% for row in tonnage_time_table %}<td class="text-muted">{{ row.work_h }}</td>{% endfor %}
+                    <td class="text-muted" style="background:#edf2f7;">{{ tonnage_time_total.work_h }}</td>
                 </tr>
                 <tr style="border-left:3px solid #38a169;">
                     <td class="fw-bold text-start ps-2">가동시간</td>
-                    {% for row in tonnage_time_table %}<td class="fw-bold">{{ row.operating_h }}h</td>{% endfor %}
-                    <td class="fw-bold" style="background:#edf2f7;">{{ tonnage_time_total.operating_h }}h</td>
+                    {% for row in tonnage_time_table %}<td class="fw-bold">{{ row.operating_h }}</td>{% endfor %}
+                    <td class="fw-bold" style="background:#edf2f7;">{{ tonnage_time_total.operating_h }}</td>
                 </tr>
                 <tr style="border-left:3px solid #e2a317;">
                     <td class="text-start ps-2">
                         관리LOSS
                         <span class="badge ms-1" style="background:#e2a317;font-size:0.62rem;vertical-align:middle;">계획정지 등</span>
                     </td>
-                    {% for row in tonnage_time_table %}<td>{{ row.mgmt_loss_h }}h</td>{% endfor %}
-                    <td style="background:#edf2f7;">{{ tonnage_time_total.mgmt_loss_h }}h</td>
+                    {% for row in tonnage_time_table %}<td>{{ row.mgmt_loss_h }}</td>{% endfor %}
+                    <td style="background:#edf2f7;">{{ tonnage_time_total.mgmt_loss_h }}</td>
                 </tr>
                 <tr style="border-left:3px solid #e53e3e;">
                     <td class="text-start ps-2">
                         시간LOSS
                         <span class="badge ms-1" style="background:#e53e3e;font-size:0.62rem;vertical-align:middle;">설비고장 등</span>
                     </td>
-                    {% for row in tonnage_time_table %}<td>{{ row.time_loss_h }}h</td>{% endfor %}
-                    <td style="background:#edf2f7;">{{ tonnage_time_total.time_loss_h }}h</td>
+                    {% for row in tonnage_time_table %}<td>{{ row.time_loss_h }}</td>{% endfor %}
+                    <td style="background:#edf2f7;">{{ tonnage_time_total.time_loss_h }}</td>
                 </tr>
                 <tr style="background:#f7fafc;border-top:2px solid #cbd5e0;">
                     <td class="fw-bold text-start ps-2">유실시간 합계</td>
-                    {% for row in tonnage_time_table %}<td class="fw-bold">{{ row.loss_h }}h</td>{% endfor %}
-                    <td class="fw-bold" style="background:#edf2f7;">{{ tonnage_time_total.loss_h }}h</td>
+                    {% for row in tonnage_time_table %}<td class="fw-bold">{{ row.loss_h }}</td>{% endfor %}
+                    <td class="fw-bold" style="background:#edf2f7;">{{ tonnage_time_total.loss_h }}</td>
                 </tr>
             </tbody>
         </table>
