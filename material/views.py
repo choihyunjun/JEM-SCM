@@ -9014,19 +9014,26 @@ def molding_ai_analysis(request):
         time_loss_cur_str = f"{cur['time_loss_h']}h"
         time_loss_prv_str = f"{prv['time_loss_h']}h"
 
-    # TON별 가동률 변화 (눈에 띄는 것)
-    ton_changes = []
-    for t in set(list(cur['ton_util'].keys()) + list(prv['ton_util'].keys())):
+    # TON별 가동률 전체 비교
+    all_tons = sorted(set(list(cur['ton_util'].keys()) + list(prv['ton_util'].keys())))
+    ton_rows = []
+    for t in all_tons:
         c_val = cur['ton_util'].get(t, 0)
         p_val = prv['ton_util'].get(t, 0)
         diff = round(c_val - p_val, 1)
-        if abs(diff) >= 5:
-            ton_changes.append(f"{t}t: {p_val}% → {c_val}% ({'+' if diff>0 else ''}{diff}%)")
+        flag = ' ▲' if diff >= 5 else (' ▼' if diff <= -5 else '')
+        ton_rows.append(f"  {t}t: {p_val}% → {c_val}% ({'+' if diff>0 else ''}{diff}%p){flag}")
 
-    # 유실항목 변화 (시간LOSS 상위)
+    # 유실항목 전체 비교 (시간LOSS만)
     all_cats = set(list(cur['loss_by_cat'].keys()) + list(prv['loss_by_cat'].keys()))
-    time_loss_cats = [(c, cur['loss_by_cat'].get(c, 0)) for c in all_cats if c not in MOLDING_MGMT_LOSS]
-    top3_loss = sorted(time_loss_cats, key=lambda x: -x[1])[:3]
+    time_loss_cats = sorted(
+        [(c, prv['loss_by_cat'].get(c, 0), cur['loss_by_cat'].get(c, 0)) for c in all_cats if c not in MOLDING_MGMT_LOSS],
+        key=lambda x: -x[2]
+    )
+    mgmt_cats = sorted(
+        [(c, prv['loss_by_cat'].get(c, 0), cur['loss_by_cat'].get(c, 0)) for c in all_cats if c in MOLDING_MGMT_LOSS],
+        key=lambda x: -x[2]
+    )
 
     cur_label = f"{cur['year']}년 {cur['month']}월"
     prv_label = f"{prv['year']}년 {prv['month']}월"
@@ -9039,30 +9046,42 @@ def molding_ai_analysis(request):
         "당월 데이터는 확정치가 아닌 참고용임을 반드시 언급해주세요.\n"
     ) if cur_incomplete else ""
 
-    prompt = f"""당신은 제조업 생산관리 전문가입니다. 아래 성형 가동률 데이터를 분석하여 한국어로 5~7줄의 코멘트를 작성해주세요.
-간결하고 실무적으로, 불필요한 인사말 없이 바로 분석 내용만 작성하세요.
+    prompt = f"""당신은 제조업 성형 생산관리 전문가입니다. 아래 데이터를 바탕으로 한국어로 실무 브리핑 보고서를 작성해주세요.
+불필요한 인사말 없이 바로 내용만 작성하고, 각 섹션 제목은 【】로 구분해주세요.
 {caution}
-[{prv_label} → {cur_label} 비교]
+━━━━━━━━━━━━━━━━━━
+[기간] {prv_label} → {cur_label}
+━━━━━━━━━━━━━━━━━━
 
-■ 설비가동률: {prv['util']}% → {cur['util']}% ({'+' if util_diff>0 else ''}{util_diff}%p)
-■ 시간가동률(입력일 기준): {prv['time_rate']}% → {cur['time_rate']}% ({'+' if time_diff>0 else ''}{time_diff}%p)
-■ 관리LOSS: {mgmt_prv_str} → {mgmt_cur_str}
-■ 시간LOSS: {time_loss_prv_str} → {time_loss_cur_str}
+【종합 가동률】
+- 설비가동률: {prv['util']}% → {cur['util']}% ({'+' if util_diff>0 else ''}{util_diff}%p)
+- 시간가동률(입력일 기준): {prv['time_rate']}% → {cur['time_rate']}% ({'+' if time_diff>0 else ''}{time_diff}%p)
+- 관리LOSS: {mgmt_prv_str} → {mgmt_cur_str}
+- 시간LOSS: {time_loss_prv_str} → {time_loss_cur_str}
 
-■ TON별 가동률 주요 변화 (±5%p 이상):
-{chr(10).join(ton_changes) if ton_changes else '큰 변화 없음'}
+【TON별 설비가동률 전체 현황】 (▲: +5%p 이상 개선 / ▼: -5%p 이상 저하)
+{chr(10).join(ton_rows) if ton_rows else '데이터 없음'}
 
-■ 시간LOSS 상위 항목 (당월):
-{chr(10).join(f"  - {c}: {v}h" for c, v in top3_loss if v > 0)}
+【시간LOSS 항목별 현황 (전월 → 당월)】
+{chr(10).join(f"  - {c}: {p}h → {v}h ({'+' if v-p>0 else ''}{round(v-p,1)}h)" for c, p, v in time_loss_cats if v > 0 or p > 0)}
 
-분석 포인트: 전월 대비 개선/악화 원인, 주요 LOSS 항목, 다음 달 주의사항을 포함해주세요."""
+【관리LOSS 항목별 현황 (전월 → 당월)】
+{chr(10).join(f"  - {c}: {p}h → {v}h ({'+' if v-p>0 else ''}{round(v-p,1)}h)" for c, p, v in mgmt_cats if v > 0 or p > 0)}
+
+━━━━━━━━━━━━━━━━━━
+작성 지침:
+1. 【종합 평가】: 전월 대비 전반적 가동률 변화와 핵심 원인 2~3줄
+2. 【주요 이슈】: 악화된 TON대역·LOSS 항목 중 가장 심각한 것 구체적으로 2~3가지
+3. 【긍정 변화】: 개선된 항목이 있다면 언급
+4. 【다음 달 권고사항】: 수치 기반 구체적 액션 2~3가지
+각 섹션 2~4줄씩, 총 15줄 내외로 작성하세요."""
 
     try:
         import anthropic as _anthropic
         client = _anthropic.Anthropic(api_key=api_key)
         message = client.messages.create(
             model='claude-haiku-4-5-20251001',
-            max_tokens=600,
+            max_tokens=1200,
             messages=[{'role': 'user', 'content': prompt}],
         )
         analysis = message.content[0].text.strip()
