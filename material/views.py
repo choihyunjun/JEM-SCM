@@ -8946,6 +8946,12 @@ def molding_ai_analysis(request):
     if not api_key:
         return JsonResponse({'success': False, 'error': 'ANTHROPIC_API_KEY 미설정'})
 
+    import re as _re_ai
+    _re_part_qty = _re_ai.compile(r'([\w\-]+)\s*:\s*([\d,]+)')
+    # Part.part_group 캐시 (part_no → 품목군)
+    from orders.models import Part as _Part
+    part_group_cache = dict(_Part.objects.values_list('part_no', 'part_group'))
+
     def collect_month_data(y, m):
         records = MoldingDailyRecord.objects.filter(date__year=y, date__month=m).select_related('machine')
         records_list = list(records)
@@ -8979,6 +8985,16 @@ def molding_ai_analysis(request):
             ton_data[r.machine.tonnage]['op'] += r.operating_minutes
         ton_util = {t: round(v['op'] / v['base'] * 100, 1) for t, v in ton_data.items() if v['base']}
 
+        # 품목별 생산수량 집계 (product_part_no 파싱 → Part.part_group 매핑)
+        group_qty = defaultdict(int)
+        for r in records_list:
+            if r.product_part_no:
+                for match in _re_part_qty.finditer(r.product_part_no):
+                    pno = match.group(1).strip()
+                    qty = int(match.group(2).replace(',', ''))
+                    group = part_group_cache.get(pno, '기타')
+                    group_qty[group] += qty
+
         return {
             'year': y, 'month': m,
             'util': util, 'time_rate': time_rate,
@@ -8991,6 +9007,7 @@ def molding_ai_analysis(request):
             'recorded_days': recorded_days,
             'expected_days': expected_days,
             'is_complete': recorded_days >= expected_days,
+            'group_qty': dict(group_qty),
         }
 
     cur = collect_month_data(year, month)
@@ -9023,6 +9040,19 @@ def molding_ai_analysis(request):
         diff = round(c_val - p_val, 1)
         flag = ' ▲' if diff >= 5 else (' ▼' if diff <= -5 else '')
         ton_rows.append(f"  {t}t: {p_val}% → {c_val}% ({'+' if diff>0 else ''}{diff}%p){flag}")
+
+    # 품목별 생산수량 비교
+    all_groups = set(list(cur['group_qty'].keys()) + list(prv['group_qty'].keys()))
+    group_qty_rows = []
+    for g in sorted(all_groups):
+        p_qty = prv['group_qty'].get(g, 0)
+        c_qty = cur['group_qty'].get(g, 0)
+        diff = c_qty - p_qty
+        pct = round(diff / p_qty * 100, 1) if p_qty else 0
+        flag = ' ▲' if diff > 0 else (' ▼' if diff < 0 else '')
+        group_qty_rows.append(
+            f"  {g}: {p_qty:,}ea → {c_qty:,}ea ({'+' if diff>=0 else ''}{diff:,}ea, {'+' if pct>=0 else ''}{pct}%){flag}"
+        )
 
     # 유실항목 전체 비교 (시간LOSS만)
     all_cats = set(list(cur['loss_by_cat'].keys()) + list(prv['loss_by_cat'].keys()))
@@ -9068,13 +9098,17 @@ def molding_ai_analysis(request):
 【관리LOSS 항목별 현황 (전월 → 당월)】
 {chr(10).join(f"  - {c}: {p}h → {v}h ({'+' if v-p>0 else ''}{round(v-p,1)}h)" for c, p, v in mgmt_cats if v > 0 or p > 0)}
 
+【품목별 생산수량 (전월 → 당월)】
+{chr(10).join(group_qty_rows) if group_qty_rows else '  생산수량 데이터 없음 (ERP 미동기화)'}
+
 ━━━━━━━━━━━━━━━━━━
 작성 지침:
 1. 【종합 평가】: 전월 대비 전반적 가동률 변화와 핵심 원인 2~3줄
 2. 【주요 이슈】: 악화된 TON대역·LOSS 항목 중 가장 심각한 것 구체적으로 2~3가지
-3. 【긍정 변화】: 개선된 항목이 있다면 언급
-4. 【다음 달 권고사항】: 수치 기반 구체적 액션 2~3가지
-각 섹션 2~4줄씩, 총 15줄 내외로 작성하세요."""
+3. 【품목별 생산 동향】: 생산수량이 크게 늘거나 줄어든 품목군을 언급하고, 가동률 변화와 연결하여 설명
+4. 【긍정 변화】: 개선된 항목이 있다면 언급
+5. 【다음 달 권고사항】: 수치 기반 구체적 액션 2~3가지
+각 섹션 2~4줄씩, 총 18줄 내외로 작성하세요."""
 
     try:
         import anthropic as _anthropic
