@@ -8805,8 +8805,10 @@ def molding_analytics(request):
     for r in records_list:
         active_machine_by_tonnage[r.machine.tonnage].add(r.machine_id)
 
+    all_tonnages = sorted(tonnage_all_count.keys())
+
     tonnage_table = []
-    for t in sorted(tonnage_all_count.keys()):
+    for t in all_tonnages:
         count = tonnage_all_count[t]
         active_count = len(active_machine_by_tonnage.get(t, set()))
         td = tonnage_data.get(t, {'base': 0, 'operating': 0})
@@ -8819,6 +8821,57 @@ def molding_analytics(request):
             'tonnage': t, 'count': count, 'active_count': active_count,
             'util': util, 'time_rate': time_r, 'time_rate_actual': time_r_actual,
         })
+
+    # ─── 표 탭: 유실 상세 (TON별 × 사유별) ───
+    loss_by_tonnage_cat = defaultdict(lambda: defaultdict(int))  # {tonnage: {category: minutes}}
+    for detail in MoldingLossDetail.objects.filter(
+        record__date__year=year, record__date__month=month
+    ).select_related('record__machine'):
+        loss_by_tonnage_cat[detail.record.machine.tonnage][detail.category] += detail.minutes
+
+    work_per_machine_min = setting.work_days * (setting.day_shift_minutes + setting.night_shift_minutes)
+
+    # 가동시간 및 LOSS시간 표 (TON별 대당 평균)
+    tonnage_time_table = []
+    for t in all_tonnages:
+        count = tonnage_all_count[t]
+        td = tonnage_data.get(t, {'base': 0, 'operating': 0})
+        loss_total = sum(loss_by_tonnage_cat[t].values())
+        mgmt_loss = sum(loss_by_tonnage_cat[t].get(c, 0) for c in MOLDING_MGMT_LOSS)
+        time_loss = loss_total - mgmt_loss
+        tonnage_time_table.append({
+            'tonnage': t,
+            'count': count,
+            'work_h': round(work_per_machine_min / 60, 1),
+            'operating_h': round(td['operating'] / count / 60, 1) if count else 0,
+            'mgmt_loss_h': round(mgmt_loss / count / 60, 1) if count else 0,
+            'time_loss_h': round(time_loss / count / 60, 1) if count else 0,
+            'loss_h': round(loss_total / count / 60, 1) if count else 0,
+        })
+
+    # TOTAL 행
+    total_count_all = sum(tonnage_all_count.values())
+    total_operating_all = sum(tonnage_data.get(t, {'operating': 0})['operating'] for t in all_tonnages)
+    total_mgmt_all = sum(sum(loss_by_tonnage_cat[t].get(c, 0) for c in MOLDING_MGMT_LOSS) for t in all_tonnages)
+    total_loss_all = sum(sum(loss_by_tonnage_cat[t].values()) for t in all_tonnages)
+    tonnage_time_total = {
+        'work_h': round(work_per_machine_min / 60, 1),
+        'operating_h': round(total_operating_all / total_count_all / 60, 1) if total_count_all else 0,
+        'mgmt_loss_h': round(total_mgmt_all / total_count_all / 60, 1) if total_count_all else 0,
+        'time_loss_h': round((total_loss_all - total_mgmt_all) / total_count_all / 60, 1) if total_count_all else 0,
+        'loss_h': round(total_loss_all / total_count_all / 60, 1) if total_count_all else 0,
+    }
+
+    # 유실항목별 × TON별 표
+    loss_category_table = []
+    for cat, label in MOLDING_LOSS_CATEGORIES:
+        row = {'label': label, 'is_mgmt': cat in MOLDING_MGMT_LOSS, 'values': [], 'total': 0}
+        for t in all_tonnages:
+            v = loss_by_tonnage_cat[t].get(cat, 0)
+            row['values'].append(round(v / 60, 1))
+            row['total'] += v
+        row['total'] = round(row['total'] / 60, 1)
+        loss_category_table.append(row)
 
     # ─── 년도 목록 ───
     year_range = list(range(2024, now.year + 2))
@@ -8838,6 +8891,10 @@ def molding_analytics(request):
         'kpi_actual_loss_hours': kpi_actual_loss_hours,
         'total_records': len(records_list),
         'tonnage_table': tonnage_table,
+        'all_tonnages': all_tonnages,
+        'tonnage_time_table': tonnage_time_table,
+        'tonnage_time_total': tonnage_time_total,
+        'loss_category_table': loss_category_table,
         # Chart 1: Daily trend
         'daily_labels': json.dumps(daily_labels, ensure_ascii=False),
         'daily_rates': json.dumps(daily_rates),
