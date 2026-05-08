@@ -8892,6 +8892,7 @@ def molding_analytics(request):
         'total_records': len(records_list),
         'tonnage_table': tonnage_table,
         'all_tonnages': all_tonnages,
+        'total_machine_count': total_count_all,
         'tonnage_time_table': tonnage_time_table,
         'tonnage_time_total': tonnage_time_total,
         'loss_category_table': loss_category_table,
