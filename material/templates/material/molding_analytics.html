@@ -1121,7 +1121,7 @@ function requestAiAnalysis() {
     form.append('month', '{{ month }}');
     form.append('csrfmiddlewaretoken', '{{ csrf_token }}');
 
-    fetch('{% url "material:molding_ai_analysis" %}', { method: 'POST', body: form })
+    fetch('{% url "material:molding_ai_analysis" %}', { method: 'POST', body: form, credentials: 'same-origin' })
         .then(r => r.json())
         .then(data => {
             loading.style.display = 'none';
