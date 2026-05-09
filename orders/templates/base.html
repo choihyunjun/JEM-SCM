@@ -641,18 +641,17 @@
 
                             {# ERP 연동 - can_wms_stock_view 권한 필요 #}
                             {% if user|has_perm:'can_wms_stock_view' %}
-                            <a class="nav-link collapsed {% if request.resolver_match.url_name in 'erp_stock_manage,erp_master_sync' %}active{% endif %}"
+                            <a class="nav-link collapsed {% if request.resolver_match.url_name == 'erp_stock_manage' %}active{% endif %}"
                                href="#" data-bs-toggle="collapse" data-bs-target="#collapseERP"
-                               aria-expanded="{% if request.resolver_match.url_name in 'erp_stock_manage,erp_master_sync' %}true{% else %}false{% endif %}"
+                               aria-expanded="{% if request.resolver_match.url_name == 'erp_stock_manage' %}true{% else %}false{% endif %}"
                                aria-controls="collapseERP">
                                 <div class="sb-nav-link-icon"><i class="bi bi-cloud-upload"></i></div>
                                 ERP 연동
                                 <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
                             </a>
-                            <div class="collapse {% if request.resolver_match.url_name in 'erp_stock_manage,erp_master_sync' %}show{% endif %}"
+                            <div class="collapse {% if request.resolver_match.url_name == 'erp_stock_manage' %}show{% endif %}"
                                  id="collapseERP" data-bs-parent="#sidenavAccordion">
                                 <nav class="sb-sidenav-menu-nested nav">
-                                    <a class="nav-link {% if request.resolver_match.url_name == 'erp_master_sync' %}active{% endif %}" href="{% url 'material:erp_master_sync' %}">거래처 / 품목 동기화</a>
                                     <a class="nav-link {% if request.resolver_match.url_name == 'erp_stock_manage' %}active{% endif %}" href="{% url 'material:erp_stock_manage' %}">기초재고 동기화</a>
                                 </nav>
                             </div>
