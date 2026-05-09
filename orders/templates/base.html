@@ -284,6 +284,57 @@
         .scm-table { font-size: 0.85rem; }
         .scm-table th { white-space: nowrap; }
         .scm-table td { vertical-align: middle; }
+
+        /* 최근 방문 탭 */
+        #recentTabsBar {
+            background: #f1f3f5;
+            border-bottom: 1px solid #dee2e6;
+            padding: 4px 16px;
+            display: flex;
+            gap: 4px;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            scrollbar-width: none;
+            align-items: center;
+            min-height: 32px;
+        }
+        #recentTabsBar::-webkit-scrollbar { display: none; }
+        .recent-tab {
+            display: inline-flex;
+            align-items: center;
+            background: #fff;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 0.76rem;
+            white-space: nowrap;
+            flex-shrink: 0;
+            transition: border-color 0.15s;
+        }
+        .recent-tab:hover { border-color: #adb5bd; }
+        .recent-tab a {
+            padding: 3px 8px 3px 10px;
+            color: #495057;
+            text-decoration: none;
+            max-width: 140px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .recent-tab.active { border-color: #9b2c2c; background: #fff5f5; }
+        body.is-wms .recent-tab.active { border-color: #134E5E; background: #f0f9f0; }
+        body.is-qms .recent-tab.active { border-color: #2c3e50; background: #f5f7fa; }
+        .recent-tab.active a { color: #9b2c2c; font-weight: 600; }
+        body.is-wms .recent-tab.active a { color: #134E5E; }
+        body.is-qms .recent-tab.active a { color: #2c3e50; }
+        .recent-tab .tab-close {
+            padding: 2px 6px;
+            background: none;
+            border: none;
+            color: #adb5bd;
+            cursor: pointer;
+            font-size: 0.9rem;
+            line-height: 1;
+        }
+        .recent-tab .tab-close:hover { color: #495057; }
     </style>
 </head>
 
@@ -801,6 +852,8 @@
         </div>
 
         <div id="layoutSidenav_content">
+            <!-- 최근 방문 탭 바 -->
+            <div id="recentTabsBar" style="display:none;"></div>
             <main>
                 <div class="container-fluid px-4 py-4">
                     {% if messages %}
@@ -885,5 +938,73 @@
     </script>
 
     {% block extra_js %}{% endblock %}
+
+    <script>
+    // ── 최근 방문 탭 ──────────────────────────────
+    (function() {
+        var MAX = 5;
+        var KEY = 'jem_recent_tabs';
+        var EXCLUDE = ['/accounts/login/', '/accounts/logout/', '/login-success/'];
+
+        function load() {
+            try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch(e) { return []; }
+        }
+        function save(pages) {
+            localStorage.setItem(KEY, JSON.stringify(pages));
+        }
+
+        function getPageLabel() {
+            // h4 → h3 → h2 → h1 순으로 첫 번째 텍스트 사용
+            var el = document.querySelector('h4, h3, h2, h1');
+            if (el) {
+                var text = el.textContent.replace(/\s+/g, ' ').trim();
+                // 뱃지(숫자) 등 제거
+                text = text.replace(/\d+건/g, '').replace(/\s+/g, ' ').trim();
+                return text.length > 18 ? text.substring(0, 18) + '…' : text;
+            }
+            return document.title || '페이지';
+        }
+
+        function track() {
+            var url = location.pathname + location.search;
+            if (EXCLUDE.some(function(p){ return url.startsWith(p); })) return;
+            var label = getPageLabel();
+            var pages = load().filter(function(p){ return p.url !== url; });
+            pages.push({ url: url, label: label });
+            if (pages.length > MAX) pages.splice(0, pages.length - MAX);
+            save(pages);
+        }
+
+        function removePage(url) {
+            var pages = load().filter(function(p){ return p.url !== url; });
+            save(pages);
+            render(pages);
+        }
+        window.removeRecentTab = removePage;
+
+        function render(pages) {
+            var bar = document.getElementById('recentTabsBar');
+            if (!bar) return;
+            if (!pages.length) { bar.style.display = 'none'; return; }
+            var cur = location.pathname + location.search;
+            bar.style.display = 'flex';
+            bar.innerHTML = pages.map(function(p) {
+                var active = p.url === cur ? ' active' : '';
+                var safeUrl = p.url.replace(/"/g, '&quot;');
+                var safeLabel = p.label.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                var jsUrl = p.url.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                return '<div class="recent-tab' + active + '">'
+                    + '<a href="' + safeUrl + '">' + safeLabel + '</a>'
+                    + '<button class="tab-close" onclick="event.preventDefault();removeRecentTab(\'' + jsUrl + '\')" title="닫기">×</button>'
+                    + '</div>';
+            }).join('');
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            track();
+            render(load());
+        });
+    })();
+    </script>
 </body>
 </html>
