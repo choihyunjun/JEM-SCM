@@ -11,6 +11,17 @@
     <div class="alert alert-warning">ERP 연동이 비활성화 상태입니다. (settings.py: ERP_ENABLED = False)</div>
     {% endif %}
 
+    {% if link_running %}
+    <div class="alert alert-warning d-flex align-items-center gap-2 mb-3" id="linkRunningBanner">
+        <div class="spinner-border spinner-border-sm text-warning flex-shrink-0"></div>
+        <div>
+            <strong>업체 연결이 백그라운드에서 실행 중입니다.</strong>
+            완료되면 자동으로 새로고침됩니다.
+            <span class="ms-2 text-muted" id="linkRunningCountdown"></span>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- 현재 현황 -->
     <div class="row g-3 mb-4">
         <div class="col-md-3">
@@ -158,12 +169,16 @@
                             <input type="number" name="months" class="form-control" value="6" min="1" max="12">
                             <span class="input-group-text">개월</span>
                         </div>
-                        <button type="submit" class="btn btn-warning btn-sm" id="btnLinkVendor" {% if not erp_enabled %}disabled{% endif %}>
+                        <button type="submit" class="btn btn-warning btn-sm" id="btnLinkVendor" {% if not erp_enabled or link_running %}disabled{% endif %}>
+                            {% if link_running %}
+                            <span class="spinner-border spinner-border-sm me-1"></span>실행 중...
+                            {% else %}
                             <i class="bi bi-link-45deg me-1"></i>업체 연결 실행
+                            {% endif %}
                         </button>
                     </form>
                     <!-- 진행률 -->
-                    <div id="linkProgress" class="mt-3" style="display:none;">
+                    <div id="linkProgress" class="mt-3" {% if not link_running %}style="display:none;"{% endif %}>
                         <div class="d-flex justify-content-between align-items-center mb-1">
                             <small class="fw-bold text-warning progress-stage">준비 중...</small>
                             <small class="fw-bold progress-pct">0%</small>
@@ -345,5 +360,52 @@ function startProgress(formId, btnId, progressAreaId, cacheKey, reloadOnDone) {
 startProgress('vendorSyncForm', 'btnVendorSync', 'vendorProgress', 'erp_sync_progress', false);
 startProgress('itemSyncForm', 'btnItemSync', 'itemProgress', 'erp_sync_progress', false);
 startProgress('linkVendorForm', 'btnLinkVendor', 'linkProgress', 'erp_link_vendor_progress', true);
+
+{% if link_running %}
+// 페이지 로드 시 이미 실행 중인 경우: 즉시 폴링 시작
+(function() {
+    var progressUrl = '{% url "material:erp_sync_progress" %}?key=erp_link_vendor_progress';
+    var area = document.getElementById('linkProgress');
+    var bar = area.querySelector('.progress-bar');
+    var stage = area.querySelector('.progress-stage');
+    var pct = area.querySelector('.progress-pct');
+    var detail = area.querySelector('.progress-detail');
+    var countdown = document.getElementById('linkRunningCountdown');
+    var countVal = 0;
+
+    function updateCountdown() {
+        countVal++;
+        if (countdown) countdown.textContent = '(' + countVal + '초 경과)';
+    }
+    var countTimer = setInterval(updateCountdown, 1000);
+
+    var poll = setInterval(function() {
+        fetch(progressUrl)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.percent > 0) {
+                    bar.style.width = data.percent + '%';
+                    pct.textContent = data.percent + '%';
+                    if (data.stage) stage.textContent = data.stage;
+                    if (data.detail) detail.textContent = data.detail;
+                }
+                if (data.percent >= 100) {
+                    clearInterval(poll);
+                    clearInterval(countTimer);
+                    bar.classList.remove('progress-bar-animated');
+                    setTimeout(function() { location.reload(); }, 1000);
+                }
+            })
+            .catch(function() {});
+    }, 2000);
+
+    // 폴링으로 완료 감지가 안 될 경우 60초 후 강제 새로고침
+    setTimeout(function() {
+        clearInterval(poll);
+        clearInterval(countTimer);
+        location.reload();
+    }, 60000);
+})();
+{% endif %}
 </script>
 {% endblock %}

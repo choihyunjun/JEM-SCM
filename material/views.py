@@ -7469,7 +7469,8 @@ def erp_master_sync(request):
         'no_vendor_count': Part.objects.filter(vendor__isnull=True).count(),
     }
 
-    # 백그라운드 업체 연결 결과가 있으면 표시
+    # 백그라운드 업체 연결 실행 중 여부 + 결과 표시
+    context['link_running'] = bool(_cache.get('erp_link_vendor_running'))
     link_result = _cache.get('erp_link_vendor_result')
     if link_result:
         context['link_result'] = link_result
@@ -7515,11 +7516,14 @@ def erp_master_sync(request):
             def _run_link():
                 import django
                 django.db.connections.close_all()
-                result = link_vendor_by_incoming(months=months)
-                _cache.set('erp_link_vendor_result', result, timeout=600)
+                try:
+                    result = link_vendor_by_incoming(months=months)
+                    _cache.set('erp_link_vendor_result', result, timeout=600)
+                finally:
+                    _cache.delete('erp_link_vendor_running')
 
+            _cache.set('erp_link_vendor_running', True, timeout=300)
             threading.Thread(target=_run_link, daemon=True).start()
-            messages.info(request, "업체 연결을 백그라운드에서 실행 중입니다. 진행률을 확인하세요.")
             return redirect('material:erp_master_sync')
 
         # 동기화 후 카운트 갱신
