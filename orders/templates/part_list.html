@@ -277,7 +277,7 @@
                             <button type="button" class="btn btn-sm btn-outline-secondary"
                                     style="border-radius: 8px; font-size: 0.8rem; padding: 4px 12px; white-space: nowrap;"
                                     data-bs-toggle="modal" data-bs-target="#editModal"
-                                    onclick="openEditModal({{ part.id }}, '{{ part.part_no|escapejs }}', '{{ part.part_name|escapejs }}', '{{ part.part_group|escapejs }}', '{{ part.vendor.id|default:"" }}')">
+                                    onclick="openEditModal({{ part.id }}, '{{ part.part_no|escapejs }}', '{{ part.part_name|escapejs }}', '{{ part.part_group|escapejs }}', '{{ part.vendor.id|default:"" }}', '{{ part.vendor.name|default:""|escapejs }}')">
                                 <i class="bi bi-pencil-square"></i> 수정
                             </button>
                         </td>
@@ -333,15 +333,18 @@
                         <label class="form-label fw-bold text-primary">
                             <i class="bi bi-building me-1"></i>연결 업체
                         </label>
-                        <select name="vendor_id" id="editVendorId" class="form-select">
-                            <option value="">-- 업체 미연결 (WMS 전용) --</option>
-                            {% for v in vendors %}
-                            <option value="{{ v.id }}">{{ v.name }}</option>
-                            {% endfor %}
-                        </select>
+                        <input type="hidden" name="vendor_id" id="editVendorId">
+                        <div style="position:relative;">
+                            <input type="text" id="editVendorSearch" class="form-control"
+                                   placeholder="업체명 검색 (2자 이상)..." autocomplete="off">
+                            <button type="button" id="editVendorClear" onclick="clearVendor()"
+                                    style="display:none;position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:1.1rem;color:#999;cursor:pointer;">×</button>
+                            <div id="vendorDropdown"
+                                 style="display:none;position:absolute;z-index:1060;width:100%;background:#fff;border:1px solid #dee2e6;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,0.15);max-height:220px;overflow-y:auto;"></div>
+                        </div>
                         <div class="form-text">
                             <i class="bi bi-info-circle me-1"></i>
-                            발주를 위해서는 업체 연결이 필요합니다.
+                            발주를 위해서는 업체 연결이 필요합니다. 미연결 시 검색창을 비워두세요.
                         </div>
                     </div>
                 </div>
@@ -357,12 +360,63 @@
 </div>
 
 <script>
-function openEditModal(partId, partNo, partName, partGroup, vendorId) {
+function openEditModal(partId, partNo, partName, partGroup, vendorId, vendorName) {
     document.getElementById('editPartId').value = partId;
     document.getElementById('editPartNo').value = partNo;
     document.getElementById('editPartName').value = partName;
     document.getElementById('editPartGroup').value = partGroup;
     document.getElementById('editVendorId').value = vendorId || '';
+    var searchEl = document.getElementById('editVendorSearch');
+    var clearBtn = document.getElementById('editVendorClear');
+    searchEl.value = vendorName || '';
+    clearBtn.style.display = vendorName ? 'block' : 'none';
+    document.getElementById('vendorDropdown').style.display = 'none';
 }
+
+function clearVendor() {
+    document.getElementById('editVendorId').value = '';
+    document.getElementById('editVendorSearch').value = '';
+    document.getElementById('editVendorClear').style.display = 'none';
+    document.getElementById('vendorDropdown').style.display = 'none';
+}
+
+function selectVendor(id, name) {
+    document.getElementById('editVendorId').value = id;
+    document.getElementById('editVendorSearch').value = name;
+    document.getElementById('editVendorClear').style.display = 'block';
+    document.getElementById('vendorDropdown').style.display = 'none';
+}
+
+(function() {
+    var timer = null;
+    document.getElementById('editVendorSearch').addEventListener('input', function() {
+        clearTimeout(timer);
+        var q = this.value.trim();
+        var dropdown = document.getElementById('vendorDropdown');
+        if (q.length < 2) { dropdown.style.display = 'none'; return; }
+        timer = setTimeout(function() {
+            fetch('/api/vendors/search/?q=' + encodeURIComponent(q))
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (!data.results || !data.results.length) {
+                        dropdown.innerHTML = '<div style="padding:10px;color:#999;font-size:0.85rem;">검색 결과 없음</div>';
+                    } else {
+                        dropdown.innerHTML = data.results.map(function(v) {
+                            return '<div style="padding:8px 12px;cursor:pointer;font-size:0.88rem;border-bottom:1px solid #f0f0f0;" '
+                                + 'onmousedown="selectVendor(' + v.id + ',\'' + v.name.replace(/'/g,"\\'") + '\')">'
+                                + '<strong>' + v.name + '</strong>'
+                                + (v.code ? ' <span style="color:#999;font-size:0.8rem;">(' + v.code + ')</span>' : '')
+                                + '</div>';
+                        }).join('');
+                    }
+                    dropdown.style.display = 'block';
+                });
+        }, 250);
+    });
+
+    document.getElementById('editVendorSearch').addEventListener('blur', function() {
+        setTimeout(function() { document.getElementById('vendorDropdown').style.display = 'none'; }, 200);
+    });
+})();
 </script>
 {% endblock %}
