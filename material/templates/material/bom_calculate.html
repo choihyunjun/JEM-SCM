@@ -924,6 +924,7 @@ async function syncMissingBom() {
 }
 
 // ── 거래처 미연결 품목 목록 (서버 렌더링) ──
+var _partGroupMap = {{ part_group_map|default:"{}"|safe }};
 var _rawUnlinked = [
     {% if batch_results %}
     {% for batch in batch_results %}
@@ -940,7 +941,14 @@ var _seenPN = new Set();
 var uniqueUnlinkedParts = _rawUnlinked.filter(function(p) {
     if (_seenPN.has(p.part_no)) return false;
     _seenPN.add(p.part_no);
+    p.part_group = _partGroupMap[p.part_no] || '기타';
     return true;
+});
+// 품목군 순으로 정렬
+uniqueUnlinkedParts.sort(function(a, b) {
+    if (a.part_group < b.part_group) return -1;
+    if (a.part_group > b.part_group) return 1;
+    return a.part_no < b.part_no ? -1 : 1;
 });
 
 // SCM 소요량 등록 - 거래처 선택 모달
@@ -975,7 +983,18 @@ function openVendorLinkModal() {
     var tbody = document.getElementById('vendorLinkTableBody');
     tbody.innerHTML = '';
 
+    var currentGroup = null;
     uniqueUnlinkedParts.forEach(function(p, idx) {
+        // 품목군 그룹 헤더
+        if (p.part_group !== currentGroup) {
+            currentGroup = p.part_group;
+            var headerTr = document.createElement('tr');
+            headerTr.style.cssText = 'background:#e9ecef;';
+            headerTr.innerHTML = '<td colspan="3" class="fw-bold small py-1 px-3" style="color:#495057; letter-spacing:0.03em;">'
+                + '<i class="bi bi-tag-fill me-1 text-secondary"></i>' + currentGroup + '</td>';
+            tbody.appendChild(headerTr);
+        }
+
         var tr = document.createElement('tr');
         tr.dataset.partNo = p.part_no;
         tr.innerHTML =

@@ -4655,6 +4655,20 @@ def bom_calculate(request):
     # 제품 목록 (자동완성용)
     products = Product.objects.filter(is_active=True, is_bom_registered=True).order_by('part_no')
 
+    # 미연결 품목 품목군 매핑 (모달 그룹핑용)
+    part_group_map = {}
+    if batch_results:
+        child_part_nos = set()
+        for _b in batch_results:
+            for _i in _b.get('items', []):
+                child_part_nos.add(_i.get('child_part_no', ''))
+            for _i in _b.get('structured_items', []):
+                if not _i.get('is_semi'):
+                    child_part_nos.add(_i.get('child_part_no', ''))
+        child_part_nos.discard('')
+        if child_part_nos:
+            part_group_map = dict(Part.objects.filter(part_no__in=child_part_nos).values_list('part_no', 'part_group'))
+
     context = {
         'products': products,
         'product': product,
@@ -4670,6 +4684,7 @@ def bom_calculate(request):
         'total_shortage_count': total_shortage_count,
         'total_sufficient_count': total_sufficient_count,
         'session_key': session_key,
+        'part_group_map': part_group_map,
     }
     return render(request, 'material/bom_calculate.html', context)
 
