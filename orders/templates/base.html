@@ -969,9 +969,12 @@
             var url = location.pathname + location.search;
             if (EXCLUDE.some(function(p){ return url.startsWith(p); })) return;
             var label = getPageLabel();
+            // 기존에 같은 URL 있으면 제거 (끝으로 이동시키기 위해)
             var pages = load().filter(function(p){ return p.url !== url; });
+            // 끝에 추가 (가장 최신)
             pages.push({ url: url, label: label });
-            if (pages.length > MAX) pages.splice(0, pages.length - MAX);
+            // MAX 초과 시 가장 오래된 것(맨 앞)을 하나씩 제거
+            while (pages.length > MAX) pages.shift();
             save(pages);
         }
 
