@@ -15,9 +15,12 @@
                         border-radius: 8px 8px 0 0; cursor: pointer; }
     .part-card-header:hover { background: #e9ecef; }
     .part-card-body { padding: 12px 16px; }
-    .search-result-row { cursor: pointer; }
-    .search-result-row:hover { background-color: #f0f7ff; }
-    .search-result-row.selected { background-color: #e8f4fd; }
+    /* 인라인 자동완성 */
+    #partSearchDropdown { border: 1px solid #dee2e6; border-radius: 0 0 6px 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    #partSearchDropdown .list-group-item { border-left: none; border-right: none; border-top: none; padding: 8px 12px; font-size: 0.875rem; }
+    #partSearchDropdown .list-group-item:last-child { border-bottom: none; border-radius: 0 0 6px 6px; }
+    #partSearchDropdown .list-group-item-action:hover { background-color: #f0f7ff; }
+    #partSearchDropdown .list-group-item.selected-item { background-color: #e8f4fd; cursor: default; }
 </style>
 
 <div class="container-fluid" style="max-width: 1200px;">
@@ -91,10 +94,8 @@
     <script>
         const allocResult = {{ alloc_result|safe }};
 
-        // SNP 변경 시 매수 자동계산 (매수 기본값 설정)
         function updateSheetCounts(fromSnp) {
             if (fromSnp) {
-                // SNP가 변경된 경우: 해당 행의 매수를 자동계산값으로 리셋
                 const idx = fromSnp.dataset.idx;
                 const total = parseInt(fromSnp.dataset.total);
                 const snp = parseInt(fromSnp.value) || total;
@@ -103,7 +104,6 @@
                 sheetInput.value = sheets;
                 sheetInput.max = sheets;
             }
-            // 총 매수 집계
             let totalSheets = 0;
             document.querySelectorAll('.sheet-input').forEach(el => {
                 totalSheets += parseInt(el.value) || 0;
@@ -111,18 +111,14 @@
             document.getElementById('totalSheetInfo').textContent = `총 ${totalSheets}장 출력`;
         }
 
-        // SNP 변경 → 매수 자동계산
         document.querySelectorAll('.snp-input').forEach(input => {
             input.addEventListener('input', function() { updateSheetCounts(this); });
         });
-        // 매수 직접 수정 → 총 매수만 갱신
         document.querySelectorAll('.sheet-input').forEach(input => {
             input.addEventListener('input', function() { updateSheetCounts(); });
         });
-        // 초기 계산
         document.querySelectorAll('.snp-input').forEach(input => { updateSheetCounts(input); });
 
-        // 출력 시 SNP 기준으로 items 분할 (매수만큼만 생성)
         document.getElementById('allocPrintForm').addEventListener('submit', function() {
             const printItems = [];
             document.querySelectorAll('.snp-input').forEach(input => {
@@ -158,7 +154,7 @@
             <i class="bi bi-search me-1"></i> 대상 선택
         </div>
         <div class="card-body">
-            <div class="row g-3 align-items-end">
+            <div class="row g-3 align-items-start">
                 <div class="col-md-3">
                     <label class="form-label small">창고</label>
                     <select id="selWarehouse" class="form-select">
@@ -168,18 +164,24 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-4">
-                    <label class="form-label small">품번</label>
-                    <div class="d-flex gap-2">
-                        <button type="button" class="btn btn-outline-primary flex-grow-1" id="btnOpenPartModal">
-                            <i class="bi bi-search me-1"></i> 품번 검색
-                        </button>
+                <div class="col-md-6">
+                    <label class="form-label small">
+                        품번 검색
+                        <span class="text-muted fw-normal ms-1">품번 또는 품명 입력 후 선택 → 재고 자동 조회</span>
+                    </label>
+                    <div class="position-relative">
+                        <div class="input-group">
+                            <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+                            <input type="text" id="partSearchInline" class="form-control"
+                                   placeholder="품번 또는 품명으로 검색 (2자 이상)..." autocomplete="off">
+                        </div>
+                        <div id="partSearchDropdown" class="list-group position-absolute w-100"
+                             style="display:none; z-index:1050; max-height:280px; overflow-y:auto; top:100%;">
+                        </div>
                     </div>
                 </div>
-                <div class="col-md-2">
-                    <button type="button" class="btn btn-primary w-100" id="btnSearch">
-                        <i class="bi bi-arrow-right-circle me-1"></i> 조회
-                    </button>
+                <div class="col-md-3 d-flex align-items-end pb-1">
+                    <span id="searchStatusMsg" class="text-muted small"></span>
                 </div>
             </div>
             <!-- 선택된 품번 표시 -->
@@ -343,62 +345,13 @@
     </div>
 </div>
 
-<!-- 품번 검색 모달 -->
-<div class="modal fade" id="partSearchModal" tabindex="-1">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title fw-bold"><i class="bi bi-search me-2"></i>품번 검색</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="input-group mb-3">
-                    <input type="text" id="modalSearchInput" class="form-control" placeholder="품번 또는 품명으로 검색 (2자 이상)..." autofocus>
-                    <button type="button" class="btn btn-primary" id="modalSearchBtn">
-                        <i class="bi bi-search"></i> 검색
-                    </button>
-                </div>
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <div>
-                        <input type="checkbox" class="form-check-input me-1" id="modalCheckAll">
-                        <label class="form-check-label small fw-bold" for="modalCheckAll">전체선택</label>
-                    </div>
-                    <span class="badge bg-primary" id="modalSelectedCount">선택: 0건</span>
-                </div>
-                <div style="max-height: 400px; overflow-y: auto;" id="modalResultsWrap">
-                    <table class="table table-sm table-hover mb-0 align-middle">
-                        <thead class="table-light sticky-top">
-                            <tr>
-                                <th style="width:40px;"></th>
-                                <th>품번</th>
-                                <th>품명</th>
-                                <th>품목군</th>
-                            </tr>
-                        </thead>
-                        <tbody id="modalResultsBody">
-                            <tr><td colspan="4" class="text-center text-muted py-4">검색어를 입력하세요.</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
-                <button type="button" class="btn btn-primary fw-bold" id="modalConfirmBtn">
-                    <i class="bi bi-check-circle me-1"></i> 선택 완료
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <script>
 document.addEventListener('DOMContentLoaded', function() {
 
     // ── 상태 ──
-    let selectedParts = []; // [{part_no, part_name, part_id}, ...]
-    let partStockData = {}; // { part_id: {null_qty, existing_lots, total_qty, ...} }
-    let allocData = {};     // { part_id: [{lot, qty}, ...] }
-    let modalChecked = {};  // { part_no: {part_no, part_name, part_id} }
+    let selectedParts = [];
+    let partStockData = {};
+    let allocData = {};
 
     const warehouseMap = {
         {% for wh in warehouses %}
@@ -406,121 +359,104 @@ document.addEventListener('DOMContentLoaded', function() {
         {% endfor %}
     };
 
-    // ── 모달 열기 ──
-    document.getElementById('btnOpenPartModal').addEventListener('click', function() {
-        // 기존 선택 상태 복원
-        modalChecked = {};
-        selectedParts.forEach(p => { modalChecked[p.part_no] = p; });
-        document.getElementById('modalSearchInput').value = '';
-        document.getElementById('modalResultsBody').innerHTML =
-            '<tr><td colspan="4" class="text-center text-muted py-4">검색어를 입력하세요.</td></tr>';
-        updateModalCount();
-        const modal = new bootstrap.Modal(document.getElementById('partSearchModal'));
-        modal.show();
-        setTimeout(() => document.getElementById('modalSearchInput').focus(), 300);
+    // ── 인라인 품번 자동완성 ──
+    let searchTimer = null;
+    const inlineInput = document.getElementById('partSearchInline');
+    const dropdown = document.getElementById('partSearchDropdown');
+
+    inlineInput.addEventListener('input', function() {
+        clearTimeout(searchTimer);
+        const q = this.value.trim();
+        if (q.length < 2) { dropdown.style.display = 'none'; return; }
+        searchTimer = setTimeout(() => {
+            fetch(`{% url 'material:api_part_search' %}?q=${encodeURIComponent(q)}`)
+                .then(r => r.json())
+                .then(data => {
+                    const results = data.results || [];
+                    dropdown.innerHTML = '';
+                    if (results.length === 0) {
+                        dropdown.innerHTML = '<div class="list-group-item text-muted small py-2">검색 결과가 없습니다.</div>';
+                        dropdown.style.display = 'block';
+                        return;
+                    }
+                    results.forEach(p => {
+                        const already = selectedParts.some(s => s.part_no === p.part_no);
+                        const item = document.createElement('button');
+                        item.type = 'button';
+                        item.className = 'list-group-item list-group-item-action py-2' + (already ? ' selected-item text-muted' : '');
+                        item.innerHTML = `<strong class="${already ? 'text-muted' : 'text-primary'}">${p.part_no}</strong>`
+                            + ` <span class="text-muted small">${p.part_name || ''}</span>`
+                            + (already ? ' <span class="badge bg-success float-end" style="font-size:0.7rem;">선택됨</span>' : '');
+                        if (!already) {
+                            item.addEventListener('click', function() {
+                                selectPart({ part_no: p.part_no, part_name: p.part_name, part_id: p.id });
+                                dropdown.style.display = 'none';
+                                inlineInput.value = '';
+                                inlineInput.focus();
+                            });
+                        }
+                        dropdown.appendChild(item);
+                    });
+                    dropdown.style.display = 'block';
+                })
+                .catch(() => { dropdown.style.display = 'none'; });
+        }, 250);
     });
 
-    // ── 모달 검색 ──
-    document.getElementById('modalSearchBtn').addEventListener('click', doModalSearch);
-    document.getElementById('modalSearchInput').addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') { e.preventDefault(); doModalSearch(); }
+    // 드롭다운 외부 클릭 시 닫기
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('#partSearchInline') && !e.target.closest('#partSearchDropdown')) {
+            dropdown.style.display = 'none';
+        }
     });
 
-    function doModalSearch() {
-        const q = document.getElementById('modalSearchInput').value.trim();
-        if (q.length < 2) { alert('2자 이상 입력해주세요.'); return; }
+    // ESC 키 → 드롭다운 닫기
+    inlineInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') { dropdown.style.display = 'none'; inlineInput.value = ''; }
+    });
 
-        const tbody = document.getElementById('modalResultsBody');
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center py-3"><div class="spinner-border spinner-border-sm"></div> 검색 중...</td></tr>';
+    // ── 품번 선택 ──
+    function selectPart(p) {
+        if (selectedParts.some(s => s.part_no === p.part_no)) return;
+        selectedParts.push(p);
+        renderSelectedBadges();
+        doSearch();
+    }
 
-        fetch(`{% url 'material:api_part_search' %}?q=${encodeURIComponent(q)}`)
+    // ── 창고 변경 → 이미 품번 선택됐으면 자동 재조회 ──
+    document.getElementById('selWarehouse').addEventListener('change', function() {
+        if (selectedParts.length > 0) doSearch();
+    });
+
+    // ── 재고 조회 (자동 트리거) ──
+    function doSearch() {
+        const whCode = document.getElementById('selWarehouse').value;
+        const msg = document.getElementById('searchStatusMsg');
+        if (!whCode) { msg.textContent = '창고를 선택해주세요.'; return; }
+        if (selectedParts.length === 0) { msg.textContent = ''; return; }
+
+        const partNos = selectedParts.map(p => p.part_no).join(',');
+        document.getElementById('hidWarehouseId').value = warehouseMap[whCode] || '';
+
+        msg.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>조회 중...';
+
+        fetch(`{% url 'material:api_null_stock_info' %}?warehouse_code=${encodeURIComponent(whCode)}&part_nos=${encodeURIComponent(partNos)}`)
             .then(r => r.json())
             .then(data => {
-                const results = data.results || [];
-                if (results.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">검색 결과가 없습니다.</td></tr>';
-                    return;
-                }
-                tbody.innerHTML = '';
-                results.forEach(p => {
-                    const checked = modalChecked[p.part_no] ? 'checked' : '';
-                    const selClass = modalChecked[p.part_no] ? 'selected' : '';
-                    const tr = document.createElement('tr');
-                    tr.className = `search-result-row ${selClass}`;
-                    tr.dataset.partNo = p.part_no;
-                    tr.innerHTML = `
-                        <td class="text-center">
-                            <input type="checkbox" class="form-check-input modal-part-check"
-                                   value="${p.part_no}" data-name="${p.part_name || ''}" data-id="${p.id}" ${checked}>
-                        </td>
-                        <td class="fw-bold text-primary">${p.part_no}</td>
-                        <td>${p.part_name || '-'}</td>
-                        <td class="small text-muted">${p.part_group || '-'}</td>
-                    `;
-                    // 행 클릭 → 체크 토글
-                    tr.addEventListener('click', function(e) {
-                        if (e.target.type === 'checkbox') return;
-                        const cb = this.querySelector('.modal-part-check');
-                        cb.checked = !cb.checked;
-                        cb.dispatchEvent(new Event('change'));
-                    });
-                    tbody.appendChild(tr);
+                if (!data.success) { msg.textContent = data.error || '조회 실패'; return; }
+
+                // 기존 배분 데이터 유지하면서 새 품목 추가
+                data.items.forEach(item => {
+                    partStockData[item.part_id] = item;
+                    if (!allocData[item.part_id]) allocData[item.part_id] = [];
                 });
 
-                // 체크박스 이벤트
-                tbody.querySelectorAll('.modal-part-check').forEach(cb => {
-                    cb.addEventListener('change', function() {
-                        const pno = this.value;
-                        if (this.checked) {
-                            modalChecked[pno] = { part_no: pno, part_name: this.dataset.name, part_id: parseInt(this.dataset.id) };
-                            this.closest('tr').classList.add('selected');
-                        } else {
-                            delete modalChecked[pno];
-                            this.closest('tr').classList.remove('selected');
-                        }
-                        updateModalCount();
-                    });
-                });
-                updateCheckAll();
+                msg.textContent = `${data.items.length}개 품목 조회됨`;
+                document.getElementById('allocForm').style.display = 'block';
+                renderPartCards();
             })
-            .catch(err => {
-                tbody.innerHTML = `<tr><td colspan="4" class="text-center text-danger py-3">오류: ${err}</td></tr>`;
-            });
+            .catch(err => { msg.textContent = '조회 오류: ' + err; });
     }
-
-    // ── 전체선택 ──
-    document.getElementById('modalCheckAll').addEventListener('change', function() {
-        document.querySelectorAll('.modal-part-check').forEach(cb => {
-            cb.checked = this.checked;
-            const pno = cb.value;
-            if (this.checked) {
-                modalChecked[pno] = { part_no: pno, part_name: cb.dataset.name, part_id: parseInt(cb.dataset.id) };
-                cb.closest('tr').classList.add('selected');
-            } else {
-                delete modalChecked[pno];
-                cb.closest('tr').classList.remove('selected');
-            }
-        });
-        updateModalCount();
-    });
-
-    function updateCheckAll() {
-        const all = document.querySelectorAll('.modal-part-check');
-        const checked = document.querySelectorAll('.modal-part-check:checked');
-        document.getElementById('modalCheckAll').checked = all.length > 0 && all.length === checked.length;
-    }
-
-    function updateModalCount() {
-        const cnt = Object.keys(modalChecked).length;
-        document.getElementById('modalSelectedCount').textContent = `선택: ${cnt}건`;
-    }
-
-    // ── 선택 완료 ──
-    document.getElementById('modalConfirmBtn').addEventListener('click', function() {
-        selectedParts = Object.values(modalChecked);
-        renderSelectedBadges();
-        bootstrap.Modal.getInstance(document.getElementById('partSearchModal')).hide();
-    });
 
     // ── 선택 품번 뱃지 렌더링 ──
     function renderSelectedBadges() {
@@ -538,44 +474,17 @@ document.addEventListener('DOMContentLoaded', function() {
             span.innerHTML = `<strong>${p.part_no}</strong> <small class="text-muted">${p.part_name}</small>
                 <span class="remove-btn" data-idx="${idx}" title="제거">&times;</span>`;
             span.querySelector('.remove-btn').addEventListener('click', function() {
+                const pid = selectedParts[idx].part_id;
                 selectedParts.splice(idx, 1);
-                delete modalChecked[p.part_no];
+                if (allocData[pid]) delete allocData[pid];
+                if (partStockData[pid]) delete partStockData[pid];
                 renderSelectedBadges();
-                // 조회된 카드도 제거
-                if (allocData[p.part_id]) delete allocData[p.part_id];
-                if (partStockData[p.part_id]) delete partStockData[p.part_id];
                 renderPartCards();
+                if (selectedParts.length > 0) doSearch();
             });
             badges.appendChild(span);
         });
     }
-
-    // ── 조회 버튼 ──
-    document.getElementById('btnSearch').addEventListener('click', function() {
-        const whCode = document.getElementById('selWarehouse').value;
-        if (!whCode) { alert('창고를 선택해주세요.'); return; }
-        if (selectedParts.length === 0) { alert('품번을 검색하여 선택해주세요.'); return; }
-
-        const partNos = selectedParts.map(p => p.part_no).join(',');
-        document.getElementById('hidWarehouseId').value = warehouseMap[whCode] || '';
-
-        fetch(`{% url 'material:api_null_stock_info' %}?warehouse_code=${encodeURIComponent(whCode)}&part_nos=${encodeURIComponent(partNos)}`)
-            .then(r => r.json())
-            .then(data => {
-                if (!data.success) { alert(data.error || '조회 실패'); return; }
-
-                partStockData = {};
-                allocData = {};
-                data.items.forEach(item => {
-                    partStockData[item.part_id] = item;
-                    allocData[item.part_id] = [];
-                });
-
-                document.getElementById('allocForm').style.display = 'block';
-                renderPartCards();
-            })
-            .catch(err => alert('조회 오류: ' + err));
-    });
 
     // ── 품번별 카드 렌더링 ──
     function renderPartCards() {
@@ -615,7 +524,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="card-body py-2 px-3">
                     <input type="hidden" name="part_ids[]" value="${pid}">
                     ${info.null_qty > 0 ? `
-                    <!-- LOT 입력 행 -->
                     <div class="row g-2 align-items-end mb-2">
                         <div class="col-4">
                             <input type="date" class="form-control form-control-sm lot-date-input" data-pid="${pid}">
@@ -633,7 +541,6 @@ document.addEventListener('DOMContentLoaded', function() {
                             / 잔여: <strong class="${remaining < 0 ? 'text-danger' : 'text-success'} alloc-remain" data-pid="${pid}">${remaining.toLocaleString()}</strong></small>
                         </div>
                     </div>
-                    <!-- LOT 목록 -->
                     <div class="lot-list" data-pid="${pid}">
                         ${lots.length === 0 ? '<div class="text-center text-muted small py-2">LOT를 추가해주세요.</div>' :
                         lots.map((l, idx) => `
@@ -679,10 +586,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // 이벤트 바인딩
         area.querySelectorAll('.btn-add-lot').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const pid = this.dataset.pid;
-                addLotTopart(pid);
-            });
+            btn.addEventListener('click', function() { addLotTopart(this.dataset.pid); });
         });
         area.querySelectorAll('.lot-qty-input').forEach(input => {
             input.addEventListener('keydown', function(e) {
@@ -691,14 +595,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         area.querySelectorAll('.btn-remove-lot').forEach(btn => {
             btn.addEventListener('click', function() {
-                const pid = this.dataset.pid;
-                const idx = parseInt(this.dataset.idx);
-                allocData[pid].splice(idx, 1);
+                allocData[this.dataset.pid].splice(parseInt(this.dataset.idx), 1);
                 renderPartCards();
             });
         });
-
-        // LOT 수정 입력 이벤트 바인딩
         area.querySelectorAll('.lot-correct-input').forEach(input => {
             input.addEventListener('input', function() {
                 const orig = parseInt(this.dataset.orig) || 0;
@@ -706,19 +606,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 const delta = newVal - orig;
                 const label = document.querySelector(`.lot-delta-label[data-stock-id="${this.dataset.stockId}"]`);
                 if (label) {
-                    if (delta > 0) {
-                        label.innerHTML = `<span class="text-primary fw-bold">+${delta.toLocaleString()}</span>`;
-                    } else if (delta < 0) {
-                        label.innerHTML = `<span class="text-danger fw-bold">${delta.toLocaleString()}</span>`;
-                    } else {
-                        label.innerHTML = '';
-                    }
+                    label.innerHTML = delta > 0
+                        ? `<span class="text-primary fw-bold">+${delta.toLocaleString()}</span>`
+                        : delta < 0
+                        ? `<span class="text-danger fw-bold">${delta.toLocaleString()}</span>`
+                        : '';
                 }
                 updateCorrectButton();
             });
         });
-
-        // 현품표 재발행 버튼 이벤트 → 모달 열기
         area.querySelectorAll('.btn-reprint-lot').forEach(btn => {
             btn.addEventListener('click', function() {
                 const partNo = this.dataset.partNo;
@@ -727,13 +623,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 const qty = parseInt(this.dataset.qty);
 
                 document.getElementById('reprintPartInfo').textContent = `${partNo} / ${partName}`;
-                const unit = this.dataset.unit || 'EA';
-                document.getElementById('reprintLotInfo').textContent = `${lotNo} / ${qty.toLocaleString()} ${unit}`;
+                document.getElementById('reprintLotInfo').textContent = `${lotNo} / ${qty.toLocaleString()} ${this.dataset.unit || 'EA'}`;
                 document.getElementById('reprintSnp').value = qty;
                 document.getElementById('reprintSnp').max = qty;
                 updateReprintSheetCount(true);
 
-                // 모달에 데이터 저장
                 const modal = document.getElementById('reprintModal');
                 modal.dataset.partNo = partNo;
                 modal.dataset.partName = partName;
@@ -749,15 +643,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function updateCorrectButton() {
-        const inputs = document.querySelectorAll('.lot-correct-input');
         let hasChanges = false;
-        inputs.forEach(inp => {
-            const orig = parseInt(inp.dataset.orig) || 0;
-            const newVal = parseInt(inp.value) || 0;
-            if (orig !== newVal) hasChanges = true;
+        document.querySelectorAll('.lot-correct-input').forEach(inp => {
+            if ((parseInt(inp.dataset.orig) || 0) !== (parseInt(inp.value) || 0)) hasChanges = true;
         });
-        const btn = document.getElementById('btnCorrect');
-        btn.style.display = hasChanges ? 'inline-block' : 'none';
+        document.getElementById('btnCorrect').style.display = hasChanges ? 'inline-block' : 'none';
     }
 
     function addLotTopart(pid) {
@@ -766,13 +656,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const lotDate = dateInput.value;
         const lotQty = parseInt(qtyInput.value) || 0;
 
-        if (!lotDate) { alert('LOT 날짜를 입력해주세요.'); return; }
-        if (lotQty <= 0) { alert('수량은 1 이상이어야 합니다.'); return; }
+        if (!lotDate) { alert('LOT 날짜를 입력해주세요.'); dateInput.focus(); return; }
+        if (lotQty <= 0) { alert('수량은 1 이상이어야 합니다.'); qtyInput.focus(); return; }
 
         const info = partStockData[pid];
         if (!allocData[pid]) allocData[pid] = [];
 
-        // 중복 체크
         const existing = allocData[pid].find(l => l.lot === lotDate);
         if (existing) {
             if (confirm(`${lotDate} LOT가 이미 있습니다. 수량을 합산하시겠습니까?`)) {
@@ -782,7 +671,6 @@ document.addEventListener('DOMContentLoaded', function() {
             allocData[pid].push({ lot: lotDate, qty: lotQty });
         }
 
-        // 합계 검증
         const sum = allocData[pid].reduce((s, l) => s + l.qty, 0);
         if (sum > info.null_qty) {
             alert(`배분 합계(${sum.toLocaleString()})가 NULL 재고(${info.null_qty.toLocaleString()})를 초과합니다!`);
@@ -791,9 +679,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         qtyInput.value = '';
-        dateInput.value = '';
-        dateInput.focus();
         renderPartCards();
+        // 재렌더 후 날짜 input에 포커스
+        const newDateInput = document.querySelector(`.lot-date-input[data-pid="${pid}"]`);
+        if (newDateInput) newDateInput.focus();
     }
 
     function updateSubmitButton() {
@@ -806,7 +695,6 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('btnSubmit').disabled = !hasAnyLots || !allValid;
     }
 
-    // ── 폼 제출 확인 ──
     document.getElementById('allocForm').addEventListener('submit', function(e) {
         let totalParts = 0, totalLots = 0, totalEa = 0;
         Object.keys(allocData).forEach(pid => {
@@ -829,9 +717,7 @@ function submitLotCorrect() {
     inputs.forEach(inp => {
         const orig = parseInt(inp.dataset.orig) || 0;
         const newVal = parseInt(inp.value) || 0;
-        if (orig !== newVal) {
-            changes.push({ stockId: inp.dataset.stockId, orig, newVal });
-        }
+        if (orig !== newVal) changes.push({ stockId: inp.dataset.stockId, orig, newVal });
     });
     if (changes.length === 0) { alert('변경 사항이 없습니다.'); return; }
 
@@ -844,8 +730,6 @@ function submitLotCorrect() {
 
     const form = document.getElementById('lotCorrectForm');
     document.getElementById('correctWarehouseId').value = document.getElementById('hidWarehouseId').value;
-
-    // 기존 동적 input 제거
     form.querySelectorAll('.dynamic-input').forEach(el => el.remove());
 
     changes.forEach(c => {
@@ -863,19 +747,13 @@ function submitLotCorrect() {
     form.submit();
 }
 
-// ============================================
-// 현품표 재발행 모달 관련
-// ============================================
+// ── 현품표 재발행 모달 ──
 function updateReprintSheetCount(fromSnp) {
     const qty = parseInt(document.getElementById('reprintModal').dataset.qty) || 0;
     const snp = parseInt(document.getElementById('reprintSnp').value) || qty;
     const sheets = snp > 0 ? Math.ceil(qty / snp) : 1;
     const sheetInput = document.getElementById('reprintSheetInput');
-    if (fromSnp) {
-        sheetInput.value = sheets;
-        sheetInput.max = sheets;
-    }
-    const userSheets = parseInt(sheetInput.value) || sheets;
+    if (fromSnp) { sheetInput.value = sheets; sheetInput.max = sheets; }
     document.getElementById('reprintSheetCount').textContent = `(자동: ${sheets}장)`;
 }
 
@@ -894,24 +772,20 @@ document.getElementById('reprintConfirmBtn').addEventListener('click', function(
 
     const maxSheets = parseInt(document.getElementById('reprintSheetInput').value) || Math.ceil(qty / snpVal);
     const items = [];
-    let remaining = qty;
-    let count = 0;
+    let remaining = qty, count = 0;
     while (remaining > 0 && count < maxSheets) {
         const tagQty = Math.min(snpVal, remaining);
         items.push({ part_no: partNo, part_name: partName, lot_no: lotNo, quantity: tagQty });
-        remaining -= tagQty;
-        count++;
+        remaining -= tagQty; count++;
     }
 
     document.getElementById('reprintItems').value = JSON.stringify(items);
     document.getElementById('reprintMode').value = printMode;
     document.getElementById('reprintSize').value = sizeType;
-
     bootstrap.Modal.getInstance(modal).hide();
     document.getElementById('reprintForm').submit();
 });
 
-// 재발행 모달 → 원재료 라벨(RM) 출력
 document.getElementById('reprintRMBtn').addEventListener('click', function() {
     const modal = document.getElementById('reprintModal');
     const partNo = modal.dataset.partNo;
@@ -922,13 +796,11 @@ document.getElementById('reprintRMBtn').addEventListener('click', function() {
 
     const maxSheets = parseInt(document.getElementById('reprintSheetInput').value) || Math.ceil(qty / snpVal);
     const items = [];
-    let remaining = qty;
-    let count = 0;
+    let remaining = qty, count = 0;
     while (remaining > 0 && count < maxSheets) {
         const tagQty = Math.min(snpVal, remaining);
         items.push({ part_no: partNo, part_name: partName, lot_no: lotNo, quantity: tagQty });
-        remaining -= tagQty;
-        count++;
+        remaining -= tagQty; count++;
     }
 
     document.getElementById('rmPrintItems').value = JSON.stringify(items);
@@ -936,7 +808,6 @@ document.getElementById('reprintRMBtn').addEventListener('click', function() {
     document.getElementById('rmPrintForm').submit();
 });
 
-// 재발행 모달 → 파렛트 라벨(PLT) 출력
 document.getElementById('reprintPLTBtn').addEventListener('click', function() {
     const modal = document.getElementById('reprintModal');
     const partNo = modal.dataset.partNo;
@@ -944,51 +815,34 @@ document.getElementById('reprintPLTBtn').addEventListener('click', function() {
     const lotNo = modal.dataset.lot;
     const qty = parseInt(modal.dataset.qty);
 
-    // 파렛트 단위 수량 입력
     const input = prompt(
         '파렛트 1장당 수량을 입력하세요.\n' +
-        `(총 ${qty} 중 분할할 단위)\n` +
-        '비워두거나 취소하면 전체 수량 1장 발행',
-        ''
-    );
+        `(총 ${qty} 중 분할할 단위)\n비워두거나 취소하면 전체 수량 1장 발행`, '');
     if (input === null) return;
-    const palletUnit = input.trim();
 
-    // items는 1건 (전체 수량), 서버에서 pallet_unit_qty로 분할
     const items = [{ part_no: partNo, part_name: partName, lot_no: lotNo, quantity: qty }];
     document.getElementById('pltPrintItems').value = JSON.stringify(items);
-    document.getElementById('pltUnitQty').value = palletUnit;
+    document.getElementById('pltUnitQty').value = input.trim();
     bootstrap.Modal.getInstance(modal).hide();
     document.getElementById('pltPrintForm').submit();
 });
 
-// 원재료 라벨 출력 (RM)
 function printRMLabels() {
-    var allocPrintItems = document.getElementById('allocPrintItems');
-    if (!allocPrintItems || !allocPrintItems.value) {
-        alert('출력할 배분 데이터가 없습니다.');
-        return;
-    }
+    const allocPrintItems = document.getElementById('allocPrintItems');
+    if (!allocPrintItems || !allocPrintItems.value) { alert('출력할 배분 데이터가 없습니다.'); return; }
     document.getElementById('rmPrintItems').value = allocPrintItems.value;
     document.getElementById('rmPrintForm').submit();
 }
 
-// 파렛트 라벨 출력 (PLT)
 function printPLTLabels() {
-    var allocPrintItems = document.getElementById('allocPrintItems');
-    if (!allocPrintItems || !allocPrintItems.value) {
-        alert('출력할 배분 데이터가 없습니다.');
-        return;
-    }
-    var unit = prompt('파렛트 단위 수량(kg)을 입력하세요:', '1000');
+    const allocPrintItems = document.getElementById('allocPrintItems');
+    if (!allocPrintItems || !allocPrintItems.value) { alert('출력할 배분 데이터가 없습니다.'); return; }
+    const unit = prompt('파렛트 단위 수량(kg)을 입력하세요:', '1000');
     if (unit === null) return;
-    unit = parseInt(unit, 10);
-    if (!unit || unit <= 0) {
-        alert('유효한 수량을 입력하세요.');
-        return;
-    }
+    const u = parseInt(unit, 10);
+    if (!u || u <= 0) { alert('유효한 수량을 입력하세요.'); return; }
     document.getElementById('pltPrintItems').value = allocPrintItems.value;
-    document.getElementById('pltUnitQty').value = unit;
+    document.getElementById('pltUnitQty').value = u;
     document.getElementById('pltPrintForm').submit();
 }
 </script>
