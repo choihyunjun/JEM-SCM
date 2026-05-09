@@ -17,7 +17,7 @@
                 <input type="hidden" name="vendor_ids" id="hiddenVendorIds" value="{{ selected_vendor_ids|default:'' }}">
 
                 <div class="col-md-3">
-                    <label class="form-label small fw-bold">협력사 선택</label>
+                    <label class="form-label small fw-bold">업체 선택</label>
                     <button type="button" class="btn btn-sm btn-outline-secondary w-100 text-start"
                             onclick="openVendorModal()" id="vendorSelectBtn">
                         <i class="bi bi-building me-1"></i>
@@ -74,7 +74,7 @@
                                 <input type="checkbox" class="form-check-input" id="selectAll">
                             </th>
                             <th>날짜</th>
-                            <th>협력사</th>
+                            <th>업체</th>
                             <th>품번</th>
                             <th>품명</th>
                             <th style="width: 150px;">소요량</th>
@@ -113,12 +113,12 @@
     </div>
 </div>
 
-<!-- 협력사 검색 모달 (복수 선택 가능) -->
+<!-- 업체 검색 모달 (복수 선택 가능) -->
 <div class="modal fade" id="vendorSearchModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-dark text-white py-2">
-                <h6 class="modal-title"><i class="bi bi-building me-2"></i>협력사 선택 (복수 선택 가능)</h6>
+                <h6 class="modal-title"><i class="bi bi-building me-2"></i>업체 선택 <small class="fw-normal opacity-75 ms-1">(소요량 등록된 업체만 표시)</small></h6>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-3">
@@ -127,15 +127,7 @@
                     <div class="col-md-7">
                         <input type="text" id="vendorModalSearchInput" class="form-control"
                                placeholder="업체명을 입력하세요..." autocomplete="off">
-                        <!-- 소요량 있는 업체만 필터 -->
-                        <div class="form-check form-switch mt-2 mb-2 ps-5">
-                            <input class="form-check-input" type="checkbox" id="onlyWithDemandSwitch"
-                                   onchange="toggleDemandFilter()">
-                            <label class="form-check-label small text-muted" for="onlyWithDemandSwitch">
-                                <i class="bi bi-funnel me-1"></i>소요량 있는 업체만 표시
-                            </label>
-                        </div>
-                        <div id="vendorModalList" class="border rounded" style="max-height: 280px; overflow-y: auto;">
+                        <div id="vendorModalList" class="border rounded mt-2" style="max-height: 300px; overflow-y: auto;">
                             <div class="text-center text-muted py-4">
                                 <i class="bi bi-search fs-3 d-block mb-2"></i>
                                 검색어를 입력하면 결과가 표시됩니다
@@ -247,18 +239,8 @@ function openVendorModal() {
     setTimeout(() => document.getElementById('vendorModalSearchInput').focus(), 300);
 }
 
-// 소요량 필터 토글 함수
-function toggleDemandFilter() {
-    const query = document.getElementById('vendorModalSearchInput').value;
-    renderVendorSearchList(query);
-}
-
-// 필터 적용된 업체 목록 반환
+// 업체 목록 반환 (allVendors는 이미 소요량 있는 업체만 포함)
 function getFilteredVendors() {
-    const onlyWithDemand = document.getElementById('onlyWithDemandSwitch')?.checked || false;
-    if (onlyWithDemand) {
-        return allVendors.filter(v => vendorsWithDemandIds.has(v.id));
-    }
     return allVendors;
 }
 

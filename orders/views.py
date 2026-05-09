@@ -1116,11 +1116,11 @@ def demand_manage(request):
         names = list(Vendor.objects.filter(id__in=vendor_ids).values_list('name', flat=True))
         selected_vendor_names = ', '.join(names)
 
-    # 전체 업체 목록 조회
-    vendor_list = Vendor.objects.all().order_by('name')
-
-    # 소요량 있는 업체 ID 목록 (모달 내 필터용)
+    # 소요량이 등록된 업체 ID 목록
     vendors_with_demand_ids = list(Demand.objects.values_list('part__vendor_id', flat=True).distinct())
+
+    # 소요량 있는 업체만 목록 조회
+    vendor_list = Vendor.objects.filter(id__in=vendors_with_demand_ids).order_by('name')
 
     return render(
         request,
