@@ -135,6 +135,9 @@ urlpatterns = [
     # material/urls.py를 바라보도록 설정 (그래야 'material:dashboard' 같은 주소가 작동함)
     path('wms/', include('material.urls')),
 
+    # SCM 기준정보관리 - ERP 마스터 동기화 (SCM 레이아웃으로 표시)
+    path('master-sync/', material_views.erp_master_sync, name='erp_master_sync'),
+
     # ------------------------------------------------------------------
     # 6. 품질관리 (QMS)
     # ------------------------------------------------------------------
