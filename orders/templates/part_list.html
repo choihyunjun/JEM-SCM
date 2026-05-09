@@ -142,12 +142,16 @@
                 <label class="form-label fw-semibold text-secondary" style="font-size: 0.8rem;">
                     <i class="bi bi-tag me-1"></i>품목군
                 </label>
-                <select name="group" class="form-select" style="font-size: 0.95rem;">
-                    <option value="">전체 품목군</option>
-                    {% for g in part_groups %}
-                    <option value="{{ g }}" {% if group_filter == g %}selected{% endif %}>{{ g }}</option>
-                    {% endfor %}
-                </select>
+                <input type="hidden" name="group" id="groupFilterVal" value="{{ group_filter }}">
+                <div style="position:relative;">
+                    <input type="text" id="groupFilterInput" class="form-control" style="font-size: 0.95rem;"
+                           placeholder="품목군 검색..." value="{{ group_filter }}" autocomplete="off">
+                    <button type="button" onclick="clearGroupFilter()"
+                            id="groupFilterClear"
+                            style="display:{% if group_filter %}block{% else %}none{% endif %};position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:1.2rem;color:#999;cursor:pointer;line-height:1;">×</button>
+                    <div id="groupFilterDropdown"
+                         style="display:none;position:absolute;z-index:1060;width:100%;background:#fff;border:1px solid #dee2e6;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,0.15);max-height:220px;overflow-y:auto;"></div>
+                </div>
             </div>
             <div class="col-md-2">
                 <div class="form-check" style="margin-top: 28px;">
@@ -360,6 +364,55 @@
 </div>
 
 <script>
+// ── 품목군 필터 자동완성 ──
+(function() {
+    const partGroups = [{% for g in part_groups %}"{{ g|escapejs }}"{% if not forloop.last %},{% endif %}{% endfor %}];
+    const input = document.getElementById('groupFilterInput');
+    const hiddenVal = document.getElementById('groupFilterVal');
+    const dropdown = document.getElementById('groupFilterDropdown');
+    const clearBtn = document.getElementById('groupFilterClear');
+
+    function renderDropdown(q) {
+        const filtered = q
+            ? partGroups.filter(g => g.toLowerCase().includes(q.toLowerCase()))
+            : partGroups;
+        if (filtered.length === 0) {
+            dropdown.innerHTML = '<div style="padding:10px;color:#999;font-size:0.85rem;">검색 결과 없음</div>';
+        } else {
+            dropdown.innerHTML = filtered.map(g =>
+                '<div style="padding:8px 12px;cursor:pointer;font-size:0.88rem;border-bottom:1px solid #f0f0f0;"'
+                + ' onmousedown="selectGroup(\'' + g.replace(/\\/g,'\\\\').replace(/'/g,"\\'") + '\')">'
+                + g + '</div>'
+            ).join('');
+        }
+        dropdown.style.display = 'block';
+    }
+
+    input.addEventListener('focus', function() { renderDropdown(this.value); });
+    input.addEventListener('input', function() {
+        hiddenVal.value = '';
+        clearBtn.style.display = this.value ? 'block' : 'none';
+        renderDropdown(this.value);
+    });
+    input.addEventListener('blur', function() {
+        setTimeout(function() { dropdown.style.display = 'none'; }, 200);
+    });
+})();
+
+function clearGroupFilter() {
+    document.getElementById('groupFilterVal').value = '';
+    document.getElementById('groupFilterInput').value = '';
+    document.getElementById('groupFilterClear').style.display = 'none';
+    document.getElementById('groupFilterDropdown').style.display = 'none';
+}
+
+function selectGroup(name) {
+    document.getElementById('groupFilterVal').value = name;
+    document.getElementById('groupFilterInput').value = name;
+    document.getElementById('groupFilterClear').style.display = 'block';
+    document.getElementById('groupFilterDropdown').style.display = 'none';
+}
+
 function openEditModal(partId, partNo, partName, partGroup, vendorId, vendorName) {
     document.getElementById('editPartId').value = partId;
     document.getElementById('editPartNo').value = partNo;
