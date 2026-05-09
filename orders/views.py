@@ -4321,6 +4321,39 @@ def api_vendor_search(request):
 
 
 @login_required
+@require_POST
+def api_part_link_vendor(request):
+    """품목에 거래처 연결 AJAX API (소요량 계산 화면에서 인라인 연결용)"""
+    import json
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        return JsonResponse({'success': False, 'error': '잘못된 요청'}, status=400)
+
+    part_no = data.get('part_no', '').strip()
+    vendor_id = data.get('vendor_id')
+
+    if not part_no:
+        return JsonResponse({'success': False, 'error': '품번이 필요합니다.'})
+
+    try:
+        part = Part.objects.get(part_no=part_no)
+    except Part.DoesNotExist:
+        return JsonResponse({'success': False, 'error': f'품번 {part_no}을(를) 찾을 수 없습니다.'})
+
+    if vendor_id:
+        try:
+            vendor = Vendor.objects.get(id=int(vendor_id))
+            part.vendor = vendor
+            part.save()
+            return JsonResponse({'success': True, 'part_no': part_no, 'vendor_name': vendor.name})
+        except (Vendor.DoesNotExist, ValueError, TypeError):
+            return JsonResponse({'success': False, 'error': '거래처를 찾을 수 없습니다.'})
+    else:
+        return JsonResponse({'success': False, 'error': '거래처 ID가 없습니다.'})
+
+
+@login_required
 def api_organization_search(request):
     """협력사(Organization) 검색 API - QMS용"""
     q = request.GET.get('q', '').strip()

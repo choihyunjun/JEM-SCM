@@ -125,6 +125,7 @@ urlpatterns = [
     # API 엔드포인트 (품번/협력사/직원 검색)
     # ------------------------------------------------------------------
     path('api/parts/search/', views.api_part_search, name='api_part_search'),
+    path('api/parts/link-vendor/', views.api_part_link_vendor, name='api_part_link_vendor'),
     path('api/vendors/search/', views.api_vendor_search, name='api_vendor_search'),
     path('api/organizations/search/', views.api_organization_search, name='api_organization_search'),
     path('api/employees/search/', views.api_employee_search, name='api_employee_search'),

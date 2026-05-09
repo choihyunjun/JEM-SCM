@@ -520,6 +520,48 @@
             </div>
         </div>
     </div>
+    <!-- 거래처 미연결 업체 연결 모달 -->
+    <div class="modal fade" id="vendorLinkModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header" style="background:#fff3cd;">
+                    <h5 class="modal-title fw-bold">
+                        <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
+                        거래처 미연결 품목 <span id="unlinkedCount" class="badge bg-warning text-dark">0</span>건
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small mb-3">
+                        <i class="bi bi-info-circle me-1"></i>
+                        거래처가 없는 품목은 발주가 불가합니다. 지금 바로 연결하거나 건너뛸 수 있습니다.
+                    </p>
+                    <div id="vendorLinkSummary" class="alert alert-success py-2 small" style="display:none;"></div>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width:22%">품번</th>
+                                    <th style="width:28%">품명</th>
+                                    <th>거래처 연결</th>
+                                </tr>
+                            </thead>
+                            <tbody id="vendorLinkTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <span class="text-muted small me-auto" id="vendorLinkStatus"></span>
+                    <button type="button" class="btn btn-secondary" onclick="skipAndRegister()">
+                        <i class="bi bi-skip-forward me-1"></i>건너뛰고 등록
+                    </button>
+                    <button type="button" class="btn btn-warning fw-bold" id="btnSaveThenRegister" onclick="saveThenRegister()">
+                        <i class="bi bi-check-circle me-1"></i>저장 후 등록
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
     {% endif %}
 
     {% if not result and not batch_results and request.method != 'POST' %}
@@ -881,30 +923,214 @@ async function syncMissingBom() {
     }
 }
 
+// ── 거래처 미연결 품목 목록 (서버 렌더링) ──
+var _rawUnlinked = [
+    {% if batch_results %}
+    {% for batch in batch_results %}
+    {% if batch.structured_items %}{% for item in batch.structured_items %}{% if not item.vendor_name and not item.is_semi %}
+    {part_no: "{{ item.child_part_no|escapejs }}", part_name: "{{ item.child_part_name|escapejs }}"},
+    {% endif %}{% endfor %}
+    {% elif batch.items %}{% for item in batch.items %}{% if not item.vendor_name %}
+    {part_no: "{{ item.child_part_no|escapejs }}", part_name: "{{ item.child_part_name|escapejs }}"},
+    {% endif %}{% endfor %}{% endif %}
+    {% endfor %}
+    {% endif %}
+];
+var _seenPN = new Set();
+var uniqueUnlinkedParts = _rawUnlinked.filter(function(p) {
+    if (_seenPN.has(p.part_no)) return false;
+    _seenPN.add(p.part_no);
+    return true;
+});
+
 // SCM 소요량 등록 - 거래처 선택 모달
 var vendorSelectModal = null;
+var vendorLinkModal = null;
+var vendorLinkAssignments = {};  // { part_no: { vendor_id, vendor_name } }
+var _vendorSearchTimers = {};
+var _newlyLinkedVendors = [];
 
 document.addEventListener('DOMContentLoaded', function() {
     var el = document.getElementById('vendorSelectModal');
     if (el) vendorSelectModal = new bootstrap.Modal(el);
+    var el2 = document.getElementById('vendorLinkModal');
+    if (el2) vendorLinkModal = new bootstrap.Modal(el2);
 });
 
 function confirmRegisterDemand() {
-    // 전체 batch-group에서 거래처 목록 추출 (숨겨진 페이지 포함)
+    if (uniqueUnlinkedParts.length > 0) {
+        openVendorLinkModal();
+    } else {
+        showVendorSelectModal();
+    }
+}
+
+function openVendorLinkModal() {
+    vendorLinkAssignments = {};
+    _newlyLinkedVendors = [];
+    document.getElementById('unlinkedCount').textContent = uniqueUnlinkedParts.length;
+    document.getElementById('vendorLinkSummary').style.display = 'none';
+    document.getElementById('vendorLinkStatus').textContent = '';
+
+    var tbody = document.getElementById('vendorLinkTableBody');
+    tbody.innerHTML = '';
+
+    uniqueUnlinkedParts.forEach(function(p, idx) {
+        var tr = document.createElement('tr');
+        tr.dataset.partNo = p.part_no;
+        tr.innerHTML =
+            '<td class="fw-bold text-primary small">' + p.part_no + '</td>' +
+            '<td class="small text-muted">' + p.part_name + '</td>' +
+            '<td>' +
+                '<div style="position:relative;">' +
+                    '<div class="input-group input-group-sm">' +
+                        '<input type="text" class="form-control vl-search" data-idx="' + idx + '" data-part-no="' + p.part_no.replace(/"/g, '&quot;') + '" placeholder="업체명 검색 (2자 이상)..." autocomplete="off">' +
+                        '<button type="button" class="btn btn-outline-secondary vl-clear" data-idx="' + idx + '" style="display:none; font-size:1rem; line-height:1;">×</button>' +
+                    '</div>' +
+                    '<div class="list-group vl-dropdown position-absolute w-100" data-idx="' + idx + '" style="display:none;z-index:2000;max-height:160px;overflow-y:auto;top:100%;border:1px solid #dee2e6;border-radius:0 0 6px 6px;box-shadow:0 4px 8px rgba(0,0,0,0.1);"></div>' +
+                '</div>' +
+            '</td>';
+        tbody.appendChild(tr);
+
+        var searchInput = tr.querySelector('.vl-search');
+        var clearBtn = tr.querySelector('.vl-clear');
+        var dropEl = tr.querySelector('.vl-dropdown');
+        var partNo = p.part_no;
+
+        searchInput.addEventListener('input', function() {
+            var q = this.value.trim();
+            clearTimeout(_vendorSearchTimers[idx]);
+            if (q.length < 2) { dropEl.style.display = 'none'; return; }
+            _vendorSearchTimers[idx] = setTimeout(function() {
+                fetch('/api/vendors/search/?q=' + encodeURIComponent(q))
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        dropEl.innerHTML = '';
+                        var results = data.results || [];
+                        if (results.length === 0) {
+                            dropEl.innerHTML = '<div class="list-group-item small text-muted py-2">검색 결과 없음</div>';
+                        } else {
+                            results.forEach(function(v) {
+                                var item = document.createElement('button');
+                                item.type = 'button';
+                                item.className = 'list-group-item list-group-item-action py-2 small';
+                                item.innerHTML = '<strong>' + v.name + '</strong>' + (v.code ? ' <span class="text-muted">(' + v.code + ')</span>' : '');
+                                item.addEventListener('click', function() {
+                                    searchInput.value = v.name;
+                                    clearBtn.style.display = 'inline-block';
+                                    dropEl.style.display = 'none';
+                                    vendorLinkAssignments[partNo] = { vendor_id: v.id, vendor_name: v.name };
+                                    tr.classList.add('table-success');
+                                    updateVendorLinkStatus();
+                                });
+                                dropEl.appendChild(item);
+                            });
+                        }
+                        dropEl.style.display = 'block';
+                    });
+            }, 250);
+        });
+
+        searchInput.addEventListener('blur', function() {
+            setTimeout(function() { dropEl.style.display = 'none'; }, 200);
+        });
+
+        clearBtn.addEventListener('click', function() {
+            searchInput.value = '';
+            clearBtn.style.display = 'none';
+            delete vendorLinkAssignments[partNo];
+            tr.classList.remove('table-success');
+            updateVendorLinkStatus();
+        });
+    });
+
+    updateVendorLinkStatus();
+    vendorLinkModal.show();
+}
+
+function updateVendorLinkStatus() {
+    var linked = Object.keys(vendorLinkAssignments).length;
+    var total = uniqueUnlinkedParts.length;
+    var statusEl = document.getElementById('vendorLinkStatus');
+    statusEl.textContent = linked + ' / ' + total + '개 연결됨';
+    statusEl.className = linked > 0 ? 'text-success small me-auto fw-bold' : 'text-muted small me-auto';
+}
+
+async function saveThenRegister() {
+    var toSave = Object.entries(vendorLinkAssignments);
+    var btn = document.getElementById('btnSaveThenRegister');
+
+    if (toSave.length === 0) {
+        skipAndRegister();
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>저장 중...';
+
+    var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    var saved = 0, failed = 0;
+
+    for (var i = 0; i < toSave.length; i++) {
+        var partNo = toSave[i][0];
+        var info = toSave[i][1];
+        try {
+            var res = await fetch('/api/parts/link-vendor/', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ part_no: partNo, vendor_id: info.vendor_id })
+            });
+            var data = await res.json();
+            if (data.success) {
+                saved++;
+                _newlyLinkedVendors.push(info.vendor_name);
+            } else {
+                failed++;
+            }
+        } catch (e) {
+            failed++;
+        }
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-check-circle me-1"></i>저장 후 등록';
+
+    var remaining = uniqueUnlinkedParts.length - saved;
+    var msg = saved + '개 거래처 연결 완료';
+    if (remaining > 0) msg += ', ' + remaining + '개는 미연결 상태로 등록됩니다';
+
+    var summaryEl = document.getElementById('vendorLinkSummary');
+    summaryEl.textContent = msg;
+    summaryEl.style.display = 'block';
+
+    if (!confirm(msg + '\n\n소요량 등록을 계속하시겠습니까?')) return;
+
+    vendorLinkModal.hide();
+    setTimeout(showVendorSelectModal, 350);
+}
+
+function skipAndRegister() {
+    vendorLinkModal.hide();
+    setTimeout(showVendorSelectModal, 350);
+}
+
+function showVendorSelectModal() {
     var vendorSet = {};
     document.querySelectorAll('#batchResultTable .batch-group tr td:last-child').forEach(function(td) {
         var name = td.textContent.trim();
         if (name && name !== '-') vendorSet[name] = (vendorSet[name] || 0) + 1;
     });
+    // 새로 연결한 업체도 추가 (서버에서 실시간 반영됨)
+    _newlyLinkedVendors.forEach(function(name) {
+        if (name) vendorSet[name] = (vendorSet[name] || 0) + 1;
+    });
 
     var vendors = Object.keys(vendorSet).sort();
-
     if (vendors.length === 0) {
         alert('등록할 거래처 정보가 없습니다.');
         return;
     }
 
-    // 체크박스 목록 생성
     var listEl = document.getElementById('vendorCheckboxList');
     listEl.innerHTML = '';
     vendors.forEach(function(name, idx) {
