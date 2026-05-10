@@ -75,6 +75,7 @@ urlpatterns = [
     path('stock/lot-allocation/rm-print/', views.lot_allocation_rm_print, name='lot_allocation_rm_print'),
     path('stock/lot-allocation/plt-print/', views.lot_allocation_plt_print, name='lot_allocation_plt_print'),
     path('api/null-stock-info/', views.api_null_stock_info, name='api_null_stock_info'),
+    path('api/lot-change/', views.api_lot_change, name='api_lot_change'),
 
     # ERP 동기화
     path('erp-sync/', views.erp_sync, name='erp_sync'),

@@ -199,20 +199,10 @@
         <div id="partCardsArea"></div>
 
         <div class="text-end mb-4 d-flex justify-content-end gap-2">
-            <button type="button" class="btn btn-warning btn-lg" id="btnCorrect" style="display:none;" onclick="submitLotCorrect()">
-                <i class="bi bi-pencil-square me-1"></i> LOT 수정
-            </button>
             <button type="submit" class="btn btn-primary btn-lg" id="btnSubmit" disabled>
                 <i class="bi bi-check-circle me-1"></i> 전체 배분 실행
             </button>
         </div>
-    </form>
-
-    <!-- LOT 수정 폼 (별도) -->
-    <form method="post" id="lotCorrectForm" style="display:none;">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="lot_correct">
-        <input type="hidden" name="warehouse_id" id="correctWarehouseId">
     </form>
 
     <!-- 현품표 재발행 폼 -->
@@ -352,6 +342,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let selectedParts = [];
     let partStockData = {};
     let allocData = {};
+    let correctData = {};  // { pid: { stockId: { newDate, newQty } } }
 
     const warehouseMap = {
         {% for wh in warehouses %}
@@ -500,91 +491,86 @@ document.addEventListener('DOMContentLoaded', function() {
         partIds.forEach(pid => {
             const info = partStockData[pid];
             const lots = allocData[pid] || [];
+            const avail = getAvailable(pid);
             const allocSum = lots.reduce((s, l) => s + l.qty, 0);
-            const remaining = info.null_qty - allocSum;
+            const remaining = avail - allocSum;
+            const unit = info.weight_unit || 'EA';
+
+            // 기존 LOT 행 HTML
+            let existingLotsHtml = '';
+            if (info.existing_lots.length > 0) {
+                const rowsHtml = info.existing_lots.map(l => {
+                    const c = correctData[pid] && correctData[pid][l.id];
+                    const curQty = c ? c.newQty : l.quantity;
+                    const curDate = c ? c.newDate : l.lot_no;
+                    const delta = curQty - l.quantity;
+                    let dHtml = '';
+                    if (delta < 0) dHtml = '<span class="text-success fw-bold"> ' + delta + ' \u2192 +' + (-delta) + ' \ud574\uc81c</span>';
+                    else if (delta > 0) dHtml = '<span class="text-warning fw-bold"> +' + delta + ' (NULL \ucc28\uac10)</span>';
+                    return '<div class="d-flex align-items-center gap-2 mb-1 existing-lot-row" data-stock-id="' + l.id + '" data-pid="' + pid + '">'
+                        + '<input type="date" class="form-control form-control-sm lot-correct-date"'
+                        + ' data-pid="' + pid + '" data-stock-id="' + l.id + '" data-orig-date="' + l.lot_no + '" value="' + curDate + '" style="width:140px;">'
+                        + '<input type="number" class="form-control form-control-sm lot-correct-qty"'
+                        + ' data-pid="' + pid + '" data-stock-id="' + l.id + '" data-orig-qty="' + l.quantity + '" value="' + curQty + '" style="width:90px;" min="0">'
+                        + '<small class="text-muted correct-desc" data-stock-id="' + l.id + '">'
+                        + '\uc6d0\ub798: ' + l.quantity.toLocaleString() + unit + dHtml + '</small>'
+                        + '<button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 btn-reprint-lot ms-auto"'
+                        + ' data-part-no="' + info.part_no + '" data-part-name="' + info.part_name + '"'
+                        + ' data-lot="' + l.lot_no + '" data-qty="' + l.quantity + '" data-unit="' + unit + '"'
+                        + ' title="\ud604\ud488\ud45c \uc7ac\ubc1c\ud589" style="font-size:0.75rem;">'
+                        + '<i class="bi bi-printer"></i></button></div>';
+                }).join('');
+                existingLotsHtml = '<div class="mb-3">'
+                    + '<small class="fw-bold text-secondary d-block mb-1">'
+                    + '<i class="bi bi-pencil-square me-1"></i>\uae30\uc874 LOT'
+                    + '<span class="text-muted fw-normal ms-1" style="font-size:0.8rem;">\uc218\ub7c9/\ub0a0\uc9dc \ubcc0\uacbd \uc2dc \ubc30\ubd84\uac00\ub2a5\ub7c9 \uc790\ub3d9 \ubc18\uc601</span></small>'
+                    + rowsHtml + '</div>';
+            }
+
+            // 새 LOT 목록 HTML
+            const lotListHtml = lots.length === 0
+                ? '<div class="text-center text-muted small py-1">\ucd94\uac00\ud560 LOT\ub97c \uc785\ub825\ud558\uc138\uc694.</div>'
+                : lots.map((l, idx) => '<div class="d-flex align-items-center gap-2 mb-1 lot-item">'
+                    + '<span class="badge bg-light text-dark border">' + l.lot + '</span>'
+                    + '<span class="fw-bold">' + l.qty.toLocaleString() + ' ' + unit + '</span>'
+                    + '<input type="hidden" name="lot_nos_' + pid + '[]" value="' + l.lot + '">'
+                    + '<input type="hidden" name="qty_' + pid + '[]" value="' + l.qty + '">'
+                    + '<button type="button" class="btn btn-sm btn-outline-danger py-0 px-1 btn-remove-lot"'
+                    + ' data-pid="' + pid + '" data-idx="' + idx + '" style="font-size:0.75rem;"><i class="bi bi-x"></i></button>'
+                    + '</div>').join('');
+
+            const newLotInputStyle = avail === 0 && lots.length === 0 ? 'opacity:0.4; pointer-events:none;' : '';
 
             const card = document.createElement('div');
             card.className = 'card shadow-sm mb-3';
-            card.innerHTML = `
-                <div class="card-header bg-light d-flex justify-content-between align-items-center py-2 px-3">
-                    <div>
-                        <strong class="text-primary">${info.part_no}</strong>
-                        <small class="text-muted ms-2">${info.part_name}</small>
-                    </div>
-                    <div class="d-flex gap-2">
-                        <span class="info-badge bg-warning bg-opacity-25 border border-warning" style="font-size:0.8rem;">
-                            NULL: <strong>${info.null_qty.toLocaleString()}</strong>${info.weight_unit || 'EA'}
-                        </span>
-                        <span class="info-badge bg-info bg-opacity-10 border border-info" style="font-size:0.8rem;">
-                            전체: <strong>${info.total_qty.toLocaleString()}</strong>${info.weight_unit || 'EA'}
-                        </span>
-                        ${info.existing_lots.length > 0 ? `<span class="info-badge bg-success bg-opacity-10 border border-success" style="font-size:0.8rem;">기존LOT: ${info.existing_lots.length}건</span>` : ''}
-                    </div>
-                </div>
-                <div class="card-body py-2 px-3">
-                    <input type="hidden" name="part_ids[]" value="${pid}">
-                    ${info.null_qty > 0 ? `
-                    <div class="row g-2 align-items-end mb-2">
-                        <div class="col-4">
-                            <input type="date" class="form-control form-control-sm lot-date-input" data-pid="${pid}">
-                        </div>
-                        <div class="col-3">
-                            <input type="number" class="form-control form-control-sm lot-qty-input" data-pid="${pid}" min="1" placeholder="수량">
-                        </div>
-                        <div class="col-2">
-                            <button type="button" class="btn btn-sm btn-success w-100 btn-add-lot" data-pid="${pid}">
-                                <i class="bi bi-plus-lg"></i> 추가
-                            </button>
-                        </div>
-                        <div class="col-3 text-end">
-                            <small>배분: <strong class="text-primary alloc-sum" data-pid="${pid}">${allocSum.toLocaleString()}</strong>
-                            / 잔여: <strong class="${remaining < 0 ? 'text-danger' : 'text-success'} alloc-remain" data-pid="${pid}">${remaining.toLocaleString()}</strong></small>
-                        </div>
-                    </div>
-                    <div class="lot-list" data-pid="${pid}">
-                        ${lots.length === 0 ? '<div class="text-center text-muted small py-2">LOT를 추가해주세요.</div>' :
-                        lots.map((l, idx) => `
-                            <div class="d-flex align-items-center gap-2 mb-1 lot-item">
-                                <span class="badge bg-light text-dark border">${l.lot}</span>
-                                <span class="fw-bold">${l.qty.toLocaleString()} ${info.weight_unit || 'EA'}</span>
-                                <input type="hidden" name="lot_nos_${pid}[]" value="${l.lot}">
-                                <input type="hidden" name="qty_${pid}[]" value="${l.qty}">
-                                <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1 btn-remove-lot"
-                                        data-pid="${pid}" data-idx="${idx}" style="font-size:0.75rem;">
-                                    <i class="bi bi-x"></i>
-                                </button>
-                            </div>
-                        `).join('')}
-                    </div>
-                    ` : '<div class="text-center text-muted small py-2">NULL 재고가 없습니다.</div>'}
-                    ${info.existing_lots.length > 0 ? `
-                    <div class="mt-2 pt-2 border-top">
-                        <div class="d-flex justify-content-between align-items-center mb-1">
-                            <small class="fw-bold text-secondary"><i class="bi bi-pencil-square me-1"></i>기존 LOT 수정</small>
-                        </div>
-                        ${info.existing_lots.map(l => `
-                            <div class="d-flex align-items-center gap-2 mb-1">
-                                <span class="badge bg-info text-dark" style="min-width:90px;">${l.lot_no}</span>
-                                <input type="number" class="form-control form-control-sm lot-correct-input"
-                                       data-pid="${pid}" data-stock-id="${l.id}" data-orig="${l.quantity}"
-                                       value="${l.quantity}" style="width:100px;" min="0">
-                                <small class="text-muted">(현재: ${l.quantity.toLocaleString()})</small>
-                                <span class="lot-delta-label" data-stock-id="${l.id}" style="font-size:0.8rem;"></span>
-                                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 btn-reprint-lot"
-                                        data-part-no="${info.part_no}" data-part-name="${info.part_name}"
-                                        data-lot="${l.lot_no}" data-qty="${l.quantity}" data-unit="${info.weight_unit || 'EA'}"
-                                        title="현품표 재발행" style="font-size:0.75rem;">
-                                    <i class="bi bi-printer"></i>
-                                </button>
-                            </div>
-                        `).join('')}
-                    </div>` : ''}
-                </div>
-            `;
+            card.innerHTML = '<div class="card-header bg-light d-flex justify-content-between align-items-center py-2 px-3">'
+                + '<div><strong class="text-primary">' + info.part_no + '</strong>'
+                + '<small class="text-muted ms-2">' + info.part_name + '</small></div>'
+                + '<div class="d-flex gap-2">'
+                + '<span class="info-badge bg-warning bg-opacity-25 border border-warning" style="font-size:0.8rem;">NULL: <strong>' + info.null_qty.toLocaleString() + '</strong>' + unit + '</span>'
+                + '<span class="info-badge bg-success bg-opacity-15 border border-success" style="font-size:0.8rem;">'
+                + '\ubc30\ubd84\uac00\ub2a5: <strong class="avail-count" data-pid="' + pid + '">' + avail.toLocaleString() + '</strong>' + unit + '</span>'
+                + '<span class="info-badge bg-info bg-opacity-10 border border-info" style="font-size:0.8rem;">\uc804\uccb4: <strong>' + info.total_qty.toLocaleString() + '</strong>' + unit + '</span>'
+                + '</div></div>'
+                + '<div class="card-body py-2 px-3">'
+                + '<input type="hidden" name="part_ids[]" value="' + pid + '">'
+                + existingLotsHtml
+                + '<div id="new-lot-section-' + pid + '" class="' + (info.existing_lots.length > 0 ? 'border-top pt-2' : '') + '">'
+                + '<small class="fw-bold text-success d-block mb-2"><i class="bi bi-plus-circle me-1"></i>\uc0c8 LOT \ubc30\ubd84</small>'
+                + '<div id="new-lot-input-' + pid + '" class="row g-2 align-items-end mb-2" style="' + newLotInputStyle + '">'
+                + '<div class="col-4"><input type="date" class="form-control form-control-sm lot-date-input" data-pid="' + pid + '"></div>'
+                + '<div class="col-3"><input type="number" class="form-control form-control-sm lot-qty-input" data-pid="' + pid + '" min="1" placeholder="\uc218\ub7c9"></div>'
+                + '<div class="col-2"><button type="button" class="btn btn-sm btn-success w-100 btn-add-lot" data-pid="' + pid + '"><i class="bi bi-plus-lg"></i> \ucd94\uac00</button></div>'
+                + '<div class="col-3 text-end"><small>\ubc30\ubd84: <strong class="text-primary alloc-sum" data-pid="' + pid + '">' + allocSum.toLocaleString() + '</strong>'
+                + ' / \uc794\uc5ec: <strong class="alloc-remain ' + (remaining < 0 ? 'text-danger' : 'text-success') + '" data-pid="' + pid + '">' + remaining.toLocaleString() + '</strong></small></div>'
+                + '</div>'
+                + '<div class="lot-list" data-pid="' + pid + '">' + lotListHtml + '</div>'
+                + '</div>'
+                + '</div>';
             area.appendChild(card);
         });
 
-        // 이벤트 바인딩
+        // ── 이벤트 바인딩 ──
         area.querySelectorAll('.btn-add-lot').forEach(btn => {
             btn.addEventListener('click', function() { addLotTopart(this.dataset.pid); });
         });
@@ -599,20 +585,36 @@ document.addEventListener('DOMContentLoaded', function() {
                 renderPartCards();
             });
         });
-        area.querySelectorAll('.lot-correct-input').forEach(input => {
+        area.querySelectorAll('.lot-correct-date, .lot-correct-qty').forEach(input => {
             input.addEventListener('input', function() {
-                const orig = parseInt(this.dataset.orig) || 0;
-                const newVal = parseInt(this.value) || 0;
-                const delta = newVal - orig;
-                const label = document.querySelector(`.lot-delta-label[data-stock-id="${this.dataset.stockId}"]`);
-                if (label) {
-                    label.innerHTML = delta > 0
-                        ? `<span class="text-primary fw-bold">+${delta.toLocaleString()}</span>`
-                        : delta < 0
-                        ? `<span class="text-danger fw-bold">${delta.toLocaleString()}</span>`
-                        : '';
+                const pid = this.dataset.pid;
+                const sid = this.dataset.stockId;
+                const row = area.querySelector('.existing-lot-row[data-stock-id="' + sid + '"]');
+                if (!row) return;
+                const dateInput = row.querySelector('.lot-correct-date');
+                const qtyInput = row.querySelector('.lot-correct-qty');
+                const origDate = dateInput.dataset.origDate;
+                const origQty = parseInt(qtyInput.dataset.origQty) || 0;
+                const newDate = dateInput.value;
+                const newQty = parseInt(qtyInput.value) || 0;
+
+                if (!correctData[pid]) correctData[pid] = {};
+                if (newDate === origDate && newQty === origQty) {
+                    delete correctData[pid][sid];
+                } else {
+                    correctData[pid][sid] = { newDate, newQty };
                 }
-                updateCorrectButton();
+
+                const delta = newQty - origQty;
+                const info = partStockData[pid];
+                const unit = info ? (info.weight_unit || 'EA') : 'EA';
+                let dHtml = '';
+                if (delta < 0) dHtml = '<span class="text-success fw-bold"> ' + delta + ' → +' + (-delta) + ' 해제</span>';
+                else if (delta > 0) dHtml = '<span class="text-warning fw-bold"> +' + delta + ' (NULL 차감)</span>';
+                const descEl = row.querySelector('.correct-desc[data-stock-id="' + sid + '"]');
+                if (descEl) descEl.innerHTML = '원래: ' + origQty.toLocaleString() + unit + dHtml;
+
+                updateAvailability(pid);
             });
         });
         area.querySelectorAll('.btn-reprint-lot').forEach(btn => {
@@ -621,50 +623,75 @@ document.addEventListener('DOMContentLoaded', function() {
                 const partName = this.dataset.partName;
                 const lotNo = this.dataset.lot;
                 const qty = parseInt(this.dataset.qty);
-
-                document.getElementById('reprintPartInfo').textContent = `${partNo} / ${partName}`;
-                document.getElementById('reprintLotInfo').textContent = `${lotNo} / ${qty.toLocaleString()} ${this.dataset.unit || 'EA'}`;
+                document.getElementById('reprintPartInfo').textContent = partNo + ' / ' + partName;
+                document.getElementById('reprintLotInfo').textContent = lotNo + ' / ' + qty.toLocaleString() + ' ' + (this.dataset.unit || 'EA');
                 document.getElementById('reprintSnp').value = qty;
                 document.getElementById('reprintSnp').max = qty;
                 updateReprintSheetCount(true);
-
                 const modal = document.getElementById('reprintModal');
                 modal.dataset.partNo = partNo;
                 modal.dataset.partName = partName;
                 modal.dataset.lot = lotNo;
                 modal.dataset.qty = qty;
-
                 new bootstrap.Modal(modal).show();
             });
         });
 
         updateSubmitButton();
-        updateCorrectButton();
     }
 
-    function updateCorrectButton() {
-        let hasChanges = false;
-        document.querySelectorAll('.lot-correct-input').forEach(inp => {
-            if ((parseInt(inp.dataset.orig) || 0) !== (parseInt(inp.value) || 0)) hasChanges = true;
+    function getAvailable(pid) {
+        const info = partStockData[pid];
+        if (!info) return 0;
+        let netCorrection = 0;
+        (info.existing_lots || []).forEach(l => {
+            const c = correctData[pid] && correctData[pid][l.id];
+            if (c) netCorrection += (c.newQty - l.quantity);
         });
-        document.getElementById('btnCorrect').style.display = hasChanges ? 'inline-block' : 'none';
+        return Math.max(0, (info.null_qty || 0) - netCorrection);
+    }
+
+    function updateAvailability(pid) {
+        const avail = getAvailable(pid);
+        const lots = allocData[pid] || [];
+        const allocSum = lots.reduce((s, l) => s + l.qty, 0);
+        const remaining = avail - allocSum;
+
+        const availEl = document.querySelector('.avail-count[data-pid="' + pid + '"]');
+        if (availEl) availEl.textContent = avail.toLocaleString();
+
+        const sumEl = document.querySelector('.alloc-sum[data-pid="' + pid + '"]');
+        if (sumEl) sumEl.textContent = allocSum.toLocaleString();
+
+        const remEl = document.querySelector('.alloc-remain[data-pid="' + pid + '"]');
+        if (remEl) {
+            remEl.textContent = remaining.toLocaleString();
+            remEl.className = 'alloc-remain fw-bold ' + (remaining < 0 ? 'text-danger' : 'text-success');
+        }
+
+        const inputRow = document.getElementById('new-lot-input-' + pid);
+        if (inputRow) {
+            const enabled = avail > 0 || lots.length > 0;
+            inputRow.style.opacity = enabled ? '1' : '0.4';
+            inputRow.style.pointerEvents = enabled ? 'auto' : 'none';
+        }
+        updateSubmitButton();
     }
 
     function addLotTopart(pid) {
-        const dateInput = document.querySelector(`.lot-date-input[data-pid="${pid}"]`);
-        const qtyInput = document.querySelector(`.lot-qty-input[data-pid="${pid}"]`);
+        const dateInput = document.querySelector('.lot-date-input[data-pid="' + pid + '"]');
+        const qtyInput = document.querySelector('.lot-qty-input[data-pid="' + pid + '"]');
         const lotDate = dateInput.value;
         const lotQty = parseInt(qtyInput.value) || 0;
 
-        if (!lotDate) { alert('LOT 날짜를 입력해주세요.'); dateInput.focus(); return; }
+        if (!lotDate) { alert('배분 LOT 날짜를 입력해주세요.'); dateInput.focus(); return; }
         if (lotQty <= 0) { alert('수량은 1 이상이어야 합니다.'); qtyInput.focus(); return; }
 
-        const info = partStockData[pid];
         if (!allocData[pid]) allocData[pid] = [];
 
         const existing = allocData[pid].find(l => l.lot === lotDate);
         if (existing) {
-            if (confirm(`${lotDate} LOT가 이미 있습니다. 수량을 합산하시겠습니까?`)) {
+            if (confirm(lotDate + ' LOT가 이미 있습니다. 수량을 합산하시겠습니까?')) {
                 existing.qty += lotQty;
             } else { return; }
         } else {
@@ -672,80 +699,63 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const sum = allocData[pid].reduce((s, l) => s + l.qty, 0);
-        if (sum > info.null_qty) {
-            alert(`배분 합계(${sum.toLocaleString()})가 NULL 재고(${info.null_qty.toLocaleString()})를 초과합니다!`);
+        const avail = getAvailable(pid);
+        if (sum > avail) {
+            alert('배분 합계(' + sum.toLocaleString() + ')가 배분 가능량(' + avail.toLocaleString() + ')을 초과합니다!');
             if (existing) { existing.qty -= lotQty; } else { allocData[pid].pop(); }
             return;
         }
 
         qtyInput.value = '';
         renderPartCards();
-        // 재렌더 후 날짜 input에 포커스
-        const newDateInput = document.querySelector(`.lot-date-input[data-pid="${pid}"]`);
+        const newDateInput = document.querySelector('.lot-date-input[data-pid="' + pid + '"]');
         if (newDateInput) newDateInput.focus();
     }
 
     function updateSubmitButton() {
         const hasAnyLots = Object.values(allocData).some(lots => lots.length > 0);
-        const allValid = Object.keys(allocData).every(pid => {
-            const info = partStockData[pid];
-            const sum = allocData[pid].reduce((s, l) => s + l.qty, 0);
-            return sum <= info.null_qty;
+        const hasAnyCorrections = Object.values(correctData).some(c => Object.keys(c).length > 0);
+        const allocValid = Object.keys(partStockData).every(pid => {
+            const avail = getAvailable(pid);
+            const sum = (allocData[pid] || []).reduce((s, l) => s + l.qty, 0);
+            return sum <= avail;
         });
-        document.getElementById('btnSubmit').disabled = !hasAnyLots || !allValid;
+        const correctValid = Object.keys(correctData).every(pid =>
+            Object.values(correctData[pid]).every(c => c.newQty >= 0 && c.newDate)
+        );
+        document.getElementById('btnSubmit').disabled =
+            (!hasAnyLots && !hasAnyCorrections) || !allocValid || !correctValid;
     }
 
     document.getElementById('allocForm').addEventListener('submit', function(e) {
-        let totalParts = 0, totalLots = 0, totalEa = 0;
-        Object.keys(allocData).forEach(pid => {
-            const lots = allocData[pid];
-            if (lots.length > 0) {
-                totalParts++;
-                totalLots += lots.length;
-                totalEa += lots.reduce((s, l) => s + l.qty, 0);
-            }
+        let newLotCount = 0, newEa = 0, correctCount = 0;
+        Object.values(allocData).forEach(lots => {
+            newLotCount += lots.length;
+            newEa += lots.reduce((s, l) => s + l.qty, 0);
         });
-        if (!confirm(`${totalParts}개 품목, ${totalLots}개 LOT에 총 ${totalEa.toLocaleString()}개를 배분하시겠습니까?`)) {
+        Object.values(correctData).forEach(c => { correctCount += Object.keys(c).length; });
+
+        let msg = '';
+        if (correctCount > 0) msg += '기존 LOT 수정: ' + correctCount + '건\n';
+        if (newLotCount > 0) msg += '새 LOT 배분: ' + newLotCount + '건 (성 ' + newEa.toLocaleString() + ')';
+        if (!confirm('다음 작업을 실행하시겠습니까?\n\n' + msg.trim())) {
             e.preventDefault();
+            return;
         }
+
+        this.querySelectorAll('.dynamic-correct-input').forEach(el => el.remove());
+        Object.keys(correctData).forEach(pid => {
+            Object.entries(correctData[pid]).forEach(([sid, c]) => {
+                [['correct_ids_' + pid + '[]', sid], ['correct_dates_' + pid + '[]', c.newDate], ['correct_qtys_' + pid + '[]', c.newQty]].forEach(([name, val]) => {
+                    const inp = document.createElement('input');
+                    inp.type = 'hidden'; inp.name = name; inp.value = val;
+                    inp.className = 'dynamic-correct-input';
+                    this.appendChild(inp);
+                });
+            });
+        });
     });
 });
-
-function submitLotCorrect() {
-    const inputs = document.querySelectorAll('.lot-correct-input');
-    let changes = [];
-    inputs.forEach(inp => {
-        const orig = parseInt(inp.dataset.orig) || 0;
-        const newVal = parseInt(inp.value) || 0;
-        if (orig !== newVal) changes.push({ stockId: inp.dataset.stockId, orig, newVal });
-    });
-    if (changes.length === 0) { alert('변경 사항이 없습니다.'); return; }
-
-    let msg = 'LOT 수량을 수정하시겠습니까?\n\n';
-    changes.forEach(c => {
-        const delta = c.newVal - c.orig;
-        msg += `  ${c.orig.toLocaleString()} → ${c.newVal.toLocaleString()} (${delta > 0 ? '+' : ''}${delta.toLocaleString()})\n`;
-    });
-    if (!confirm(msg)) return;
-
-    const form = document.getElementById('lotCorrectForm');
-    document.getElementById('correctWarehouseId').value = document.getElementById('hidWarehouseId').value;
-    form.querySelectorAll('.dynamic-input').forEach(el => el.remove());
-
-    changes.forEach(c => {
-        const idInput = document.createElement('input');
-        idInput.type = 'hidden'; idInput.name = 'stock_ids[]'; idInput.value = c.stockId;
-        idInput.className = 'dynamic-input';
-        form.appendChild(idInput);
-
-        const qtyInput = document.createElement('input');
-        qtyInput.type = 'hidden'; qtyInput.name = 'new_qtys[]'; qtyInput.value = c.newVal;
-        qtyInput.className = 'dynamic-input';
-        form.appendChild(qtyInput);
-    });
-
-    form.submit();
-}
 
 // ── 현품표 재발행 모달 ──
 function updateReprintSheetCount(fromSnp) {

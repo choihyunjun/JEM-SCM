@@ -3739,13 +3739,10 @@ def lot_allocation(request):
             with transaction.atomic():
                 for pid in part_ids:
                     part = Part.objects.get(id=pid)
+
+                    # ── 1. 새 LOT 배분 항목 파싱 ──
                     lot_nos = request.POST.getlist(f'lot_nos_{pid}[]')
                     quantities = request.POST.getlist(f'qty_{pid}[]')
-
-                    if not lot_nos or not quantities:
-                        continue
-
-                    # 배분 항목 파싱
                     alloc_items = []
                     part_alloc = 0
                     for i in range(len(lot_nos)):
@@ -3764,20 +3761,91 @@ def lot_allocation(request):
                         alloc_items.append((lot_date, qty))
                         part_alloc += qty
 
-                    if not alloc_items:
+                    # ── 2. 기존 LOT 수정 항목 파싱 ──
+                    correct_ids = request.POST.getlist(f'correct_ids_{pid}[]')
+                    correct_dates = request.POST.getlist(f'correct_dates_{pid}[]')
+                    correct_qtys_raw = request.POST.getlist(f'correct_qtys_{pid}[]')
+
+                    corrections = []  # (old_stock, old_date, old_qty, new_date, new_qty)
+                    sum_correction_delta = 0  # 양수: NULL 감소(LOT 증가), 음수: NULL 증가(LOT 해제)
+                    for sid, nd_str, nq_str in zip(correct_ids, correct_dates, correct_qtys_raw):
+                        new_qty = int(nq_str)
+                        new_date = datetime.strptime(nd_str, '%Y-%m-%d').date()
+                        old_stock = MaterialStock.objects.select_for_update().get(
+                            pk=sid, warehouse=warehouse, part=part
+                        )
+                        old_date = old_stock.lot_no
+                        old_qty = old_stock.quantity
+                        if old_date == new_date and old_qty == new_qty:
+                            continue
+                        corrections.append((old_stock, old_date, old_qty, new_date, new_qty))
+                        sum_correction_delta += (new_qty - old_qty)
+
+                    if not alloc_items and not corrections:
                         continue
 
-                    # NULL 재고 검증
-                    null_stock = MaterialStock.objects.filter(
+                    # ── 3. NULL 재고 검증 ──
+                    null_stock = MaterialStock.objects.select_for_update().filter(
                         warehouse=warehouse, part=part, lot_no__isnull=True
                     ).first()
                     null_qty = null_stock.quantity if null_stock else 0
+                    effective_null = null_qty - sum_correction_delta  # 수정 후 사용 가능한 NULL
 
-                    if part_alloc > null_qty:
-                        messages.error(request, f"{part.part_no}: 배분({part_alloc})이 NULL 재고({null_qty})를 초과합니다.")
+                    if effective_null < 0:
+                        messages.error(request, f"{part.part_no}: 기존 LOT 증량이 NULL 재고({null_qty})를 초과합니다.")
+                        return redirect('material:lot_allocation')
+                    if part_alloc > effective_null:
+                        messages.error(request, f"{part.part_no}: 배분({part_alloc})이 배분 가능량({effective_null})을 초과합니다.")
                         return redirect('material:lot_allocation')
 
-                    # 배분 실행
+                    # ── 4. 기존 LOT 수정 실행 ──
+                    for old_stock, old_date, old_qty, new_date, new_qty in corrections:
+                        trx_base = f"LOTC-{timezone.now().strftime('%y%m%d%H%M%S%f')}-{request.user.id}"
+                        if old_date == new_date:
+                            # 수량만 변경
+                            delta = new_qty - old_qty
+                            old_stock.quantity = new_qty
+                            old_stock.save()
+                            MaterialTransaction.objects.create(
+                                transaction_no=trx_base,
+                                transaction_type='LOT_CORRECT',
+                                date=timezone.now(),
+                                part=part, quantity=delta, lot_no=new_date,
+                                warehouse_to=warehouse, result_stock=new_qty,
+                                actor=request.user,
+                                remark=f"LOT 수량 수정: {old_date} {old_qty}→{new_qty}"
+                            )
+                        else:
+                            # 날짜+수량 변경: 기존 삭제 → 신규 생성/합산
+                            old_stock.delete()
+                            MaterialTransaction.objects.create(
+                                transaction_no=trx_base + '-OUT',
+                                transaction_type='LOT_CORRECT',
+                                date=timezone.now(),
+                                part=part, quantity=-old_qty, lot_no=old_date,
+                                warehouse_to=warehouse, result_stock=0,
+                                actor=request.user,
+                                remark=f"LOT 날짜 변경(출): {old_date}→{new_date}"
+                            )
+                            new_stock, _ = MaterialStock.objects.get_or_create(
+                                warehouse=warehouse, part=part, lot_no=new_date,
+                                defaults={'quantity': 0}
+                            )
+                            MaterialStock.objects.filter(pk=new_stock.pk).update(
+                                quantity=F('quantity') + new_qty
+                            )
+                            new_stock.refresh_from_db()
+                            MaterialTransaction.objects.create(
+                                transaction_no=trx_base + '-IN',
+                                transaction_type='LOT_CORRECT',
+                                date=timezone.now(),
+                                part=part, quantity=new_qty, lot_no=new_date,
+                                warehouse_to=warehouse, result_stock=new_stock.quantity,
+                                actor=request.user,
+                                remark=f"LOT 날짜 변경(입): {old_date}→{new_date}"
+                            )
+
+                    # ── 5. 새 LOT 배분 실행 ──
                     for lot_date, qty in alloc_items:
                         lot_stock, _ = MaterialStock.objects.get_or_create(
                             warehouse=warehouse, part=part, lot_no=lot_date,
@@ -3787,29 +3855,35 @@ def lot_allocation(request):
                             quantity=F('quantity') + qty
                         )
                         lot_stock.refresh_from_db()
-
                         trx_no = f"LOTA-{timezone.now().strftime('%y%m%d%H%M%S%f')}-{request.user.id}"
                         MaterialTransaction.objects.create(
                             transaction_no=trx_no,
                             transaction_type='LOT_ASSIGN',
                             date=timezone.now(),
-                            part=part,
-                            quantity=qty,
-                            lot_no=lot_date,
-                            warehouse_to=warehouse,
-                            result_stock=lot_stock.quantity,
+                            part=part, quantity=qty, lot_no=lot_date,
+                            warehouse_to=warehouse, result_stock=lot_stock.quantity,
                             actor=request.user,
                             remark=f"LOT 배분: NULL→{lot_date} ({qty}EA)"
                         )
 
-                    # NULL 재고 차감
-                    MaterialStock.objects.filter(pk=null_stock.pk).update(
-                        quantity=F('quantity') - part_alloc
-                    )
+                    # ── 6. NULL 최종 업데이트 ──
+                    final_null = null_qty - sum_correction_delta - part_alloc
+                    if null_stock:
+                        null_stock.quantity = final_null
+                        null_stock.save()
+                    elif final_null != 0:
+                        MaterialStock.objects.create(
+                            warehouse=warehouse, part=part, lot_no=None, quantity=final_null
+                        )
 
-                    total_parts += 1
-                    total_lots += len(alloc_items)
-                    total_ea += part_alloc
+                    if corrections:
+                        total_parts += 1
+                        total_lots += len(corrections)
+                    if alloc_items:
+                        if not corrections:
+                            total_parts += 1
+                        total_lots += len(alloc_items)
+                        total_ea += part_alloc
 
             if total_parts == 0:
                 messages.warning(request, "배분할 LOT 정보가 없습니다.")
@@ -3952,6 +4026,133 @@ def api_null_stock_info(request):
         })
 
     except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
+@wms_permission_required('can_wms_stock_edit')
+def api_lot_change(request):
+    """
+    [API] LOT 날짜(및 수량) 변경
+    POST { stock_id, new_lot_date (YYYY-MM-DD), new_qty }
+    - 날짜가 같으면 수량만 조정 (기존 lot_correct 방식)
+    - 날짜가 다르면 원자적으로 이전 LOT 삭제 → 새 LOT 생성/합산
+    - 차이분은 NULL 버킷으로 역보정
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST only'}, status=405)
+
+    try:
+        import json
+        from datetime import date as date_type
+        body = json.loads(request.body)
+        stock_id = int(body['stock_id'])
+        new_lot_date_str = body['new_lot_date'].strip()
+        new_qty = int(body['new_qty'])
+    except (KeyError, ValueError, TypeError) as e:
+        return JsonResponse({'success': False, 'error': f'입력값 오류: {e}'}, status=400)
+
+    if new_qty < 0:
+        return JsonResponse({'success': False, 'error': '수량은 0 이상이어야 합니다.'}, status=400)
+
+    try:
+        from datetime import datetime
+        new_lot_date = datetime.strptime(new_lot_date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return JsonResponse({'success': False, 'error': '날짜 형식이 올바르지 않습니다. (YYYY-MM-DD)'}, status=400)
+
+    try:
+        with transaction.atomic():
+            old_stock = MaterialStock.objects.select_for_update().get(pk=stock_id)
+            warehouse = old_stock.warehouse
+            part = old_stock.part
+            old_qty = old_stock.quantity
+            old_lot = old_stock.lot_no
+
+            trx_base = f"LOTC-{timezone.now().strftime('%y%m%d%H%M%S%f')}-{request.user.id}"
+
+            if old_lot == new_lot_date and old_qty == new_qty:
+                return JsonResponse({'success': True, 'message': '변경 사항 없음'})
+
+            null_stock, _ = MaterialStock.objects.select_for_update().get_or_create(
+                warehouse=warehouse, part=part, lot_no=None,
+                defaults={'quantity': 0}
+            )
+
+            if old_lot == new_lot_date:
+                # 날짜 동일 — 수량만 변경
+                delta = new_qty - old_qty
+                old_stock.quantity = new_qty
+                old_stock.save()
+                null_stock.quantity -= delta
+                null_stock.save()
+
+                MaterialTransaction.objects.create(
+                    transaction_no=trx_base,
+                    transaction_type='LOT_CORRECT',
+                    date=timezone.now(),
+                    part=part,
+                    quantity=delta,
+                    lot_no=new_lot_date,
+                    warehouse_to=warehouse,
+                    result_stock=new_qty,
+                    actor=request.user,
+                    remark=f"LOT 수량 변경: {old_lot} {old_qty}→{new_qty}"
+                )
+            else:
+                # 날짜 변경 — 원자적으로 처리
+                # 1) 기존 LOT 차감 (삭제 또는 qty=0)
+                MaterialTransaction.objects.create(
+                    transaction_no=trx_base + '-OUT',
+                    transaction_type='LOT_CORRECT',
+                    date=timezone.now(),
+                    part=part,
+                    quantity=-old_qty,
+                    lot_no=old_lot,
+                    warehouse_to=warehouse,
+                    result_stock=0,
+                    actor=request.user,
+                    remark=f"LOT 날짜 변경 (출): {old_lot}→{new_lot_date}"
+                )
+                old_stock.delete()
+
+                # 2) 새 날짜 LOT 생성 or 합산
+                new_stock, created = MaterialStock.objects.select_for_update().get_or_create(
+                    warehouse=warehouse, part=part, lot_no=new_lot_date,
+                    defaults={'quantity': 0}
+                )
+                prev_new_qty = new_stock.quantity
+                new_stock.quantity += new_qty
+                new_stock.save()
+
+                MaterialTransaction.objects.create(
+                    transaction_no=trx_base + '-IN',
+                    transaction_type='LOT_CORRECT',
+                    date=timezone.now(),
+                    part=part,
+                    quantity=new_qty,
+                    lot_no=new_lot_date,
+                    warehouse_to=warehouse,
+                    result_stock=new_stock.quantity,
+                    actor=request.user,
+                    remark=f"LOT 날짜 변경 (입): {old_lot}→{new_lot_date}"
+                )
+
+                # 3) NULL 버킷 역보정: 총 재고량 변화분 = new_qty - old_qty
+                delta = new_qty - old_qty
+                null_stock.quantity -= delta
+                null_stock.save()
+
+            return JsonResponse({
+                'success': True,
+                'message': f'LOT 변경 완료: {old_lot} → {new_lot_date} ({new_qty})',
+                'null_qty': null_stock.quantity,
+            })
+
+    except MaterialStock.DoesNotExist:
+        return JsonResponse({'success': False, 'error': '재고 레코드를 찾을 수 없습니다.'}, status=404)
+    except Exception as e:
+        logger.error(f"api_lot_change 오류: {e}")
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
