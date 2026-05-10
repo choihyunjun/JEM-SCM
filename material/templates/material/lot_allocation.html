@@ -509,7 +509,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     else if (delta > 0) dHtml = '<span class="text-warning fw-bold"> +' + delta + ' (NULL \ucc28\uac10)</span>';
                     return '<div class="d-flex align-items-center gap-2 mb-1 existing-lot-row" data-stock-id="' + l.id + '" data-pid="' + pid + '">'
                         + '<input type="date" class="form-control form-control-sm lot-correct-date"'
-                        + ' data-pid="' + pid + '" data-stock-id="' + l.id + '" data-orig-date="' + l.lot_no + '" value="' + curDate + '" style="width:140px;">'
+                        + ' data-pid="' + pid + '" data-stock-id="' + l.id + '" data-orig-date="' + l.lot_no + '" value="' + curDate + '" style="width:140px;" min="2000-01-01" max="2099-12-31">'
                         + '<input type="number" class="form-control form-control-sm lot-correct-qty"'
                         + ' data-pid="' + pid + '" data-stock-id="' + l.id + '" data-orig-qty="' + l.quantity + '" value="' + curQty + '" style="width:90px;" min="0">'
                         + '<small class="text-muted correct-desc" data-stock-id="' + l.id + '">'
@@ -558,7 +558,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 + '<div id="new-lot-section-' + pid + '" class="' + (info.existing_lots.length > 0 ? 'border-top pt-2' : '') + '">'
                 + '<small class="fw-bold text-success d-block mb-2"><i class="bi bi-plus-circle me-1"></i>\uc0c8 LOT \ubc30\ubd84</small>'
                 + '<div id="new-lot-input-' + pid + '" class="row g-2 align-items-end mb-2" style="' + newLotInputStyle + '">'
-                + '<div class="col-4"><input type="date" class="form-control form-control-sm lot-date-input" data-pid="' + pid + '"></div>'
+                + '<div class="col-4"><input type="date" class="form-control form-control-sm lot-date-input" data-pid="' + pid + '" min="2000-01-01" max="2099-12-31"></div>'
                 + '<div class="col-3"><input type="number" class="form-control form-control-sm lot-qty-input" data-pid="' + pid + '" min="1" placeholder="\uc218\ub7c9"></div>'
                 + '<div class="col-2"><button type="button" class="btn btn-sm btn-success w-100 btn-add-lot" data-pid="' + pid + '"><i class="bi bi-plus-lg"></i> \ucd94\uac00</button></div>'
                 + '<div class="col-3 text-end"><small>\ubc30\ubd84: <strong class="text-primary alloc-sum" data-pid="' + pid + '">' + allocSum.toLocaleString() + '</strong>'
