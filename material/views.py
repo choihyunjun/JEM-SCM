@@ -7327,26 +7327,24 @@ def erp_stock_manage(request):
     context = {
         'erp_enabled': getattr(django_settings, 'ERP_ENABLED', False),
         'today': date.today().isoformat(),
+        'stock_sync_running': bool(cache.get('erp_stock_sync_running')),
     }
 
     action = request.POST.get('action', '') if request.method == 'POST' else ''
 
-    # ── ERP 재고 동기화 (ERP 현재고 → SCM lot_no=NULL 조정) ──
+    # ── ERP 재고 동기화 (백그라운드 실행) ──
     if action == 'sync_stock':
-        from material.erp_api import sync_stock_from_erp
-        result = sync_stock_from_erp()
-        if result.get('error'):
-            messages.error(request, f'재고 동기화 실패: {result["error"]}')
-        else:
-            messages.success(
-                request,
-                f'ERP 재고 동기화 완료: '
-                f'조정 {result["adjusted"]}건 '
-                f'(증가 {result["increased"]}, 감소 {result["decreased"]}), '
-                f'생성 {result.get("created", 0)}건, '
-                f'건너뜀(Part없음) {result.get("skipped_no_part", 0)}건, '
-                f'건너뜀(창고없음) {result.get("skipped_no_wh", 0)}건'
-            )
+        import threading
+        def _run_sync():
+            import django
+            django.db.connections.close_all()
+            try:
+                from material.erp_api import sync_stock_from_erp
+                sync_stock_from_erp()
+            finally:
+                cache.delete('erp_stock_sync_running')
+        cache.set('erp_stock_sync_running', True, timeout=600)
+        threading.Thread(target=_run_sync, daemon=True).start()
         return redirect('material:erp_stock_manage')
 
     # ── 수불 동기화 (입고/출고/생산출고/생산입고/재고이동) ──
