@@ -837,21 +837,41 @@ document.getElementById('reprintPLTBtn').addEventListener('click', function() {
     document.getElementById('pltPrintForm').submit();
 });
 
+function buildPrintItems() {
+    const items = [];
+    document.querySelectorAll('.snp-input').forEach(input => {
+        const idx = parseInt(input.dataset.idx);
+        const item = allocResult[idx];
+        const total = parseInt(input.dataset.total);
+        const snp = parseInt(input.value) || total;
+        const sheetInput = document.getElementById('sheet-count-' + idx);
+        const maxSheets = parseInt(sheetInput ? sheetInput.value : 0) || Math.ceil(total / snp);
+        let remaining = total, count = 0;
+        while (remaining > 0 && count < maxSheets) {
+            const qty = Math.min(snp, remaining);
+            items.push({ part_no: item.part_no, part_name: item.part_name,
+                         part_group: item.part_group || '', lot_no: item.lot_no, quantity: qty });
+            remaining -= qty; count++;
+        }
+    });
+    return items;
+}
+
 function printRMLabels() {
-    const allocPrintItems = document.getElementById('allocPrintItems');
-    if (!allocPrintItems || !allocPrintItems.value) { alert('출력할 배분 데이터가 없습니다.'); return; }
-    document.getElementById('rmPrintItems').value = allocPrintItems.value;
+    const items = buildPrintItems();
+    if (!items.length) { alert('출력할 배분 데이터가 없습니다.'); return; }
+    document.getElementById('rmPrintItems').value = JSON.stringify(items);
     document.getElementById('rmPrintForm').submit();
 }
 
 function printPLTLabels() {
-    const allocPrintItems = document.getElementById('allocPrintItems');
-    if (!allocPrintItems || !allocPrintItems.value) { alert('출력할 배분 데이터가 없습니다.'); return; }
+    const items = buildPrintItems();
+    if (!items.length) { alert('출력할 배분 데이터가 없습니다.'); return; }
     const unit = prompt('파렛트 단위 수량(kg)을 입력하세요:', '1000');
     if (unit === null) return;
     const u = parseInt(unit, 10);
     if (!u || u <= 0) { alert('유효한 수량을 입력하세요.'); return; }
-    document.getElementById('pltPrintItems').value = allocPrintItems.value;
+    document.getElementById('pltPrintItems').value = JSON.stringify(items);
     document.getElementById('pltUnitQty').value = u;
     document.getElementById('pltPrintForm').submit();
 }
