@@ -3771,7 +3771,7 @@ def lot_allocation(request):
                     for sid, nd_str, nq_str in zip(correct_ids, correct_dates, correct_qtys_raw):
                         new_qty = int(nq_str)
                         new_date = datetime.strptime(nd_str, '%Y-%m-%d').date()
-                        old_stock = MaterialStock.objects.select_for_update().get(
+                        old_stock = MaterialStock.objects.get(
                             pk=sid, warehouse=warehouse, part=part
                         )
                         old_date = old_stock.lot_no
@@ -3785,7 +3785,7 @@ def lot_allocation(request):
                         continue
 
                     # ── 3. NULL 재고 검증 ──
-                    null_stock = MaterialStock.objects.select_for_update().filter(
+                    null_stock = MaterialStock.objects.filter(
                         warehouse=warehouse, part=part, lot_no__isnull=True
                     ).first()
                     null_qty = null_stock.quantity if null_stock else 0
