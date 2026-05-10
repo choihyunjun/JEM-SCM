@@ -3802,10 +3802,13 @@ def lot_allocation(request):
                     for old_stock, old_date, old_qty, new_date, new_qty in corrections:
                         trx_base = f"LOTC-{timezone.now().strftime('%y%m%d%H%M%S%f')}-{request.user.id}"
                         if old_date == new_date:
-                            # 수량만 변경
+                            # 수량만 변경 (0이면 레코드 삭제)
                             delta = new_qty - old_qty
-                            old_stock.quantity = new_qty
-                            old_stock.save()
+                            if new_qty == 0:
+                                old_stock.delete()
+                            else:
+                                old_stock.quantity = new_qty
+                                old_stock.save()
                             MaterialTransaction.objects.create(
                                 transaction_no=trx_base,
                                 transaction_type='LOT_CORRECT',
@@ -3974,7 +3977,7 @@ def api_null_stock_info(request):
                 null_qty = null_stock.quantity if null_stock else 0
 
                 lot_stocks = MaterialStock.objects.filter(
-                    warehouse=warehouse, part=part, lot_no__isnull=False
+                    warehouse=warehouse, part=part, lot_no__isnull=False, quantity__gt=0
                 ).order_by('lot_no')
                 existing_lots = [
                     {'id': s.id, 'lot_no': s.lot_no.strftime('%Y-%m-%d'), 'quantity': s.quantity}
@@ -4008,7 +4011,7 @@ def api_null_stock_info(request):
         null_qty = null_stock.quantity if null_stock else 0
 
         lot_stocks = MaterialStock.objects.filter(
-            warehouse=warehouse, part=part, lot_no__isnull=False
+            warehouse=warehouse, part=part, lot_no__isnull=False, quantity__gt=0
         ).order_by('lot_no')
         existing_lots = [
             {'id': s.id, 'lot_no': s.lot_no.strftime('%Y-%m-%d'), 'quantity': s.quantity}
