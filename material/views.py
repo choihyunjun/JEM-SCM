@@ -2502,7 +2502,7 @@ def api_scan_history_by_part(request):
     if not part_no:
         # 전체 모드: 모든 USED 라벨/태그 (최근 50건)
         tags_all = ProcessTag.objects.filter(
-            status='USED', used_warehouse__code='3000'
+            status='USED', used_warehouse__code='3000', stock_reflected=False
         ).select_related('used_by').order_by('-used_at')[:50]
         items_all = []
         for t in tags_all:
@@ -2513,8 +2513,9 @@ def api_scan_history_by_part(request):
                 'lot_no': str(t.lot_no) if t.lot_no else '-',
                 'quantity': t.quantity,
                 'used_at': timezone.localtime(t.used_at).strftime('%Y-%m-%d %H:%M') if t.used_at else '-',
+                'used_at_raw': t.used_at.isoformat() if t.used_at else None,
                 'used_by': t.used_by.username if t.used_by else '-',
-                'stock_reflected': t.stock_reflected,
+                'stock_reflected': False,
             })
         used_labels_all = RawMaterialLabel.objects.filter(
             status='USED'
@@ -2527,6 +2528,7 @@ def api_scan_history_by_part(request):
                 'lot_no': lbl.lot_no.strftime('%Y-%m-%d') if lbl.lot_no else '-',
                 'quantity': float(lbl.quantity),
                 'used_at': timezone.localtime(lbl.used_at).strftime('%Y-%m-%d %H:%M') if lbl.used_at else '-',
+                'used_at_raw': lbl.used_at.isoformat() if lbl.used_at else None,
                 'used_by': lbl.used_by.username if lbl.used_by else '-',
                 'stock_reflected': False,
             })
@@ -2537,7 +2539,7 @@ def api_scan_history_by_part(request):
 
     # 1) ProcessTag - 현재 USED 상태만 표시 (취소된 건 자동 제외)
     tags = ProcessTag.objects.filter(
-        part_no=part_no, status='USED', used_warehouse__code='3000'
+        part_no=part_no, status='USED', used_warehouse__code='3000', stock_reflected=False
     ).select_related('used_by').order_by('-used_at')[:30]
     for t in tags:
         items.append({
@@ -2545,8 +2547,9 @@ def api_scan_history_by_part(request):
             'lot_no': str(t.lot_no) if t.lot_no else '-',
             'quantity': t.quantity,
             'used_at': timezone.localtime(t.used_at).strftime('%Y-%m-%d %H:%M') if t.used_at else '-',
+            'used_at_raw': t.used_at.isoformat() if t.used_at else None,
             'used_by': t.used_by.username if t.used_by else '-',
-            'stock_reflected': t.stock_reflected,
+            'stock_reflected': False,
         })
 
     # 2) RM/PLT 라벨 - 현재 USED 상태만 표시 (취소되어 INSTOCK 복구된 건 자동 제외)
@@ -2559,6 +2562,7 @@ def api_scan_history_by_part(request):
             'lot_no': lbl.lot_no.strftime('%Y-%m-%d') if lbl.lot_no else '-',
             'quantity': float(lbl.quantity),
             'used_at': timezone.localtime(lbl.used_at).strftime('%Y-%m-%d %H:%M') if lbl.used_at else '-',
+            'used_at_raw': lbl.used_at.isoformat() if lbl.used_at else None,
             'used_by': lbl.used_by.username if lbl.used_by else '-',
             'stock_reflected': False,
         })

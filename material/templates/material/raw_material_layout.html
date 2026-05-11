@@ -1161,11 +1161,13 @@ function openAllHistory() {
             + '<table class="table table-sm table-hover mb-0" style="font-size:0.82rem;">'
             + '<thead><tr><th>태그ID</th><th>품번</th><th>LOT</th><th>수량</th><th>투입일시</th><th>상태</th></tr></thead><tbody>';
         data.items.forEach(item => {
-            const badge = item.stock_reflected
-                ? '<span class="badge bg-secondary">출고완료</span>'
-                : `<span class="badge bg-success">투입</span>`
-                  + ` <button class="btn btn-outline-danger btn-sm py-0 px-1" style="font-size:0.7rem;line-height:1.4;"
-                        onclick="openCancelConfirm('${item.tag_id}')" title="투입 취소">✕</button>`;
+            const canCancel = item.used_at_raw
+                && (new Date() - new Date(item.used_at_raw)) < 3 * 24 * 60 * 60 * 1000;
+            const badge = `<span class="badge bg-success">투입</span>`
+                + (canCancel
+                    ? ` <button class="btn btn-outline-danger btn-sm py-0 px-1" style="font-size:0.7rem;line-height:1.4;"
+                            onclick="openCancelConfirm('${item.tag_id}')" title="투입 취소">✕</button>`
+                    : '');
             html += `<tr>
                 <td><code style="font-size:0.72rem;">${item.tag_id}</code></td>
                 <td>${item.part_no || '-'}</td>
@@ -1251,14 +1253,13 @@ function loadScanHistory(partNo) {
         let html = '<table class="table table-sm table-hover mb-0" style="font-size:0.85rem;">'
             + '<thead><tr><th>태그ID</th><th>LOT</th><th>투입일시</th><th>상태</th></tr></thead><tbody>';
         data.items.forEach(item => {
-            let badge;
-            if (item.stock_reflected) {
-                badge = '<span class="badge bg-secondary">출고완료</span>';
-            } else {
-                badge = `<span class="badge bg-success">투입</span>`
-                      + ` <button class="btn btn-outline-danger btn-sm py-0 px-1" style="font-size:0.7rem;line-height:1.4;"
-                            onclick="openCancelConfirm('${item.tag_id}')" title="투입 취소">✕</button>`;
-            }
+            const canCancel = item.used_at_raw
+                && (new Date() - new Date(item.used_at_raw)) < 3 * 24 * 60 * 60 * 1000;
+            const badge = `<span class="badge bg-success">투입</span>`
+                + (canCancel
+                    ? ` <button class="btn btn-outline-danger btn-sm py-0 px-1" style="font-size:0.7rem;line-height:1.4;"
+                            onclick="openCancelConfirm('${item.tag_id}')" title="투입 취소">✕</button>`
+                    : '');
             html += `<tr>
                 <td><code style="font-size:0.75rem;">${item.tag_id}</code></td>
                 <td>${item.lot_no}</td>
