@@ -939,7 +939,7 @@ async function applySelected() {
     const moveDates = {};
     checks.forEach(c => { moveDates[c.value] = c.dataset.date; });
 
-    if (!confirm(`선택한 ${keys.length}건을 SCM에 반영하시겠습니까?\n재고가 실제로 차감·이동됩니다.`)) return;
+    if (!confirm(`선택한 ${keys.length}건의 이동 이력을 SCM에 등록하시겠습니까?\n실제 재고는 변경되지 않습니다.`)) return;
 
     const btn = document.getElementById('applyBtn');
     btn.disabled = true;
