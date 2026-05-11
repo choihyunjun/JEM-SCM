@@ -6439,15 +6439,15 @@ def api_erp_transfer_preview(request):
 
 @wms_permission_required('can_wms_stock_edit')
 def api_erp_transfer_apply(request):
-    """ERP 이동 내역 수기 반영 (3200→3000 재고 이동 + TRF_ERP 트랜잭션 생성)"""
+    """ERP 이동 내역 수기 반영 (이력 등록만, 재고 변경 없음)"""
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
 
     import json as _json
-    from django.db.models import F as _F, Sum
+    from django.db.models import Sum
     from django.utils import timezone as tz
     from datetime import datetime
-    from material.erp_api import fetch_erp_transfer_details
+    from material.erp_api import fetch_erp_transfer_details, _create_trx
 
     try:
         body = _json.loads(request.body)
@@ -6515,7 +6515,7 @@ def api_erp_transfer_apply(request):
                 error_list.append({'key': trx_key, 'error': f'품목 없음: {item_cd}'})
                 continue
 
-            # 날짜 처리: 프론트에서 받은 ERP 이동일 사용
+            # 날짜 처리: ERP 이동일 기준
             move_dt_str = move_dates.get(trx_key, '')
             if move_dt_str:
                 try:
@@ -6527,36 +6527,7 @@ def api_erp_transfer_apply(request):
             else:
                 trf_date = tz.now()
 
-            # FIFO 재고 이동: 3200 → 3000
-            remaining = qty
-            from_lots = list(MaterialStock.objects.filter(
-                warehouse=from_wh, part=part, lot_no__isnull=False, quantity__gt=0
-            ).order_by('lot_no'))
-
-            for src in from_lots:
-                if remaining <= 0:
-                    break
-                take = min(src.quantity, remaining)
-                MaterialStock.objects.filter(pk=src.pk).update(quantity=_F('quantity') - take)
-                dst, _ = MaterialStock.objects.get_or_create(
-                    warehouse=to_wh, part=part, lot_no=src.lot_no,
-                    defaults={'quantity': 0}
-                )
-                MaterialStock.objects.filter(pk=dst.pk).update(quantity=_F('quantity') + take)
-                remaining -= take
-
-            if remaining > 0:
-                src_null, _ = MaterialStock.objects.get_or_create(
-                    warehouse=from_wh, part=part, lot_no=None,
-                    defaults={'quantity': 0}
-                )
-                MaterialStock.objects.filter(pk=src_null.pk).update(quantity=_F('quantity') - remaining)
-                dst_null, _ = MaterialStock.objects.get_or_create(
-                    warehouse=to_wh, part=part, lot_no=None,
-                    defaults={'quantity': 0}
-                )
-                MaterialStock.objects.filter(pk=dst_null.pk).update(quantity=_F('quantity') + remaining)
-
+            # 현재 재고 스냅샷 (result_stock 기록용, 변경 없음)
             to_total = MaterialStock.objects.filter(
                 warehouse=to_wh, part=part
             ).aggregate(t=Sum('quantity'))['t'] or 0
@@ -6564,7 +6535,7 @@ def api_erp_transfer_apply(request):
             fwh_nm = target_detail.get('fwhNm', '3200창고')
             twh_nm = target_detail.get('twhNm', '3000창고')
 
-            from material.erp_api import _create_trx
+            # 이력만 등록 (재고 변경 없음)
             _create_trx(
                 transaction_type='TRF_ERP',
                 date=trf_date,
