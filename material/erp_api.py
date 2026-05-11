@@ -887,6 +887,12 @@ def sync_stock_from_erp():
         'skipped_no_part': 0, 'skipped_no_wh': 0, 'error': None,
     }
 
+    # 중복 실행 방지 (cache.add는 키가 없을 때만 성공)
+    _lock_key = 'sync_stock_from_erp_lock'
+    if not _cache.add(_lock_key, 1, timeout=600):
+        result['error'] = '재고 동기화가 이미 실행 중입니다. 잠시 후 다시 시도해주세요.'
+        return result
+
     _cache.set('erp_sync_progress', {'stage': 'ERP 현재고 조회 중...', 'percent': 5}, timeout=300)
 
     # 1) ERP 현재고 조회

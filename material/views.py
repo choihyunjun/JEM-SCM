@@ -7761,6 +7761,8 @@ def erp_stock_manage(request):
 
     # ── ERP 재고 동기화 (백그라운드 실행) ──
     if action == 'sync_stock':
+        if cache.get('erp_stock_sync_running'):
+            return redirect('material:erp_stock_manage')
         import threading
         def _run_sync():
             import django
