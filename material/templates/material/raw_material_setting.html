@@ -142,7 +142,7 @@ searchInput.addEventListener('input', function() {
     if (q.length < 2) { searchResults.style.display = 'none'; return; }
 
     searchTimer = setTimeout(() => {
-        fetch(`{% url "material:api_part_search" %}?q=${encodeURIComponent(q)}&exclude_setting=1`)
+        fetch(`{% url "material:api_part_search" %}?q=${encodeURIComponent(q)}`)
         .then(r => r.json())
         .then(data => {
             if (!data.results.length) {
