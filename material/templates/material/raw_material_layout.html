@@ -298,15 +298,16 @@
     }
     .section-tabs {
         display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
+        gap: 6px;
+        flex-wrap: nowrap;
+        align-items: center;
     }
     .section-tabs .btn {
-        flex: 1;
-        min-width: 80px;
+        white-space: nowrap;
         border-radius: 8px;
         font-weight: 500;
-        padding: 8px 16px;
+        padding: 6px 14px;
+        font-size: 0.82rem;
     }
     .section-tabs .btn-primary {
         background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
@@ -321,6 +322,21 @@
         background: #f8fafc;
         border-color: #3b82f6;
         color: #3b82f6;
+    }
+    .section-tabs .btn-warning {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        border: none;
+        color: #fff;
+        box-shadow: 0 2px 6px rgba(245, 158, 11, 0.3);
+    }
+    .section-tabs .btn-outline-warning {
+        border-color: #f59e0b;
+        color: #d97706;
+    }
+    .section-tabs .btn-outline-warning:hover {
+        background: #fffbeb;
+        border-color: #d97706;
+        color: #b45309;
     }
     .no-rack-msg {
         text-align: center;
