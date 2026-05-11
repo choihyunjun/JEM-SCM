@@ -733,6 +733,42 @@
     </div>
 </div>
 
+<!-- ERP 수기반영 확인 모달 -->
+<div class="modal fade" id="erpApplyConfirmModal" tabindex="-1" style="z-index:2100;">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content" style="border-radius:12px; border:none; box-shadow:0 12px 40px rgba(0,0,0,0.2);">
+            <div class="modal-header" style="background:linear-gradient(135deg,#f59e0b,#d97706); color:#fff; border-radius:12px 12px 0 0; padding:14px 18px;">
+                <h6 class="modal-title mb-0"><i class="bi bi-check-circle me-2"></i>ERP 수기반영 확인</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" style="padding:18px; font-size:0.88rem;">
+                <p id="erpApplyConfirmMsg" style="margin-bottom:8px;"></p>
+                <p style="color:#16a34a; font-weight:600; margin:0;"><i class="bi bi-shield-check me-1"></i>실제 재고는 변경되지 않습니다.</p>
+            </div>
+            <div class="modal-footer" style="padding:10px 18px; gap:8px;">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn btn-warning btn-sm" id="erpApplyConfirmOkBtn">반영</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ERP 수기반영 결과 모달 -->
+<div class="modal fade" id="erpApplyResultModal" tabindex="-1" style="z-index:2100;">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content" style="border-radius:12px; border:none; box-shadow:0 12px 40px rgba(0,0,0,0.2);">
+            <div class="modal-header" style="background:linear-gradient(135deg,#16a34a,#15803d); color:#fff; border-radius:12px 12px 0 0; padding:14px 18px;">
+                <h6 class="modal-title mb-0"><i class="bi bi-check2-all me-2"></i>반영 완료</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" style="padding:18px; font-size:0.88rem; white-space:pre-line;" id="erpApplyResultMsg"></div>
+            <div class="modal-footer" style="padding:10px 18px;">
+                <button type="button" class="btn btn-success btn-sm" data-bs-dismiss="modal">확인</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- 투입 취소 확인 모달 -->
 <div class="modal fade" id="cancelConfirmModal" tabindex="-1" style="z-index:2000;">
     <div class="modal-dialog modal-dialog-centered modal-sm">
@@ -931,16 +967,41 @@ function toggleAll(el) {
     document.querySelectorAll('.row-check').forEach(cb => { cb.checked = el.checked; });
 }
 
-async function applySelected() {
+let _pendingApplyKeys = null;
+let _pendingApplyDates = null;
+
+function applySelected() {
     const checks = Array.from(document.querySelectorAll('.row-check:checked'));
-    if (checks.length === 0) { alert('반영할 항목을 선택해주세요.'); return; }
+    if (checks.length === 0) {
+        document.getElementById('erpApplyConfirmMsg').textContent = '반영할 항목을 선택해주세요.';
+        document.getElementById('erpApplyConfirmOkBtn').style.display = 'none';
+        const m = new bootstrap.Modal(document.getElementById('erpApplyConfirmModal'));
+        setTimeout(() => { const bd = document.querySelectorAll('.modal-backdrop'); if (bd.length) bd[bd.length-1].style.zIndex='2099'; }, 100);
+        m.show();
+        return;
+    }
 
-    const keys = checks.map(c => c.value);
-    const moveDates = {};
-    checks.forEach(c => { moveDates[c.value] = c.dataset.date; });
+    _pendingApplyKeys = checks.map(c => c.value);
+    _pendingApplyDates = {};
+    checks.forEach(c => { _pendingApplyDates[c.value] = c.dataset.date; });
 
-    if (!confirm(`선택한 ${keys.length}건의 이동 이력을 SCM에 등록하시겠습니까?\n실제 재고는 변경되지 않습니다.`)) return;
+    document.getElementById('erpApplyConfirmMsg').textContent = `선택한 ${_pendingApplyKeys.length}건의 이동 이력을 SCM에 등록하시겠습니까?`;
+    document.getElementById('erpApplyConfirmOkBtn').style.display = '';
+    const m = new bootstrap.Modal(document.getElementById('erpApplyConfirmModal'));
+    setTimeout(() => { const bd = document.querySelectorAll('.modal-backdrop'); if (bd.length) bd[bd.length-1].style.zIndex='2099'; }, 100);
+    m.show();
+}
 
+document.addEventListener('DOMContentLoaded', function() {
+    const okBtn = document.getElementById('erpApplyConfirmOkBtn');
+    if (!okBtn) return;
+    okBtn.addEventListener('click', async function() {
+        bootstrap.Modal.getInstance(document.getElementById('erpApplyConfirmModal')).hide();
+        await _doApply(_pendingApplyKeys, _pendingApplyDates);
+    });
+});
+
+async function _doApply(keys, moveDates) {
     const btn = document.getElementById('applyBtn');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>반영 중...';
@@ -958,7 +1019,10 @@ async function applySelected() {
         if (data.errors && data.errors.length > 0) {
             msg += `\n오류:\n` + data.errors.map(e => `  ${e.key}: ${e.error}`).join('\n');
         }
-        alert(msg);
+        document.getElementById('erpApplyResultMsg').textContent = msg;
+        const rm = new bootstrap.Modal(document.getElementById('erpApplyResultModal'));
+        setTimeout(() => { const bd = document.querySelectorAll('.modal-backdrop'); if (bd.length) bd[bd.length-1].style.zIndex='2099'; }, 100);
+        rm.show();
 
         // UI 업데이트: 반영된 행을 "이미 반영" 상태로 전환
         (data.success_keys || []).forEach(key => {
@@ -975,7 +1039,9 @@ async function applySelected() {
         document.getElementById('checkAll').checked = false;
 
     } catch (e) {
-        alert('반영 중 오류가 발생했습니다.');
+        document.getElementById('erpApplyResultMsg').textContent = '반영 중 오류가 발생했습니다.';
+        const rm = new bootstrap.Modal(document.getElementById('erpApplyResultModal'));
+        rm.show();
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>선택 반영';
