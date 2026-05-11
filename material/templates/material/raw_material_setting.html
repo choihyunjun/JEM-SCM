@@ -152,9 +152,16 @@ searchInput.addEventListener('input', function() {
             }
             let html = '';
             data.results.forEach(p => {
+                const settingJson = JSON.stringify({
+                    safety_stock: p.safety_stock,
+                    warning_stock: p.warning_stock,
+                    shelf_life_days: p.shelf_life_days,
+                    unit_weight: p.unit_weight,
+                }).replace(/'/g, "\\'");
+                const badge = p.safety_stock !== null ? ' <span style="font-size:8pt;color:#27ae60;">●설정됨</span>' : '';
                 html += `<button type="button" class="list-group-item list-group-item-action py-2"
-                    onclick="selectPart(${p.id}, '${p.part_no}', '${p.part_name.replace(/'/g, "\\'")}')">
-                    <strong>${p.part_no}</strong> <small class="text-muted">${p.part_name}</small>
+                    onclick="selectPartWithSetting(${p.id}, '${p.part_no}', '${p.part_name.replace(/'/g, "\\'")}', '${settingJson}')">
+                    <strong>${p.part_no}</strong> <small class="text-muted">${p.part_name}</small>${badge}
                 </button>`;
             });
             searchResults.innerHTML = html;
@@ -169,6 +176,18 @@ document.addEventListener('click', function(e) {
         searchResults.style.display = 'none';
     }
 });
+
+// 품목 선택 (검색) - 기존 설정값 포함
+function selectPartWithSetting(id, partNo, partName, settingJson) {
+    selectPart(id, partNo, partName);
+    try {
+        const s = JSON.parse(settingJson);
+        if (s.safety_stock !== null) document.querySelector('[name=safety_stock]').value = s.safety_stock;
+        if (s.warning_stock !== null) document.querySelector('[name=warning_stock]').value = s.warning_stock;
+        if (s.shelf_life_days !== null) document.querySelector('[name=shelf_life_days]').value = s.shelf_life_days;
+        if (s.unit_weight !== null) document.querySelector('[name=unit_weight]').value = s.unit_weight;
+    } catch(e) {}
+}
 
 // 품목 선택 (검색)
 function selectPart(id, partNo, partName) {

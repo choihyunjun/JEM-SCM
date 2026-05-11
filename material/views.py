@@ -7503,13 +7503,25 @@ def api_part_search(request):
 
     parts = qs.order_by('part_no')[:30]
 
+    # 기존 설정값 한 번에 조회
+    part_ids = [p.id for p in parts]
+    settings_map = {
+        s.part_id: s
+        for s in RawMaterialSetting.objects.filter(part_id__in=part_ids)
+    }
+
     results = []
     for part in parts:
+        s = settings_map.get(part.id)
         results.append({
             'id': part.id,
             'part_no': part.part_no,
             'part_name': part.part_name,
             'assigned': part.id in assigned_parts,
+            'safety_stock': s.safety_stock if s else None,
+            'warning_stock': s.warning_stock if s else None,
+            'shelf_life_days': s.shelf_life_days if s else None,
+            'unit_weight': float(s.unit_weight) if s and s.unit_weight is not None else None,
         })
 
     return JsonResponse({'results': results})
