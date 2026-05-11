@@ -118,6 +118,8 @@ urlpatterns = [
     path('api/labels-for-lot/', views.api_labels_for_lot, name='api_labels_for_lot'),
     path('api/transfer-detail/<int:trx_id>/', views.api_transfer_detail, name='api_transfer_detail'),
     path('api/cancel-stock-move/<int:trx_id>/', views.cancel_stock_move, name='cancel_stock_move'),
+    path('api/erp-transfer-preview/', views.api_erp_transfer_preview, name='api_erp_transfer_preview'),
+    path('api/erp-transfer-apply/', views.api_erp_transfer_apply, name='api_erp_transfer_apply'),
 
     # 감사모드 API
     path('api/audit-mode/toggle/', views.api_audit_mode_toggle, name='api_audit_mode_toggle'),

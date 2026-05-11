@@ -6216,6 +6216,7 @@ def raw_material_layout(request):
     - 가운데: 통로
     """
     section = request.GET.get('section', '3F')
+    current_view = request.GET.get('view', 'layout')
 
     # 감사모드 상태 조회
     from .models import WMSConfig
@@ -6327,6 +6328,7 @@ def raw_material_layout(request):
 
     context = {
         'section': section,
+        'current_view': current_view,
         'section_display': '3공장' if section == '3F' else '2공장',
         'wall_a': wall_a,
         'wall_b': wall_b,
@@ -6340,6 +6342,256 @@ def raw_material_layout(request):
     }
 
     return render(request, 'material/raw_material_layout.html', context)
+
+
+# =============================================================================
+# ERP 수기반영 API (3200→3000 이동 내역 조회 + 반영)
+# =============================================================================
+
+@wms_permission_required('can_wms_stock_view')
+def api_erp_transfer_preview(request):
+    """ERP 3200→3000 이동 내역 미리보기 (미반영 건 포함 전체 표시)"""
+    date_from = request.GET.get('date_from', '')
+    date_to = request.GET.get('date_to', '')
+
+    if not date_from or not date_to:
+        return JsonResponse({'error': '날짜를 입력해주세요'}, status=400)
+
+    date_from_erp = date_from.replace('-', '')
+    date_to_erp = date_to.replace('-', '')
+
+    from material.erp_api import fetch_erp_transfer_headers, fetch_erp_transfer_details
+    from orders.models import Part
+
+    ok, headers, err = fetch_erp_transfer_headers(date_from_erp, date_to_erp)
+    if not ok:
+        return JsonResponse({'error': f'ERP 조회 실패: {err}'}, status=500)
+
+    existing_nbs = set(
+        MaterialTransaction.objects.filter(
+            transaction_type='TRF_ERP',
+            erp_incoming_no__isnull=False
+        ).values_list('erp_incoming_no', flat=True)
+    )
+
+    from_wh = Warehouse.objects.filter(code='3200').first()
+
+    results = []
+    for header in (headers or []):
+        move_nb = header.get('moveNb', '')
+        if not move_nb:
+            continue
+
+        remark = header.get('remarkDc', '') or ''
+        if 'SCM' in remark:
+            continue
+
+        ok2, details, err2 = fetch_erp_transfer_details(move_nb)
+        if not ok2 or not details:
+            continue
+
+        move_dt = header.get('moveDt', '')
+        move_dt_display = f'{move_dt[:4]}-{move_dt[4:6]}-{move_dt[6:]}' if len(move_dt) == 8 else move_dt
+
+        for detail in details:
+            fwh_cd = detail.get('fwhCd', '')
+            twh_cd = detail.get('twhCd', '')
+
+            if fwh_cd != '3200' or twh_cd != '3000':
+                continue
+
+            move_sq = detail.get('moveSq', 1)
+            trx_key = f'{move_nb}-{move_sq}'
+            item_cd = detail.get('itemCd', '')
+            qty = int(detail.get('moveQt', 0) or 0)
+            already_applied = trx_key in existing_nbs
+
+            part = Part.objects.filter(part_no=item_cd).first()
+            part_name = part.part_name if part else '-'
+
+            lot_info = []
+            if part and from_wh:
+                lots = MaterialStock.objects.filter(
+                    warehouse=from_wh, part=part, quantity__gt=0
+                ).order_by('lot_no')
+                for lot in lots:
+                    lot_info.append({
+                        'lot_no': lot.lot_no if lot.lot_no else 'LOT없음',
+                        'qty': lot.quantity,
+                    })
+
+            results.append({
+                'trx_key': trx_key,
+                'move_nb': move_nb,
+                'move_sq': move_sq,
+                'move_dt': move_dt_display,
+                'item_cd': item_cd,
+                'item_name': part_name,
+                'qty': qty,
+                'fwh_nm': detail.get('fwhNm', '3200창고'),
+                'twh_nm': detail.get('twhNm', '3000창고'),
+                'already_applied': already_applied,
+                'lot_info': lot_info,
+            })
+
+    return JsonResponse({'results': results})
+
+
+@wms_permission_required('can_wms_stock_edit')
+def api_erp_transfer_apply(request):
+    """ERP 이동 내역 수기 반영 (3200→3000 재고 이동 + TRF_ERP 트랜잭션 생성)"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+
+    import json as _json
+    from django.db.models import F as _F, Sum
+    from django.utils import timezone as tz
+    from datetime import datetime
+    from material.erp_api import fetch_erp_transfer_details
+
+    try:
+        body = _json.loads(request.body)
+    except Exception:
+        return JsonResponse({'error': '잘못된 요청'}, status=400)
+
+    keys_to_apply = body.get('keys', [])
+    move_dates = body.get('move_dates', {})
+
+    if not keys_to_apply:
+        return JsonResponse({'error': '선택된 항목이 없습니다'}, status=400)
+
+    existing_nbs = set(
+        MaterialTransaction.objects.filter(
+            transaction_type='TRF_ERP',
+            erp_incoming_no__isnull=False
+        ).values_list('erp_incoming_no', flat=True)
+    )
+
+    from_wh = Warehouse.objects.filter(code='3200').first()
+    to_wh = Warehouse.objects.filter(code='3000').first()
+    if not from_wh or not to_wh:
+        return JsonResponse({'error': '3200 또는 3000 창고가 존재하지 않습니다'}, status=500)
+
+    from orders.models import Part
+
+    success_list = []
+    skip_list = []
+    error_list = []
+
+    for trx_key in keys_to_apply:
+        if trx_key in existing_nbs:
+            skip_list.append(trx_key)
+            continue
+
+        try:
+            parts = trx_key.rsplit('-', 1)
+            move_nb = parts[0]
+            move_sq = int(parts[1]) if len(parts) > 1 else 1
+
+            ok2, details, err2 = fetch_erp_transfer_details(move_nb)
+            if not ok2 or not details:
+                error_list.append({'key': trx_key, 'error': 'ERP 디테일 조회 실패'})
+                continue
+
+            target_detail = next((d for d in details if int(d.get('moveSq', 1)) == move_sq), None)
+            if not target_detail:
+                error_list.append({'key': trx_key, 'error': '해당 순번 없음'})
+                continue
+
+            fwh_cd = target_detail.get('fwhCd', '')
+            twh_cd = target_detail.get('twhCd', '')
+            item_cd = target_detail.get('itemCd', '')
+            qty = int(target_detail.get('moveQt', 0) or 0)
+
+            if fwh_cd != '3200' or twh_cd != '3000':
+                error_list.append({'key': trx_key, 'error': '3200→3000 이동이 아님'})
+                continue
+            if qty <= 0:
+                error_list.append({'key': trx_key, 'error': '수량 0'})
+                continue
+
+            part = Part.objects.filter(part_no=item_cd).first()
+            if not part:
+                error_list.append({'key': trx_key, 'error': f'품목 없음: {item_cd}'})
+                continue
+
+            # 날짜 처리: 프론트에서 받은 ERP 이동일 사용
+            move_dt_str = move_dates.get(trx_key, '')
+            if move_dt_str:
+                try:
+                    erp_date = datetime.strptime(move_dt_str, '%Y-%m-%d').date()
+                    now = tz.localtime(tz.now())
+                    trf_date = now.replace(year=erp_date.year, month=erp_date.month, day=erp_date.day)
+                except Exception:
+                    trf_date = tz.now()
+            else:
+                trf_date = tz.now()
+
+            # FIFO 재고 이동: 3200 → 3000
+            remaining = qty
+            from_lots = list(MaterialStock.objects.filter(
+                warehouse=from_wh, part=part, lot_no__isnull=False, quantity__gt=0
+            ).order_by('lot_no'))
+
+            for src in from_lots:
+                if remaining <= 0:
+                    break
+                take = min(src.quantity, remaining)
+                MaterialStock.objects.filter(pk=src.pk).update(quantity=_F('quantity') - take)
+                dst, _ = MaterialStock.objects.get_or_create(
+                    warehouse=to_wh, part=part, lot_no=src.lot_no,
+                    defaults={'quantity': 0}
+                )
+                MaterialStock.objects.filter(pk=dst.pk).update(quantity=_F('quantity') + take)
+                remaining -= take
+
+            if remaining > 0:
+                src_null, _ = MaterialStock.objects.get_or_create(
+                    warehouse=from_wh, part=part, lot_no=None,
+                    defaults={'quantity': 0}
+                )
+                MaterialStock.objects.filter(pk=src_null.pk).update(quantity=_F('quantity') - remaining)
+                dst_null, _ = MaterialStock.objects.get_or_create(
+                    warehouse=to_wh, part=part, lot_no=None,
+                    defaults={'quantity': 0}
+                )
+                MaterialStock.objects.filter(pk=dst_null.pk).update(quantity=_F('quantity') + remaining)
+
+            to_total = MaterialStock.objects.filter(
+                warehouse=to_wh, part=part
+            ).aggregate(t=Sum('quantity'))['t'] or 0
+
+            fwh_nm = target_detail.get('fwhNm', '3200창고')
+            twh_nm = target_detail.get('twhNm', '3000창고')
+
+            from material.erp_api import _create_trx
+            _create_trx(
+                transaction_type='TRF_ERP',
+                date=trf_date,
+                part=part,
+                lot_no=None,
+                quantity=qty,
+                warehouse_from=from_wh,
+                warehouse_to=to_wh,
+                result_stock=to_total,
+                remark=f'ERP재고이동(수기반영) {fwh_nm}→{twh_nm}',
+                erp_incoming_no=trx_key,
+                erp_sync_status='SUCCESS',
+                erp_sync_message=f'수기반영 ({move_nb})',
+                actor=request.user,
+            )
+            existing_nbs.add(trx_key)
+            success_list.append(trx_key)
+
+        except Exception as e:
+            error_list.append({'key': trx_key, 'error': str(e)})
+
+    return JsonResponse({
+        'success': len(success_list),
+        'skipped': len(skip_list),
+        'errors': error_list,
+        'success_keys': success_list,
+    })
 
 
 # =============================================================================
