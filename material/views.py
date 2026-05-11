@@ -2542,7 +2542,7 @@ def api_scan_history_by_part(request):
                 'tag_id': f'ERP-{trx.erp_incoming_no or trx.transaction_no}',
                 'part_no': trx.part.part_no if trx.part else '-',
                 'part_name': trx.part.part_name if trx.part else '-',
-                'lot_no': '-',
+                'lot_no': trx.lot_no.strftime('%Y-%m-%d') if trx.lot_no else '-',
                 'quantity': float(trx.quantity),
                 'used_at': timezone.localtime(trx.date).strftime('%Y-%m-%d %H:%M') if trx.date else '-',
                 'used_at_raw': trx.date.isoformat() if trx.date else None,
@@ -2596,7 +2596,7 @@ def api_scan_history_by_part(request):
         for trx in erp_trxs:
             items.append({
                 'tag_id': f'ERP-{trx.erp_incoming_no or trx.transaction_no}',
-                'lot_no': '-',
+                'lot_no': trx.lot_no.strftime('%Y-%m-%d') if trx.lot_no else '-',
                 'quantity': float(trx.quantity),
                 'used_at': timezone.localtime(trx.date).strftime('%Y-%m-%d %H:%M') if trx.date else '-',
                 'used_at_raw': trx.date.isoformat() if trx.date else None,
