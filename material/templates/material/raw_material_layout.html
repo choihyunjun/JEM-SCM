@@ -1251,7 +1251,7 @@ function loadScanHistory(partNo) {
             return;
         }
         let html = '<table class="table table-sm table-hover mb-0" style="font-size:0.85rem;">'
-            + '<thead><tr><th>태그ID</th><th>LOT</th><th>투입일시</th><th>상태</th></tr></thead><tbody>';
+            + '<thead><tr><th>태그ID</th><th>LOT</th><th>수량</th><th>투입일시</th><th>상태</th></tr></thead><tbody>';
         data.items.forEach(item => {
             const isErp = item.is_erp_manual;
             const canCancel = !isErp && item.used_at_raw
@@ -1266,6 +1266,7 @@ function loadScanHistory(partNo) {
             html += `<tr>
                 <td><code style="font-size:0.75rem;">${item.tag_id}</code></td>
                 <td>${item.lot_no}</td>
+                <td class="text-end" style="font-weight:600;">${item.quantity ? item.quantity.toLocaleString() : '-'}</td>
                 <td>${item.used_at}</td>
                 <td>${badge}</td>
             </tr>`;
