@@ -734,7 +734,7 @@
 </div>
 
 <!-- 투입 취소 확인 모달 -->
-<div class="modal fade" id="cancelConfirmModal" tabindex="-1">
+<div class="modal fade" id="cancelConfirmModal" tabindex="-1" style="z-index:2000;">
     <div class="modal-dialog modal-dialog-centered modal-sm">
         <div class="modal-content" style="border-radius:12px; border:none; box-shadow:0 12px 40px rgba(0,0,0,0.2);">
             <div class="modal-header" style="background:linear-gradient(135deg,#dc3545,#c82333); color:#fff; border-radius:12px 12px 0 0; padding:14px 18px;">
@@ -1383,7 +1383,12 @@ function openCancelConfirm(tagId) {
 
     const modal = new bootstrap.Modal(document.getElementById('cancelConfirmModal'));
     modal.show();
-    setTimeout(() => document.getElementById('cancelScanInput').focus(), 400);
+    // backdrop을 이 모달보다 낮은 z-index로 조정 (스캔 모달 위에 뜨도록)
+    setTimeout(() => {
+        const backdrops = document.querySelectorAll('.modal-backdrop');
+        if (backdrops.length >= 2) backdrops[backdrops.length - 1].style.zIndex = '1999';
+        document.getElementById('cancelScanInput').focus();
+    }, 200);
 }
 
 document.addEventListener('DOMContentLoaded', function() {
