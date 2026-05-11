@@ -468,6 +468,7 @@
                                 <th style="padding:10px 8px;">품목명</th>
                                 <th style="padding:10px 8px; text-align:right; white-space:nowrap;">수량</th>
                                 <th style="padding:10px 8px;">3200창고 LOT 현황</th>
+                                <th style="padding:10px 8px; white-space:nowrap;">LOT 지정</th>
                                 <th style="padding:10px 8px; white-space:nowrap;">상태</th>
                             </tr>
                         </thead>
@@ -910,6 +911,10 @@ function renderErpResults(results) {
             ? '<td style="padding:8px 14px;"></td>'
             : `<td style="padding:8px 14px;"><input type="checkbox" class="row-check" value="${row.trx_key}" data-date="${row.move_dt}"></td>`;
 
+        const lotInput = applied
+            ? '<td></td>'
+            : `<td style="padding:4px 8px;"><input type="date" class="form-control form-control-sm lot-input" data-key="${row.trx_key}" style="font-size:0.8rem; min-width:130px;"></td>`;
+
         const tr = document.createElement('tr');
         tr.dataset.key = row.trx_key;
         if (applied) { tr.style.opacity = '0.55'; tr.style.background = '#f8fafc'; }
@@ -920,6 +925,7 @@ function renderErpResults(results) {
             + `<td style="padding:8px;">${row.item_name}</td>`
             + `<td style="padding:8px; text-align:right; font-weight:600;">${row.qty.toLocaleString()}kg</td>`
             + `<td style="padding:8px;">${lotHtml}</td>`
+            + lotInput
             + `<td style="padding:8px;">${statusBadge}</td>`;
         tbody.appendChild(tr);
     });
@@ -937,7 +943,12 @@ async function applySelected() {
 
     const keys = checks.map(c => c.value);
     const moveDates = {};
-    checks.forEach(c => { moveDates[c.value] = c.dataset.date; });
+    const lotValues = {};
+    checks.forEach(c => {
+        moveDates[c.value] = c.dataset.date;
+        const lotEl = document.querySelector(`.lot-input[data-key="${c.value}"]`);
+        if (lotEl && lotEl.value) lotValues[c.value] = lotEl.value;
+    });
 
     if (!confirm(`선택한 ${keys.length}건의 이동 이력을 SCM에 등록하시겠습니까?\n실제 재고는 변경되지 않습니다.`)) return;
 
@@ -949,7 +960,7 @@ async function applySelected() {
         const res = await fetch('{% url "material:api_erp_transfer_apply" %}', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
-            body: JSON.stringify({ keys, move_dates: moveDates }),
+            body: JSON.stringify({ keys, move_dates: moveDates, lot_values: lotValues }),
         });
         const data = await res.json();
 

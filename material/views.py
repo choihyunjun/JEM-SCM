@@ -6483,6 +6483,7 @@ def api_erp_transfer_apply(request):
 
     keys_to_apply = body.get('keys', [])
     move_dates = body.get('move_dates', {})
+    lot_values = body.get('lot_values', {})
 
     if not keys_to_apply:
         return JsonResponse({'error': '선택된 항목이 없습니다'}, status=400)
@@ -6564,12 +6565,22 @@ def api_erp_transfer_apply(request):
             fwh_nm = target_detail.get('fwhNm', '3200창고')
             twh_nm = target_detail.get('twhNm', '3000창고')
 
+            # LOT 수기 지정 값 파싱
+            lot_no_manual = None
+            lot_str = lot_values.get(trx_key, '')
+            if lot_str:
+                try:
+                    from datetime import date as _date
+                    lot_no_manual = _date.fromisoformat(lot_str)
+                except Exception:
+                    pass
+
             # 이력만 등록 (재고 변경 없음)
             _create_trx(
                 transaction_type='TRF_ERP',
                 date=trf_date,
                 part=part,
-                lot_no=None,
+                lot_no=lot_no_manual,
                 quantity=qty,
                 warehouse_from=from_wh,
                 warehouse_to=to_wh,
