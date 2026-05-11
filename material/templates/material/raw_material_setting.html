@@ -133,6 +133,7 @@
 <script>
 // 품목 검색
 let searchTimer = null;
+let searchResultsData = {};  // part_id → setting 데이터 캐시
 const searchInput = document.getElementById('partSearchInput');
 const searchResults = document.getElementById('partSearchResults');
 
@@ -150,17 +151,22 @@ searchInput.addEventListener('input', function() {
                 searchResults.style.display = 'block';
                 return;
             }
-            let html = '';
+            // 설정값을 JS 변수에 저장 (onclick에 JSON 직접 삽입 시 따옴표 충돌 방지)
+            searchResultsData = {};
             data.results.forEach(p => {
-                const settingJson = JSON.stringify({
+                searchResultsData[p.id] = {
                     safety_stock: p.safety_stock,
                     warning_stock: p.warning_stock,
                     shelf_life_days: p.shelf_life_days,
                     unit_weight: p.unit_weight,
-                }).replace(/'/g, "\\'");
+                };
+            });
+
+            let html = '';
+            data.results.forEach(p => {
                 const badge = p.safety_stock !== null ? ' <span style="font-size:8pt;color:#27ae60;">●설정됨</span>' : '';
                 html += `<button type="button" class="list-group-item list-group-item-action py-2"
-                    onclick="selectPartWithSetting(${p.id}, '${p.part_no}', '${p.part_name.replace(/'/g, "\\'")}', '${settingJson}')">
+                    onclick="selectPartWithSetting(${p.id}, '${p.part_no}', '${p.part_name.replace(/'/g, "\\'")}')">
                     <strong>${p.part_no}</strong> <small class="text-muted">${p.part_name}</small>${badge}
                 </button>`;
             });
@@ -177,16 +183,16 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// 품목 선택 (검색) - 기존 설정값 포함
-function selectPartWithSetting(id, partNo, partName, settingJson) {
+// 품목 선택 (검색) - 기존 설정값 폼에 로드
+function selectPartWithSetting(id, partNo, partName) {
     selectPart(id, partNo, partName);
-    try {
-        const s = JSON.parse(settingJson);
+    const s = searchResultsData[id];
+    if (s) {
         if (s.safety_stock !== null) document.querySelector('[name=safety_stock]').value = s.safety_stock;
         if (s.warning_stock !== null) document.querySelector('[name=warning_stock]').value = s.warning_stock;
         if (s.shelf_life_days !== null) document.querySelector('[name=shelf_life_days]').value = s.shelf_life_days;
         if (s.unit_weight !== null) document.querySelector('[name=unit_weight]').value = s.unit_weight;
-    } catch(e) {}
+    }
 }
 
 // 품목 선택 (검색)
