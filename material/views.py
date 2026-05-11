@@ -1878,104 +1878,12 @@ def api_process_tag_scan(request):
             label_kind = '파렛트' if tag_id.startswith('PLT-') else '원재료'
 
             if rm_label.status == 'USED':
-                # 이미 투입된 라벨 → 투입 취소 처리 (3000 차감, 3200 복구, INSTOCK 복구)
-                wh_3200 = Warehouse.objects.filter(code='3200').first()
-                wh_3000 = Warehouse.objects.filter(code='3000').first()
-                if not wh_3200 or not wh_3000:
-                    return JsonResponse({
-                        'success': False,
-                        'error': '창고 마스터(3200/3000)가 등록되어 있지 않습니다.',
-                    })
-
-                # 가장 최근 투입 이력에서 실제 이동 수량 조회
-                last_trx = MaterialTransaction.objects.filter(
-                    part=rm_label.part,
-                    transaction_type='TRANSFER',
-                    warehouse_from=wh_3200,
-                    warehouse_to=wh_3000,
-                    remark__icontains=rm_label.label_id,
-                ).order_by('-date').first()
-
-                cancel_qty = float(last_trx.quantity) if last_trx else float(rm_label.quantity)
-                lot_no_cancel = rm_label.lot_no
-
-                from django.db.models import F as _F
-                with transaction.atomic():
-                    # 3000 재고 차감 (LOT 유지)
-                    src_3000 = MaterialStock.objects.filter(
-                        warehouse=wh_3000, part=rm_label.part, lot_no=lot_no_cancel
-                    ).first()
-                    if src_3000:
-                        MaterialStock.objects.filter(pk=src_3000.pk).update(
-                            quantity=_F('quantity') - cancel_qty
-                        )
-                    else:
-                        MaterialStock.objects.create(
-                            warehouse=wh_3000, part=rm_label.part, lot_no=lot_no_cancel,
-                            quantity=-cancel_qty
-                        )
-
-                    # 3200 재고 복구 (LOT 유지)
-                    tgt_3200, _c = MaterialStock.objects.get_or_create(
-                        warehouse=wh_3200, part=rm_label.part, lot_no=lot_no_cancel,
-                        defaults={'quantity': 0}
-                    )
-                    MaterialStock.objects.filter(pk=tgt_3200.pk).update(
-                        quantity=_F('quantity') + cancel_qty
-                    )
-                    tgt_3200.refresh_from_db()
-
-                    # 라벨 USED → INSTOCK 복구
-                    rm_label.status = 'INSTOCK'
-                    rm_label.used_at = None
-                    rm_label.used_by = None
-                    rm_label.save(update_fields=['status', 'used_at', 'used_by'])
-
-                    # 취소 이력 (역방향 TRANSFER)
-                    trx_no = f"RM-CANCEL-{timezone.now().strftime('%y%m%d%H%M%S%f')}-{request.user.id}"
-                    lot_disp = lot_no_cancel.strftime('%Y-%m-%d') if lot_no_cancel else 'NO LOT'
-                    label_kind_c = '파렛트' if rm_label.label_id.startswith('PLT-') else '원재료'
-                    cancel_trx = MaterialTransaction.objects.create(
-                        transaction_no=trx_no,
-                        transaction_type='TRANSFER',
-                        date=timezone.now(),
-                        part=rm_label.part,
-                        quantity=cancel_qty,
-                        lot_no=lot_no_cancel,
-                        warehouse_from=wh_3000,
-                        warehouse_to=wh_3200,
-                        result_stock=tgt_3200.quantity,
-                        actor=request.user,
-                        remark=f"[{label_kind_c} 라벨 투입취소] {rm_label.label_id} (LOT: {lot_disp})"
-                    )
-
-                # ERP 역방향 재고이동 등록 (atomic 밖)
-                erp_msg_c = ''
-                try:
-                    from .erp_api import register_erp_stock_move
-                    ok_erp, erp_no, err_erp = register_erp_stock_move(
-                        cancel_trx, cancel_qty, wh_3000.code, wh_3200.code
-                    )
-                    if not ok_erp:
-                        erp_msg_c = f' (ERP 연동 실패: {err_erp})'
-                        logger.warning(f'RM 취소 ERP 이동 실패: {err_erp}')
-                except Exception as _e:
-                    erp_msg_c = f' (ERP 연동 예외)'
-                    logger.warning(f'RM 취소 ERP 이동 예외: {_e}')
-
+                # 이미 투입된 라벨 → 에러 반환 (취소는 이력 ✕ 버튼으로만 가능)
                 return JsonResponse({
-                    'success': True,
-                    'is_first_scan': True,
-                    'message': f'투입 취소 완료 ({cancel_qty}) - 라벨 재사용 가능' + erp_msg_c,
-                    'tag_info': {
-                        'tag_id': rm_label.label_id,
-                        'part_no': rm_label.part_no,
-                        'part_name': rm_label.part_name,
-                        'quantity': cancel_qty,
-                        'lot_no': str(lot_no_cancel) if lot_no_cancel else '',
-                        'status': '재고',
-                        'cancelled': True,
-                    }
+                    'success': False,
+                    'already_used': True,
+                    'error': '이미 투입된 라벨입니다. 투입 이력의 ✕ 버튼을 눌러 취소하세요.',
+                    'tag_id': rm_label.label_id,
                 })
             elif rm_label.status == 'CANCELLED':
                 return JsonResponse({
@@ -2665,8 +2573,9 @@ def api_scan_history_by_part(request):
 @wms_permission_required('can_wms_stock_view')
 def api_process_tag_cancel_scan(request):
     """
-    투입(스캔) 취소 API - 태그를 PRINTED 상태로 되돌려 재스캔 가능하게 함
-    - stock_reflected=True (이미 출고 반영됨)인 경우 취소 불가
+    투입(스캔) 취소 API
+    - TAG- : ProcessTag PRINTED 복구
+    - RM- / PLT- : RawMaterialLabel INSTOCK 복구 + 재고 역방향 이동
     """
     from .models import ProcessTag, ProcessTagScanLog
 
@@ -2677,6 +2586,82 @@ def api_process_tag_cancel_scan(request):
         if not tag_id:
             return JsonResponse({'success': False, 'error': '태그 ID가 누락되었습니다.'}, status=400)
 
+        # ── RM / PLT 라벨 취소 ──
+        if tag_id.startswith('RM-') or tag_id.startswith('PLT-'):
+            rm_label = RawMaterialLabel.objects.filter(label_id=tag_id).first()
+            if not rm_label:
+                return JsonResponse({'success': False, 'error': f'등록되지 않은 라벨: {tag_id}'}, status=404)
+            if rm_label.status != 'USED':
+                return JsonResponse({'success': False, 'error': '투입 상태가 아닙니다.'})
+
+            wh_3200 = Warehouse.objects.filter(code='3200').first()
+            wh_3000 = Warehouse.objects.filter(code='3000').first()
+            if not wh_3200 or not wh_3000:
+                return JsonResponse({'success': False, 'error': '창고 마스터(3200/3000)가 없습니다.'})
+
+            last_trx = MaterialTransaction.objects.filter(
+                part=rm_label.part,
+                transaction_type='TRANSFER',
+                warehouse_from=wh_3200,
+                warehouse_to=wh_3000,
+                remark__icontains=rm_label.label_id,
+            ).order_by('-date').first()
+
+            cancel_qty = float(last_trx.quantity) if last_trx else float(rm_label.quantity)
+            lot_no_cancel = rm_label.lot_no
+
+            from django.db.models import F as _F
+            with transaction.atomic():
+                src_3000 = MaterialStock.objects.filter(
+                    warehouse=wh_3000, part=rm_label.part, lot_no=lot_no_cancel
+                ).first()
+                if src_3000:
+                    MaterialStock.objects.filter(pk=src_3000.pk).update(quantity=_F('quantity') - cancel_qty)
+                else:
+                    MaterialStock.objects.create(
+                        warehouse=wh_3000, part=rm_label.part, lot_no=lot_no_cancel, quantity=-cancel_qty
+                    )
+
+                tgt_3200, _ = MaterialStock.objects.get_or_create(
+                    warehouse=wh_3200, part=rm_label.part, lot_no=lot_no_cancel, defaults={'quantity': 0}
+                )
+                MaterialStock.objects.filter(pk=tgt_3200.pk).update(quantity=_F('quantity') + cancel_qty)
+                tgt_3200.refresh_from_db()
+
+                rm_label.status = 'INSTOCK'
+                rm_label.used_at = None
+                rm_label.used_by = None
+                rm_label.save(update_fields=['status', 'used_at', 'used_by'])
+
+                trx_no = f"RM-CANCEL-{timezone.now().strftime('%y%m%d%H%M%S%f')}-{request.user.id}"
+                lot_disp = lot_no_cancel.strftime('%Y-%m-%d') if lot_no_cancel else 'NO LOT'
+                label_kind_c = '파렛트' if tag_id.startswith('PLT-') else '원재료'
+                cancel_trx = MaterialTransaction.objects.create(
+                    transaction_no=trx_no,
+                    transaction_type='TRANSFER',
+                    date=timezone.now(),
+                    part=rm_label.part,
+                    quantity=cancel_qty,
+                    lot_no=lot_no_cancel,
+                    warehouse_from=wh_3000,
+                    warehouse_to=wh_3200,
+                    result_stock=tgt_3200.quantity,
+                    actor=request.user,
+                    remark=f"[{label_kind_c} 라벨 투입취소] {rm_label.label_id} (LOT: {lot_disp})"
+                )
+
+            erp_msg = ''
+            try:
+                from .erp_api import register_erp_stock_move
+                ok_erp, _, err_erp = register_erp_stock_move(cancel_trx, cancel_qty, wh_3000.code, wh_3200.code)
+                if not ok_erp:
+                    erp_msg = f' (ERP 연동 실패: {err_erp})'
+            except Exception as _e:
+                erp_msg = ' (ERP 연동 예외)'
+
+            return JsonResponse({'success': True, 'message': f'{tag_id} 투입 취소 완료' + erp_msg})
+
+        # ── ProcessTag 취소 ──
         tag = ProcessTag.objects.filter(tag_id=tag_id).first()
         if not tag:
             return JsonResponse({'success': False, 'error': f'등록되지 않은 태그: {tag_id}'}, status=404)
@@ -2687,7 +2672,6 @@ def api_process_tag_cancel_scan(request):
         if tag.stock_reflected:
             return JsonResponse({'success': False, 'error': '이미 출고 처리된 태그는 취소할 수 없습니다.'})
 
-        # 투입 취소: PRINTED로 되돌리기
         tag.status = 'PRINTED'
         tag.used_at = None
         tag.used_by = None
@@ -2695,7 +2679,6 @@ def api_process_tag_cancel_scan(request):
         tag.scan_count = 0
         tag.save()
 
-        # 취소 로그 기록
         ProcessTagScanLog.objects.create(
             tag=tag,
             scanned_by=request.user,
