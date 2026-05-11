@@ -1253,13 +1253,16 @@ function loadScanHistory(partNo) {
         let html = '<table class="table table-sm table-hover mb-0" style="font-size:0.85rem;">'
             + '<thead><tr><th>태그ID</th><th>LOT</th><th>투입일시</th><th>상태</th></tr></thead><tbody>';
         data.items.forEach(item => {
-            const canCancel = item.used_at_raw
+            const isErp = item.is_erp_manual;
+            const canCancel = !isErp && item.used_at_raw
                 && (new Date() - new Date(item.used_at_raw)) < 3 * 24 * 60 * 60 * 1000;
-            const badge = `<span class="badge bg-success">투입</span>`
-                + (canCancel
-                    ? ` <button class="btn btn-outline-danger btn-sm py-0 px-1" style="font-size:0.7rem;line-height:1.4;"
-                            onclick="openCancelConfirm('${item.tag_id}')" title="투입 취소">✕</button>`
-                    : '');
+            const badge = isErp
+                ? `<span class="badge bg-info text-dark">ERP수기반영</span>`
+                : `<span class="badge bg-success">투입</span>`
+                  + (canCancel
+                      ? ` <button class="btn btn-outline-danger btn-sm py-0 px-1" style="font-size:0.7rem;line-height:1.4;"
+                              onclick="openCancelConfirm('${item.tag_id}')" title="투입 취소">✕</button>`
+                      : '');
             html += `<tr>
                 <td><code style="font-size:0.75rem;">${item.tag_id}</code></td>
                 <td>${item.lot_no}</td>

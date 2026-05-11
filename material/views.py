@@ -2532,6 +2532,24 @@ def api_scan_history_by_part(request):
                 'used_by': lbl.used_by.username if lbl.used_by else '-',
                 'stock_reflected': False,
             })
+        # ERP 수기반영 전체 이력
+        erp_trxs_all = MaterialTransaction.objects.filter(
+            transaction_type='TRF_ERP',
+            remark__icontains='수기반영',
+        ).select_related('part', 'actor').order_by('-date')[:50]
+        for trx in erp_trxs_all:
+            items_all.append({
+                'tag_id': f'ERP-{trx.erp_incoming_no or trx.transaction_no}',
+                'part_no': trx.part.part_no if trx.part else '-',
+                'part_name': trx.part.part_name if trx.part else '-',
+                'lot_no': '-',
+                'quantity': float(trx.quantity),
+                'used_at': timezone.localtime(trx.date).strftime('%Y-%m-%d %H:%M') if trx.date else '-',
+                'used_at_raw': trx.date.isoformat() if trx.date else None,
+                'used_by': trx.actor.username if trx.actor else '-',
+                'stock_reflected': False,
+                'is_erp_manual': True,
+            })
         items_all.sort(key=lambda x: x['used_at'], reverse=True)
         return JsonResponse({'success': True, 'part_no': '', 'items': items_all[:50]})
 
@@ -2566,6 +2584,26 @@ def api_scan_history_by_part(request):
             'used_by': lbl.used_by.username if lbl.used_by else '-',
             'stock_reflected': False,
         })
+
+    # 3) ERP 수기반영 이력 (TRF_ERP + remark에 '수기반영' 포함)
+    part_obj = Part.objects.filter(part_no=part_no).first()
+    if part_obj:
+        erp_trxs = MaterialTransaction.objects.filter(
+            part=part_obj,
+            transaction_type='TRF_ERP',
+            remark__icontains='수기반영',
+        ).order_by('-date')[:30]
+        for trx in erp_trxs:
+            items.append({
+                'tag_id': f'ERP-{trx.erp_incoming_no or trx.transaction_no}',
+                'lot_no': '-',
+                'quantity': float(trx.quantity),
+                'used_at': timezone.localtime(trx.date).strftime('%Y-%m-%d %H:%M') if trx.date else '-',
+                'used_at_raw': trx.date.isoformat() if trx.date else None,
+                'used_by': trx.actor.username if trx.actor else '-',
+                'stock_reflected': False,
+                'is_erp_manual': True,
+            })
 
     # 시간 역순 정렬 후 30건 제한
     items.sort(key=lambda x: x['used_at'], reverse=True)
