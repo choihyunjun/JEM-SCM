@@ -6354,10 +6354,12 @@ def api_erp_transfer_preview(request):
     if not ok:
         return JsonResponse({'error': f'ERP 조회 실패: {err}'}, status=500)
 
+    # 자동 수불동기화로 생긴 TRF_ERP는 제외 — 수기반영으로 만든 것만 "이미 반영" 체크
     existing_nbs = set(
         MaterialTransaction.objects.filter(
             transaction_type='TRF_ERP',
-            erp_incoming_no__isnull=False
+            erp_incoming_no__isnull=False,
+            remark__icontains='수기반영'
         ).values_list('erp_incoming_no', flat=True)
     )
 
@@ -6447,10 +6449,12 @@ def api_erp_transfer_apply(request):
     if not keys_to_apply:
         return JsonResponse({'error': '선택된 항목이 없습니다'}, status=400)
 
+    # 자동 수불동기화로 생긴 TRF_ERP는 제외 — 수기반영으로 만든 것만 체크
     existing_nbs = set(
         MaterialTransaction.objects.filter(
             transaction_type='TRF_ERP',
-            erp_incoming_no__isnull=False
+            erp_incoming_no__isnull=False,
+            remark__icontains='수기반영'
         ).values_list('erp_incoming_no', flat=True)
     )
 
