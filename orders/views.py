@@ -923,60 +923,77 @@ def inventory_list(request):
 @login_required
 @menu_permission_required('can_view_inventory')
 def inventory_export(request):
+    from material.models import Warehouse
+    from collections import defaultdict
+    from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
     user = request.user
     user_vendor = Vendor.objects.filter(user=user).first()
+    if not user_vendor and not user.is_superuser:
+        try:
+            if hasattr(user, 'profile') and user.profile.org and user.profile.org.linked_vendor:
+                user_vendor = user.profile.org.linked_vendor
+        except Exception:
+            pass
 
-    # ✅ 직원/관리자(벤더가 아닌 계정)만 inv.export 권한 체크
     if (not user.is_superuser) and (not user_vendor):
         resp = require_action_perm(request, 'inv.export')
         if resp:
             return resp
 
     today = timezone.localtime().date()
+    show_all = request.GET.get('show_all', 'false') == 'true'
+    selected_v = request.GET.get('vendor_id', '').strip()
+    q = request.GET.get('q', '').strip()
 
     max_due = Demand.objects.aggregate(Max('due_date'))['due_date__max']
     end_date = max_due if max_due and max_due > (today + datetime.timedelta(days=31)) else (today + datetime.timedelta(days=31))
     dr = [today + datetime.timedelta(days=i) for i in range((end_date - today).days + 1)]
 
-    # 품목 조회
-    from material.models import Warehouse
-    from collections import defaultdict
-
-    part_qs = Part.objects.select_related('vendor').filter(vendor__isnull=False)
-    if (not user.is_superuser) and user_vendor:
+    # ─── 품목 필터 ───
+    part_qs = Part.objects.select_related('vendor').filter(vendor__isnull=False).order_by('vendor__name', 'part_name')
+    if user_vendor and not user.is_superuser:
         part_qs = part_qs.filter(vendor=user_vendor)
+    elif selected_v:
+        part_qs = part_qs.filter(vendor_id=selected_v)
+    if q:
+        part_qs = part_qs.filter(Q(part_no__icontains=q) | Q(part_name__icontains=q))
+
+    # 소요 없는 품목 제외 (show_all=false일 때)
+    if not show_all:
+        demand_part_ids = set(
+            Demand.objects.filter(due_date__range=[today, end_date])
+            .values_list('part_id', flat=True).distinct()
+        )
+        part_qs = part_qs.filter(id__in=demand_part_ids)
+
     parts = list(part_qs)
     part_ids = [p.id for p in parts]
 
-    # WMS 현재 재고 (시업재고)
-    target_wh_ids = list(Warehouse.objects.filter(code__in=['2000', '4200']).values_list('id', flat=True))
+    # ─── 재고 ───
+    target_wh_ids = list(Warehouse.objects.filter(code__in=['2000', '4200', '4300']).values_list('id', flat=True))
+    stock_qs = MaterialStock.objects.filter(part_id__in=part_ids)
     if target_wh_ids:
-        stock_qs = MaterialStock.objects.filter(
-            part_id__in=part_ids, warehouse_id__in=target_wh_ids
-        ).values('part_id').annotate(total_qty=Sum('quantity'))
-    else:
-        stock_qs = MaterialStock.objects.filter(
-            part_id__in=part_ids
-        ).values('part_id').annotate(total_qty=Sum('quantity'))
-    stock_map = {item['part_id']: item['total_qty'] or 0 for item in stock_qs}
+        stock_qs = stock_qs.filter(warehouse_id__in=target_wh_ids)
+    stock_map = {r['part_id']: r['total_qty'] or 0
+                 for r in stock_qs.values('part_id').annotate(total_qty=Sum('quantity'))}
 
-    # 입고예정: PENDING 납품서 기반
+    # ─── 입고예정 ───
     part_no_to_id = {p.part_no: p.id for p in parts}
     pending_items = DeliveryOrderItem.objects.filter(
-        part_no__in=part_no_to_id.keys(),
-        order__status='PENDING'
+        part_no__in=part_no_to_id.keys(), order__status='PENDING'
     ).select_related('linked_order')
-
     incoming_map = defaultdict(lambda: defaultdict(int))
     for pi in pending_items:
         pid = part_no_to_id.get(pi.part_no)
         if pid:
-            expected_date = pi.linked_order.due_date if pi.linked_order else today
-            if expected_date < today:
-                expected_date = today
-            incoming_map[pid][expected_date] += pi.total_qty
+            ed = (pi.linked_order.due_date if pi.linked_order else today)
+            if ed < today:
+                ed = today
+            incoming_map[pid][ed] += pi.total_qty
 
-    # 소요량
+    # ─── 소요량 ───
     demand_qs = Demand.objects.filter(
         part_id__in=part_ids, due_date__range=[today, end_date]
     ).values('part_id', 'due_date').annotate(total_qty=Sum('quantity'))
@@ -984,33 +1001,147 @@ def inventory_export(request):
     for item in demand_qs:
         demand_map[item['part_id']][item['due_date']] = item['total_qty'] or 0
 
+    # ─── 스타일 정의 ───
+    thin = Side(style='thin', color='CCCCCC')
+    border_all = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    fill_header   = PatternFill('solid', fgColor='1F3864')   # 진남색
+    fill_soyo     = PatternFill('solid', fgColor='EBF3FB')   # 연파랑
+    fill_incoming = PatternFill('solid', fgColor='EDF7EE')   # 연초록
+    fill_surplus  = PatternFill('solid', fgColor='FFFFFF')   # 흰색
+    fill_weekend  = PatternFill('solid', fgColor='FFF2CC')   # 연노랑
+    fill_today    = PatternFill('solid', fgColor='FCE4D6')   # 연주황
+
+    font_header  = Font(bold=True, color='FFFFFF', size=9)
+    font_soyo    = Font(color='1F5C9C', size=8)
+    font_incom   = Font(color='1E7B36', size=8)
+    font_surplus = Font(color='222222', size=8)
+    font_neg     = Font(bold=True, color='C00000', size=8)
+    font_info    = Font(bold=True, color='2C3E50', size=8)
+
+    center = Alignment(horizontal='center', vertical='center')
+    left   = Alignment(horizontal='left',   vertical='center')
+
+    # ─── 워크북 생성 ───
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.append(['협력사', '품번', '품명', '구분'] + [d.strftime('%m/%d') for d in dr])
+    ws.title = f'과부족_{today.strftime("%m%d")}'
+    ws.freeze_panes = 'E2'  # 헤더 + 업체/품번/품명/구분 고정
 
+    # ─── 헤더 행 ───
+    header = ['업체', '품번', '품명', '구분'] + [d.strftime('%m/%d') for d in dr]
+    ws.append(header)
+
+    # 헤더 스타일
+    for ci, cell in enumerate(ws[1], start=1):
+        cell.fill   = fill_header
+        cell.font   = font_header
+        cell.alignment = center
+        cell.border = border_all
+        # 날짜 컬럼 (5열~): 주말이면 배경 살짝 다르게
+        if ci >= 5:
+            d = dr[ci - 5]
+            if d.weekday() >= 5:  # 토/일
+                cell.fill = PatternFill('solid', fgColor='3B5998')
+            if d == today:
+                cell.fill = PatternFill('solid', fgColor='C0392B')
+
+    # 열 너비 설정
+    ws.column_dimensions['A'].width = 14
+    ws.column_dimensions['B'].width = 16
+    ws.column_dimensions['C'].width = 20
+    ws.column_dimensions['D'].width = 8
+    for ci in range(5, 5 + len(dr)):
+        ws.column_dimensions[get_column_letter(ci)].width = 7
+
+    # ─── 데이터 행 ───
+    current_row = 2
     for part in parts:
         opening_stock = stock_map.get(part.id, 0)
         temp_stock = opening_stock
 
-        r1 = [part.vendor.name if part.vendor else '(미연결)', part.part_no, part.part_name, '소요량']
-        r2 = ['', '', '', '입고예정']
-        r3 = ['', '', '', '과부족']
-
+        soyo_vals, incom_vals, surplus_vals = [], [], []
         for dt in dr:
             dq = demand_map[part.id].get(dt, 0)
             iq = incoming_map[part.id].get(dt, 0)
             temp_stock = temp_stock - dq + iq
+            soyo_vals.append(dq)
+            incom_vals.append(iq)
+            surplus_vals.append(temp_stock)
 
-            r1.append(dq)
-            r2.append(iq)
-            r3.append(temp_stock)
+        vendor_name = part.vendor.name if part.vendor else '(미연결)'
+        rows_data = [
+            (soyo_vals,   '소요량',   fill_soyo,     font_soyo,   False),
+            (incom_vals,  '입고예정', fill_incoming, font_incom,  False),
+            (surplus_vals,'과부족',   fill_surplus,  font_surplus, True),
+        ]
 
-        ws.append(r1)
-        ws.append(r2)
-        ws.append(r3)
+        for vals, label, fill, font_normal, is_surplus in rows_data:
+            row_cells = [vendor_name if label == '소요량' else '',
+                         part.part_no if label == '소요량' else '',
+                         part.part_name if label == '소요량' else '',
+                         label]
+            row_cells += vals
+            ws.append(row_cells)
+
+            r = ws[current_row]
+
+            # 업체/품번/품명/구분 스타일
+            for ci, cell in enumerate(r[:4], start=1):
+                cell.border    = border_all
+                cell.alignment = center if ci == 4 else left
+                if label == '소요량':
+                    cell.font = font_info
+                else:
+                    cell.font = Font(size=8, color='999999')
+
+            # 날짜 데이터 셀 스타일
+            for ci, cell in enumerate(r[4:], start=0):
+                dt = dr[ci]
+                cell.border    = border_all
+                cell.alignment = center
+                v = vals[ci]
+
+                # 배경: 주말/오늘
+                if dt == today:
+                    cell.fill = fill_today
+                elif dt.weekday() >= 5:
+                    cell.fill = fill_weekend
+                else:
+                    cell.fill = fill
+
+                # 값이 0이면 빈칸(-)으로
+                if v == 0:
+                    cell.value = None
+                    cell.font  = Font(size=8, color='BBBBBB')
+                elif is_surplus and v < 0:
+                    cell.font = font_neg
+                else:
+                    cell.font = font_normal
+
+            current_row += 1
+
+        # 3행 사이 구분선 (과부족 행 아래에 두꺼운 선)
+        thick_bottom = Border(
+            left=thin, right=thin, top=thin,
+            bottom=Side(style='medium', color='AAAAAA')
+        )
+        for cell in ws[current_row - 1]:
+            cell.border = thick_bottom
+
+        # 행 높이
+        for i in range(current_row - 3, current_row):
+            ws.row_dimensions[i].height = 14
 
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    response['Content-Disposition'] = f'attachment; filename=Inventory_{today}.xlsx'
+    fname = f'과부족현황_{today.strftime("%Y%m%d")}'
+    if selected_v:
+        try:
+            vname = Vendor.objects.get(id=selected_v).name
+            fname += f'_{vname}'
+        except Exception:
+            pass
+    response['Content-Disposition'] = f'attachment; filename*=UTF-8\'\'{fname}.xlsx'
     wb.save(response)
     return response
 
