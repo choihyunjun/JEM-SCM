@@ -7192,7 +7192,7 @@ def api_raw_material_labels(request):
         inspection = ImportInspection.objects.get(id=inspection_id)
         trx = inspection.inbound_transaction
         labels = RawMaterialLabel.objects.filter(
-            incoming_transaction=trx
+            incoming_transaction=trx, label_type='PACKAGE'
         ).exclude(status='CANCELLED').order_by('id')
 
         result = []

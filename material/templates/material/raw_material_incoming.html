@@ -93,34 +93,41 @@
                                         <span class="status-badge status-scm-done">
                                             <i class="bi bi-check-circle"></i> 현품표 발행 완료
                                         </span>
-                                        {% elif insp.label_count > 0 %}
+                                        {% elif insp.label_count > 0 or insp.pallet_count > 0 %}
+                                        {% if insp.label_count > 0 %}
                                         <span class="status-badge status-printed">
                                             <i class="bi bi-check"></i> {{ insp.label_count }}장 발행됨
                                         </span>
+                                        {% endif %}
                                         {% if insp.pallet_count > 0 %}
-                                        <br><span class="status-badge" style="background:#dbeafe;color:#1e40af;margin-top:2px;">
+                                        {% if insp.label_count > 0 %}<br>{% endif %}
+                                        <span class="status-badge" style="background:#dbeafe;color:#1e40af;margin-top:2px;">
                                             <i class="bi bi-box-seam"></i> 파렛트 {{ insp.pallet_count }}장
                                         </span>
                                         {% endif %}
-                                        {% else %}
-                                        {% if insp.pallet_count > 0 %}
-                                        <span class="status-badge" style="background:#dbeafe;color:#1e40af;">
-                                            <i class="bi bi-box-seam"></i> 파렛트 {{ insp.pallet_count }}장
-                                        </span>
+                                        {% if insp.label_count == 0 and insp.pallet_count > 0 %}
+                                        <br><span class="status-badge status-approved" style="margin-top:2px;">RM 미발행</span>
+                                        {% endif %}
                                         {% else %}
                                         <span class="status-badge status-approved">미발행</span>
-                                        {% endif %}
                                         {% endif %}
                                     </td>
                                     <td class="text-center">
                                         {% if insp.is_scm %}
                                         <span class="text-muted small">-</span>
-                                        {% elif insp.label_count > 0 %}
+                                        {% elif insp.label_count > 0 or insp.pallet_count > 0 %}
                                         <div class="btn-group btn-group-sm">
+                                            {% if insp.label_count > 0 %}
                                             <button type="button" class="btn btn-outline-secondary btn-print"
-                                                    onclick="openReprintModal('{{ insp.id }}', '{{ insp.inbound_transaction.part.part_no }}', '{{ insp.inbound_transaction.part.part_name|truncatechars:20 }}')" title="재출력">
+                                                    onclick="openReprintModal('{{ insp.id }}', '{{ insp.inbound_transaction.part.part_no }}', '{{ insp.inbound_transaction.part.part_name|truncatechars:20 }}')" title="RM 재출력">
                                                 <i class="bi bi-printer"></i> 재출력
                                             </button>
+                                            {% else %}
+                                            <button type="button" class="btn btn-success btn-print"
+                                                    onclick="openLabelModal('{{ insp.id }}', '{{ insp.inbound_transaction.part.part_no }}', '{{ insp.inbound_transaction.part.part_name|truncatechars:30 }}', {{ insp.inbound_transaction.quantity }}, {{ insp.has_setting|yesno:'true,false' }}, {{ insp.setting_unit_weight }}, {{ insp.setting_shelf_life }})">
+                                                <i class="bi bi-qr-code"></i> 라벨발행
+                                            </button>
+                                            {% endif %}
                                             <button type="button" class="btn btn-outline-primary btn-print"
                                                     onclick="createPalletLabel('{{ insp.id }}')" title="파렛트 라벨">
                                                 <i class="bi bi-box-seam"></i> 파렛트
@@ -764,8 +771,8 @@ function createPalletLabel(inspId) {
                     window.open("{% url 'material:pallet_label_print' %}?ids=" + data.label_ids, '_blank');
                 }
             } else {
-                alert(data.message);
                 window.open("{% url 'material:pallet_label_print' %}?ids=" + data.label_ids, '_blank');
+                location.reload();
             }
         } else {
             alert('오류: ' + data.error);
