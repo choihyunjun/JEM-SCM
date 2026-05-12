@@ -10037,6 +10037,8 @@ def mold_mt_dashboard(request):
     item_groups_filter = request.GET.getlist('item_group')
     materials_filter = request.GET.getlist('material_type')
     status_filters = request.GET.getlist('status')
+    mt_year_filter = request.GET.get('mt_year', '').strip()
+    mt_month_filter = request.GET.get('mt_month', '').strip()
 
     if q:
         qs = qs.filter(Q(part_no__icontains=q) | Q(mold_name__icontains=q))
@@ -10046,6 +10048,22 @@ def mold_mt_dashboard(request):
         qs = qs.filter(item_group__in=item_groups_filter)
     if materials_filter:
         qs = qs.filter(material_type__in=materials_filter)
+
+    # MT 년도/월 필터: 해당 년월에 최종 MT 이력이 있는 금형만
+    from .models import MoldMTLog
+    if mt_year_filter or mt_month_filter:
+        mt_log_qs = MoldMTLog.objects.all()
+        if mt_year_filter:
+            mt_log_qs = mt_log_qs.filter(mt_date__year=int(mt_year_filter))
+        if mt_month_filter:
+            mt_log_qs = mt_log_qs.filter(mt_date__month=int(mt_month_filter))
+        mt_mold_ids = set(mt_log_qs.values_list('mold_id', flat=True))
+        qs = qs.filter(id__in=mt_mold_ids)
+
+    # MT 이력 년도 목록 (드롭다운용)
+    mt_years = sorted(set(
+        MoldMTLog.objects.values_list('mt_date__year', flat=True).distinct()
+    ), reverse=True)
 
     molds_list = list(qs)
 
@@ -10123,6 +10141,10 @@ def mold_mt_dashboard(request):
         qs_params.append(('material_type', mt))
     for sf in status_filters:
         qs_params.append(('status', sf))
+    if mt_year_filter:
+        qs_params.append(('mt_year', mt_year_filter))
+    if mt_month_filter:
+        qs_params.append(('mt_month', mt_month_filter))
     pagination_qs = urlencode(qs_params)
 
     context = {
@@ -10136,6 +10158,9 @@ def mold_mt_dashboard(request):
         'item_groups_filter': item_groups_filter,
         'materials_filter': materials_filter,
         'status_filters': status_filters,
+        'mt_year_filter': mt_year_filter,
+        'mt_month_filter': mt_month_filter,
+        'mt_years': mt_years,
         'pagination_qs': pagination_qs,
         'part_nos_json': _json.dumps(part_nos, ensure_ascii=False),
         'grade_list': grade_list,

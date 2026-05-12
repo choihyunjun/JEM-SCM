@@ -229,6 +229,35 @@
                 </label>
             </div>
         </div>
+        <div class="filter-row">
+            <span class="filter-label">MT월</span>
+            <div class="filter-btn-group align-items-center">
+                <!-- 년도 선택 -->
+                <select name="mt_year" class="form-select form-select-sm" style="width:auto;min-width:85px;font-size:0.72rem;" onchange="this.form.submit()">
+                    <option value="">년도</option>
+                    {% for yr in mt_years %}
+                    <option value="{{ yr }}" {% if mt_year_filter == yr|stringformat:"s" %}selected{% endif %}>{{ yr }}년</option>
+                    {% endfor %}
+                </select>
+                <!-- 월 토글 버튼 -->
+                {% for m in "123456789" %}{% endfor %}
+                <label class="filter-toggle {% if mt_month_filter == '1' %}active{% endif %}"><input type="radio" name="mt_month" value="1" {% if mt_month_filter == '1' %}checked{% endif %} hidden onchange="this.form.submit()">1월</label>
+                <label class="filter-toggle {% if mt_month_filter == '2' %}active{% endif %}"><input type="radio" name="mt_month" value="2" {% if mt_month_filter == '2' %}checked{% endif %} hidden onchange="this.form.submit()">2월</label>
+                <label class="filter-toggle {% if mt_month_filter == '3' %}active{% endif %}"><input type="radio" name="mt_month" value="3" {% if mt_month_filter == '3' %}checked{% endif %} hidden onchange="this.form.submit()">3월</label>
+                <label class="filter-toggle {% if mt_month_filter == '4' %}active{% endif %}"><input type="radio" name="mt_month" value="4" {% if mt_month_filter == '4' %}checked{% endif %} hidden onchange="this.form.submit()">4월</label>
+                <label class="filter-toggle {% if mt_month_filter == '5' %}active{% endif %}"><input type="radio" name="mt_month" value="5" {% if mt_month_filter == '5' %}checked{% endif %} hidden onchange="this.form.submit()">5월</label>
+                <label class="filter-toggle {% if mt_month_filter == '6' %}active{% endif %}"><input type="radio" name="mt_month" value="6" {% if mt_month_filter == '6' %}checked{% endif %} hidden onchange="this.form.submit()">6월</label>
+                <label class="filter-toggle {% if mt_month_filter == '7' %}active{% endif %}"><input type="radio" name="mt_month" value="7" {% if mt_month_filter == '7' %}checked{% endif %} hidden onchange="this.form.submit()">7월</label>
+                <label class="filter-toggle {% if mt_month_filter == '8' %}active{% endif %}"><input type="radio" name="mt_month" value="8" {% if mt_month_filter == '8' %}checked{% endif %} hidden onchange="this.form.submit()">8월</label>
+                <label class="filter-toggle {% if mt_month_filter == '9' %}active{% endif %}"><input type="radio" name="mt_month" value="9" {% if mt_month_filter == '9' %}checked{% endif %} hidden onchange="this.form.submit()">9월</label>
+                <label class="filter-toggle {% if mt_month_filter == '10' %}active{% endif %}"><input type="radio" name="mt_month" value="10" {% if mt_month_filter == '10' %}checked{% endif %} hidden onchange="this.form.submit()">10월</label>
+                <label class="filter-toggle {% if mt_month_filter == '11' %}active{% endif %}"><input type="radio" name="mt_month" value="11" {% if mt_month_filter == '11' %}checked{% endif %} hidden onchange="this.form.submit()">11월</label>
+                <label class="filter-toggle {% if mt_month_filter == '12' %}active{% endif %}"><input type="radio" name="mt_month" value="12" {% if mt_month_filter == '12' %}checked{% endif %} hidden onchange="this.form.submit()">12월</label>
+                {% if mt_year_filter or mt_month_filter %}
+                <button type="button" class="btn btn-sm btn-outline-secondary" style="font-size:0.7rem;padding:2px 7px;" onclick="clearMtFilter()">✕ MT월 초기화</button>
+                {% endif %}
+            </div>
+        </div>
     </form>
 </div>
 
@@ -668,12 +697,41 @@
 document.querySelectorAll('.filter-toggle').forEach(function(btn) {
     btn.addEventListener('click', function(e) {
         e.preventDefault();
-        var cb = this.querySelector('input[type=checkbox]');
-        cb.checked = !cb.checked;
-        this.classList.toggle('active', cb.checked);
+        var inp = this.querySelector('input');
+        if (!inp) return;
+        if (inp.type === 'radio') {
+            // 이미 선택된 월 클릭 → 해제 후 폼 제출
+            if (inp.checked) {
+                inp.checked = false;
+                this.classList.remove('active');
+            } else {
+                document.querySelectorAll('input[name="mt_month"]').forEach(function(r) {
+                    r.checked = false;
+                    r.closest('.filter-toggle').classList.remove('active');
+                });
+                inp.checked = true;
+                this.classList.add('active');
+            }
+        } else {
+            inp.checked = !inp.checked;
+            this.classList.toggle('active', inp.checked);
+        }
         document.getElementById('filterForm').submit();
     });
 });
+
+// ─── MT 년도/월 필터 초기화 ───
+function clearMtFilter() {
+    var form = document.getElementById('filterForm');
+    var yearSel = form.querySelector('select[name="mt_year"]');
+    if (yearSel) yearSel.value = '';
+    document.querySelectorAll('input[name="mt_month"]').forEach(function(r) {
+        r.checked = false;
+        var lbl = r.closest('.filter-toggle');
+        if (lbl) lbl.classList.remove('active');
+    });
+    form.submit();
+}
 
 // ─── 체크박스 전체선택 ───
 document.getElementById('checkAll').addEventListener('change', function() {
