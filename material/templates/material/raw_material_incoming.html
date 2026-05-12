@@ -128,10 +128,17 @@
                                                 <i class="bi bi-qr-code"></i> 라벨발행
                                             </button>
                                             {% endif %}
+                                            {% if insp.pallet_count > 0 %}
                                             <button type="button" class="btn btn-outline-primary btn-print"
-                                                    onclick="createPalletLabel('{{ insp.id }}')" title="파렛트 라벨">
+                                                    onclick="reprintPalletLabels('{{ insp.pallet_label_ids }}')" title="파렛트 재출력">
                                                 <i class="bi bi-box-seam"></i> 파렛트
                                             </button>
+                                            {% else %}
+                                            <button type="button" class="btn btn-outline-primary btn-print"
+                                                    onclick="createPalletLabel('{{ insp.id }}')" title="파렛트 라벨 발행">
+                                                <i class="bi bi-box-seam"></i> 파렛트
+                                            </button>
+                                            {% endif %}
                                             <button type="button" class="btn btn-outline-danger btn-print"
                                                     onclick="openLabelCancelModal('{{ insp.id }}', '{{ insp.inbound_transaction.part.part_no }}', {{ insp.label_count }})" title="라벨 취소">
                                                 <i class="bi bi-trash"></i> 취소
@@ -739,7 +746,13 @@ function printSelectedLabels() {
     bootstrap.Modal.getInstance(document.getElementById('reprintModal')).hide();
 }
 
-// ===== 파렛트 라벨 발행 =====
+// ===== 파렛트 라벨 재출력 (이미 발행된 라벨 직접 출력) =====
+function reprintPalletLabels(ids) {
+    if (!ids) { alert('출력할 파렛트 라벨이 없습니다.'); return; }
+    window.open("{% url 'material:pallet_label_print' %}?ids=" + ids, '_blank');
+}
+
+// ===== 파렛트 라벨 발행 (신규) =====
 function createPalletLabel(inspId) {
     // 파렛트 단위 수량 입력 (비워두면 전체 수량 1장)
     var input = prompt(
