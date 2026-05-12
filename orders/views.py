@@ -1058,68 +1058,97 @@ def inventory_export(request):
     current_row = 2
     for part in parts:
         opening_stock = stock_map.get(part.id, 0)
-        temp_stock = opening_stock
 
-        soyo_vals, incom_vals, surplus_vals = [], [], []
+        soyo_vals, incom_vals = [], []
         for dt in dr:
-            dq = demand_map[part.id].get(dt, 0)
-            iq = incoming_map[part.id].get(dt, 0)
-            temp_stock = temp_stock - dq + iq
-            soyo_vals.append(dq)
-            incom_vals.append(iq)
-            surplus_vals.append(temp_stock)
+            soyo_vals.append(demand_map[part.id].get(dt, 0))
+            incom_vals.append(incoming_map[part.id].get(dt, 0))
 
         vendor_name = part.vendor.name if part.vendor else '(미연결)'
-        rows_data = [
-            (soyo_vals,   '소요량',   fill_soyo,     font_soyo,   False),
-            (incom_vals,  '입고예정', fill_incoming, font_incom,  False),
-            (surplus_vals,'과부족',   fill_surplus,  font_surplus, True),
-        ]
 
-        for vals, label, fill, font_normal, is_surplus in rows_data:
-            row_cells = [vendor_name if label == '소요량' else '',
-                         part.part_no if label == '소요량' else '',
-                         part.part_name if label == '소요량' else '',
-                         label]
-            row_cells += vals
-            ws.append(row_cells)
+        # 각 행의 엑셀 행 번호
+        soyo_row    = current_row
+        inc_row     = current_row + 1
+        surplus_row = current_row + 2
 
-            r = ws[current_row]
+        # ── 소요량 행 ──
+        ws.append([vendor_name, part.part_no, part.part_name, '소요량'] + soyo_vals)
+        for ci, cell in enumerate(ws[soyo_row][:4], start=1):
+            cell.border = border_all
+            cell.alignment = center if ci == 4 else left
+            cell.font = font_info
+        for ci, cell in enumerate(ws[soyo_row][4:], start=0):
+            dt = dr[ci]
+            cell.border = border_all
+            cell.alignment = center
+            if dt == today:      cell.fill = fill_today
+            elif dt.weekday()>=5: cell.fill = fill_weekend
+            else:                 cell.fill = fill_soyo
+            if soyo_vals[ci] == 0:
+                cell.value = None
+                cell.font  = Font(size=8, color='BBBBBB')
+            else:
+                cell.font = font_soyo
 
-            # 업체/품번/품명/구분 스타일
-            for ci, cell in enumerate(r[:4], start=1):
-                cell.border    = border_all
-                cell.alignment = center if ci == 4 else left
-                if label == '소요량':
-                    cell.font = font_info
-                else:
-                    cell.font = Font(size=8, color='999999')
+        # ── 입고예정 행 ──
+        ws.append(['', '', '', '입고예정'] + incom_vals)
+        for ci, cell in enumerate(ws[inc_row][:4], start=1):
+            cell.border = border_all
+            cell.alignment = center if ci == 4 else left
+            cell.font = Font(size=8, color='999999')
+        for ci, cell in enumerate(ws[inc_row][4:], start=0):
+            dt = dr[ci]
+            cell.border = border_all
+            cell.alignment = center
+            if dt == today:       cell.fill = fill_today
+            elif dt.weekday()>=5: cell.fill = fill_weekend
+            else:                 cell.fill = fill_incoming
+            if incom_vals[ci] == 0:
+                cell.value = None
+                cell.font  = Font(size=8, color='BBBBBB')
+            else:
+                cell.font = font_incom
 
-            # 날짜 데이터 셀 스타일
-            for ci, cell in enumerate(r[4:], start=0):
-                dt = dr[ci]
-                cell.border    = border_all
-                cell.alignment = center
-                v = vals[ci]
+        # ── 과부족 행: 엑셀 수식 ──
+        ws.append(['', '', '', '과부족'])
+        for ci, cell in enumerate(ws[surplus_row][:4], start=1):
+            cell.border = border_all
+            cell.alignment = center if ci == 4 else left
+            cell.font = Font(size=8, color='999999')
 
-                # 배경: 주말/오늘
-                if dt == today:
-                    cell.fill = fill_today
-                elif dt.weekday() >= 5:
-                    cell.fill = fill_weekend
-                else:
-                    cell.fill = fill
+        for ci in range(len(dr)):
+            col = get_column_letter(5 + ci)
+            cell = ws.cell(row=surplus_row, column=5 + ci)
 
-                # 값이 0이면 빈칸(-)으로
-                if v == 0:
-                    cell.value = None
-                    cell.font  = Font(size=8, color='BBBBBB')
-                elif is_surplus and v < 0:
-                    cell.font = font_neg
-                else:
-                    cell.font = font_normal
+            if ci == 0:
+                # 첫 날짜: 시업재고 - 소요량 + 입고예정
+                formula = f"={opening_stock}-{col}{soyo_row}+{col}{inc_row}"
+            else:
+                prev_col = get_column_letter(5 + ci - 1)
+                # 이전 과부족 - 이번 소요량 + 이번 입고예정
+                formula = f"={prev_col}{surplus_row}-{col}{soyo_row}+{col}{inc_row}"
 
-            current_row += 1
+            cell.value = formula
+            cell.border = border_all
+            cell.alignment = center
+
+            dt = dr[ci]
+            if dt == today:       cell.fill = fill_today
+            elif dt.weekday()>=5: cell.fill = fill_weekend
+            else:                 cell.fill = fill_surplus
+
+            # 조건부 서식 대신 Python 계산값으로 미리 색 결정
+            temp = opening_stock
+            for k in range(ci + 1):
+                temp = temp - soyo_vals[k] + incom_vals[k]
+            if temp < 0:
+                cell.font = font_neg
+            elif temp == 0:
+                cell.font = Font(size=8, color='BBBBBB')
+            else:
+                cell.font = font_surplus
+
+        current_row += 3
 
         # 3행 사이 구분선 (과부족 행 아래에 두꺼운 선)
         thick_bottom = Border(
