@@ -5,10 +5,18 @@
 <div class="container-fluid p-0" style="max-width: 1920px;">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h3 class="fw-bold">소요량 데이터 관리</h3>
-        <a href="{% url 'inventory_list' %}" class="btn btn-sm btn-outline-secondary">
-            <i class="bi bi-arrow-left"></i> 과부족 현황으로 돌아가기
-        </a>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-sm btn-success fw-bold" onclick="openUploadModal()">
+                <i class="bi bi-file-earmark-excel me-1"></i> 엑셀 업로드
+            </button>
+            <a href="{% url 'inventory_list' %}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> 과부족 현황으로 돌아가기
+            </a>
+        </div>
     </div>
+
+    <!-- hidden file input -->
+    <input type="file" id="demandExcelFile" accept=".xlsx,.xls" style="display:none" onchange="previewUpload(this)">
 
     <div class="card shadow-sm border-0 mb-4">
         <div class="card-body bg-light">
@@ -432,7 +440,331 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.classList.add('btn-primary');
     }
 });
+
+// ===================== 엑셀 업로드 프리뷰 =====================
+let previewOkRows = [];
+let previewErrorRows = [];  // {row, date, part_no, part_name, vendor_name, qty, error, part_id?, _skip, _fix_vendor_id, _fix_part_no}
+let previewAllVendors = [];
+
+function openUploadModal() {
+    document.getElementById('demandExcelFile').value = '';
+    document.getElementById('demandExcelFile').click();
+}
+
+function previewUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('demand_file', file);
+    formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+    // 로딩 모달 표시
+    showUploadLoading(true);
+
+    fetch("{% url 'demand_preview_upload' %}", { method: 'POST', body: formData })
+    .then(r => r.json())
+    .then(data => {
+        showUploadLoading(false);
+        if (data.error) { alert('오류: ' + data.error); return; }
+        previewOkRows = data.ok || [];
+        previewErrorRows = (data.errors || []).map(e => ({...e, _skip: false, _fix_vendor_id: null, _fix_part_no: null}));
+        previewAllVendors = data.vendors || [];
+        renderReviewModal();
+        new bootstrap.Modal(document.getElementById('uploadReviewModal')).show();
+    })
+    .catch(err => { showUploadLoading(false); alert('업로드 오류: ' + err); });
+}
+
+function showUploadLoading(show) {
+    let el = document.getElementById('uploadLoadingModal');
+    if (!el) return;
+    if (show) new bootstrap.Modal(el).show();
+    else { const m = bootstrap.Modal.getInstance(el); if (m) m.hide(); }
+}
+
+function renderReviewModal() {
+    const errCount = previewErrorRows.filter(e => !e._skip).length;
+    document.getElementById('reviewSummaryOk').textContent = previewOkRows.length;
+    document.getElementById('reviewSummaryErr').textContent = previewErrorRows.length;
+    document.getElementById('reviewSummarySkipped').textContent = previewErrorRows.filter(e => e._skip).length;
+
+    // 오류 행 테이블
+    const tbody = document.getElementById('reviewErrorTbody');
+    tbody.innerHTML = '';
+
+    if (previewErrorRows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3">오류 항목이 없습니다</td></tr>';
+        return;
+    }
+
+    const vendorOptions = previewAllVendors.map(v =>
+        `<option value="${v.id}">${v.name}</option>`
+    ).join('');
+
+    previewErrorRows.forEach((err, idx) => {
+        const skipped = err._skip;
+        const errLabel = err.error === 'part_not_found'
+            ? '<span class="badge bg-danger">품목없음</span>'
+            : '<span class="badge bg-warning text-dark">거래처미연결</span>';
+
+        let fixHtml = '';
+        if (err.error === 'part_not_found') {
+            fixHtml = `
+                <div class="input-group input-group-sm" style="min-width:200px">
+                    <input type="text" class="form-control form-control-sm part-fix-input"
+                           data-idx="${idx}" placeholder="대체 품번 입력..."
+                           value="${err._fix_part_no || ''}"
+                           ${skipped ? 'disabled' : ''}>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="searchPartFix(${idx})" ${skipped ? 'disabled' : ''}>검색</button>
+                </div>
+                <div id="partFixResult_${idx}" class="mt-1" style="font-size:0.75rem;"></div>`;
+        } else {
+            fixHtml = `
+                <select class="form-select form-select-sm vendor-fix-select" data-idx="${idx}"
+                        onchange="applyVendorFix(${idx}, this.value)" ${skipped ? 'disabled' : ''} style="min-width:160px">
+                    <option value="">-- 거래처 선택 --</option>
+                    ${vendorOptions}
+                </select>`;
+            if (err._fix_vendor_id) {
+                fixHtml += `<div class="text-success mt-1" style="font-size:0.75rem;" id="vendorFixOk_${idx}"><i class="bi bi-check-circle-fill me-1"></i>선택됨</div>`;
+            }
+        }
+
+        const rowClass = skipped ? 'table-secondary text-muted' : (err._fix_vendor_id || err._fix_part_no ? 'table-success' : 'table-warning');
+
+        tbody.innerHTML += `
+            <tr class="${rowClass}" id="errRow_${idx}">
+                <td class="text-center">${err.row}</td>
+                <td>${errLabel}</td>
+                <td class="fw-bold">${err.date}</td>
+                <td><span class="${err.error==='part_not_found'?'text-danger fw-bold':''}">${err.part_no}</span></td>
+                <td class="text-muted" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;">${err.part_name||'-'}</td>
+                <td class="text-end">${Number(err.qty).toLocaleString()}</td>
+                <td>
+                    <div class="d-flex align-items-start gap-2 flex-wrap">
+                        ${fixHtml}
+                        <button type="button" class="btn btn-sm ${skipped ? 'btn-secondary' : 'btn-outline-secondary'}"
+                                onclick="toggleSkip(${idx})" title="${skipped ? '건너뛰기 취소' : '건너뛰기'}">
+                            ${skipped ? '<i class="bi bi-arrow-counterclockwise"></i>' : '<i class="bi bi-skip-forward"></i>'}
+                        </button>
+                    </div>
+                </td>
+            </tr>`;
+    });
+
+    // 거래처 선택 복원
+    previewErrorRows.forEach((err, idx) => {
+        if (err._fix_vendor_id) {
+            const sel = document.querySelector(`.vendor-fix-select[data-idx="${idx}"]`);
+            if (sel) sel.value = err._fix_vendor_id;
+        }
+    });
+
+    updateApplyButton();
+}
+
+function toggleSkip(idx) {
+    previewErrorRows[idx]._skip = !previewErrorRows[idx]._skip;
+    renderReviewModal();
+}
+
+function applyVendorFix(idx, vendorId) {
+    previewErrorRows[idx]._fix_vendor_id = vendorId || null;
+    // 시각적 업데이트만 (전체 렌더 없이)
+    const row = document.getElementById(`errRow_${idx}`);
+    if (row) {
+        if (vendorId) {
+            row.className = 'table-success';
+            let okEl = document.getElementById(`vendorFixOk_${idx}`);
+            if (!okEl) {
+                const div = document.createElement('div');
+                div.className = 'text-success mt-1';
+                div.style.fontSize = '0.75rem';
+                div.id = `vendorFixOk_${idx}`;
+                div.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i>선택됨';
+                document.querySelector(`.vendor-fix-select[data-idx="${idx}"]`).after(div);
+            }
+        } else {
+            row.className = 'table-warning';
+        }
+    }
+    updateApplyButton();
+}
+
+// 대체 품번 검색
+let partSearchCache = {};
+function searchPartFix(idx) {
+    const input = document.querySelector(`.part-fix-input[data-idx="${idx}"]`);
+    const q = input ? input.value.trim() : '';
+    if (!q) return;
+
+    const resultEl = document.getElementById(`partFixResult_${idx}`);
+    resultEl.innerHTML = '<span class="text-muted">검색 중...</span>';
+
+    fetch(`{% url "material:api_part_search" %}?q=${encodeURIComponent(q)}`)
+    .then(r => r.json())
+    .then(data => {
+        const parts = (data.results || []).slice(0, 5);
+        if (!parts.length) {
+            resultEl.innerHTML = '<span class="text-danger">결과 없음</span>';
+            return;
+        }
+        resultEl.innerHTML = parts.map(p =>
+            `<button type="button" class="btn btn-xs btn-outline-primary me-1 mb-1" style="font-size:0.7rem;padding:1px 6px;"
+                     onclick="selectPartFix(${idx}, '${p.part_no.replace(/'/g,"\\'")}', '${p.part_name.replace(/'/g,"\\'")}')">
+                ${p.part_no} <small class="text-muted">${p.part_name}</small>
+             </button>`
+        ).join('');
+    });
+}
+
+function selectPartFix(idx, partNo, partName) {
+    previewErrorRows[idx]._fix_part_no = partNo;
+    const input = document.querySelector(`.part-fix-input[data-idx="${idx}"]`);
+    if (input) input.value = partNo;
+    const resultEl = document.getElementById(`partFixResult_${idx}`);
+    if (resultEl) resultEl.innerHTML = `<span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>${partNo} - ${partName}</span>`;
+    const row = document.getElementById(`errRow_${idx}`);
+    if (row) row.className = 'table-success';
+    updateApplyButton();
+}
+
+function updateApplyButton() {
+    const btn = document.getElementById('applyUploadBtn');
+    if (!btn) return;
+    const total = previewOkRows.length + previewErrorRows.filter(e => !e._skip && (e._fix_vendor_id || e._fix_part_no || e.error === 'no_vendor' && e._fix_vendor_id)).length;
+    // count rows that will be applied
+    let willApply = previewOkRows.length;
+    previewErrorRows.forEach(e => {
+        if (e._skip) return;
+        if (e.error === 'no_vendor' && e._fix_vendor_id) willApply++;
+        if (e.error === 'part_not_found' && e._fix_part_no) willApply++;
+    });
+    btn.textContent = `반영하기 (${willApply}건)`;
+}
+
+function applyUpload() {
+    const rows = [];
+    const vendorLinks = {};
+
+    // OK 행
+    previewOkRows.forEach(r => rows.push({date: r.date, part_no: r.part_no, qty: r.qty}));
+
+    // 오류 행 처리
+    previewErrorRows.forEach(err => {
+        if (err._skip) return;
+        if (err.error === 'no_vendor' && err._fix_vendor_id) {
+            vendorLinks[err.part_id] = err._fix_vendor_id;
+            rows.push({date: err.date, part_no: err.part_no, qty: err.qty});
+        } else if (err.error === 'part_not_found' && err._fix_part_no) {
+            rows.push({date: err.date, part_no: err._fix_part_no, qty: err.qty});
+        }
+    });
+
+    if (rows.length === 0) { alert('반영할 항목이 없습니다.'); return; }
+
+    const btn = document.getElementById('applyUploadBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>처리 중...';
+
+    fetch("{% url 'demand_apply_upload' %}", {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+        body: JSON.stringify({rows, vendor_links: vendorLinks}),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) { alert('오류: ' + data.error); btn.disabled = false; return; }
+        bootstrap.Modal.getInstance(document.getElementById('uploadReviewModal')).hide();
+        alert(`소요량 ${data.count}건 반영 완료${data.skipped ? ` (건너뜀 ${data.skipped}건)` : ''}`);
+        location.reload();
+    })
+    .catch(err => { alert('오류: ' + err); btn.disabled = false; });
+}
 </script>
+
+<!-- 로딩 모달 -->
+<div class="modal fade" id="uploadLoadingModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content">
+            <div class="modal-body text-center py-4">
+                <div class="spinner-border text-success mb-3" style="width:2.5rem;height:2.5rem;"></div>
+                <div class="fw-bold">파일 분석 중...</div>
+                <div class="text-muted small mt-1">품목 및 거래처 정보를 확인하고 있습니다</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 업로드 리뷰 모달 -->
+<div class="modal fade" id="uploadReviewModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white py-2">
+                <h6 class="modal-title"><i class="bi bi-file-earmark-excel me-2"></i>소요량 엑셀 업로드 검토</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-3">
+                <!-- 요약 -->
+                <div class="row g-2 mb-3">
+                    <div class="col">
+                        <div class="border rounded text-center py-2 bg-light">
+                            <div class="text-muted small">정상 항목</div>
+                            <div class="fw-bold text-success fs-5" id="reviewSummaryOk">0</div>
+                        </div>
+                    </div>
+                    <div class="col">
+                        <div class="border rounded text-center py-2 bg-light">
+                            <div class="text-muted small">오류 항목</div>
+                            <div class="fw-bold text-danger fs-5" id="reviewSummaryErr">0</div>
+                        </div>
+                    </div>
+                    <div class="col">
+                        <div class="border rounded text-center py-2 bg-light">
+                            <div class="text-muted small">건너뜀</div>
+                            <div class="fw-bold text-secondary fs-5" id="reviewSummarySkipped">0</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 오류 행 처리 테이블 -->
+                <div id="errorSection">
+                    <div class="fw-bold mb-2 text-danger"><i class="bi bi-exclamation-triangle me-1"></i>오류 항목 처리</div>
+                    <div class="small text-muted mb-2">
+                        <span class="badge bg-danger me-1">품목없음</span>대체 품번 검색으로 연결하거나 건너뛰기
+                        <span class="badge bg-warning text-dark ms-2 me-1">거래처미연결</span>거래처를 선택하거나 건너뛰기
+                    </div>
+                    <div class="table-responsive" style="max-height:380px;overflow-y:auto;">
+                        <table class="table table-sm table-bordered mb-0" style="font-size:0.8rem;">
+                            <thead class="table-dark" style="position:sticky;top:0;z-index:1;">
+                                <tr>
+                                    <th style="width:45px">행</th>
+                                    <th style="width:90px">오류유형</th>
+                                    <th style="width:100px">날짜</th>
+                                    <th style="width:130px">품번</th>
+                                    <th>품명</th>
+                                    <th style="width:80px" class="text-end">소요량</th>
+                                    <th>처리</th>
+                                </tr>
+                            </thead>
+                            <tbody id="reviewErrorTbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer py-2 justify-content-between">
+                <div class="text-muted small"><i class="bi bi-info-circle me-1"></i>정상 항목은 자동 반영 · 오류 항목은 수정 또는 건너뛰기 후 반영</div>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button>
+                    <button type="button" class="btn btn-success btn-sm fw-bold" id="applyUploadBtn" onclick="applyUpload()">
+                        <i class="bi bi-check-lg me-1"></i>반영하기
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <style>
     .header-title { font-size: 1.3rem; font-weight: 700; color: #2c3e50; }

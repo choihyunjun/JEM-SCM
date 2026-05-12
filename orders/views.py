@@ -1195,6 +1195,130 @@ def demand_upload_action(request):
 
     return redirect('inventory_list')
 
+
+@login_required
+@require_POST
+def demand_preview_upload(request):
+    """엑셀 파일 파싱 후 OK/오류 행 프리뷰 JSON 반환"""
+    if not request.user.is_superuser:
+        return JsonResponse({'error': '권한 없음'}, status=403)
+
+    f = request.FILES.get('demand_file')
+    if not f:
+        return JsonResponse({'error': '파일이 없습니다'}, status=400)
+
+    try:
+        import datetime as _dt
+        wb = openpyxl.load_workbook(f, read_only=True, data_only=True)
+        ws = wb.active
+
+        all_parts = {p.part_no: p for p in Part.objects.select_related('vendor').all()}
+        all_vendors = list(Vendor.objects.order_by('name').values('id', 'name'))
+
+        ok_rows, error_rows = [], []
+
+        for i, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+            if not any(cell is not None for cell in row):
+                continue
+
+            raw_date, raw_part_no, raw_qty = row[0], row[1], row[2]
+
+            # 날짜 파싱: 20260508(정수) 또는 date/datetime 객체
+            try:
+                if isinstance(raw_date, (_dt.date, _dt.datetime)):
+                    d = raw_date.date() if isinstance(raw_date, _dt.datetime) else raw_date
+                else:
+                    ds = str(int(raw_date)).strip()
+                    d = _dt.date(int(ds[:4]), int(ds[4:6]), int(ds[6:8]))
+            except Exception:
+                continue
+
+            part_no = str(raw_part_no).strip() if raw_part_no else ''
+            if not part_no:
+                continue
+            qty = int(raw_qty) if raw_qty is not None else 0
+
+            part = all_parts.get(part_no)
+            if part is None:
+                error_rows.append({
+                    'row': i, 'date': d.isoformat(), 'part_no': part_no,
+                    'part_name': '', 'vendor_name': '', 'qty': qty,
+                    'error': 'part_not_found',
+                })
+            elif part.vendor is None:
+                error_rows.append({
+                    'row': i, 'date': d.isoformat(), 'part_no': part_no,
+                    'part_name': part.part_name, 'vendor_name': '', 'qty': qty,
+                    'error': 'no_vendor', 'part_id': part.id,
+                })
+            else:
+                ok_rows.append({
+                    'date': d.isoformat(), 'part_no': part_no,
+                    'part_name': part.part_name, 'vendor_name': part.vendor.name,
+                    'qty': qty,
+                })
+
+        return JsonResponse({'ok': ok_rows, 'errors': error_rows, 'vendors': all_vendors})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+@require_POST
+def demand_apply_upload(request):
+    """프리뷰 검토 후 소요량 일괄 반영 (덮어쓰기)"""
+    if not request.user.is_superuser:
+        return JsonResponse({'error': '권한 없음'}, status=403)
+
+    import json as _json
+    import datetime as _dt
+
+    try:
+        data = _json.loads(request.body)
+    except Exception:
+        return JsonResponse({'error': '잘못된 요청'}, status=400)
+
+    rows = data.get('rows', [])
+    vendor_links = data.get('vendor_links', {})  # {part_id: vendor_id} 거래처 연결 요청
+
+    all_parts = {p.part_no: p for p in Part.objects.all()}
+    count, skipped = 0, 0
+
+    with transaction.atomic():
+        # 거래처 연결 먼저 처리
+        for part_id_str, vendor_id in vendor_links.items():
+            try:
+                Part.objects.filter(id=int(part_id_str)).update(vendor_id=int(vendor_id))
+            except Exception:
+                pass
+        # 연결 후 캐시 갱신
+        if vendor_links:
+            all_parts = {p.part_no: p for p in Part.objects.all()}
+
+        for r in rows:
+            pn = str(r.get('part_no', '')).strip()
+            date_str = r.get('date', '')
+            qty = int(r.get('qty', 0))
+
+            part = all_parts.get(pn)
+            if not part:
+                skipped += 1
+                continue
+            try:
+                d = _dt.date.fromisoformat(date_str)
+            except Exception:
+                skipped += 1
+                continue
+
+            Demand.objects.update_or_create(
+                part=part, due_date=d,
+                defaults={'quantity': qty},
+            )
+            count += 1
+
+    return JsonResponse({'count': count, 'skipped': skipped})
+
+
 @login_required
 @require_POST
 def demand_update_ajax(request):
