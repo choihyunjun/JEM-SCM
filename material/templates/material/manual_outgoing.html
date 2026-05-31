@@ -88,14 +88,11 @@
                         <input type="hidden" id="selectedPartName">
                     </div>
                     <div class="col-6 col-lg-2">
-                        <label class="small fw-bold mb-1 text-danger">LOT 번호</label>
-                        <div class="input-group">
-                            <input type="text" id="inputLotNo" class="form-control" placeholder="YYYYMMDD">
-                            <button class="btn btn-outline-secondary" type="button" id="btnCalendar" title="달력에서 선택">
-                                <i class="bi bi-calendar3"></i>
-                            </button>
-                            <input type="date" id="hiddenDatePicker" class="d-none">
-                        </div>
+                        <label class="small fw-bold mb-1 text-danger">LOT 선택</label>
+                        <select id="selLot" class="form-select" disabled>
+                            <option value="">:: 창고/품목 선택 후 표시 ::</option>
+                        </select>
+                        <small id="lotInfo" class="text-muted" style="font-size:0.75rem;"></small>
                     </div>
                     <div class="col-6 col-lg-1">
                         <label class="small fw-bold mb-1 text-danger">수량</label>
@@ -435,12 +432,10 @@
             }
         }
 
-        setTodayAsDefault();
-        document.getElementById('inputLotNo').addEventListener('input', formatLotInput);
-        document.getElementById('btnCalendar').addEventListener('click', openDatePicker);
-        document.getElementById('hiddenDatePicker').addEventListener('change', function() {
-            if (this.value) document.getElementById('inputLotNo').value = this.value;
+        document.getElementById('selWarehouse').addEventListener('change', function() {
+            loadAvailableLots();
         });
+        document.getElementById('selLot').addEventListener('change', onLotSelect);
     });
 
     // === 거래처 모달 ===
@@ -474,6 +469,101 @@
                 tr[i].style.display = show ? "" : "none";
             }
         }
+    }
+
+    // === LOT 드롭다운 로드 (FIFO 순) ===
+    async function loadAvailableLots() {
+        const partNo = document.getElementById('inputPart').value.trim();
+        const whSel = document.getElementById('selWarehouse');
+        const warehouseCode = whSel.selectedIndex > 0 ? whSel.options[whSel.selectedIndex].dataset.code : '';
+        const lotSelect = document.getElementById('selLot');
+        const lotInfo = document.getElementById('lotInfo');
+
+        lotSelect.innerHTML = '<option value="">:: 창고/품목 선택 후 표시 ::</option>';
+        lotSelect.disabled = true;
+        lotInfo.textContent = '';
+
+        if (!partNo || !warehouseCode) return;
+
+        try {
+            const url = "{% url 'material:api_get_available_lots' %}?part_no=" + encodeURIComponent(partNo) + "&warehouse_code=" + encodeURIComponent(warehouseCode);
+            const res = await fetch(url);
+            const data = await res.json();
+
+            if (!data.success) {
+                lotInfo.textContent = data.error || 'LOT 정보를 가져올 수 없습니다.';
+                lotInfo.style.color = '#dc3545';
+                return;
+            }
+
+            if (data.lots.length === 0) {
+                lotSelect.innerHTML = '<option value="">:: 해당 창고에 재고 없음 ::</option>';
+                lotInfo.textContent = '출고 가능한 재고가 없습니다.';
+                lotInfo.style.color = '#dc3545';
+                return;
+            }
+
+            const unit = data.unit || 'EA';
+            lotSelect.innerHTML = '<option value="">:: LOT 선택 ::</option>';
+            data.lots.forEach((lot, index) => {
+                const option = document.createElement('option');
+                option.value = lot.stock_id;
+                option.dataset.quantity = lot.quantity;
+                option.dataset.lotNo = lot.lot_no || '';
+                option.dataset.daysOld = lot.days_old;
+
+                let displayText;
+                if (lot.is_null_lot) {
+                    displayText = `ERP 재고 (재고: ${lot.quantity.toLocaleString()} ${unit}) ★ 우선 소진`;
+                } else {
+                    displayText = `${lot.lot_no} (재고: ${lot.quantity.toLocaleString()} ${unit}, ${lot.days_old}일 경과)`;
+                    if (index === 0 || (index === 1 && data.lots[0].is_null_lot)) {
+                        displayText += ' ⚠️ FIFO 추천';
+                    }
+                }
+                option.textContent = displayText;
+                lotSelect.appendChild(option);
+            });
+
+            lotSelect.disabled = false;
+            lotSelect.dataset.unit = unit;
+            lotInfo.textContent = `총 ${data.lots.length}개 LOT 사용 가능`;
+            lotInfo.style.color = '#198754';
+
+        } catch (e) {
+            lotInfo.textContent = 'LOT 정보 조회 실패';
+            lotInfo.style.color = '#dc3545';
+            console.error(e);
+        }
+    }
+
+    function onLotSelect() {
+        const lotSelect = document.getElementById('selLot');
+        const selectedOption = lotSelect.options[lotSelect.selectedIndex];
+        const qtyInput = document.getElementById('inputQty');
+
+        if (selectedOption && selectedOption.value) {
+            const maxQty = parseInt(selectedOption.dataset.quantity) || 0;
+            qtyInput.value = maxQty;
+            qtyInput.max = maxQty;
+        } else {
+            qtyInput.value = '';
+            qtyInput.removeAttribute('max');
+        }
+    }
+
+    function autoSelectLotByDate(lotDateStr, qty) {
+        const lotSelect = document.getElementById('selLot');
+        for (let i = 1; i < lotSelect.options.length; i++) {
+            if (lotSelect.options[i].dataset.lotNo === lotDateStr) {
+                lotSelect.selectedIndex = i;
+                onLotSelect();
+                if (qty) document.getElementById('inputQty').value = qty;
+                return true;
+            }
+        }
+        alert(`QR의 LOT(${lotDateStr})가 해당 창고에 없습니다. LOT를 직접 선택해주세요.`);
+        return false;
     }
 
     // === QR 스캔 ===
@@ -538,8 +628,7 @@
             });
     }
 
-    function applyTag(partNo, partName, qty, lotNo) {
-        // datalist에서 part_id 찾기
+    async function applyTag(partNo, partName, qty, lotNo) {
         var options = document.getElementById('partOptions').options;
         var partId = '';
         for (var i = 0; i < options.length; i++) {
@@ -558,10 +647,15 @@
         document.getElementById('selectedPartId').value = partId;
         document.getElementById('selectedPartName').value = partName;
         document.getElementById('partNameDisplay').innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> ${partName}`;
-        document.getElementById('inputQty').value = qty;
-        if (lotNo) document.getElementById('inputLotNo').value = lotNo;
 
         if (qrScanModal) qrScanModal.hide();
+
+        await loadAvailableLots();
+        if (lotNo) {
+            autoSelectLotByDate(lotNo, qty);
+        } else {
+            document.getElementById('inputQty').value = qty;
+        }
     }
 
     // === 품목 검색 및 매핑 ===
@@ -584,6 +678,7 @@
             document.getElementById('selectedPartName').value = '';
             document.getElementById('partNameDisplay').innerText = '';
         }
+        loadAvailableLots();
     });
 
     // === 리스트 추가/삭제 ===
@@ -591,7 +686,7 @@
         var partId = document.getElementById('selectedPartId').value;
         var partNo = document.getElementById('inputPart').value;
         var partName = document.getElementById('selectedPartName').value;
-        var lotNo = document.getElementById('inputLotNo').value;
+        var lotSel = document.getElementById('selLot');
         var qty = document.getElementById('inputQty').value;
         var remark = document.getElementById('inputRemark').value;
 
@@ -600,9 +695,29 @@
             document.getElementById('inputPart').focus();
             return;
         }
+        if (!document.getElementById('selWarehouse').value) {
+            alert("출고 창고를 선택해주세요.");
+            document.getElementById('selWarehouse').focus();
+            return;
+        }
+        if (!lotSel.value) {
+            alert("LOT를 선택해주세요.");
+            lotSel.focus();
+            return;
+        }
         if (!qty || parseInt(qty) <= 0) {
             alert("수량을 1개 이상 입력해주세요.");
             document.getElementById('inputQty').focus();
+            return;
+        }
+
+        var selectedOption = lotSel.options[lotSel.selectedIndex];
+        var lotNo = selectedOption.dataset.lotNo || '';
+        var maxQty = parseInt(selectedOption.dataset.quantity) || 0;
+        var unit = lotSel.dataset.unit || 'EA';
+
+        if (maxQty > 0 && parseInt(qty) > maxQty) {
+            alert(`선택한 LOT의 재고(${maxQty.toLocaleString()} ${unit})를 초과할 수 없습니다.`);
             return;
         }
 
@@ -611,7 +726,7 @@
 
         var tbody = document.getElementById('listBody');
         var newRow = document.createElement('tr');
-        var lotDisplay = lotNo ? lotNo : '-';
+        var lotDisplay = lotNo ? lotNo : 'ERP 재고';
 
         newRow.innerHTML = `
             <td class="fw-bold text-danger">
@@ -643,8 +758,11 @@
         document.getElementById('selectedPartId').value = '';
         document.getElementById('selectedPartName').value = '';
         document.getElementById('partNameDisplay').innerText = '';
-        setTodayAsDefault();
+        lotSel.innerHTML = '<option value="">:: 창고/품목 선택 후 표시 ::</option>';
+        lotSel.disabled = true;
+        document.getElementById('lotInfo').textContent = '';
         document.getElementById('inputQty').value = '';
+        document.getElementById('inputQty').removeAttribute('max');
         document.getElementById('inputRemark').value = '';
         document.getElementById('inputPart').focus();
         updateCount();
@@ -673,40 +791,6 @@
         var wh = document.querySelector('select[name="warehouse_id"]').value;
         if (!wh) { alert("출고 창고를 선택해주세요."); return false; }
         return confirm("총 " + count + "건의 자재를 출고 처리하시겠습니까?\n(재고가 차감됩니다)");
-    }
-
-    // === LOT 입력 ===
-    function setTodayAsDefault() {
-        const today = new Date();
-        const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
-        document.getElementById('inputLotNo').value = todayStr;
-        document.getElementById('hiddenDatePicker').value = todayStr;
-    }
-
-    function formatLotInput(e) {
-        let value = e.target.value.replace(/[^\d-]/g, '');
-        if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
-        const digitsOnly = value.replace(/-/g, '');
-        if (digitsOnly.length === 8) {
-            const formatted = `${digitsOnly.substring(0,4)}-${digitsOnly.substring(4,6)}-${digitsOnly.substring(6,8)}`;
-            const testDate = new Date(formatted);
-            if (!isNaN(testDate.getTime())) {
-                e.target.value = formatted;
-                document.getElementById('hiddenDatePicker').value = formatted;
-            } else {
-                alert('올바른 날짜 형식이 아닙니다.');
-                e.target.value = '';
-            }
-        } else {
-            e.target.value = value;
-        }
-    }
-
-    function openDatePicker() {
-        const hiddenPicker = document.getElementById('hiddenDatePicker');
-        const currentValue = document.getElementById('inputLotNo').value;
-        if (/^\d{4}-\d{2}-\d{2}$/.test(currentValue)) hiddenPicker.value = currentValue;
-        hiddenPicker.click();
     }
 
     // === 출고 내역 모달 ===
