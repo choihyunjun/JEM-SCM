@@ -514,14 +514,18 @@
                 option.dataset.lotNo = lot.lot_no || '';
                 option.dataset.daysOld = lot.days_old;
 
+                // FIFO OK: NULL LOT 또는 가장 오래된 날짜 LOT
+                const isFifo = lot.is_null_lot
+                    || index === 0
+                    || (index === 1 && data.lots[0].is_null_lot);
+                option.dataset.isFifo = isFifo ? '1' : '0';
+
                 let displayText;
                 if (lot.is_null_lot) {
                     displayText = `ERP 재고 (재고: ${lot.quantity.toLocaleString()} ${unit}) ★ 우선 소진`;
                 } else {
                     displayText = `${lot.lot_no} (재고: ${lot.quantity.toLocaleString()} ${unit}, ${lot.days_old}일 경과)`;
-                    if (index === 0 || (index === 1 && data.lots[0].is_null_lot)) {
-                        displayText += ' ⚠️ FIFO 추천';
-                    }
+                    if (isFifo) displayText += ' ⚠️ FIFO 추천';
                 }
                 option.textContent = displayText;
                 lotSelect.appendChild(option);
@@ -531,6 +535,7 @@
             lotSelect.dataset.unit = unit;
             lotInfo.textContent = `총 ${data.lots.length}개 LOT 사용 가능`;
             lotInfo.style.color = '#198754';
+            lotInfo.style.fontWeight = '';
 
         } catch (e) {
             lotInfo.textContent = 'LOT 정보 조회 실패';
@@ -543,11 +548,23 @@
         const lotSelect = document.getElementById('selLot');
         const selectedOption = lotSelect.options[lotSelect.selectedIndex];
         const qtyInput = document.getElementById('inputQty');
+        const lotInfo = document.getElementById('lotInfo');
 
         if (selectedOption && selectedOption.value) {
             const maxQty = parseInt(selectedOption.dataset.quantity) || 0;
             qtyInput.value = maxQty;
             qtyInput.max = maxQty;
+
+            if (selectedOption.dataset.isFifo === '0') {
+                lotInfo.textContent = '⚠️ FIFO 위반: 더 오래된 LOT가 있습니다!';
+                lotInfo.style.color = '#dc3545';
+                lotInfo.style.fontWeight = 'bold';
+            } else {
+                const totalLots = lotSelect.options.length - 1;
+                lotInfo.textContent = `총 ${totalLots}개 LOT 사용 가능`;
+                lotInfo.style.color = '#198754';
+                lotInfo.style.fontWeight = '';
+            }
         } else {
             qtyInput.value = '';
             qtyInput.removeAttribute('max');
@@ -721,6 +738,13 @@
         if (maxQty > 0 && parseInt(qty) > maxQty) {
             alert(`선택한 LOT의 재고(${maxQty.toLocaleString()} ${unit})를 초과할 수 없습니다.`);
             return;
+        }
+
+        if (selectedOption.dataset.isFifo === '0') {
+            var lotDisplay2 = lotNo ? lotNo : 'ERP 재고';
+            if (!confirm(`⚠️ FIFO 위반\n\n더 오래된 LOT가 남아 있습니다.\n선택한 LOT(${lotDisplay2})로 출고하시겠습니까?`)) {
+                return;
+            }
         }
 
         var emptyRow = document.getElementById('emptyRow');
