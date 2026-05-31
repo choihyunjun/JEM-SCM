@@ -696,8 +696,15 @@
             document.getElementById('selectedPartId').value = '';
             document.getElementById('selectedPartName').value = '';
             document.getElementById('partNameDisplay').innerText = '';
+            // 품목 미선택 시 LOT 드롭다운 초기화
+            document.getElementById('selLot').innerHTML = '<option value="">:: 창고/품목 선택 후 표시 ::</option>';
+            document.getElementById('selLot').disabled = true;
+            document.getElementById('lotInfo').textContent = '';
+            document.getElementById('inputQty').removeAttribute('max');
+        } else {
+            // 유효한 품목 선택 시에만 LOT 로드
+            loadAvailableLots();
         }
-        loadAvailableLots();
     });
 
     // === 리스트 추가/삭제 ===
