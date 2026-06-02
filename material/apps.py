@@ -60,11 +60,10 @@ class MaterialConfig(AppConfig):
                         from material.erp_api import (
                             sync_erp_incoming, sync_erp_issue, sync_erp_receipt,
                             sync_erp_stock_transfer, sync_erp_adjustments, sync_erp_outgoing,
-                            sync_stock_from_erp,
                         )
                         from django.utils import timezone
 
-                        # ── 1단계: 이력 동기화 (6개 트랜잭션, 재고 미반영) ──
+                        # 이력 동기화 (입고 sync는 재고도 직접 반영)
                         sync_jobs = [
                             ('incoming', '입고', sync_erp_incoming),
                             ('issue', '생산출고', sync_erp_issue),
@@ -86,22 +85,6 @@ class MaterialConfig(AppConfig):
                             }, timeout=86400)
                             if synced > 0:
                                 logger.info(f'ERP {label} 자동 동기화: 신규 {synced}건, 건너뜀 {skipped}건, 오류 {errors}건')
-
-                        # ── 2단계: 재고 동기화 (ERP 현재고로 SCM 총량 보정) ──
-                        stock_result = sync_stock_from_erp()
-                        if stock_result.get('adjusted', 0) > 0:
-                            logger.info(
-                                f'ERP 재고동기화: 조정 {stock_result["adjusted"]}건 '
-                                f'(증가 {stock_result["increased"]}, 감소 {stock_result["decreased"]})'
-                            )
-                        cache.set('erp_stock_sync_result', {
-                            'adjusted': stock_result.get('adjusted', 0),
-                            'increased': stock_result.get('increased', 0),
-                            'decreased': stock_result.get('decreased', 0),
-                            'error': stock_result.get('error'),
-                            'finished_at': timezone.now().strftime('%Y-%m-%d %H:%M'),
-                            'auto': True,
-                        }, timeout=86400)
 
                     except Exception as e:
                         logger.error(f'ERP 자동 동기화 오류: {e}')

@@ -408,14 +408,18 @@ def stock_list(request):
     """
     [WMS] 자재 재고 현황 조회
     """
+    from django.core.cache import cache as _cache
+
     # 1. 파라미터 수신
     search_triggered = request.GET.get('search_triggered', '')
     q = request.GET.get('q', '')
     part_group = request.GET.get('part_group', '')
     warehouse_id = request.GET.get('warehouse_id', '')
     view_mode = request.GET.get('view_mode', 'detail')
+    show_erp = request.GET.get('show_erp', '')
 
     stock_data = []
+    erp_map = {}
 
     # 2. 검색 버튼이 눌렸을 때만 DB 조회 실행
     if search_triggered == 'yes':
@@ -454,7 +458,38 @@ def stock_list(request):
                 'part__vendor__name'
             ).annotate(total_qty=Sum('quantity')).order_by('warehouse__code', 'part__part_no')
 
-    # 4. 필터용 데이터
+        # 4. ERP 총량 비교 (show_erp=1 일 때, 30분 캐시)
+        if show_erp:
+            from datetime import datetime as _dt
+            cache_key = f'stock_list_erp_map_{_dt.now().year}'
+            erp_map = _cache.get(cache_key)
+            if erp_map is None:
+                try:
+                    from material.erp_api import fetch_erp_stock
+                    ok, erp_items, _ = fetch_erp_stock(year=str(_dt.now().year), total_fg='0')
+                    if ok and erp_items:
+                        erp_map = {}
+                        for ei in erp_items:
+                            qty = int(ei.get('invQt1', 0) or 0)
+                            if qty > 0:
+                                key = f"{ei.get('whCd', '')}|{ei.get('itemCd', '')}"
+                                erp_map[key] = erp_map.get(key, 0) + qty
+                        _cache.set(cache_key, erp_map, timeout=1800)
+                    else:
+                        erp_map = {}
+                except Exception:
+                    erp_map = {}
+
+            # stock_data에 erp_qty, erp_diff 필드 추가
+            stock_data = list(stock_data)
+            for item in stock_data:
+                wh_code = item.get('warehouse__code', '')
+                part_no = item.get('part__part_no', '')
+                erp_qty = erp_map.get(f'{wh_code}|{part_no}', 0)
+                item['erp_qty'] = erp_qty
+                item['erp_diff'] = item['total_qty'] - erp_qty
+
+    # 5. 필터용 데이터
     part_groups = Part.objects.values_list('part_group', flat=True).distinct().order_by('part_group')
     warehouses = Warehouse.objects.all().order_by('code')
 
@@ -467,6 +502,8 @@ def stock_list(request):
         'selected_wh': warehouse_id,
         'view_mode': view_mode,
         'search_triggered': search_triggered,
+        'show_erp': show_erp,
+        'erp_map': erp_map,
     }
     return render(request, 'material/stock_list.html', context)
 
@@ -7814,21 +7851,9 @@ def erp_stock_manage(request):
 
     action = request.POST.get('action', '') if request.method == 'POST' else ''
 
-    # ── ERP 재고 동기화 (백그라운드 실행) ──
+    # ── ERP 재고 동기화 (비활성화: sync_erp_incoming이 직접 재고 반영) ──
     if action == 'sync_stock':
-        if cache.get('erp_stock_sync_running'):
-            return redirect('material:erp_stock_manage')
-        import threading
-        def _run_sync():
-            import django
-            django.db.connections.close_all()
-            try:
-                from material.erp_api import sync_stock_from_erp
-                sync_stock_from_erp()
-            finally:
-                cache.delete('erp_stock_sync_running')
-        cache.set('erp_stock_sync_running', True, timeout=600)
-        threading.Thread(target=_run_sync, daemon=True).start()
+        messages.warning(request, '재고 총량 동기화는 비활성화되었습니다. 수불 동기화(입고)를 실행하면 재고가 자동 반영됩니다.')
         return redirect('material:erp_stock_manage')
 
     # ── 수불 동기화 (입고/출고/생산출고/생산입고/재고이동) ──

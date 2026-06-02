@@ -684,7 +684,17 @@ def sync_erp_incoming(date_from=None, date_to=None):
 
                 detail_remark = detail.get('remarkDc', '') or ''
 
-                result_stock = 0  # 재고 미반영 (sync_stock_from_erp에서 일괄 처리)
+                # 재고 직접 반영: lot_date가 있으면 해당 LOT, 없으면 NULL LOT에 증가
+                from material.models import MaterialStock as _MS
+                from django.db.models import F as _F
+                with transaction.atomic():
+                    stock_obj, _ = _MS.objects.get_or_create(
+                        warehouse=warehouse, part=part, lot_no=lot_date,
+                        defaults={'quantity': 0}
+                    )
+                    _MS.objects.filter(pk=stock_obj.pk).update(
+                        quantity=_F('quantity') + qty
+                    )
 
                 # MaterialTransaction 생성
                 _create_trx(
@@ -694,7 +704,7 @@ def sync_erp_incoming(date_from=None, date_to=None):
                     lot_no=lot_date,
                     quantity=qty,
                     warehouse_to=warehouse,
-                    result_stock=result_stock,
+                    result_stock=0,
                     vendor=vendor,
                     remark=f'ERP입고({vendor_name}) {detail_remark}'.strip(),
                     erp_incoming_no=trx_key,
@@ -740,9 +750,19 @@ def sync_erp_incoming(date_from=None, date_to=None):
             # erp_incoming_no 형식: 'RV2602000222-1' → 입고번호는 앞부분
             rcv_nb_part = trx.erp_incoming_no.rsplit('-', 1)[0] if '-' in trx.erp_incoming_no else trx.erp_incoming_no
             if rcv_nb_part not in erp_rcv_nbs_in_period:
-                # ERP에서 삭제된 건 → 이력만 삭제 (재고는 sync_stock_from_erp가 처리)
+                # ERP에서 삭제된 건 → 재고 역방향 + 이력 삭제
                 try:
                     logger.info(f'ERP 삭제 감지: {trx.transaction_no} (ERP:{trx.erp_incoming_no}) 삭제')
+                    if trx.quantity > 0 and trx.warehouse_to and trx.part:
+                        from material.models import MaterialStock as _MS
+                        from django.db.models import F as _F
+                        stock_obj = _MS.objects.filter(
+                            warehouse=trx.warehouse_to, part=trx.part, lot_no=trx.lot_no
+                        ).first()
+                        if stock_obj:
+                            _MS.objects.filter(pk=stock_obj.pk).update(
+                                quantity=_F('quantity') - trx.quantity
+                            )
                     trx.delete()
                     deleted += 1
                 except Exception as e:
