@@ -2040,7 +2040,7 @@ def sync_erp_issue(date_from=None, date_to=None):
                     lot_no=None,
                     quantity=-qty,
                     warehouse_from=warehouse,
-                    result_stock=result_stock,
+                    result_stock=0,
                     remark=f'ERP생산출고({fwh_nm}) {detail_remark}'.strip(),
                     erp_incoming_no=trx_key,
                     erp_sync_status='SUCCESS',
@@ -2048,6 +2048,18 @@ def sync_erp_issue(date_from=None, date_to=None):
                 )
                 existing_nbs.add(trx_key)
                 detail_synced = True
+
+                # FIFO: ERP 생산출고 수량만큼 현품표 stock_reflected 마킹
+                from .models import ProcessTag as _PT
+                remaining = qty
+                for tag in _PT.objects.filter(
+                    part_no=item_cd, status='USED', stock_reflected=False
+                ).order_by('used_at'):
+                    if remaining <= 0:
+                        break
+                    tag.stock_reflected = True
+                    tag.save(update_fields=['stock_reflected'])
+                    remaining -= tag.quantity
 
             if detail_synced:
                 synced += 1
