@@ -827,11 +827,27 @@
                         <small class="text-muted">기본: 현장 투입(3000)</small>
                     </div>
                     <div class="input-group">
-                        <span class="input-group-text" id="scanIconBtn" style="cursor:pointer;"><i class="bi bi-upc-scan"></i></span>
+                        <span class="input-group-text" id="scanIconBtn" style="cursor:pointer;" title="클릭: 카메라 QR 스캔 / 더블클릭: 오버라이드"><i class="bi bi-upc-scan"></i></span>
                         <input type="text" id="scanInput" class="form-control" placeholder="바코드를 스캔하세요...">
                         <button class="btn btn-primary" onclick="doScan()">
                             <i class="bi bi-check-lg me-1"></i>투입
                         </button>
+                    </div>
+                    <!-- 카메라 QR 스캔 영역 -->
+                    <div id="cameraSection" style="display:none; margin-top:10px;">
+                        <div style="position:relative; width:100%; max-width:400px; margin:0 auto; border-radius:8px; overflow:hidden; background:#000;">
+                            <video id="qrVideo" style="width:100%; display:block;" autoplay playsinline muted></video>
+                            <canvas id="qrCanvas" style="display:none;"></canvas>
+                            <div style="position:absolute; top:0; left:0; right:0; bottom:0; pointer-events:none;">
+                                <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:200px; height:200px; border:3px solid rgba(59,130,246,0.8); border-radius:8px; box-shadow:0 0 0 2000px rgba(0,0,0,0.3);"></div>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mt-2">
+                            <small class="text-muted"><i class="bi bi-camera me-1"></i>QR코드를 카메라에 비춰주세요</small>
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="stopCameraScan()">
+                                <i class="bi bi-x-circle me-1"></i>카메라 닫기
+                            </button>
+                        </div>
                     </div>
                     <div id="scanResult" style="display:none; font-size:0.85rem; padding:8px 12px; border-radius:6px; margin-top:8px;"></div>
                 </div>
@@ -1290,15 +1306,130 @@ function loadScanHistory(partNo) {
     });
 }
 
-// === 바코드 아이콘 더블클릭 → 오버라이드 입력 토글 ===
+// === 카메라 QR 스캔 기능 ===
+let _qrStream = null;
+let _qrScanTimer = null;
+let _qrLastCode = '';
+let _qrLastTime = 0;
+
+function startCameraScan() {
+    const section = document.getElementById('cameraSection');
+    const video = document.getElementById('qrVideo');
+    section.style.display = 'block';
+
+    const constraints = {
+        video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+        }
+    };
+
+    navigator.mediaDevices.getUserMedia(constraints)
+        .then(function(stream) {
+            _qrStream = stream;
+            video.srcObject = stream;
+            video.play();
+            _qrLastCode = '';
+            _qrScanTimer = setInterval(_qrScanFrame, 200);
+        })
+        .catch(function(err) {
+            section.style.display = 'none';
+            if (err.name === 'NotAllowedError') {
+                alert('카메라 권한이 거부되었습니다.\n브라우저 설정에서 카메라 접근을 허용해주세요.');
+            } else if (err.name === 'NotFoundError') {
+                alert('카메라를 찾을 수 없습니다.\n하드웨어 바코드 스캐너를 사용하거나 카메라가 있는 기기에서 접속해주세요.');
+            } else {
+                alert('카메라를 시작할 수 없습니다: ' + err.message);
+            }
+        });
+}
+
+function stopCameraScan() {
+    if (_qrScanTimer) { clearInterval(_qrScanTimer); _qrScanTimer = null; }
+    if (_qrStream) {
+        _qrStream.getTracks().forEach(t => t.stop());
+        _qrStream = null;
+    }
+    const video = document.getElementById('qrVideo');
+    video.srcObject = null;
+    document.getElementById('cameraSection').style.display = 'none';
+}
+
+function _qrScanFrame() {
+    const video = document.getElementById('qrVideo');
+    const canvas = document.getElementById('qrCanvas');
+    if (!video || video.readyState < 2) return;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0);
+
+    // BarcodeDetector API (Chrome 83+, Edge 83+, Android)
+    if ('BarcodeDetector' in window) {
+        const detector = new BarcodeDetector({ formats: ['qr_code', 'code_128', 'code_39', 'ean_13', 'ean_8', 'data_matrix', 'pdf417'] });
+        detector.detect(canvas).then(function(codes) {
+            if (codes.length > 0) {
+                const code = codes[0].rawValue;
+                const now = Date.now();
+                // 같은 코드 1.5초 내 중복 방지
+                if (code === _qrLastCode && now - _qrLastTime < 1500) return;
+                _qrLastCode = code;
+                _qrLastTime = now;
+                _onQrDetected(code);
+            }
+        }).catch(function() {});
+    }
+}
+
+function _onQrDetected(code) {
+    stopCameraScan();
+    const scanInput = document.getElementById('scanInput');
+    scanInput.value = code;
+    // 짧은 시각 피드백 후 자동 투입
+    const scanResult = document.getElementById('scanResult');
+    scanResult.style.display = 'block';
+    scanResult.style.background = '#dbeafe';
+    scanResult.textContent = '📷 QR 스캔: ' + code;
+    setTimeout(function() { doScan(); }, 300);
+}
+
+// 모달 닫힐 때 카메라 정리
+document.getElementById('scanHistoryModal').addEventListener('hidden.bs.modal', function() {
+    stopCameraScan();
+});
+
+// === 바코드 아이콘 클릭 → 카메라 QR 스캔 / 더블클릭 → 오버라이드 입력 토글 ===
 (function() {
     const icon = document.getElementById('scanIconBtn');
     const section = document.getElementById('overrideSection');
-    if (icon && section) {
-        icon.addEventListener('dblclick', function() {
+    if (!icon) return;
+
+    let clickTimer = null;
+
+    icon.addEventListener('click', function() {
+        // 더블클릭 판정 대기 (250ms)
+        if (clickTimer) return; // 더블클릭 처리 중
+        clickTimer = setTimeout(function() {
+            clickTimer = null;
+            // 싱글 클릭 → 카메라 스캔
+            const cameraSection = document.getElementById('cameraSection');
+            if (cameraSection.style.display === 'none' || cameraSection.style.display === '') {
+                startCameraScan();
+            } else {
+                stopCameraScan();
+            }
+        }, 250);
+    });
+
+    icon.addEventListener('dblclick', function() {
+        // 더블클릭 → 오버라이드 토글 (싱글클릭 취소)
+        if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
+        if (section) {
             section.style.display = section.style.display === 'none' ? 'block' : 'none';
-        });
-    }
+        }
+    });
 })();
 
 // === 새로고침 카드 3회 클릭 → 감사모드 모달 ===
