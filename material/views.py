@@ -5471,9 +5471,11 @@ def bom_register_demand(request):
             if not child_part_no or required_qty <= 0:
                 continue
 
-            # 거래처 필터 적용: Part 마스터의 실제 vendor.name 기준으로 매칭
+            # 거래처 필터 적용: Part.vendor 우선, null이면 BOMItem.vendor_name fallback
             if selected_vendors is not None:
                 actual_vendor_name = part_vendor_cache.get(child_part_no, '')
+                if not actual_vendor_name:
+                    actual_vendor_name = item.get('vendor_name', '') or ''
                 if not actual_vendor_name or actual_vendor_name not in selected_vendors:
                     continue
 
