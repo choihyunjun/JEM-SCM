@@ -111,7 +111,7 @@ def role_has_menu_perm(user, permission_field: str) -> bool:
         'can_view_orders': 'can_scm_order_view',
         'can_register_orders': 'can_scm_order_edit',
         'can_view_inventory': 'can_scm_inventory_view',
-        'can_manage_incoming': 'can_scm_incoming_view',
+        'can_manage_incoming': 'can_scm_incoming_edit',
         'can_manage_parts': 'can_scm_admin',
         'can_view_reports': 'can_scm_report',
         'can_access_scm_admin': 'can_scm_admin',
@@ -230,14 +230,7 @@ def login_success(request):
 def order_list(request):
     user = request.user
 
-    # 협력업체 사용자 판별 (2가지 경로)
-    user_vendor = Vendor.objects.filter(user=user).first()
-    if not user_vendor and not user.is_superuser:
-        try:
-            if hasattr(user, 'profile') and user.profile.org and user.profile.org.linked_vendor:
-                user_vendor = user.profile.org.linked_vendor
-        except Exception:
-            pass
+    user_vendor = _get_user_vendor(user)
 
     vendor_list = Vendor.objects.all().order_by('name') if user.is_superuser else []
     sort_by = request.GET.get('sort', 'due_date') or 'due_date'
@@ -658,14 +651,7 @@ def order_approve_all(request):
     user = request.user
     q = Order.objects.filter(approved_at__isnull=True, is_closed=False)
 
-    # 협력업체 사용자 판별 (2가지 경로)
-    user_vendor = Vendor.objects.filter(user=user).first()
-    if not user_vendor and not user.is_superuser:
-        try:
-            if hasattr(user, 'profile') and user.profile.org and user.profile.org.linked_vendor:
-                user_vendor = user.profile.org.linked_vendor
-        except Exception:
-            pass
+    user_vendor = _get_user_vendor(user)
 
     # 협력업체 사용자는 자신의 발주만 승인 가능
     if not user.is_superuser and user_vendor:
@@ -688,14 +674,7 @@ def order_approve(request, order_id):
 def order_export(request):
     user = request.user
 
-    # 협력업체 사용자 판별 (2가지 경로)
-    user_vendor = Vendor.objects.filter(user=user).first()
-    if not user_vendor and not user.is_superuser:
-        try:
-            if hasattr(user, 'profile') and user.profile.org and user.profile.org.linked_vendor:
-                user_vendor = user.profile.org.linked_vendor
-        except Exception:
-            pass
+    user_vendor = _get_user_vendor(user)
 
     # 관리자는 전체, 협력업체는 자신의 발주만
     if user.is_superuser:
@@ -732,16 +711,7 @@ def inventory_list(request):
     user = request.user
     today = timezone.localtime().date()
 
-    # 협력업체 사용자 판별 (2가지 경로)
-    # 1. Vendor.user 필드 (구 방식)
-    user_vendor = Vendor.objects.filter(user=user).first()
-    # 2. UserProfile.org → Organization.linked_vendor (신 방식)
-    if not user_vendor and not user.is_superuser:
-        try:
-            if hasattr(user, 'profile') and user.profile.org and user.profile.org.linked_vendor:
-                user_vendor = user.profile.org.linked_vendor
-        except Exception:
-            pass
+    user_vendor = _get_user_vendor(user)
 
     if MaterialStock is None:
         messages.error(request, "WMS(MaterialStock) 연동 모델을 불러올 수 없습니다. material 앱/모델 연결을 확인해주세요.")
@@ -929,13 +899,7 @@ def inventory_export(request):
     from openpyxl.utils import get_column_letter
 
     user = request.user
-    user_vendor = Vendor.objects.filter(user=user).first()
-    if not user_vendor and not user.is_superuser:
-        try:
-            if hasattr(user, 'profile') and user.profile.org and user.profile.org.linked_vendor:
-                user_vendor = user.profile.org.linked_vendor
-        except Exception:
-            pass
+    user_vendor = _get_user_vendor(user)
 
     if (not user.is_superuser) and (not user_vendor):
         resp = require_action_perm(request, 'inv.export')
@@ -1516,15 +1480,7 @@ def label_list(request):
     q = request.GET.get('q', '')
 
     # 협력업체 사용자 판별 (2가지 경로)
-    # 1. Vendor.user 필드 (구 방식)
-    user_vendor = Vendor.objects.filter(user=user).first()
-    # 2. UserProfile.org → Organization.linked_vendor (신 방식)
-    if not user_vendor and not user.is_superuser:
-        try:
-            if hasattr(user, 'profile') and user.profile.org and user.profile.org.linked_vendor:
-                user_vendor = user.profile.org.linked_vendor
-        except Exception:
-            pass
+    user_vendor = _get_user_vendor(user)
 
     pnos_with_delivery = DeliveryOrderItem.objects.values_list('part_no', flat=True).distinct()
     vendor_ids = Part.objects.filter(part_no__in=pnos_with_delivery).values_list('vendor_id', flat=True).distinct()
@@ -1997,7 +1953,7 @@ def incoming_list(request):
     selected_v = request.GET.get('vendor_id')
     sd, ed, q = request.GET.get('start_date'), request.GET.get('end_date'), request.GET.get('q', '')
 
-    user_vendor = Vendor.objects.filter(user=user).first()
+    user_vendor = _get_user_vendor(user)
 
     incomings = Incoming.objects.select_related('part', 'part__vendor').all().order_by('-in_date', '-created_at')
 
@@ -2281,6 +2237,7 @@ def receive_delivery_order_confirm(request):
                     Incoming.objects.create(
                         part=part,
                         quantity=item.total_qty,
+                        confirmed_qty=item.total_qty,
                         in_date=timezone.localtime().date(),
                         delivery_order_no=do.order_no,
                         erp_order_no=item.erp_order_no,
@@ -2776,14 +2733,7 @@ def vendor_delivery_close_month(request):
 def scm_alert_dashboard(request):
     """SCM 종합 대시보드 - 발주/입고 현황 + 알림"""
     user = request.user
-    # 협력사 감지 - 기존 방식(Vendor.user)과 새 방식(UserProfile.org.linked_vendor) 모두 지원
-    user_vendor = Vendor.objects.filter(user=user).first()
-    if not user_vendor and not user.is_superuser:
-        try:
-            if hasattr(user, 'profile') and user.profile.org and user.profile.org.linked_vendor:
-                user_vendor = user.profile.org.linked_vendor
-        except Exception:
-            pass
+    user_vendor = _get_user_vendor(user)
     today = timezone.localtime().date()
     this_month_start = today.replace(day=1)
 
