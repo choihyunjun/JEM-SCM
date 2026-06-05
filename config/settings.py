@@ -195,16 +195,16 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # -----------------------------------------------------------------------------
 # 더존 아마란스10 ERP API 연동
 # -----------------------------------------------------------------------------
-ERP_ENABLED = True  # False로 하면 ERP 연동 비활성화
-ERP_API_BASE_URL = "https://gwa.jem-techno.co.kr"
-ERP_API_CALLER_NAME = "API_gcmsAmaranth40364"
-ERP_API_ACCESS_TOKEN = "dwmUifGLhb7QJRT1zZd6CKg8h5hajv"
-ERP_API_HASH_KEY = "69737611755212349465016565657986137804435180"
-ERP_API_GROUP_SEQ = "gcmsAmaranth40364"
-ERP_COMPANY_CODE = "1000"
-ERP_DIVISION_CODE = "1000"
-ERP_DEFAULT_DEPT_CODE = "0630"
-ERP_DEFAULT_EMP_CODE = "20240601"
+ERP_ENABLED = os.getenv("ERP_ENABLED", "true").lower() == "true"
+ERP_API_BASE_URL = os.getenv("ERP_API_BASE_URL", "https://gwa.jem-techno.co.kr")
+ERP_API_CALLER_NAME = os.getenv("ERP_API_CALLER_NAME", "")
+ERP_API_ACCESS_TOKEN = os.getenv("ERP_API_ACCESS_TOKEN", "")
+ERP_API_HASH_KEY = os.getenv("ERP_API_HASH_KEY", "")
+ERP_API_GROUP_SEQ = os.getenv("ERP_API_GROUP_SEQ", "")
+ERP_COMPANY_CODE = os.getenv("ERP_COMPANY_CODE", "1000")
+ERP_DIVISION_CODE = os.getenv("ERP_DIVISION_CODE", "1000")
+ERP_DEFAULT_DEPT_CODE = os.getenv("ERP_DEFAULT_DEPT_CODE", "0630")
+ERP_DEFAULT_EMP_CODE = os.getenv("ERP_DEFAULT_EMP_CODE", "20240601")
 
 # ERP 입고 자동 동기화
 ERP_AUTO_SYNC_ENABLED = True          # 자동 동기화 on/off
@@ -218,7 +218,7 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'mail.jem-techno.co.kr'
 EMAIL_PORT = 25
 EMAIL_USE_TLS = False
-EMAIL_HOST_USER = 'jemscm@jem-techno.co.kr'
-EMAIL_HOST_PASSWORD = 'jem2718838!'
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 DEFAULT_FROM_EMAIL = 'JEM SCM <jemscm@jem-techno.co.kr>'
 

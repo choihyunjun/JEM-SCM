@@ -1,5 +1,6 @@
 import datetime
 import logging
+import os
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
@@ -11,6 +12,18 @@ from django.views.decorators.http import require_POST
 from functools import wraps
 
 logger = logging.getLogger(__name__)
+
+_ALLOWED_EXTENSIONS = {'.pdf', '.jpg', '.jpeg', '.png', '.gif', '.xlsx', '.xls', '.doc', '.docx', '.zip'}
+_MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10MB
+
+def _validate_file(f):
+    """업로드 파일 크기/확장자 검증. 문제 있으면 에러 문자열 반환, 없으면 None."""
+    if f.size > _MAX_UPLOAD_SIZE:
+        return f'파일 크기가 10MB를 초과합니다. ({f.size // 1024 // 1024}MB)'
+    ext = os.path.splitext(f.name)[1].lower()
+    if ext not in _ALLOWED_EXTENSIONS:
+        return f'허용되지 않는 파일 형식입니다. ({ext})'
+    return None
 
 # ✅ [새 기능 필수] 검색/정렬(Case, When, Q) 및 페이징(Paginator)용
 from django.db.models import F, Q, Case, When, Value, IntegerField
@@ -1065,8 +1078,15 @@ def formal4m_upload(request, formal_id, item_id):
     item = get_object_or_404(Formal4MDocumentItem, pk=item_id, formal=formal)
     if request.method == "POST":
         f = request.FILES.get("file")
-        if not f: messages.error(request, "파일 선택 필요.")
-        else: Formal4MAttachment.objects.create(item=item, file=f, uploaded_by=request.user); messages.success(request, "업로드됨.")
+        if not f:
+            messages.error(request, "파일 선택 필요.")
+        else:
+            err = _validate_file(f)
+            if err:
+                messages.error(request, err)
+            else:
+                Formal4MAttachment.objects.create(item=item, file=f, uploaded_by=request.user)
+                messages.success(request, "업로드됨.")
     return redirect("qms:formal4m_detail_by_id", formal_id=formal.id)
 
 
@@ -1147,7 +1167,7 @@ def m4_cancel_approval(request, pk):
     if request.method == "POST":
         item = get_object_or_404(M4Request, pk=pk)
         if item.status == "PENDING_REVIEW" and request.user == item.user: item.status, item.is_submitted = "DRAFT", False
-        elif item.status == "PENDING_REVIEW2" and request.user == item.reviewer_user: item.status, item.is_reviewed = "PENDING_REVIEW"
+        elif item.status == "PENDING_REVIEW2" and request.user == item.reviewer_user2: item.status, item.is_reviewed = "PENDING_REVIEW"
         elif item.status == "PENDING_APPROVE" and getattr(item, "reviewer_user2", None) and request.user == item.reviewer_user2: item.status = "PENDING_REVIEW2"
         elif item.status == "APPROVED" and request.user == item.approver_user: item.status, item.is_approved = "PENDING_APPROVE", False
         item.save(); messages.info(request, "취소됨.")
@@ -2041,6 +2061,10 @@ def vendor_response_submit(request, pk):
     # 첨부파일 처리
     files = request.FILES.getlist('attachments')
     for f in files:
+        err = _validate_file(f)
+        if err:
+            messages.warning(request, f'{f.name}: {err}')
+            continue
         VendorResponseAttachment.objects.create(
             response=vr,
             file=f,
@@ -2070,6 +2094,11 @@ def document_upload(request, pk):
     file = request.FILES.get('file')
     if not file:
         messages.error(request, '파일을 선택해주세요.')
+        return redirect('qms:change_request_detail', pk=cr.pk)
+
+    err = _validate_file(file)
+    if err:
+        messages.error(request, err)
         return redirect('qms:change_request_detail', pk=cr.pk)
 
     doc.file = file
