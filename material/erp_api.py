@@ -1136,6 +1136,31 @@ def _sync_stock_from_erp_inner(result, _cache):
                 )
                 remaining -= deduct
 
+            # LOT 차감 후에도 남은 잔여분 → NULL 버킷에 음수로 반영 (ERP 음수재고 표시)
+            if remaining > 0:
+                final_null = erp_qty  # ERP 기준값 그대로
+                null_stock = MaterialStock.objects.filter(
+                    warehouse=warehouse, part=part, lot_no=None
+                ).first()
+                if null_stock:
+                    old_qty = null_stock.quantity
+                    MaterialStock.objects.filter(pk=null_stock.pk).update(quantity=final_null)
+                else:
+                    MaterialStock.objects.create(
+                        warehouse=warehouse, part=part, lot_no=None, quantity=final_null
+                    )
+                    old_qty = 0
+                _create_trx(
+                    transaction_type='ADJ_ERP_OUT' if final_null < old_qty else 'ADJ_ERP_IN',
+                    part=part,
+                    warehouse_from=warehouse if final_null < old_qty else None,
+                    warehouse_to=None if final_null < old_qty else warehouse,
+                    quantity=abs(final_null - old_qty),
+                    lot_no=None,
+                    date=now,
+                    remark=f'ERP 재고동기화 음수반영 (ERP={erp_qty}, NULL:{old_qty}→{final_null})',
+                )
+
             # 스캔 태그 반영 완료 처리 (bulk_update로 원자적 처리)
             from .models import ProcessTag
             unreflected = list(ProcessTag.objects.filter(
