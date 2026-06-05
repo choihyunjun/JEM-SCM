@@ -1582,24 +1582,25 @@ def process_tag_print(request):
 
         # 태그 생성
         tag_list = []
-        for _ in range(print_count):
-            tag_id = ProcessTag.generate_tag_id()
-            tag = ProcessTag.objects.create(
-                tag_id=tag_id,
-                part=part,
-                part_no=part_no,
-                part_name=part_name,
-                quantity=int(quantity) if quantity else 0,
-                lot_no=lot_date,
-                status='PRINTED',
-                printed_by=request.user if request.user.is_authenticated else None
-            )
-            serial_no = serial_start + len(tag_list) if use_serial else 0
-            tag_list.append({
-                'index': len(tag_list),
-                'tag_id': tag_id,
-                'serial_no': serial_no,
-            })
+        with transaction.atomic():
+            for _ in range(print_count):
+                tag_id = ProcessTag.generate_tag_id()
+                tag = ProcessTag.objects.create(
+                    tag_id=tag_id,
+                    part=part,
+                    part_no=part_no,
+                    part_name=part_name,
+                    quantity=int(quantity) if quantity else 0,
+                    lot_no=lot_date,
+                    status='PRINTED',
+                    printed_by=request.user if request.user.is_authenticated else None
+                )
+                serial_no = serial_start + len(tag_list) if use_serial else 0
+                tag_list.append({
+                    'index': len(tag_list),
+                    'tag_id': tag_id,
+                    'serial_no': serial_no,
+                })
 
         # 중량 정보
         weight_qty = float(part.weight_qty) if part and part.weight_qty else 0
@@ -1684,17 +1685,18 @@ def lot_allocation_print(request):
             except (ValueError, TypeError):
                 pass
 
-        tag_id = ProcessTag.generate_tag_id()
-        ProcessTag.objects.create(
-            tag_id=tag_id,
-            part=part,
-            part_no=item['part_no'],
-            part_name=item.get('part_name', ''),
-            quantity=int(item.get('quantity', 0)),
-            lot_no=lot_date,
-            status='PRINTED',
-            printed_by=request.user if request.user.is_authenticated else None,
-        )
+        with transaction.atomic():
+            tag_id = ProcessTag.generate_tag_id()
+            ProcessTag.objects.create(
+                tag_id=tag_id,
+                part=part,
+                part_no=item['part_no'],
+                part_name=item.get('part_name', ''),
+                quantity=int(item.get('quantity', 0)),
+                lot_no=lot_date,
+                status='PRINTED',
+                printed_by=request.user if request.user.is_authenticated else None,
+            )
         all_tags.append({
             'index': len(all_tags),
             'tag_id': tag_id,
@@ -1760,17 +1762,18 @@ def lot_allocation_rm_print(request):
         qty = Decimal(str(item.get('quantity', 0)))
         unit = (part.weight_unit or 'KG').strip() or 'KG'
 
-        label = RawMaterialLabel.objects.create(
-            label_id=RawMaterialLabel.generate_label_id(),
-            part=part,
-            part_no=part.part_no,
-            part_name=part.part_name or '',
-            lot_no=lot_date,
-            quantity=qty,
-            unit=unit,
-            status='INSTOCK',
-            printed_by=request.user if request.user.is_authenticated else None,
-        )
+        with transaction.atomic():
+            label = RawMaterialLabel.objects.create(
+                label_id=RawMaterialLabel.generate_label_id(),
+                part=part,
+                part_no=part.part_no,
+                part_name=part.part_name or '',
+                lot_no=lot_date,
+                quantity=qty,
+                unit=unit,
+                status='INSTOCK',
+                printed_by=request.user if request.user.is_authenticated else None,
+            )
         all_labels.append(label)
 
     if not all_labels:
@@ -1836,20 +1839,21 @@ def lot_allocation_plt_print(request):
         else:
             split_qtys.append(total_qty)
 
-        for split_qty in split_qtys:
-            label = RawMaterialLabel.objects.create(
-                label_id=RawMaterialLabel.generate_pallet_label_id(),
-                label_type='PALLET',
-                part=part,
-                part_no=part.part_no,
-                part_name=part.part_name or '',
-                lot_no=lot_date,
-                quantity=split_qty,
-                unit=unit,
-                status='INSTOCK',
-                printed_by=request.user if request.user.is_authenticated else None,
-            )
-            all_labels.append(label)
+        with transaction.atomic():
+            for split_qty in split_qtys:
+                label = RawMaterialLabel.objects.create(
+                    label_id=RawMaterialLabel.generate_pallet_label_id(),
+                    label_type='PALLET',
+                    part=part,
+                    part_no=part.part_no,
+                    part_name=part.part_name or '',
+                    lot_no=lot_date,
+                    quantity=split_qty,
+                    unit=unit,
+                    status='INSTOCK',
+                    printed_by=request.user if request.user.is_authenticated else None,
+                )
+                all_labels.append(label)
 
     if not all_labels:
         messages.error(request, '출력할 라벨이 없습니다.')

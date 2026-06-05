@@ -427,21 +427,24 @@ class ProcessTag(models.Model):
     def generate_tag_id(cls):
         """고유 태그 ID 생성 (TAG-YYYYMMDD-XXXX)"""
         from django.utils import timezone
+        from django.db import transaction, connection
         today = timezone.now().strftime('%Y%m%d')
         prefix = f"TAG-{today}-"
 
-        # 오늘 발행된 마지막 태그 번호 조회
-        last_tag = cls.objects.filter(tag_id__startswith=prefix).order_by('-tag_id').first()
-        if last_tag:
-            try:
-                last_seq = int(last_tag.tag_id.split('-')[-1])
-                new_seq = last_seq + 1
-            except (ValueError, IndexError):
+        with transaction.atomic():
+            qs = cls.objects.filter(tag_id__startswith=prefix).order_by('-tag_id')
+            if connection.vendor != 'sqlite':
+                qs = qs.select_for_update()
+            last_tag = qs.first()
+            if last_tag:
+                try:
+                    last_seq = int(last_tag.tag_id.split('-')[-1])
+                    new_seq = last_seq + 1
+                except (ValueError, IndexError):
+                    new_seq = 1
+            else:
                 new_seq = 1
-        else:
-            new_seq = 1
-
-        return f"{prefix}{new_seq:04d}"
+            return f"{prefix}{new_seq:04d}"
 
     def record_scan(self, user=None, warehouse=None):
         """
@@ -767,38 +770,46 @@ class RawMaterialLabel(models.Model):
     @classmethod
     def generate_label_id(cls):
         """고유 라벨 ID 생성 (RM-YYYYMMDD-XXXX)"""
+        from django.db import transaction, connection
         today = timezone.now().strftime('%Y%m%d')
         prefix = f"RM-{today}-"
 
-        last_label = cls.objects.filter(label_id__startswith=prefix).order_by('-label_id').first()
-        if last_label:
-            try:
-                last_seq = int(last_label.label_id.split('-')[-1])
-                new_seq = last_seq + 1
-            except (ValueError, IndexError):
+        with transaction.atomic():
+            qs = cls.objects.filter(label_id__startswith=prefix).order_by('-label_id')
+            if connection.vendor != 'sqlite':
+                qs = qs.select_for_update()
+            last_label = qs.first()
+            if last_label:
+                try:
+                    last_seq = int(last_label.label_id.split('-')[-1])
+                    new_seq = last_seq + 1
+                except (ValueError, IndexError):
+                    new_seq = 1
+            else:
                 new_seq = 1
-        else:
-            new_seq = 1
-
-        return f"{prefix}{new_seq:04d}"
+            return f"{prefix}{new_seq:04d}"
 
     @classmethod
     def generate_pallet_label_id(cls):
         """파렛트 라벨 ID 생성 (PLT-YYYYMMDD-XXXX)"""
+        from django.db import transaction, connection
         today = timezone.now().strftime('%Y%m%d')
         prefix = f"PLT-{today}-"
 
-        last_label = cls.objects.filter(label_id__startswith=prefix).order_by('-label_id').first()
-        if last_label:
-            try:
-                last_seq = int(last_label.label_id.split('-')[-1])
-                new_seq = last_seq + 1
-            except (ValueError, IndexError):
+        with transaction.atomic():
+            qs = cls.objects.filter(label_id__startswith=prefix).order_by('-label_id')
+            if connection.vendor != 'sqlite':
+                qs = qs.select_for_update()
+            last_label = qs.first()
+            if last_label:
+                try:
+                    last_seq = int(last_label.label_id.split('-')[-1])
+                    new_seq = last_seq + 1
+                except (ValueError, IndexError):
+                    new_seq = 1
+            else:
                 new_seq = 1
-        else:
-            new_seq = 1
-
-        return f"{prefix}{new_seq:04d}"
+            return f"{prefix}{new_seq:04d}"
 
     def is_expired(self):
         """유효기간 만료 여부 확인"""

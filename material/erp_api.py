@@ -229,12 +229,18 @@ def register_erp_incoming(trx, qty, warehouse_code, erp_order_no='', erp_order_s
     # 결과를 트랜잭션에 저장
     if success:
         erp_no = data.get('resultData', '')
-        trx.erp_incoming_no = erp_no
-        trx.erp_sync_status = 'SUCCESS'
-        trx.erp_sync_message = f'ERP 입고번호: {erp_no}'
-        trx.save(update_fields=['erp_incoming_no', 'erp_sync_status', 'erp_sync_message'])
-        logger.info(f'ERP 입고등록 성공: {trx.transaction_no} -> {erp_no}')
-        return True, erp_no, None
+        try:
+            trx.erp_incoming_no = erp_no
+            trx.erp_sync_status = 'SUCCESS'
+            trx.erp_sync_message = f'ERP 입고번호: {erp_no}'
+            trx.save(update_fields=['erp_incoming_no', 'erp_sync_status', 'erp_sync_message'])
+            logger.info(f'ERP 입고등록 성공: {trx.transaction_no} -> {erp_no}')
+            return True, erp_no, None
+        except Exception as save_err:
+            # DB 저장 실패 → ERP에서도 삭제하여 불일치 방지
+            logger.error(f'ERP 입고등록 DB 저장 실패, ERP 롤백 시도: {trx.transaction_no} -> {save_err}')
+            delete_erp_incoming(erp_no)
+            return False, None, f'DB 저장 실패 (ERP 롤백 시도): {save_err}'
     else:
         trx.erp_sync_status = 'FAILED'
         trx.erp_sync_message = error or 'Unknown error'
@@ -581,7 +587,7 @@ def sync_erp_incoming(date_from=None, date_to=None):
         logger.info('ERP 입고 내역 없음')
         return 0, 0, 0, []
 
-    # 2) 이미 동기화된 입고번호 목록
+    # 2) 이미 동기화된 입고번호 목록 (rcv_nb-rcv_sq 형태의 정확한 키)
     existing_rcv_nbs = set(
         MaterialTransaction.objects.filter(
             erp_incoming_no__isnull=False
@@ -607,10 +613,8 @@ def sync_erp_incoming(date_from=None, date_to=None):
             skipped += 1
             continue
 
-        # 이미 동기화된 건 제외 (existing_nbs에는 'RV...-순번' 형태이므로 prefix로 체크)
-        if any(nb.startswith(rcv_nb) for nb in existing_rcv_nbs):
-            skipped += 1
-            continue
+        # 헤더 단위 skip 제거: 부분 동기화 후 재시도 시 누락 방지
+        # 디테일 단위 정확한 키(rcv_nb-rcv_sq)로만 중복 체크
 
         try:
             # 3) 디테일 조회
@@ -894,12 +898,6 @@ def sync_stock_from_erp():
     - 멱등성: 여러 번 실행해도 동일 결과
     Returns: dict {adjusted, increased, decreased, created, skipped_no_part, skipped_no_wh, error}
     """
-    from material.models import MaterialStock, MaterialTransaction, Warehouse
-    from orders.models import Part
-    from django.db.models import F, Sum
-    from django.db.models import Sum
-    from django.utils import timezone
-    from datetime import datetime
     from django.core.cache import cache as _cache
 
     result = {
@@ -912,6 +910,19 @@ def sync_stock_from_erp():
     if not _cache.add(_lock_key, 1, timeout=600):
         result['error'] = '재고 동기화가 이미 실행 중입니다. 잠시 후 다시 시도해주세요.'
         return result
+
+    try:
+        return _sync_stock_from_erp_inner(result, _cache)
+    finally:
+        _cache.delete(_lock_key)
+
+
+def _sync_stock_from_erp_inner(result, _cache):
+    from material.models import MaterialStock, MaterialTransaction, Warehouse
+    from orders.models import Part
+    from django.db.models import F, Sum
+    from django.utils import timezone
+    from datetime import datetime
 
     _cache.set('erp_sync_progress', {'stage': 'ERP 현재고 조회 중...', 'percent': 5}, timeout=300)
 
@@ -1040,18 +1051,21 @@ def sync_stock_from_erp():
                     date=now,
                     remark=f'ERP 재고동기화 (ERP={erp_qty}, LOT={lot_qty}, NULL:{current_null}→{target_null}, diff={diff:+d})',
                 )
-                # 스캔 태그 반영 완료 처리
+                # 스캔 태그 반영 완료 처리 (bulk_update로 원자적 처리)
                 from .models import ProcessTag
-                unreflected = ProcessTag.objects.filter(
+                unreflected = list(ProcessTag.objects.filter(
                     part_no=part.part_no, status='USED', stock_reflected=False
-                ).order_by('used_at')
+                ).order_by('used_at'))
                 consume_remaining = abs(diff)
+                to_mark = []
                 for tag in unreflected:
                     if consume_remaining <= 0:
                         break
                     tag.stock_reflected = True
-                    tag.save(update_fields=['stock_reflected'])
+                    to_mark.append(tag)
                     consume_remaining -= tag.quantity
+                if to_mark:
+                    ProcessTag.objects.bulk_update(to_mark, ['stock_reflected'])
 
         else:
             # ── Case 2: LOT > ERP → NULL=0 초기화 후 FIFO LOT 차감 ──
@@ -1122,18 +1136,21 @@ def sync_stock_from_erp():
                 )
                 remaining -= deduct
 
-            # 스캔 태그 반영 완료 처리
+            # 스캔 태그 반영 완료 처리 (bulk_update로 원자적 처리)
             from .models import ProcessTag
-            unreflected = ProcessTag.objects.filter(
+            unreflected = list(ProcessTag.objects.filter(
                 part_no=part.part_no, status='USED', stock_reflected=False
-            ).order_by('used_at')
+            ).order_by('used_at'))
             consume_remaining = excess
+            to_mark = []
             for tag in unreflected:
                 if consume_remaining <= 0:
                     break
                 tag.stock_reflected = True
-                tag.save(update_fields=['stock_reflected'])
+                to_mark.append(tag)
                 consume_remaining -= tag.quantity
+            if to_mark:
+                ProcessTag.objects.bulk_update(to_mark, ['stock_reflected'])
 
             result['decreased'] += 1
 
