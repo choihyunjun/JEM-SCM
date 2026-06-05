@@ -3,6 +3,13 @@ import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# .env 파일 자동 로드
+try:
+    from dotenv import load_dotenv
+    load_dotenv(BASE_DIR / '.env')
+except ImportError:
+    pass
+
 # -----------------------------------------------------------------------------
 # Core
 # -----------------------------------------------------------------------------
