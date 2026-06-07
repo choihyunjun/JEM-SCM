@@ -2100,8 +2100,6 @@ def receive_delivery_order_confirm(request):
     target_warehouse_code = request.POST.get('target_warehouse_code', '2000')  # 수입검사 후 입고될 창고
 
     do = get_object_or_404(DeliveryOrder, pk=order_id)
-    if do.is_received:
-        return redirect('incoming_list')
 
     if Warehouse is None or MaterialStock is None or MaterialTransaction is None:
         messages.error(request, "WMS 연동 모델을 불러올 수 없습니다.")
@@ -2147,6 +2145,9 @@ def receive_delivery_order_confirm(request):
         # 실제 입고 처리 시작
         # =====================================================================
         with transaction.atomic():
+            do = DeliveryOrder.objects.select_for_update().get(pk=order_id)
+            if do.is_received:
+                return redirect('incoming_list')
             do.is_received = True
 
             if inspection_needed == 'yes':
