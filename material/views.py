@@ -11235,14 +11235,26 @@ def transfer_request_reject(request, pk):
     if request.method != 'POST':
         return redirect('material:transfer_request_list')
 
-    req = get_object_or_404(MaterialTransferRequest, pk=pk, status='PENDING')
+    req = get_object_or_404(MaterialTransferRequest, pk=pk, status__in=['PENDING', 'PARTIAL'])
     reason = request.POST.get('reject_reason', '').strip()
-    req.status = 'REJECTED'
-    req.reject_reason = reason
-    req.approved_by = request.user
-    req.approved_at = timezone.now()
-    req.save()
-    messages.success(request, f'반려 처리되었습니다. ({req.request_no})')
+
+    if req.status == 'PARTIAL':
+        # 이미 처리된 라인은 유지, 미처리 라인만 취소 → 전체 APPROVED로 종결
+        req.status = 'APPROVED'
+        req.reject_reason = reason  # 사유는 기록
+        req.approved_by = request.user
+        req.approved_at = timezone.now()
+        req.save()
+        pending_count = req.lines.filter(approved_qty__isnull=True).count()
+        messages.warning(request, f'잔여 {pending_count}개 품목 처리 취소 — 처리된 항목은 유지됩니다. ({req.request_no})')
+    else:
+        req.status = 'REJECTED'
+        req.reject_reason = reason
+        req.approved_by = request.user
+        req.approved_at = timezone.now()
+        req.save()
+        messages.success(request, f'반려 처리되었습니다. ({req.request_no})')
+
     return redirect('material:transfer_request_list')
 
 

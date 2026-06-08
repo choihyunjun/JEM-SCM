@@ -78,7 +78,10 @@
                      class="btn btn-success btn-sm py-0 px-2 me-1">{% if req.status == 'PARTIAL' %}잔여승인{% else %}승인{% endif %}</a>
                   <button class="btn btn-outline-danger btn-sm py-0 px-2"
                           data-bs-toggle="modal" data-bs-target="#rejectModal"
-                          data-pk="{{ req.pk }}" data-request-no="{{ req.request_no }}">반려</button>
+                          data-pk="{{ req.pk }}" data-request-no="{{ req.request_no }}"
+                          data-partial="{% if req.status == 'PARTIAL' %}1{% else %}0{% endif %}">
+                    {% if req.status == 'PARTIAL' %}잔여취소{% else %}반려{% endif %}
+                  </button>
                 {% else %}
                   {% if req.requested_by == request.user %}
                   <form method="post" action="{% url 'material:transfer_request_cancel' req.pk %}" style="display:inline">
@@ -141,9 +144,13 @@
         {% csrf_token %}
         <div class="modal-body">
           <p>요청번호: <strong id="reject-request-no"></strong></p>
+          <div id="reject-partial-notice" class="alert alert-warning py-2 small" style="display:none;">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            부분승인 상태입니다. 이미 처리된 품목은 유지되고 <strong>미처리 품목만 취소</strong>됩니다.
+          </div>
           <div class="mb-3">
-            <label class="form-label">반려 사유</label>
-            <textarea name="reject_reason" class="form-control" rows="3" placeholder="반려 사유 (선택)"></textarea>
+            <label class="form-label">사유</label>
+            <textarea name="reject_reason" class="form-control" rows="3" placeholder="사유 (선택)"></textarea>
           </div>
         </div>
         <div class="modal-footer">
@@ -167,6 +174,11 @@ document.addEventListener('DOMContentLoaded', function () {
       const btn = e.relatedTarget;
       document.getElementById('reject-request-no').textContent = btn.dataset.requestNo;
       document.getElementById('rejectForm').action = `/wms/transfer-request/${btn.dataset.pk}/reject/`;
+      const isPartial = btn.dataset.partial === '1';
+      document.getElementById('reject-partial-notice').style.display = isPartial ? '' : 'none';
+      rejectModal.querySelector('.modal-title').innerHTML = isPartial
+        ? '<i class="bi bi-x-circle me-2"></i>잔여 품목 취소'
+        : '<i class="bi bi-x-circle me-2"></i>이동 요청 반려';
     });
   }
 });
