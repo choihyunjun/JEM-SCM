@@ -1,5 +1,4 @@
 {% extends "material/material_base.html" %}
-{% load auth_extras %}
 
 {% block title %}재료 이동 요청{% endblock %}
 
@@ -255,7 +254,7 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('modal-request-no').textContent = requestNo;
     document.getElementById('modal-part-info').textContent = `${partNo} / ${partName}`;
     document.getElementById('modal-approved-qty').value = qty;
-    document.getElementById('approveForm').action = `/material/transfer-request/${pk}/approve/`;
+    document.getElementById('approveForm').action = `/wms/transfer-request/${pk}/approve/`;
     document.getElementById('stock-info-table').innerHTML = '<span class="text-muted">조회 중...</span>';
 
     // 창고별 재고 조회
@@ -283,7 +282,7 @@ document.addEventListener('DOMContentLoaded', function () {
   rejectModal.addEventListener('show.bs.modal', function (e) {
     const btn = e.relatedTarget;
     document.getElementById('reject-request-no').textContent = btn.dataset.requestNo;
-    document.getElementById('rejectForm').action = `/material/transfer-request/${btn.dataset.pk}/reject/`;
+    document.getElementById('rejectForm').action = `/wms/transfer-request/${btn.dataset.pk}/reject/`;
   });
   {% endif %}
 });
