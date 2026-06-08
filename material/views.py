@@ -11019,9 +11019,13 @@ def transfer_request_list(request):
     from material.models import MaterialTransferRequest
     can_approve = _can_approve_transfer(request.user)
 
+    from django.db.models import Count, Q as DQ
     qs = MaterialTransferRequest.objects.select_related(
         'requested_by', 'approved_by', 'warehouse_from', 'warehouse_to'
-    ).prefetch_related('lines__part')
+    ).prefetch_related('lines__part').annotate(
+        total_lines=Count('lines'),
+        approved_lines=Count('lines', filter=DQ(lines__approved_qty__isnull=False)),
+    )
 
     if not can_approve:
         qs = qs.filter(requested_by=request.user)

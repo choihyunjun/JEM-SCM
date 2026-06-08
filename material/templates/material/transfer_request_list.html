@@ -11,7 +11,6 @@
     </a>
   </div>
 
-  {# 상태 필터 탭 #}
   <ul class="nav nav-tabs mb-3">
     <li class="nav-item">
       <a class="nav-link {% if not status_filter %}active{% endif %}" href="?status=">전체</a>
@@ -19,12 +18,13 @@
     {% for val, label in STATUS_CHOICES %}
     <li class="nav-item">
       <a class="nav-link {% if status_filter == val %}active{% endif %}" href="?status={{ val }}">
-        {{ label }}
-        {% if val == 'PENDING' %}<span class="badge bg-warning text-dark ms-1">●</span>{% endif %}
+        {{ label }}{% if val == 'PENDING' %}<span class="badge bg-warning text-dark ms-1">●</span>{% endif %}
       </a>
     </li>
     {% endfor %}
   </ul>
+
+  <p class="text-muted small mb-2"><i class="bi bi-hand-index me-1"></i>행을 더블클릭하면 품목 세부내역을 볼 수 있습니다.</p>
 
   <div class="card shadow-sm">
     <div class="card-body p-0">
@@ -45,7 +45,14 @@
         <tbody>
           {% for req in requests_page %}
           {% with lines=req.lines.all %}
-          <tr class="{% if req.status == 'PENDING' %}table-warning{% elif req.status == 'APPROVED' %}table-success{% elif req.status == 'REJECTED' or req.status == 'CANCELLED' %}table-secondary{% endif %}">
+          <tr class="request-row {% if req.status == 'PENDING' or req.status == 'PARTIAL' %}table-warning{% elif req.status == 'APPROVED' %}table-success{% elif req.status == 'REJECTED' or req.status == 'CANCELLED' %}table-secondary{% endif %}"
+              style="cursor:pointer"
+              data-pk="{{ req.pk }}"
+              data-request-no="{{ req.request_no }}"
+              data-lines='[{% for line in lines %}{"part_no":"{{ line.part.part_no|escapejs }}","part_name":"{{ line.part.part_name|escapejs|truncatechars:40 }}","requested_qty":{{ line.requested_qty }},"approved_qty":{% if line.approved_qty is not None %}{{ line.approved_qty }}{% else %}null{% endif %},"lot_no":"{% if line.lot_no %}{{ line.lot_no|date:"Y-m-d" }}{% endif %}"}{% if not forloop.last %},{% endif %}{% endfor %}]'
+              data-remark="{{ req.reject_reason|default:""|escapejs }}"
+              data-wh-from="{{ req.warehouse_from.name|default:"" }}"
+              data-wh-to="{{ req.warehouse_to.name|default:"" }}">
             <td><code>{{ req.request_no }}</code></td>
             <td>
               {% for line in lines %}
@@ -61,11 +68,21 @@
             <td>{{ req.requested_by.get_full_name|default:req.requested_by.username }}</td>
             <td>{{ req.requested_at|date:"Y-m-d H:i" }}</td>
             <td>
-              {% if req.status == 'PENDING' %}<span class="badge bg-warning text-dark">대기중</span>
-              {% elif req.status == 'PARTIAL' %}<span class="badge bg-info text-dark">부분승인</span>
-              {% elif req.status == 'APPROVED' %}<span class="badge bg-success">승인완료</span>
-              {% elif req.status == 'REJECTED' %}<span class="badge bg-danger">반려</span>
-              {% elif req.status == 'CANCELLED' %}<span class="badge bg-secondary">취소</span>
+              {% if req.status == 'PENDING' %}
+                <span class="badge bg-warning text-dark">대기중</span>
+              {% elif req.status == 'PARTIAL' %}
+                <span class="badge bg-info text-dark">부분승인</span>
+              {% elif req.status == 'APPROVED' %}
+                {% if req.approved_lines < req.total_lines %}
+                  <span class="badge bg-info text-dark">부분승인</span>
+                  <small class="text-muted">({{ req.approved_lines }}/{{ req.total_lines }})</small>
+                {% else %}
+                  <span class="badge bg-success">승인완료</span>
+                {% endif %}
+              {% elif req.status == 'REJECTED' %}
+                <span class="badge bg-danger">반려</span>
+              {% elif req.status == 'CANCELLED' %}
+                <span class="badge bg-secondary">취소</span>
               {% endif %}
             </td>
             <td>{{ req.warehouse_from.name|default:"-" }}</td>
@@ -75,16 +92,21 @@
               {% if req.status == 'PENDING' or req.status == 'PARTIAL' %}
                 {% if can_approve %}
                   <a href="{% url 'material:transfer_request_approve' req.pk %}"
-                     class="btn btn-success btn-sm py-0 px-2 me-1">{% if req.status == 'PARTIAL' %}잔여승인{% else %}승인{% endif %}</a>
+                     class="btn btn-success btn-sm py-0 px-2 me-1"
+                     onclick="event.stopPropagation()">
+                    {% if req.status == 'PARTIAL' %}잔여승인{% else %}승인{% endif %}
+                  </a>
                   <button class="btn btn-outline-danger btn-sm py-0 px-2"
                           data-bs-toggle="modal" data-bs-target="#rejectModal"
-                          data-pk="{{ req.pk }}" data-request-no="{{ req.request_no }}"
-                          data-partial="{% if req.status == 'PARTIAL' %}1{% else %}0{% endif %}">
+                          data-pk="{{ req.pk }}"
+                          data-request-no="{{ req.request_no }}"
+                          data-partial="{% if req.status == 'PARTIAL' %}1{% else %}0{% endif %}"
+                          onclick="event.stopPropagation()">
                     {% if req.status == 'PARTIAL' %}잔여취소{% else %}반려{% endif %}
                   </button>
                 {% else %}
                   {% if req.requested_by == request.user %}
-                  <form method="post" action="{% url 'material:transfer_request_cancel' req.pk %}" style="display:inline">
+                  <form method="post" action="{% url 'material:transfer_request_cancel' req.pk %}" style="display:inline" onclick="event.stopPropagation()">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-outline-secondary btn-sm py-0 px-2"
                             onclick="return confirm('요청을 취소하시겠습니까?')">취소</button>
@@ -113,17 +135,11 @@
   <nav class="mt-3">
     <ul class="pagination pagination-sm justify-content-center">
       {% if requests_page.has_previous %}
-      <li class="page-item">
-        <a class="page-link" href="?page={{ requests_page.previous_page_number }}&status={{ status_filter }}">이전</a>
-      </li>
+      <li class="page-item"><a class="page-link" href="?page={{ requests_page.previous_page_number }}&status={{ status_filter }}">이전</a></li>
       {% endif %}
-      <li class="page-item disabled">
-        <span class="page-link">{{ requests_page.number }} / {{ requests_page.paginator.num_pages }}</span>
-      </li>
+      <li class="page-item disabled"><span class="page-link">{{ requests_page.number }} / {{ requests_page.paginator.num_pages }}</span></li>
       {% if requests_page.has_next %}
-      <li class="page-item">
-        <a class="page-link" href="?page={{ requests_page.next_page_number }}&status={{ status_filter }}">다음</a>
-      </li>
+      <li class="page-item"><a class="page-link" href="?page={{ requests_page.next_page_number }}&status={{ status_filter }}">다음</a></li>
       {% endif %}
     </ul>
   </nav>
@@ -131,13 +147,45 @@
 
 </div>
 
-{# 반려 모달 #}
+{# ── 세부내역 모달 ── #}
+<div class="modal fade" id="detailModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-list-ul me-2"></i>품목 세부내역 — <span id="detail-request-no"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row mb-3 text-muted small" id="detail-wh-info"></div>
+        <table class="table table-sm table-bordered mb-2">
+          <thead class="table-secondary">
+            <tr>
+              <th>품번</th>
+              <th>품명</th>
+              <th class="text-end">신청수량</th>
+              <th>LOT</th>
+              <th class="text-end">승인수량</th>
+              <th>처리상태</th>
+            </tr>
+          </thead>
+          <tbody id="detail-lines-body"></tbody>
+        </table>
+        <div id="detail-remark" class="small text-muted"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── 반려 모달 ── #}
 {% if can_approve %}
 <div class="modal fade" id="rejectModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header bg-danger text-white">
-        <h5 class="modal-title"><i class="bi bi-x-circle me-2"></i>이동 요청 반려</h5>
+        <h5 class="modal-title" id="reject-modal-title"><i class="bi bi-x-circle me-2"></i>이동 요청 반려</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <form method="post" id="rejectForm">
@@ -155,7 +203,7 @@
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
-          <button type="submit" class="btn btn-danger"><i class="bi bi-x-lg me-1"></i>반려</button>
+          <button type="submit" class="btn btn-danger"><i class="bi bi-x-lg me-1"></i>확인</button>
         </div>
       </form>
     </div>
@@ -168,18 +216,77 @@
 {{ block.super }}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+
+  // 반려 모달
   const rejectModal = document.getElementById('rejectModal');
   if (rejectModal) {
     rejectModal.addEventListener('show.bs.modal', function (e) {
       const btn = e.relatedTarget;
+      const isPartial = btn.dataset.partial === '1';
       document.getElementById('reject-request-no').textContent = btn.dataset.requestNo;
       document.getElementById('rejectForm').action = `/wms/transfer-request/${btn.dataset.pk}/reject/`;
-      const isPartial = btn.dataset.partial === '1';
       document.getElementById('reject-partial-notice').style.display = isPartial ? '' : 'none';
-      rejectModal.querySelector('.modal-title').innerHTML = isPartial
+      document.getElementById('reject-modal-title').innerHTML = isPartial
         ? '<i class="bi bi-x-circle me-2"></i>잔여 품목 취소'
         : '<i class="bi bi-x-circle me-2"></i>이동 요청 반려';
     });
+  }
+
+  // 세부내역 모달 (더블클릭)
+  const detailModal = new bootstrap.Modal(document.getElementById('detailModal'));
+
+  document.querySelectorAll('.request-row').forEach(row => {
+    row.addEventListener('dblclick', function () {
+      const requestNo = this.dataset.requestNo;
+      const lines = JSON.parse(this.dataset.lines || '[]');
+      const remark = this.dataset.remark;
+      const whFrom = this.dataset.whFrom;
+      const whTo = this.dataset.whTo;
+
+      document.getElementById('detail-request-no').textContent = requestNo;
+
+      // 창고 정보
+      const whInfo = document.getElementById('detail-wh-info');
+      if (whFrom || whTo) {
+        whInfo.innerHTML = `<div class="col-auto"><strong>출고창고:</strong> ${whFrom || '-'}</div>
+                            <div class="col-auto ms-3"><strong>이동창고:</strong> ${whTo || '-'}</div>`;
+      } else {
+        whInfo.innerHTML = '';
+      }
+
+      // 라인 테이블
+      let html = '';
+      lines.forEach(line => {
+        const isApproved = line.approved_qty !== null;
+        const rowCls = isApproved ? 'table-success' : 'table-warning';
+        const statusBadge = isApproved
+          ? `<span class="badge bg-success">승인</span>`
+          : `<span class="badge bg-secondary">미처리</span>`;
+        const lot = line.lot_no || '<span class="text-muted">-</span>';
+        const approvedQty = isApproved
+          ? `<strong>${line.approved_qty.toLocaleString()}</strong>`
+          : '<span class="text-muted">-</span>';
+        html += `<tr class="${rowCls}">
+          <td><strong>${esc(line.part_no)}</strong></td>
+          <td class="small">${esc(line.part_name)}</td>
+          <td class="text-end">${line.requested_qty.toLocaleString()}</td>
+          <td class="small">${lot}</td>
+          <td class="text-end">${approvedQty}</td>
+          <td>${statusBadge}</td>
+        </tr>`;
+      });
+      document.getElementById('detail-lines-body').innerHTML = html;
+
+      // 사유
+      const remarkEl = document.getElementById('detail-remark');
+      remarkEl.textContent = remark ? `사유: ${remark}` : '';
+
+      detailModal.show();
+    });
+  });
+
+  function esc(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 });
 </script>
