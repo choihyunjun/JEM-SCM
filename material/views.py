@@ -11155,11 +11155,9 @@ def transfer_request_approve(request, pk):
                 )
                 target_stock.refresh_from_db()
 
-                from material.erp_api import _generate_trx_no
-                trx_no = _generate_trx_no()
+                from material.erp_api import _create_trx
                 lot_label = stock.lot_no.strftime('%Y-%m-%d') if stock.lot_no else 'NULL'
-                trx = MaterialTransaction.objects.create(
-                    transaction_no=trx_no,
+                trx = _create_trx(
                     transaction_type='TRANSFER',
                     date=now,
                     part=req.part,
