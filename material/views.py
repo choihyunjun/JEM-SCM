@@ -11188,13 +11188,13 @@ def transfer_request_approve(request, pk):
         messages.error(request, f'처리 중 오류가 발생했습니다: {e}')
         return redirect('material:transfer_request_list')
 
-    # ERP 등록 (atomic 밖)
-    from material.erp_api import register_erp_stock_move
-    for trx in trx_list:
+    # ERP 등록: LOT 분할 여부와 무관하게 총 승인수량으로 1건만 등록
+    if first_trx:
+        from material.erp_api import register_erp_stock_move
         try:
-            register_erp_stock_move(trx, trx.quantity, from_wh.code, to_wh.code)
+            register_erp_stock_move(first_trx, approved_qty, from_wh.code, to_wh.code)
         except Exception as e:
-            logger.warning(f'ERP 재고이동 등록 실패 ({trx.transaction_no}): {e}')
+            logger.warning(f'ERP 재고이동 등록 실패 ({first_trx.transaction_no}): {e}')
 
     messages.success(request, f'승인 완료: {req.request_no} ({from_wh.name} → {to_wh.name}, {approved_qty}개)')
     return redirect('material:transfer_request_list')
