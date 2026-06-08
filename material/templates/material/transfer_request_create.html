@@ -1,0 +1,179 @@
+{% extends "material/material_base.html" %}
+
+{% block title %}재료 이동 요청 등록{% endblock %}
+
+{% block material_content %}
+<div class="container-fluid py-3">
+  <div class="d-flex align-items-center mb-3 gap-2">
+    <a href="{% url 'material:transfer_request_list' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left"></i>
+    </a>
+    <h4 class="mb-0"><i class="bi bi-arrow-left-right me-2"></i>재료 이동 요청 등록</h4>
+  </div>
+
+  <div class="row justify-content-center">
+    <div class="col-lg-7">
+      <div class="card shadow-sm">
+        <div class="card-body">
+
+          {# ── 품번 검색 ── #}
+          <div class="mb-4">
+            <label class="form-label fw-bold">품번 검색</label>
+            <div class="input-group">
+              <input type="text" id="search-part-no" class="form-control"
+                     placeholder="품번 입력 후 Enter 또는 검색 클릭"
+                     autocomplete="off">
+              <button type="button" class="btn btn-outline-primary" id="btn-search">
+                <i class="bi bi-search"></i> 검색
+              </button>
+            </div>
+            <div id="suggestions" class="list-group mt-1" style="display:none; position:absolute; z-index:999; width:400px;"></div>
+          </div>
+
+          {# ── 조회 결과: 창고별 재고 ── #}
+          <div id="stock-result" style="display:none;">
+            <div class="alert alert-info py-2 mb-3" id="part-info-bar"></div>
+            <div class="mb-4">
+              <label class="form-label fw-bold">창고별 현재 재고</label>
+              <table class="table table-sm table-bordered">
+                <thead class="table-secondary">
+                  <tr><th>창고코드</th><th>창고명</th><th class="text-end">현재 재고</th></tr>
+                </thead>
+                <tbody id="stock-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+          {# ── 신청 폼 ── #}
+          <form method="post" id="request-form" style="display:none;">
+            {% csrf_token %}
+            <input type="hidden" name="part_no" id="form-part-no">
+
+            <div class="mb-3">
+              <label class="form-label fw-bold">신청수량 <span class="text-danger">*</span></label>
+              <input type="number" name="requested_qty" id="form-qty" class="form-control"
+                     min="1" placeholder="이동 신청할 수량 입력" required>
+            </div>
+
+            <div class="mb-4">
+              <label class="form-label fw-bold">신청사유 <span class="text-muted fw-normal">(선택)</span></label>
+              <textarea name="remark" class="form-control" rows="3"
+                        placeholder="이동이 필요한 이유를 입력하세요"></textarea>
+            </div>
+
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-primary px-4">
+                <i class="bi bi-send me-1"></i>이동 요청 등록
+              </button>
+              <a href="{% url 'material:transfer_request_list' %}" class="btn btn-outline-secondary">취소</a>
+            </div>
+          </form>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+(function () {
+  const stockApiUrl = "{% url 'material:api_transfer_request_stock' %}";
+  const searchInput = document.getElementById('search-part-no');
+  const btnSearch = document.getElementById('btn-search');
+  const stockResult = document.getElementById('stock-result');
+  const stockTableBody = document.getElementById('stock-table-body');
+  const partInfoBar = document.getElementById('part-info-bar');
+  const requestForm = document.getElementById('request-form');
+  const formPartNo = document.getElementById('form-part-no');
+  const suggestions = document.getElementById('suggestions');
+
+  let searchTimeout = null;
+
+  function doSearch(partNo) {
+    if (!partNo) return;
+    suggestions.style.display = 'none';
+    fetch(`${stockApiUrl}?part_no=${encodeURIComponent(partNo)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          showStockResult(data);
+        } else {
+          stockResult.style.display = 'none';
+          requestForm.style.display = 'none';
+          if (data.suggestions && data.suggestions.length) {
+            showSuggestions(data.suggestions);
+          } else {
+            alert(data.error || '품번을 찾을 수 없습니다.');
+          }
+        }
+      })
+      .catch(() => alert('조회 중 오류가 발생했습니다.'));
+  }
+
+  function showStockResult(data) {
+    partInfoBar.textContent = `${data.part_no}  /  ${data.part_name}`;
+    formPartNo.value = data.part_no;
+
+    let rows = '';
+    data.stocks.forEach(s => {
+      const cls = s.qty > 0 ? '' : 'text-muted';
+      rows += `<tr><td>${s.warehouse_code}</td><td>${s.warehouse_name}</td>
+               <td class="text-end ${cls}"><strong>${s.qty.toLocaleString()}</strong></td></tr>`;
+    });
+    stockTableBody.innerHTML = rows;
+    stockResult.style.display = 'block';
+    requestForm.style.display = 'block';
+  }
+
+  function showSuggestions(items) {
+    suggestions.innerHTML = '';
+    items.forEach(item => {
+      const a = document.createElement('a');
+      a.href = '#';
+      a.className = 'list-group-item list-group-item-action py-1 px-2 small';
+      a.textContent = `${item.part_no}  —  ${item.part_name}`;
+      a.addEventListener('click', function (e) {
+        e.preventDefault();
+        searchInput.value = item.part_no;
+        suggestions.style.display = 'none';
+        doSearch(item.part_no);
+      });
+      suggestions.appendChild(a);
+    });
+    suggestions.style.display = 'block';
+  }
+
+  btnSearch.addEventListener('click', () => doSearch(searchInput.value.trim()));
+  searchInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); doSearch(searchInput.value.trim()); }
+  });
+
+  // 입력 중 자동완성
+  searchInput.addEventListener('input', function () {
+    clearTimeout(searchTimeout);
+    const val = this.value.trim();
+    if (val.length < 2) { suggestions.style.display = 'none'; return; }
+    searchTimeout = setTimeout(() => {
+      fetch(`${stockApiUrl}?part_no=${encodeURIComponent(val)}`)
+        .then(r => r.json())
+        .then(data => {
+          if (!data.ok && data.suggestions && data.suggestions.length) {
+            showSuggestions(data.suggestions);
+          } else {
+            suggestions.style.display = 'none';
+          }
+        });
+    }, 300);
+  });
+
+  document.addEventListener('click', e => {
+    if (!suggestions.contains(e.target) && e.target !== searchInput) {
+      suggestions.style.display = 'none';
+    }
+  });
+})();
+</script>
+{% endblock %}

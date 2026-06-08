@@ -157,6 +157,14 @@ urlpatterns = [
     path('api/mold/mt/<int:pk>/edit/', views.api_mold_mt_edit, name='api_mold_mt_edit'),
     path('mold/mt/erp-sync/', views.mold_mt_erp_sync, name='mold_mt_erp_sync'),
 
+    # 재료 이동 요청
+    path('transfer-request/', views.transfer_request_list, name='transfer_request_list'),
+    path('transfer-request/create/', views.transfer_request_create, name='transfer_request_create'),
+    path('transfer-request/<int:pk>/approve/', views.transfer_request_approve, name='transfer_request_approve'),
+    path('transfer-request/<int:pk>/reject/', views.transfer_request_reject, name='transfer_request_reject'),
+    path('transfer-request/<int:pk>/cancel/', views.transfer_request_cancel, name='transfer_request_cancel'),
+    path('api/transfer-request/stock/', views.api_transfer_request_stock, name='api_transfer_request_stock'),
+
     # 금형 수리 의뢰
     path('mold/repair/', views.mold_repair_list, name='mold_repair_list'),
     path('mold/repair/create/', views.mold_repair_create, name='mold_repair_create'),

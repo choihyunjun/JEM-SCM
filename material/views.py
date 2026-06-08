@@ -11002,4 +11002,274 @@ def mold_repair_detail(request, pk):
         'first_article': obj.first_article,
         'ng_content': obj.ng_content,
     }
+
+
+# =============================================================================
+# 재료 이동 요청 (Material Transfer Request)
+# =============================================================================
+
+@login_required
+@wms_permission_required('can_wms_stock_view')
+def transfer_request_list(request):
+    from material.models import MaterialTransferRequest
+    profile = _get_profile(request.user)
+    can_approve = (
+        request.user.is_superuser
+        or (profile and getattr(profile, 'can_wms_stock_edit', False))
+    )
+
+    qs = MaterialTransferRequest.objects.select_related(
+        'part', 'requested_by', 'approved_by', 'warehouse_from', 'warehouse_to'
+    )
+    if not can_approve:
+        qs = qs.filter(requested_by=request.user)
+
+    status_filter = request.GET.get('status', '')
+    if status_filter:
+        qs = qs.filter(status=status_filter)
+
+    qs = qs.order_by('-created_at')
+
+    from django.core.paginator import Paginator
+    paginator = Paginator(qs, 30)
+    page = request.GET.get('page', 1)
+    requests_page = paginator.get_page(page)
+
+    return render(request, 'material/transfer_request_list.html', {
+        'requests_page': requests_page,
+        'can_approve': can_approve,
+        'status_filter': status_filter,
+        'STATUS_CHOICES': MaterialTransferRequest.STATUS_CHOICES,
+        'warehouses': Warehouse.objects.filter(is_active=True).order_by('code'),
+    })
+
+
+@login_required
+@wms_permission_required('can_wms_stock_view')
+def transfer_request_create(request):
+    if request.method == 'POST':
+        from material.models import MaterialTransferRequest
+        part_no = request.POST.get('part_no', '').strip()
+        qty_str = request.POST.get('requested_qty', '').strip()
+        remark = request.POST.get('remark', '').strip()
+
+        part = Part.objects.filter(part_no=part_no).first()
+        if not part:
+            messages.error(request, f'품번을 찾을 수 없습니다: {part_no}')
+            return redirect('material:transfer_request_create')
+
+        try:
+            qty = int(qty_str)
+            if qty <= 0:
+                raise ValueError
+        except ValueError:
+            messages.error(request, '신청수량은 1 이상의 정수여야 합니다.')
+            return redirect('material:transfer_request_create')
+
+        req = MaterialTransferRequest.objects.create(
+            request_no=MaterialTransferRequest.generate_request_no(),
+            part=part,
+            requested_qty=qty,
+            remark=remark,
+            requested_by=request.user,
+        )
+        messages.success(request, f'이동 요청이 등록되었습니다. ({req.request_no})')
+        return redirect('material:transfer_request_list')
+
+    target_warehouses = ['3000', '2000', '3200']
+    warehouses = Warehouse.objects.filter(code__in=target_warehouses, is_active=True).order_by('code')
+    return render(request, 'material/transfer_request_create.html', {
+        'warehouses': warehouses,
+        'target_warehouse_codes': target_warehouses,
+    })
+
+
+@login_required
+@wms_permission_required('can_wms_stock_edit')
+def transfer_request_approve(request, pk):
+    from material.models import MaterialTransferRequest
+    if request.method != 'POST':
+        return redirect('material:transfer_request_list')
+
+    req = get_object_or_404(MaterialTransferRequest, pk=pk, status='PENDING')
+
+    wh_from_id = request.POST.get('warehouse_from')
+    wh_to_id = request.POST.get('warehouse_to')
+    try:
+        approved_qty = int(request.POST.get('approved_qty', req.requested_qty))
+        if approved_qty <= 0:
+            raise ValueError
+    except (ValueError, TypeError):
+        messages.error(request, '승인수량이 올바르지 않습니다.')
+        return redirect('material:transfer_request_list')
+
+    try:
+        from_wh = Warehouse.objects.get(pk=wh_from_id)
+        to_wh = Warehouse.objects.get(pk=wh_to_id)
+    except Warehouse.DoesNotExist:
+        messages.error(request, '창고를 선택해주세요.')
+        return redirect('material:transfer_request_list')
+
+    if from_wh == to_wh:
+        messages.error(request, '출고창고와 이동창고가 동일합니다.')
+        return redirect('material:transfer_request_list')
+
+    # 출고창고 가용재고 확인
+    available = MaterialStock.objects.filter(
+        warehouse=from_wh, part=req.part, quantity__gt=0
+    ).aggregate(total=Sum('quantity'))['total'] or 0
+    if available < approved_qty:
+        messages.error(request, f'재고 부족: {from_wh.name} 가용재고 {available}개, 신청 {approved_qty}개')
+        return redirect('material:transfer_request_list')
+
+    now = timezone.now()
+    first_trx = None
+
+    try:
+        with transaction.atomic():
+            # FIFO: NULL 버킷 먼저, 이후 오래된 LOT 순서
+            stocks = list(
+                MaterialStock.objects.select_for_update().filter(
+                    warehouse=from_wh, part=req.part, quantity__gt=0
+                ).order_by(F('lot_no').asc(nulls_first=True))
+            )
+            remaining = approved_qty
+            trx_list = []
+
+            for stock in stocks:
+                if remaining <= 0:
+                    break
+                move_qty = min(int(stock.quantity), remaining)
+
+                # 출고창고 차감
+                MaterialStock.objects.filter(pk=stock.pk).update(
+                    quantity=F('quantity') - move_qty
+                )
+                # 입고창고 증가
+                target_stock, _ = MaterialStock.objects.get_or_create(
+                    warehouse=to_wh, part=req.part, lot_no=stock.lot_no,
+                    defaults={'quantity': 0}
+                )
+                MaterialStock.objects.filter(pk=target_stock.pk).update(
+                    quantity=F('quantity') + move_qty
+                )
+                target_stock.refresh_from_db()
+
+                from material.erp_api import _generate_trx_no
+                trx_no = _generate_trx_no()
+                lot_label = stock.lot_no.strftime('%Y-%m-%d') if stock.lot_no else 'NULL'
+                trx = MaterialTransaction.objects.create(
+                    transaction_no=trx_no,
+                    transaction_type='TRANSFER',
+                    date=now,
+                    part=req.part,
+                    quantity=move_qty,
+                    lot_no=stock.lot_no,
+                    warehouse_from=from_wh,
+                    warehouse_to=to_wh,
+                    result_stock=target_stock.quantity,
+                    actor=request.user,
+                    remark=f'이동요청 {req.request_no} 승인 [LOT:{lot_label}]',
+                )
+                trx_list.append(trx)
+                if first_trx is None:
+                    first_trx = trx
+                remaining -= move_qty
+
+            req.status = 'APPROVED'
+            req.warehouse_from = from_wh
+            req.warehouse_to = to_wh
+            req.approved_qty = approved_qty
+            req.approved_by = request.user
+            req.approved_at = now
+            req.transfer_transaction = first_trx
+            req.save()
+
+    except Exception as e:
+        logger.exception('transfer_request_approve error')
+        messages.error(request, f'처리 중 오류가 발생했습니다: {e}')
+        return redirect('material:transfer_request_list')
+
+    # ERP 등록 (atomic 밖)
+    from material.erp_api import register_erp_stock_move
+    for trx in trx_list:
+        try:
+            register_erp_stock_move(trx, trx.quantity, from_wh.code, to_wh.code)
+        except Exception as e:
+            logger.warning(f'ERP 재고이동 등록 실패 ({trx.transaction_no}): {e}')
+
+    messages.success(request, f'승인 완료: {req.request_no} ({from_wh.name} → {to_wh.name}, {approved_qty}개)')
+    return redirect('material:transfer_request_list')
+
+
+@login_required
+@wms_permission_required('can_wms_stock_edit')
+def transfer_request_reject(request, pk):
+    from material.models import MaterialTransferRequest
+    if request.method != 'POST':
+        return redirect('material:transfer_request_list')
+
+    req = get_object_or_404(MaterialTransferRequest, pk=pk, status='PENDING')
+    reason = request.POST.get('reject_reason', '').strip()
+    req.status = 'REJECTED'
+    req.reject_reason = reason
+    req.approved_by = request.user
+    req.approved_at = timezone.now()
+    req.save()
+    messages.success(request, f'반려 처리되었습니다. ({req.request_no})')
+    return redirect('material:transfer_request_list')
+
+
+@login_required
+@wms_permission_required('can_wms_stock_view')
+def transfer_request_cancel(request, pk):
+    from material.models import MaterialTransferRequest
+    if request.method != 'POST':
+        return redirect('material:transfer_request_list')
+
+    req = get_object_or_404(MaterialTransferRequest, pk=pk, status='PENDING', requested_by=request.user)
+    req.status = 'CANCELLED'
+    req.save()
+    messages.success(request, f'요청이 취소되었습니다. ({req.request_no})')
+    return redirect('material:transfer_request_list')
+
+
+@login_required
+@wms_permission_required('can_wms_stock_view')
+def api_transfer_request_stock(request):
+    """품번 검색 + 창고별 재고 반환 (Ajax)"""
+    from django.http import JsonResponse
+    part_no = request.GET.get('part_no', '').strip()
+    if not part_no:
+        return JsonResponse({'ok': False, 'error': '품번을 입력하세요.'})
+
+    part = Part.objects.filter(part_no=part_no).first()
+    if not part:
+        # 유사 품번 자동완성용
+        suggestions = list(
+            Part.objects.filter(part_no__icontains=part_no).values('part_no', 'part_name')[:10]
+        )
+        return JsonResponse({'ok': False, 'error': '품번을 찾을 수 없습니다.', 'suggestions': suggestions})
+
+    target_codes = ['3000', '2000', '3200']
+    stocks = []
+    for code in target_codes:
+        wh = Warehouse.objects.filter(code=code, is_active=True).first()
+        if not wh:
+            continue
+        qty = MaterialStock.objects.filter(
+            warehouse=wh, part=part
+        ).aggregate(total=Sum('quantity'))['total'] or 0
+        stocks.append({
+            'warehouse_code': wh.code,
+            'warehouse_name': wh.name,
+            'qty': int(qty),
+        })
+
+    return JsonResponse({
+        'ok': True,
+        'part_no': part.part_no,
+        'part_name': part.part_name,
+        'stocks': stocks,
+    })
     return JsonResponse(data)

@@ -1310,3 +1310,75 @@ class MoldRepairRequest(models.Model):
     def repair_type_list(self):
         """수리유형 리스트"""
         return [t.strip() for t in self.repair_types.split(',') if t.strip()] if self.repair_types else []
+
+
+# -----------------------------------------------------------------------------
+# 20. 재료 이동 요청 (Material Transfer Request)
+# -----------------------------------------------------------------------------
+class MaterialTransferRequest(models.Model):
+    STATUS_CHOICES = [
+        ('PENDING', '대기중'),
+        ('APPROVED', '승인완료'),
+        ('REJECTED', '반려'),
+        ('CANCELLED', '취소'),
+    ]
+
+    request_no = models.CharField("요청번호", max_length=30, unique=True, db_index=True)
+    part = models.ForeignKey(Part, on_delete=models.CASCADE, verbose_name="품목")
+    requested_qty = models.IntegerField("신청수량")
+    status = models.CharField("상태", max_length=15, choices=STATUS_CHOICES, default='PENDING', db_index=True)
+    remark = models.TextField("신청사유", blank=True)
+
+    requested_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True,
+        related_name='transfer_requests', verbose_name="신청자"
+    )
+    requested_at = models.DateTimeField("신청일시", auto_now_add=True)
+
+    # 승인자가 지정하는 창고 정보
+    warehouse_from = models.ForeignKey(
+        Warehouse, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='transfer_from_requests', verbose_name="출고창고"
+    )
+    warehouse_to = models.ForeignKey(
+        Warehouse, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='transfer_to_requests', verbose_name="이동창고"
+    )
+    approved_qty = models.IntegerField("승인수량", null=True, blank=True)
+
+    approved_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='approved_transfer_requests', verbose_name="승인자"
+    )
+    approved_at = models.DateTimeField("승인일시", null=True, blank=True)
+    reject_reason = models.TextField("반려사유", blank=True)
+
+    transfer_transaction = models.ForeignKey(
+        MaterialTransaction, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='origin_requests', verbose_name="이동 트랜잭션"
+    )
+
+    created_at = models.DateTimeField("등록일시", auto_now_add=True)
+    updated_at = models.DateTimeField("수정일시", auto_now=True)
+
+    class Meta:
+        verbose_name = "재료 이동 요청"
+        verbose_name_plural = "20. 재료 이동 요청"
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"[{self.get_status_display()}] {self.request_no} - {self.part.part_no} x {self.requested_qty}"
+
+    @classmethod
+    def generate_request_no(cls):
+        today = timezone.now().strftime('%Y%m%d')
+        prefix = f"TRR-{today}-"
+        last = cls.objects.filter(request_no__startswith=prefix).order_by('-request_no').first()
+        if last:
+            try:
+                seq = int(last.request_no.split('-')[-1]) + 1
+            except (ValueError, IndexError):
+                seq = 1
+        else:
+            seq = 1
+        return f"{prefix}{seq:04d}"
