@@ -69,7 +69,7 @@
             <td>{{ req.warehouse_to.name|default:"-" }}</td>
             <td class="text-end">{{ req.approved_qty|default:"-" }}</td>
             {% endif %}
-            <td>{{ req.approved_by.get_full_name|default:req.approved_by.username|default:"-" }}</td>
+            <td>{% if req.approved_by %}{{ req.approved_by.get_full_name|default:req.approved_by.username }}{% else %}-{% endif %}</td>
             <td>
               {% if req.status == 'PENDING' %}
                 {% if can_approve %}
