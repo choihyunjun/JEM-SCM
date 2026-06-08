@@ -11008,19 +11008,21 @@ def mold_repair_detail(request, pk):
 # 재료 이동 요청 (Material Transfer Request)
 # =============================================================================
 
+def _can_approve_transfer(user):
+    profile = _get_profile(user)
+    return user.is_superuser or (profile and getattr(profile, 'can_wms_stock_edit', False))
+
+
 @login_required
 @wms_permission_required('can_wms_stock_view')
 def transfer_request_list(request):
     from material.models import MaterialTransferRequest
-    profile = _get_profile(request.user)
-    can_approve = (
-        request.user.is_superuser
-        or (profile and getattr(profile, 'can_wms_stock_edit', False))
-    )
+    can_approve = _can_approve_transfer(request.user)
 
     qs = MaterialTransferRequest.objects.select_related(
-        'part', 'requested_by', 'approved_by', 'warehouse_from', 'warehouse_to'
-    )
+        'requested_by', 'approved_by', 'warehouse_from', 'warehouse_to'
+    ).prefetch_related('lines__part')
+
     if not can_approve:
         qs = qs.filter(requested_by=request.user)
 
@@ -11032,171 +11034,185 @@ def transfer_request_list(request):
 
     from django.core.paginator import Paginator
     paginator = Paginator(qs, 30)
-    page = request.GET.get('page', 1)
-    requests_page = paginator.get_page(page)
+    requests_page = paginator.get_page(request.GET.get('page', 1))
 
     return render(request, 'material/transfer_request_list.html', {
         'requests_page': requests_page,
         'can_approve': can_approve,
         'status_filter': status_filter,
         'STATUS_CHOICES': MaterialTransferRequest.STATUS_CHOICES,
-        'warehouses': Warehouse.objects.filter(is_active=True).order_by('code'),
     })
 
 
 @login_required
 @wms_permission_required('can_wms_stock_view')
 def transfer_request_create(request):
+    from material.models import MaterialTransferRequest, MaterialTransferRequestLine
     if request.method == 'POST':
-        from material.models import MaterialTransferRequest
-        part_no = request.POST.get('part_no', '').strip()
-        qty_str = request.POST.get('requested_qty', '').strip()
-        remark = request.POST.get('remark', '').strip()
+        part_nos = request.POST.getlist('part_no')
+        qtys = request.POST.getlist('requested_qty')
+        remarks = request.POST.getlist('item_remark')
+        overall_remark = request.POST.get('remark', '').strip()
 
-        part = Part.objects.filter(part_no=part_no).first()
-        if not part:
-            messages.error(request, f'품번을 찾을 수 없습니다: {part_no}')
+        # 유효한 라인만 파싱
+        lines_data = []
+        for pno, qty_str, rem in zip(part_nos, qtys, remarks):
+            pno = pno.strip()
+            if not pno:
+                continue
+            part = Part.objects.filter(part_no=pno).first()
+            if not part:
+                messages.error(request, f'품번을 찾을 수 없습니다: {pno}')
+                return redirect('material:transfer_request_create')
+            try:
+                qty = int(qty_str)
+                if qty <= 0:
+                    raise ValueError
+            except (ValueError, TypeError):
+                messages.error(request, f'수량이 올바르지 않습니다: {pno}')
+                return redirect('material:transfer_request_create')
+            lines_data.append((part, qty, rem.strip()))
+
+        if not lines_data:
+            messages.error(request, '품목을 1개 이상 추가해주세요.')
             return redirect('material:transfer_request_create')
 
-        try:
-            qty = int(qty_str)
-            if qty <= 0:
-                raise ValueError
-        except ValueError:
-            messages.error(request, '신청수량은 1 이상의 정수여야 합니다.')
-            return redirect('material:transfer_request_create')
+        with transaction.atomic():
+            req = MaterialTransferRequest.objects.create(
+                request_no=MaterialTransferRequest.generate_request_no(),
+                remark=overall_remark,
+                requested_by=request.user,
+            )
+            for part, qty, rem in lines_data:
+                MaterialTransferRequestLine.objects.create(
+                    request=req, part=part, requested_qty=qty, remark=rem
+                )
 
-        req = MaterialTransferRequest.objects.create(
-            request_no=MaterialTransferRequest.generate_request_no(),
-            part=part,
-            requested_qty=qty,
-            remark=remark,
-            requested_by=request.user,
-        )
-        messages.success(request, f'이동 요청이 등록되었습니다. ({req.request_no})')
+        messages.success(request, f'이동 요청이 등록되었습니다. ({req.request_no}, {len(lines_data)}개 품목)')
         return redirect('material:transfer_request_list')
 
-    target_warehouses = ['3000', '2000', '3200']
-    warehouses = Warehouse.objects.filter(code__in=target_warehouses, is_active=True).order_by('code')
-    return render(request, 'material/transfer_request_create.html', {
-        'warehouses': warehouses,
-        'target_warehouse_codes': target_warehouses,
-    })
+    return render(request, 'material/transfer_request_create.html')
 
 
 @login_required
 @wms_permission_required('can_wms_stock_edit')
 def transfer_request_approve(request, pk):
-    from material.models import MaterialTransferRequest
-    if request.method != 'POST':
-        return redirect('material:transfer_request_list')
-
+    from material.models import MaterialTransferRequest, MaterialTransferRequestLine
     req = get_object_or_404(MaterialTransferRequest, pk=pk, status='PENDING')
+    lines = list(req.lines.select_related('part').all())
 
+    if request.method == 'GET':
+        warehouses = Warehouse.objects.filter(is_active=True).order_by('code')
+        return render(request, 'material/transfer_request_approve.html', {
+            'req': req,
+            'lines': lines,
+            'warehouses': warehouses,
+        })
+
+    # POST: 승인 처리
     wh_from_id = request.POST.get('warehouse_from')
     wh_to_id = request.POST.get('warehouse_to')
-    try:
-        approved_qty = int(request.POST.get('approved_qty', req.requested_qty))
-        if approved_qty <= 0:
-            raise ValueError
-    except (ValueError, TypeError):
-        messages.error(request, '승인수량이 올바르지 않습니다.')
-        return redirect('material:transfer_request_list')
-
     try:
         from_wh = Warehouse.objects.get(pk=wh_from_id)
         to_wh = Warehouse.objects.get(pk=wh_to_id)
     except Warehouse.DoesNotExist:
         messages.error(request, '창고를 선택해주세요.')
-        return redirect('material:transfer_request_list')
+        return redirect('material:transfer_request_approve', pk=pk)
 
     if from_wh == to_wh:
         messages.error(request, '출고창고와 이동창고가 동일합니다.')
-        return redirect('material:transfer_request_list')
+        return redirect('material:transfer_request_approve', pk=pk)
 
-    # 출고창고 가용재고 확인
-    available = MaterialStock.objects.filter(
-        warehouse=from_wh, part=req.part, quantity__gt=0
-    ).aggregate(total=Sum('quantity'))['total'] or 0
-    if available < approved_qty:
-        messages.error(request, f'재고 부족: {from_wh.name} 가용재고 {available}개, 신청 {approved_qty}개')
-        return redirect('material:transfer_request_list')
+    # 라인별 LOT/수량 파싱
+    line_inputs = []
+    for line in lines:
+        lot_str = request.POST.get(f'lot_{line.pk}', '').strip()
+        qty_str = request.POST.get(f'qty_{line.pk}', '').strip()
+        try:
+            qty = int(qty_str)
+            if qty <= 0:
+                raise ValueError
+        except (ValueError, TypeError):
+            messages.error(request, f'{line.part.part_no}: 승인수량이 올바르지 않습니다.')
+            return redirect('material:transfer_request_approve', pk=pk)
+
+        import datetime
+        lot_no = None
+        if lot_str:
+            try:
+                lot_no = datetime.date.fromisoformat(lot_str)
+            except ValueError:
+                messages.error(request, f'{line.part.part_no}: LOT 날짜 형식이 올바르지 않습니다.')
+                return redirect('material:transfer_request_approve', pk=pk)
+
+        # 재고 확인
+        stock_filter = MaterialStock.objects.filter(warehouse=from_wh, part=line.part, lot_no=lot_no)
+        available = stock_filter.aggregate(total=Sum('quantity'))['total'] or 0
+        if available < qty:
+            lot_label = lot_str if lot_str else 'NULL(ERP미러)'
+            messages.error(request, f'{line.part.part_no} [LOT:{lot_label}]: 재고 부족 (가용 {available}, 신청 {qty})')
+            return redirect('material:transfer_request_approve', pk=pk)
+
+        line_inputs.append((line, lot_no, qty))
 
     now = timezone.now()
-    first_trx = None
+    from material.erp_api import _create_trx, register_erp_stock_move
+    erp_tasks = []  # (trx, qty, from_code, to_code)
 
     try:
         with transaction.atomic():
-            # FIFO: NULL 버킷 먼저, 이후 오래된 LOT 순서
-            stocks = list(
-                MaterialStock.objects.select_for_update().filter(
-                    warehouse=from_wh, part=req.part, quantity__gt=0
-                ).order_by(F('lot_no').asc(nulls_first=True))
-            )
-            remaining = approved_qty
-            trx_list = []
-
-            for stock in stocks:
-                if remaining <= 0:
-                    break
-                move_qty = min(int(stock.quantity), remaining)
-
-                # 출고창고 차감
-                MaterialStock.objects.filter(pk=stock.pk).update(
-                    quantity=F('quantity') - move_qty
+            for line, lot_no, qty in line_inputs:
+                stock = MaterialStock.objects.select_for_update().get(
+                    warehouse=from_wh, part=line.part, lot_no=lot_no
                 )
-                # 입고창고 증가
+                MaterialStock.objects.filter(pk=stock.pk).update(quantity=F('quantity') - qty)
+
                 target_stock, _ = MaterialStock.objects.get_or_create(
-                    warehouse=to_wh, part=req.part, lot_no=stock.lot_no,
+                    warehouse=to_wh, part=line.part, lot_no=lot_no,
                     defaults={'quantity': 0}
                 )
-                MaterialStock.objects.filter(pk=target_stock.pk).update(
-                    quantity=F('quantity') + move_qty
-                )
+                MaterialStock.objects.filter(pk=target_stock.pk).update(quantity=F('quantity') + qty)
                 target_stock.refresh_from_db()
 
-                from material.erp_api import _create_trx
-                lot_label = stock.lot_no.strftime('%Y-%m-%d') if stock.lot_no else 'NULL'
+                lot_label = lot_no.strftime('%Y-%m-%d') if lot_no else 'NULL'
                 trx = _create_trx(
                     transaction_type='TRANSFER',
                     date=now,
-                    part=req.part,
-                    quantity=move_qty,
-                    lot_no=stock.lot_no,
+                    part=line.part,
+                    quantity=qty,
+                    lot_no=lot_no,
                     warehouse_from=from_wh,
                     warehouse_to=to_wh,
                     result_stock=target_stock.quantity,
                     actor=request.user,
                     remark=f'이동요청 {req.request_no} 승인 [LOT:{lot_label}]',
                 )
-                trx_list.append(trx)
-                if first_trx is None:
-                    first_trx = trx
-                remaining -= move_qty
+                line.lot_no = lot_no
+                line.approved_qty = qty
+                line.transfer_transaction = trx
+                line.save()
+                erp_tasks.append((trx, qty))
 
             req.status = 'APPROVED'
             req.warehouse_from = from_wh
             req.warehouse_to = to_wh
-            req.approved_qty = approved_qty
             req.approved_by = request.user
             req.approved_at = now
-            req.transfer_transaction = first_trx
             req.save()
 
     except Exception as e:
         logger.exception('transfer_request_approve error')
         messages.error(request, f'처리 중 오류가 발생했습니다: {e}')
-        return redirect('material:transfer_request_list')
+        return redirect('material:transfer_request_approve', pk=pk)
 
-    # ERP 등록: LOT 분할 여부와 무관하게 총 승인수량으로 1건만 등록
-    if first_trx:
-        from material.erp_api import register_erp_stock_move
+    # ERP 등록: 라인별 1건씩
+    for trx, qty in erp_tasks:
         try:
-            register_erp_stock_move(first_trx, approved_qty, from_wh.code, to_wh.code)
+            register_erp_stock_move(trx, qty, from_wh.code, to_wh.code)
         except Exception as e:
-            logger.warning(f'ERP 재고이동 등록 실패 ({first_trx.transaction_no}): {e}')
+            logger.warning(f'ERP 재고이동 등록 실패 ({trx.transaction_no}): {e}')
 
-    messages.success(request, f'승인 완료: {req.request_no} ({from_wh.name} → {to_wh.name}, {approved_qty}개)')
+    messages.success(request, f'승인 완료: {req.request_no} ({from_wh.name} → {to_wh.name}, {len(erp_tasks)}개 품목)')
     return redirect('material:transfer_request_list')
 
 
@@ -11235,7 +11251,7 @@ def transfer_request_cancel(request, pk):
 @login_required
 @wms_permission_required('can_wms_stock_view')
 def api_transfer_request_stock(request):
-    """품번 검색 + 창고별 재고 반환 (Ajax)"""
+    """품번 검색 + 창고별 재고 합계 반환 (신청 화면용)"""
     from django.http import JsonResponse
     part_no = request.GET.get('part_no', '').strip()
     if not part_no:
@@ -11243,7 +11259,6 @@ def api_transfer_request_stock(request):
 
     part = Part.objects.filter(part_no=part_no).first()
     if not part:
-        # 유사 품번 자동완성용
         suggestions = list(
             Part.objects.filter(part_no__icontains=part_no).values('part_no', 'part_name')[:10]
         )
@@ -11255,19 +11270,38 @@ def api_transfer_request_stock(request):
         wh = Warehouse.objects.filter(code=code, is_active=True).first()
         if not wh:
             continue
-        qty = MaterialStock.objects.filter(
-            warehouse=wh, part=part
-        ).aggregate(total=Sum('quantity'))['total'] or 0
-        stocks.append({
-            'warehouse_code': wh.code,
-            'warehouse_name': wh.name,
-            'qty': int(qty),
+        qty = MaterialStock.objects.filter(warehouse=wh, part=part).aggregate(total=Sum('quantity'))['total'] or 0
+        stocks.append({'warehouse_code': wh.code, 'warehouse_name': wh.name, 'qty': int(qty)})
+
+    return JsonResponse({'ok': True, 'part_no': part.part_no, 'part_name': part.part_name, 'stocks': stocks})
+
+
+@login_required
+@wms_permission_required('can_wms_stock_view')
+def api_transfer_request_lots(request):
+    """창고 + 품번 → LOT별 재고 반환 (승인 화면용)"""
+    from django.http import JsonResponse
+    part_no = request.GET.get('part_no', '').strip()
+    warehouse_id = request.GET.get('warehouse_id', '').strip()
+
+    part = Part.objects.filter(part_no=part_no).first()
+    if not part:
+        return JsonResponse({'ok': False, 'error': '품번 없음'})
+    try:
+        wh = Warehouse.objects.get(pk=warehouse_id)
+    except Warehouse.DoesNotExist:
+        return JsonResponse({'ok': False, 'error': '창고 없음'})
+
+    stocks = MaterialStock.objects.filter(
+        warehouse=wh, part=part, quantity__gt=0
+    ).order_by(F('lot_no').asc(nulls_first=True))
+
+    lots = []
+    for s in stocks:
+        lots.append({
+            'lot_no': s.lot_no.isoformat() if s.lot_no else '',
+            'lot_label': s.lot_no.strftime('%Y-%m-%d') if s.lot_no else 'NULL (ERP 미러)',
+            'qty': int(s.quantity),
         })
 
-    return JsonResponse({
-        'ok': True,
-        'part_no': part.part_no,
-        'part_name': part.part_name,
-        'stocks': stocks,
-    })
-    return JsonResponse(data)
+    return JsonResponse({'ok': True, 'lots': lots})

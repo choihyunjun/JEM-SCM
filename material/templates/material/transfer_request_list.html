@@ -1,5 +1,4 @@
 {% extends "material/material_base.html" %}
-
 {% block title %}재료 이동 요청{% endblock %}
 
 {% block material_content %}
@@ -33,63 +32,53 @@
         <thead class="table-dark">
           <tr>
             <th>요청번호</th>
-            <th>품번</th>
-            <th>품명</th>
-            <th class="text-end">신청수량</th>
+            <th>품목 요약</th>
             <th>신청자</th>
             <th>신청일시</th>
             <th>상태</th>
-            {% if can_approve %}<th>출고창고</th><th>이동창고</th><th class="text-end">승인수량</th>{% endif %}
+            <th>출고창고</th>
+            <th>이동창고</th>
             <th>승인자</th>
             <th>처리</th>
           </tr>
         </thead>
         <tbody>
           {% for req in requests_page %}
+          {% with lines=req.lines.all %}
           <tr class="{% if req.status == 'PENDING' %}table-warning{% elif req.status == 'APPROVED' %}table-success{% elif req.status == 'REJECTED' or req.status == 'CANCELLED' %}table-secondary{% endif %}">
             <td><code>{{ req.request_no }}</code></td>
-            <td><strong>{{ req.part.part_no }}</strong></td>
-            <td>{{ req.part.part_name|truncatechars:30 }}</td>
-            <td class="text-end">{{ req.requested_qty|floatformat:0 }}</td>
+            <td>
+              {% for line in lines %}
+                {% if forloop.counter <= 2 %}
+                  <span class="badge bg-secondary me-1">{{ line.part.part_no }}</span>
+                {% endif %}
+              {% endfor %}
+              {% with cnt=lines|length %}
+                {% if cnt > 2 %}<span class="text-muted small">외 {{ cnt|add:"-2" }}건 </span>{% endif %}
+                <span class="text-muted small">({{ cnt }}품목)</span>
+              {% endwith %}
+            </td>
             <td>{{ req.requested_by.get_full_name|default:req.requested_by.username }}</td>
             <td>{{ req.requested_at|date:"Y-m-d H:i" }}</td>
             <td>
-              {% if req.status == 'PENDING' %}
-                <span class="badge bg-warning text-dark">대기중</span>
-              {% elif req.status == 'APPROVED' %}
-                <span class="badge bg-success">승인완료</span>
-              {% elif req.status == 'REJECTED' %}
-                <span class="badge bg-danger">반려</span>
-              {% elif req.status == 'CANCELLED' %}
-                <span class="badge bg-secondary">취소</span>
+              {% if req.status == 'PENDING' %}<span class="badge bg-warning text-dark">대기중</span>
+              {% elif req.status == 'APPROVED' %}<span class="badge bg-success">승인완료</span>
+              {% elif req.status == 'REJECTED' %}<span class="badge bg-danger">반려</span>
+              {% elif req.status == 'CANCELLED' %}<span class="badge bg-secondary">취소</span>
               {% endif %}
             </td>
-            {% if can_approve %}
             <td>{{ req.warehouse_from.name|default:"-" }}</td>
             <td>{{ req.warehouse_to.name|default:"-" }}</td>
-            <td class="text-end">{{ req.approved_qty|default:"-" }}</td>
-            {% endif %}
             <td>{% if req.approved_by %}{{ req.approved_by.get_full_name|default:req.approved_by.username }}{% else %}-{% endif %}</td>
             <td>
               {% if req.status == 'PENDING' %}
                 {% if can_approve %}
-                  <button class="btn btn-success btn-sm py-0 px-2 me-1"
-                          data-bs-toggle="modal" data-bs-target="#approveModal"
-                          data-pk="{{ req.pk }}"
-                          data-request-no="{{ req.request_no }}"
-                          data-part-no="{{ req.part.part_no }}"
-                          data-part-name="{{ req.part.part_name }}"
-                          data-qty="{{ req.requested_qty }}">
-                    승인
-                  </button>
+                  <a href="{% url 'material:transfer_request_approve' req.pk %}"
+                     class="btn btn-success btn-sm py-0 px-2 me-1">승인</a>
                   <button class="btn btn-outline-danger btn-sm py-0 px-2"
                           data-bs-toggle="modal" data-bs-target="#rejectModal"
-                          data-pk="{{ req.pk }}"
-                          data-request-no="{{ req.request_no }}">
-                    반려
-                  </button>
+                          data-pk="{{ req.pk }}" data-request-no="{{ req.request_no }}">반려</button>
                 {% else %}
-                  {# 본인 요청만 취소 가능 #}
                   {% if req.requested_by == request.user %}
                   <form method="post" action="{% url 'material:transfer_request_cancel' req.pk %}" style="display:inline">
                     {% csrf_token %}
@@ -99,17 +88,16 @@
                   {% endif %}
                 {% endif %}
               {% elif req.status == 'REJECTED' and req.reject_reason %}
-                <small class="text-muted" title="{{ req.reject_reason }}">
-                  <i class="bi bi-info-circle"></i> 사유
-                </small>
+                <small class="text-muted" title="{{ req.reject_reason }}"><i class="bi bi-info-circle"></i> 사유</small>
               {% else %}
                 -
               {% endif %}
             </td>
           </tr>
+          {% endwith %}
           {% empty %}
           <tr>
-            <td colspan="12" class="text-center text-muted py-4">이동 요청 내역이 없습니다.</td>
+            <td colspan="9" class="text-center text-muted py-4">이동 요청 내역이 없습니다.</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -117,7 +105,6 @@
     </div>
   </div>
 
-  {# 페이지네이션 #}
   {% if requests_page.has_other_pages %}
   <nav class="mt-3">
     <ul class="pagination pagination-sm justify-content-center">
@@ -140,72 +127,8 @@
 
 </div>
 
-{# ── 승인 모달 ── #}
+{# 반려 모달 #}
 {% if can_approve %}
-<div class="modal fade" id="approveModal" tabindex="-1">
-  <div class="modal-dialog modal-lg">
-    <div class="modal-content">
-      <div class="modal-header bg-success text-white">
-        <h5 class="modal-title"><i class="bi bi-check-circle me-2"></i>이동 요청 승인</h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-      </div>
-      <form method="post" id="approveForm">
-        {% csrf_token %}
-        <div class="modal-body">
-          <div class="row mb-3">
-            <div class="col-6">
-              <label class="form-label fw-bold">요청번호</label>
-              <div id="modal-request-no" class="form-control-plaintext fw-bold"></div>
-            </div>
-            <div class="col-6">
-              <label class="form-label fw-bold">품번 / 품명</label>
-              <div id="modal-part-info" class="form-control-plaintext"></div>
-            </div>
-          </div>
-
-          {# 창고별 현재 재고 #}
-          <div class="mb-3" id="stock-info-area">
-            <label class="form-label fw-bold">창고별 현재 재고</label>
-            <div id="stock-info-table" class="text-muted small">조회 중...</div>
-          </div>
-
-          <div class="row g-3">
-            <div class="col-md-4">
-              <label class="form-label fw-bold">출고창고 <span class="text-danger">*</span></label>
-              <select name="warehouse_from" id="modal-wh-from" class="form-select" required>
-                <option value="">-- 선택 --</option>
-                {% for wh in warehouses %}
-                <option value="{{ wh.pk }}" data-code="{{ wh.code }}">{{ wh.name }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label fw-bold">이동창고 <span class="text-danger">*</span></label>
-              <select name="warehouse_to" id="modal-wh-to" class="form-select" required>
-                <option value="">-- 선택 --</option>
-                {% for wh in warehouses %}
-                <option value="{{ wh.pk }}" data-code="{{ wh.code }}">{{ wh.name }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label fw-bold">승인수량 <span class="text-danger">*</span></label>
-              <input type="number" name="approved_qty" id="modal-approved-qty" class="form-control" min="1" required>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
-          <button type="submit" class="btn btn-success">
-            <i class="bi bi-check-lg me-1"></i>승인 처리
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-
-{# ── 반려 모달 ── #}
 <div class="modal fade" id="rejectModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -219,14 +142,12 @@
           <p>요청번호: <strong id="reject-request-no"></strong></p>
           <div class="mb-3">
             <label class="form-label">반려 사유</label>
-            <textarea name="reject_reason" class="form-control" rows="3" placeholder="반려 사유를 입력하세요 (선택)"></textarea>
+            <textarea name="reject_reason" class="form-control" rows="3" placeholder="반려 사유 (선택)"></textarea>
           </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
-          <button type="submit" class="btn btn-danger">
-            <i class="bi bi-x-lg me-1"></i>반려
-          </button>
+          <button type="submit" class="btn btn-danger"><i class="bi bi-x-lg me-1"></i>반려</button>
         </div>
       </form>
     </div>
@@ -239,52 +160,14 @@
 {{ block.super }}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-  {% if can_approve %}
-  const approveModal = document.getElementById('approveModal');
-  const stockApiUrl = "{% url 'material:api_transfer_request_stock' %}";
-
-  approveModal.addEventListener('show.bs.modal', function (e) {
-    const btn = e.relatedTarget;
-    const pk = btn.dataset.pk;
-    const requestNo = btn.dataset.requestNo;
-    const partNo = btn.dataset.partNo;
-    const partName = btn.dataset.partName;
-    const qty = btn.dataset.qty;
-
-    document.getElementById('modal-request-no').textContent = requestNo;
-    document.getElementById('modal-part-info').textContent = `${partNo} / ${partName}`;
-    document.getElementById('modal-approved-qty').value = qty;
-    document.getElementById('approveForm').action = `/wms/transfer-request/${pk}/approve/`;
-    document.getElementById('stock-info-table').innerHTML = '<span class="text-muted">조회 중...</span>';
-
-    // 창고별 재고 조회
-    fetch(`${stockApiUrl}?part_no=${encodeURIComponent(partNo)}`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.ok) {
-          let html = '<table class="table table-sm table-bordered mb-0"><thead><tr><th>창고</th><th class="text-end">현재 재고</th></tr></thead><tbody>';
-          data.stocks.forEach(s => {
-            const cls = s.qty > 0 ? '' : 'text-muted';
-            html += `<tr><td>${s.warehouse_name} (${s.warehouse_code})</td><td class="text-end ${cls}">${s.qty.toLocaleString()}</td></tr>`;
-          });
-          html += '</tbody></table>';
-          document.getElementById('stock-info-table').innerHTML = html;
-        } else {
-          document.getElementById('stock-info-table').innerHTML = `<span class="text-danger">${data.error}</span>`;
-        }
-      })
-      .catch(() => {
-        document.getElementById('stock-info-table').innerHTML = '<span class="text-danger">재고 조회 실패</span>';
-      });
-  });
-
   const rejectModal = document.getElementById('rejectModal');
-  rejectModal.addEventListener('show.bs.modal', function (e) {
-    const btn = e.relatedTarget;
-    document.getElementById('reject-request-no').textContent = btn.dataset.requestNo;
-    document.getElementById('rejectForm').action = `/wms/transfer-request/${btn.dataset.pk}/reject/`;
-  });
-  {% endif %}
+  if (rejectModal) {
+    rejectModal.addEventListener('show.bs.modal', function (e) {
+      const btn = e.relatedTarget;
+      document.getElementById('reject-request-no').textContent = btn.dataset.requestNo;
+      document.getElementById('rejectForm').action = `/wms/transfer-request/${btn.dataset.pk}/reject/`;
+    });
+  }
 });
 </script>
 {% endblock %}

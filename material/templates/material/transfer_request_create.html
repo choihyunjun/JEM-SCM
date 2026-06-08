@@ -1,5 +1,4 @@
 {% extends "material/material_base.html" %}
-
 {% block title %}재료 이동 요청 등록{% endblock %}
 
 {% block material_content %}
@@ -12,65 +11,87 @@
   </div>
 
   <div class="row justify-content-center">
-    <div class="col-lg-7">
-      <div class="card shadow-sm">
+    <div class="col-lg-9">
+
+      {# ── 품목 검색 ── #}
+      <div class="card shadow-sm mb-3">
+        <div class="card-header bg-light fw-bold py-2">품목 추가</div>
         <div class="card-body">
-
-          {# ── 품번 검색 ── #}
-          <div class="mb-4">
-            <label class="form-label fw-bold">품번 검색</label>
-            <div class="input-group">
-              <input type="text" id="search-part-no" class="form-control"
-                     placeholder="품번 입력 후 Enter 또는 검색 클릭"
-                     autocomplete="off">
-              <button type="button" class="btn btn-outline-primary" id="btn-search">
-                <i class="bi bi-search"></i> 검색
-              </button>
+          <div class="row g-2 align-items-end">
+            <div class="col-md-5" style="position:relative;">
+              <label class="form-label small mb-1">품번 검색</label>
+              <input type="text" id="search-part-no" class="form-control form-control-sm"
+                     placeholder="품번 입력 후 Enter" autocomplete="off">
+              <div id="suggestions" class="list-group mt-1"
+                   style="display:none;position:absolute;z-index:999;width:100%;max-height:200px;overflow-y:auto;"></div>
             </div>
-            <div id="suggestions" class="list-group mt-1" style="display:none; position:absolute; z-index:999; width:400px;"></div>
-          </div>
-
-          {# ── 조회 결과: 창고별 재고 ── #}
-          <div id="stock-result" style="display:none;">
-            <div class="alert alert-info py-2 mb-3" id="part-info-bar"></div>
-            <div class="mb-4">
-              <label class="form-label fw-bold">창고별 현재 재고</label>
-              <table class="table table-sm table-bordered">
-                <thead class="table-secondary">
-                  <tr><th>창고코드</th><th>창고명</th><th class="text-end">현재 재고</th></tr>
-                </thead>
-                <tbody id="stock-table-body"></tbody>
-              </table>
+            <div class="col-md-3">
+              <label class="form-label small mb-1">신청수량</label>
+              <input type="number" id="add-qty" class="form-control form-control-sm" min="1" placeholder="수량">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small mb-1">비고</label>
+              <input type="text" id="add-remark" class="form-control form-control-sm" placeholder="선택">
+            </div>
+            <div class="col-md-1">
+              <button type="button" class="btn btn-primary btn-sm w-100" id="btn-add">추가</button>
             </div>
           </div>
 
-          {# ── 신청 폼 ── #}
-          <form method="post" id="request-form" style="display:none;">
-            {% csrf_token %}
-            <input type="hidden" name="part_no" id="form-part-no">
-
-            <div class="mb-3">
-              <label class="form-label fw-bold">신청수량 <span class="text-danger">*</span></label>
-              <input type="number" name="requested_qty" id="form-qty" class="form-control"
-                     min="1" placeholder="이동 신청할 수량 입력" required>
-            </div>
-
-            <div class="mb-4">
-              <label class="form-label fw-bold">신청사유 <span class="text-muted fw-normal">(선택)</span></label>
-              <textarea name="remark" class="form-control" rows="3"
-                        placeholder="이동이 필요한 이유를 입력하세요"></textarea>
-            </div>
-
-            <div class="d-flex gap-2">
-              <button type="submit" class="btn btn-primary px-4">
-                <i class="bi bi-send me-1"></i>이동 요청 등록
-              </button>
-              <a href="{% url 'material:transfer_request_list' %}" class="btn btn-outline-secondary">취소</a>
-            </div>
-          </form>
-
+          {# 창고별 재고 미리보기 #}
+          <div id="stock-preview" class="mt-2" style="display:none;">
+            <small class="text-muted">창고별 현재 재고: </small>
+            <span id="stock-preview-text" class="small"></span>
+          </div>
+          <input type="hidden" id="selected-part-no">
+          <input type="hidden" id="selected-part-name">
         </div>
       </div>
+
+      {# ── 추가된 품목 목록 ── #}
+      <form method="post" id="main-form">
+        {% csrf_token %}
+        <div class="card shadow-sm mb-3">
+          <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
+            <span class="fw-bold">신청 품목 목록</span>
+            <span class="badge bg-primary" id="item-count">0개</span>
+          </div>
+          <div class="card-body p-0">
+            <table class="table table-sm table-hover mb-0" id="items-table">
+              <thead class="table-secondary">
+                <tr>
+                  <th style="width:180px">품번</th>
+                  <th>품명</th>
+                  <th class="text-end" style="width:100px">신청수량</th>
+                  <th style="width:180px">비고</th>
+                  <th style="width:60px"></th>
+                </tr>
+              </thead>
+              <tbody id="items-body">
+                <tr id="empty-row">
+                  <td colspan="5" class="text-center text-muted py-3">품목을 추가하세요</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label small fw-bold">전체 신청사유 <span class="text-muted fw-normal">(선택)</span></label>
+          <textarea name="remark" class="form-control form-control-sm" rows="2"
+                    placeholder="이동이 필요한 이유를 입력하세요"></textarea>
+        </div>
+
+        <div id="hidden-inputs"></div>
+
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-primary px-4" id="btn-submit" disabled>
+            <i class="bi bi-send me-1"></i>이동 요청 등록
+          </button>
+          <a href="{% url 'material:transfer_request_list' %}" class="btn btn-outline-secondary">취소</a>
+        </div>
+      </form>
+
     </div>
   </div>
 </div>
@@ -82,63 +103,131 @@
 (function () {
   const stockApiUrl = "{% url 'material:api_transfer_request_stock' %}";
   const searchInput = document.getElementById('search-part-no');
-  const btnSearch = document.getElementById('btn-search');
-  const stockResult = document.getElementById('stock-result');
-  const stockTableBody = document.getElementById('stock-table-body');
-  const partInfoBar = document.getElementById('part-info-bar');
-  const requestForm = document.getElementById('request-form');
-  const formPartNo = document.getElementById('form-part-no');
+  const addQtyInput = document.getElementById('add-qty');
+  const addRemarkInput = document.getElementById('add-remark');
+  const btnAdd = document.getElementById('btn-add');
+  const itemsBody = document.getElementById('items-body');
+  const emptyRow = document.getElementById('empty-row');
+  const hiddenInputs = document.getElementById('hidden-inputs');
+  const itemCountBadge = document.getElementById('item-count');
+  const btnSubmit = document.getElementById('btn-submit');
+  const stockPreview = document.getElementById('stock-preview');
+  const stockPreviewText = document.getElementById('stock-preview-text');
   const suggestions = document.getElementById('suggestions');
+  const selectedPartNo = document.getElementById('selected-part-no');
+  const selectedPartName = document.getElementById('selected-part-name');
 
+  let items = [];
   let searchTimeout = null;
 
-  function doSearch(partNo) {
-    if (!partNo) return;
+  function updateTable() {
+    emptyRow.style.display = items.length ? 'none' : '';
+    itemCountBadge.textContent = items.length + '개';
+    btnSubmit.disabled = items.length === 0;
+
+    // hidden inputs 재생성
+    hiddenInputs.innerHTML = '';
+    items.forEach(item => {
+      hiddenInputs.innerHTML += `
+        <input type="hidden" name="part_no" value="${escHtml(item.partNo)}">
+        <input type="hidden" name="requested_qty" value="${item.qty}">
+        <input type="hidden" name="item_remark" value="${escHtml(item.remark)}">
+      `;
+    });
+  }
+
+  function renderRows() {
+    // 기존 동적 행 제거
+    document.querySelectorAll('#items-body tr.item-row').forEach(r => r.remove());
+    items.forEach((item, idx) => {
+      const tr = document.createElement('tr');
+      tr.className = 'item-row';
+      tr.innerHTML = `
+        <td><strong>${escHtml(item.partNo)}</strong></td>
+        <td class="text-truncate" style="max-width:200px">${escHtml(item.partName)}</td>
+        <td class="text-end">${item.qty.toLocaleString()}</td>
+        <td class="text-truncate" style="max-width:160px"><small class="text-muted">${escHtml(item.remark)}</small></td>
+        <td><button type="button" class="btn btn-outline-danger btn-sm py-0 px-1" data-idx="${idx}">
+          <i class="bi bi-x"></i></button></td>
+      `;
+      itemsBody.appendChild(tr);
+    });
+    updateTable();
+  }
+
+  function addItem() {
+    const partNo = selectedPartNo.value.trim();
+    const partName = selectedPartName.value.trim();
+    const qty = parseInt(addQtyInput.value);
+    const remark = addRemarkInput.value.trim();
+
+    if (!partNo) { alert('품번을 검색하여 선택하세요.'); return; }
+    if (!qty || qty <= 0) { alert('수량을 입력하세요.'); return; }
+    if (items.find(i => i.partNo === partNo)) { alert('이미 추가된 품번입니다.'); return; }
+
+    items.push({ partNo, partName, qty, remark });
+    renderRows();
+
+    // 초기화
+    searchInput.value = '';
+    addQtyInput.value = '';
+    addRemarkInput.value = '';
+    selectedPartNo.value = '';
+    selectedPartName.value = '';
+    stockPreview.style.display = 'none';
+    searchInput.focus();
+  }
+
+  itemsBody.addEventListener('click', e => {
+    const btn = e.target.closest('button[data-idx]');
+    if (!btn) return;
+    items.splice(parseInt(btn.dataset.idx), 1);
+    renderRows();
+  });
+
+  btnAdd.addEventListener('click', addItem);
+  searchInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); doSearch(searchInput.value.trim()); }
+  });
+
+  function doSearch(val) {
+    if (!val) return;
     suggestions.style.display = 'none';
-    fetch(`${stockApiUrl}?part_no=${encodeURIComponent(partNo)}`)
+    fetch(`${stockApiUrl}?part_no=${encodeURIComponent(val)}`)
       .then(r => r.json())
       .then(data => {
         if (data.ok) {
-          showStockResult(data);
+          selectPart(data);
+        } else if (data.suggestions && data.suggestions.length) {
+          showSuggestions(data.suggestions);
         } else {
-          stockResult.style.display = 'none';
-          requestForm.style.display = 'none';
-          if (data.suggestions && data.suggestions.length) {
-            showSuggestions(data.suggestions);
-          } else {
-            alert(data.error || '품번을 찾을 수 없습니다.');
-          }
+          alert(data.error || '품번을 찾을 수 없습니다.');
         }
-      })
-      .catch(() => alert('조회 중 오류가 발생했습니다.'));
+      });
   }
 
-  function showStockResult(data) {
-    partInfoBar.textContent = `${data.part_no}  /  ${data.part_name}`;
-    formPartNo.value = data.part_no;
-
-    let rows = '';
-    data.stocks.forEach(s => {
-      const cls = s.qty > 0 ? '' : 'text-muted';
-      rows += `<tr><td>${s.warehouse_code}</td><td>${s.warehouse_name}</td>
-               <td class="text-end ${cls}"><strong>${s.qty.toLocaleString()}</strong></td></tr>`;
-    });
-    stockTableBody.innerHTML = rows;
-    stockResult.style.display = 'block';
-    requestForm.style.display = 'block';
+  function selectPart(data) {
+    selectedPartNo.value = data.part_no;
+    selectedPartName.value = data.part_name;
+    searchInput.value = data.part_no;
+    suggestions.style.display = 'none';
+    // 재고 미리보기
+    const preview = data.stocks.map(s => `${s.warehouse_name}: ${s.qty.toLocaleString()}`).join(' / ');
+    stockPreviewText.textContent = preview;
+    stockPreview.style.display = '';
+    addQtyInput.focus();
   }
 
-  function showSuggestions(items) {
+  function showSuggestions(list) {
     suggestions.innerHTML = '';
-    items.forEach(item => {
+    list.forEach(item => {
       const a = document.createElement('a');
       a.href = '#';
       a.className = 'list-group-item list-group-item-action py-1 px-2 small';
       a.textContent = `${item.part_no}  —  ${item.part_name}`;
-      a.addEventListener('click', function (e) {
+      a.addEventListener('click', e => {
         e.preventDefault();
         searchInput.value = item.part_no;
-        suggestions.style.display = 'none';
         doSearch(item.part_no);
       });
       suggestions.appendChild(a);
@@ -146,12 +235,6 @@
     suggestions.style.display = 'block';
   }
 
-  btnSearch.addEventListener('click', () => doSearch(searchInput.value.trim()));
-  searchInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); doSearch(searchInput.value.trim()); }
-  });
-
-  // 입력 중 자동완성
   searchInput.addEventListener('input', function () {
     clearTimeout(searchTimeout);
     const val = this.value.trim();
@@ -162,6 +245,8 @@
         .then(data => {
           if (!data.ok && data.suggestions && data.suggestions.length) {
             showSuggestions(data.suggestions);
+          } else if (data.ok) {
+            showSuggestions([{ part_no: data.part_no, part_name: data.part_name }]);
           } else {
             suggestions.style.display = 'none';
           }
@@ -174,6 +259,10 @@
       suggestions.style.display = 'none';
     }
   });
+
+  function escHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
 })();
 </script>
 {% endblock %}
