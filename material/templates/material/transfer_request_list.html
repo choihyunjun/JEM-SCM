@@ -62,6 +62,7 @@
             <td>{{ req.requested_at|date:"Y-m-d H:i" }}</td>
             <td>
               {% if req.status == 'PENDING' %}<span class="badge bg-warning text-dark">대기중</span>
+              {% elif req.status == 'PARTIAL' %}<span class="badge bg-info text-dark">부분승인</span>
               {% elif req.status == 'APPROVED' %}<span class="badge bg-success">승인완료</span>
               {% elif req.status == 'REJECTED' %}<span class="badge bg-danger">반려</span>
               {% elif req.status == 'CANCELLED' %}<span class="badge bg-secondary">취소</span>
@@ -71,10 +72,10 @@
             <td>{{ req.warehouse_to.name|default:"-" }}</td>
             <td>{% if req.approved_by %}{{ req.approved_by.get_full_name|default:req.approved_by.username }}{% else %}-{% endif %}</td>
             <td>
-              {% if req.status == 'PENDING' %}
+              {% if req.status == 'PENDING' or req.status == 'PARTIAL' %}
                 {% if can_approve %}
                   <a href="{% url 'material:transfer_request_approve' req.pk %}"
-                     class="btn btn-success btn-sm py-0 px-2 me-1">승인</a>
+                     class="btn btn-success btn-sm py-0 px-2 me-1">{% if req.status == 'PARTIAL' %}잔여승인{% else %}승인{% endif %}</a>
                   <button class="btn btn-outline-danger btn-sm py-0 px-2"
                           data-bs-toggle="modal" data-bs-target="#rejectModal"
                           data-pk="{{ req.pk }}" data-request-no="{{ req.request_no }}">반려</button>

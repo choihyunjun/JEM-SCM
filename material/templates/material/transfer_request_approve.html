@@ -65,6 +65,7 @@
         <table class="table table-sm mb-0">
           <thead class="table-secondary">
             <tr>
+              <th style="width:40px"><input type="checkbox" id="check-all" checked title="전체선택"></th>
               <th style="width:160px">품번</th>
               <th>품명</th>
               <th class="text-end" style="width:100px">신청수량</th>
@@ -76,12 +77,15 @@
           <tbody>
             {% for line in lines %}
             <tr class="line-row" data-line-id="{{ line.pk }}" data-part-no="{{ line.part.part_no }}">
+              <td>
+                <input type="checkbox" name="process_{{ line.pk }}" class="line-check" checked>
+              </td>
               <td><strong>{{ line.part.part_no }}</strong></td>
               <td class="small">{{ line.part.part_name|truncatechars:35 }}</td>
               <td class="text-end">{{ line.requested_qty|floatformat:0 }}</td>
               <td>
                 <select name="lot_{{ line.pk }}" class="form-select form-select-sm lot-select"
-                        data-line-id="{{ line.pk }}" required>
+                        data-line-id="{{ line.pk }}">
                   <option value="">-- 출고창고 선택 후 조회 --</option>
                 </select>
               </td>
@@ -89,7 +93,7 @@
                 <input type="number" name="qty_{{ line.pk }}"
                        class="form-control form-control-sm text-end qty-input"
                        min="1" max="{{ line.requested_qty }}"
-                       value="{{ line.requested_qty }}" required>
+                       value="{{ line.requested_qty }}">
               </td>
               <td class="small text-muted avail-cell" id="avail-{{ line.pk }}">-</td>
             </tr>
@@ -169,6 +173,29 @@
       availCell.textContent = '-';
       availCell.className = 'small text-muted avail-cell';
     }
+  }
+
+  // 전체선택 체크박스
+  document.getElementById('check-all').addEventListener('change', function () {
+    document.querySelectorAll('.line-check').forEach(cb => {
+      cb.checked = this.checked;
+      toggleLineRow(cb);
+    });
+  });
+
+  // 개별 체크박스: 체크 해제 시 해당 행 inputs 비활성화
+  document.addEventListener('change', e => {
+    if (!e.target.classList.contains('line-check')) return;
+    toggleLineRow(e.target);
+  });
+
+  function toggleLineRow(cb) {
+    const row = cb.closest('tr');
+    const disabled = !cb.checked;
+    row.querySelectorAll('select, input[type=number]').forEach(el => {
+      el.disabled = disabled;
+    });
+    row.style.opacity = disabled ? '0.4' : '';
   }
 })();
 </script>

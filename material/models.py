@@ -1318,6 +1318,7 @@ class MoldRepairRequest(models.Model):
 class MaterialTransferRequest(models.Model):
     STATUS_CHOICES = [
         ('PENDING', '대기중'),
+        ('PARTIAL', '부분승인'),
         ('APPROVED', '승인완료'),
         ('REJECTED', '반려'),
         ('CANCELLED', '취소'),
