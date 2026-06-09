@@ -102,7 +102,8 @@
                     <button type="submit" class="btn btn-outline-secondary btn-sm py-0 px-2"
                             onclick="return confirm('요청을 취소하시겠습니까?')">취소</button>
                   </form>
-                {% elif can_approve %}
+                {% endif %}
+                {% if can_approve and req.requested_by != request.user or request.user.is_superuser %}
                   <a href="{% url 'material:transfer_request_approve' req.pk %}"
                      class="btn btn-success btn-sm py-0 px-2 me-1"
                      onclick="event.stopPropagation()">

@@ -11109,7 +11109,7 @@ def transfer_request_approve(request, pk):
     if not _can_approve_transfer(request.user):
         messages.error(request, '승인 권한이 없습니다.')
         return redirect('material:transfer_request_list')
-    if req.requested_by == request.user:
+    if req.requested_by == request.user and not request.user.is_superuser:
         messages.error(request, '본인 요청은 직접 승인할 수 없습니다.')
         return redirect('material:transfer_request_list')
 
