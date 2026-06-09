@@ -11014,7 +11014,6 @@ def _can_approve_transfer(user):
 
 
 @login_required
-@wms_permission_required('can_wms_stock_view')
 def transfer_request_list(request):
     from material.models import MaterialTransferRequest
     can_approve = _can_approve_transfer(request.user)
@@ -11051,7 +11050,6 @@ def transfer_request_list(request):
 
 
 @login_required
-@wms_permission_required('can_wms_stock_view')
 def transfer_request_create(request):
     from material.models import MaterialTransferRequest, MaterialTransferRequestLine
     if request.method == 'POST':
@@ -11329,7 +11327,6 @@ def transfer_request_reject(request, pk):
 
 
 @login_required
-@wms_permission_required('can_wms_stock_view')
 def transfer_request_cancel(request, pk):
     from material.models import MaterialTransferRequest
     if request.method != 'POST':
@@ -11342,7 +11339,6 @@ def transfer_request_cancel(request, pk):
 
 
 @login_required
-@wms_permission_required('can_wms_stock_view')
 def api_transfer_request_stock(request):
     """품번 검색 + 창고별 재고 합계 반환 (신청 화면용)"""
     from django.http import JsonResponse
