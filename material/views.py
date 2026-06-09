@@ -11106,6 +11106,13 @@ def transfer_request_approve(request, pk):
     from material.models import MaterialTransferRequest, MaterialTransferRequestLine
     req = get_object_or_404(MaterialTransferRequest, pk=pk, status__in=['PENDING', 'PARTIAL'])
 
+    if not _can_approve_transfer(request.user):
+        messages.error(request, '승인 권한이 없습니다.')
+        return redirect('material:transfer_request_list')
+    if req.requested_by == request.user:
+        messages.error(request, '본인 요청은 직접 승인할 수 없습니다.')
+        return redirect('material:transfer_request_list')
+
     # 미처리 라인만 표시
     pending_lines = list(req.lines.select_related('part').filter(approved_qty__isnull=True))
 
@@ -11242,6 +11249,10 @@ def transfer_request_reject(request, pk):
         return redirect('material:transfer_request_list')
 
     req = get_object_or_404(MaterialTransferRequest, pk=pk, status__in=['PENDING', 'PARTIAL'])
+
+    if not _can_approve_transfer(request.user) or req.requested_by == request.user:
+        messages.error(request, '권한이 없습니다.')
+        return redirect('material:transfer_request_list')
     reason = request.POST.get('reject_reason', '').strip()
 
     if req.status == 'PARTIAL':

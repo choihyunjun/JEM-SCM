@@ -89,7 +89,13 @@
             <td>{% if req.approved_by %}{{ req.approved_by.get_full_name|default:req.approved_by.username }}{% else %}-{% endif %}</td>
             <td>
               {% if req.status == 'PENDING' or req.status == 'PARTIAL' %}
-                {% if can_approve %}
+                {% if req.requested_by == request.user %}
+                  <form method="post" action="{% url 'material:transfer_request_cancel' req.pk %}" style="display:inline" onclick="event.stopPropagation()">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-secondary btn-sm py-0 px-2"
+                            onclick="return confirm('요청을 취소하시겠습니까?')">취소</button>
+                  </form>
+                {% elif can_approve %}
                   <a href="{% url 'material:transfer_request_approve' req.pk %}"
                      class="btn btn-success btn-sm py-0 px-2 me-1"
                      onclick="event.stopPropagation()">
@@ -103,14 +109,6 @@
                           onclick="event.stopPropagation()">
                     {% if req.status == 'PARTIAL' %}잔여취소{% else %}반려{% endif %}
                   </button>
-                {% else %}
-                  {% if req.requested_by == request.user %}
-                  <form method="post" action="{% url 'material:transfer_request_cancel' req.pk %}" style="display:inline" onclick="event.stopPropagation()">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-outline-secondary btn-sm py-0 px-2"
-                            onclick="return confirm('요청을 취소하시겠습니까?')">취소</button>
-                  </form>
-                  {% endif %}
                 {% endif %}
                 {% if req.status == 'PARTIAL' %}
                   <br><small class="text-info"><i class="bi bi-slash-circle me-1"></i>일부미처리 ({{ req.approved_lines }}/{{ req.total_lines }})</small>
