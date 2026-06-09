@@ -18,12 +18,12 @@
         <div class="card-header bg-light fw-bold py-2">품목 추가</div>
         <div class="card-body">
           <div class="row g-2 align-items-end">
-            <div class="col-md-5" style="position:relative;">
-              <label class="form-label small mb-1">품번 검색</label>
+            <div class="col-md-5 position-relative">
+              <label class="form-label small mb-1">품번/품명 검색</label>
               <input type="text" id="search-part-no" class="form-control form-control-sm"
-                     placeholder="품번 입력 후 Enter" autocomplete="off">
-              <div id="suggestions" class="list-group mt-1"
-                   style="display:none;position:absolute;z-index:999;width:100%;max-height:200px;overflow-y:auto;"></div>
+                     placeholder="품번 또는 품명 입력" autocomplete="off">
+              <div id="suggestions" class="position-absolute w-100 bg-white border rounded shadow-sm"
+                   style="display:none;z-index:1050;max-height:280px;overflow-y:auto;top:100%;"></div>
             </div>
             <div class="col-md-3">
               <label class="form-label small mb-1">신청수량</label>
@@ -186,52 +186,38 @@
   });
 
   btnAdd.addEventListener('click', addItem);
-  searchInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); doSearch(searchInput.value.trim()); }
-  });
 
-  function doSearch(val) {
-    if (!val) return;
+  const partSearchApiUrl = "{% url 'material:api_part_search' %}";
+
+  function selectPartByNo(partNo) {
     suggestions.style.display = 'none';
-    fetch(`${stockApiUrl}?part_no=${encodeURIComponent(val)}`)
+    fetch(`${stockApiUrl}?part_no=${encodeURIComponent(partNo)}`)
       .then(r => r.json())
       .then(data => {
-        if (data.ok) {
-          selectPart(data);
-        } else if (data.suggestions && data.suggestions.length) {
-          showSuggestions(data.suggestions);
-        } else {
-          alert(data.error || '품번을 찾을 수 없습니다.');
-        }
+        if (!data.ok) { alert(data.error || '품번을 찾을 수 없습니다.'); return; }
+        selectedPartNo.value = data.part_no;
+        selectedPartName.value = data.part_name;
+        searchInput.value = data.part_no;
+        const preview = data.stocks.map(s => `${s.warehouse_name}: ${s.qty.toLocaleString()}`).join(' / ');
+        stockPreviewText.textContent = preview || '재고 없음';
+        stockPreview.style.display = '';
+        addQtyInput.focus();
       });
   }
 
-  function selectPart(data) {
-    selectedPartNo.value = data.part_no;
-    selectedPartName.value = data.part_name;
-    searchInput.value = data.part_no;
-    suggestions.style.display = 'none';
-    // 재고 미리보기
-    const preview = data.stocks.map(s => `${s.warehouse_name}: ${s.qty.toLocaleString()}`).join(' / ');
-    stockPreviewText.textContent = preview;
-    stockPreview.style.display = '';
-    addQtyInput.focus();
-  }
-
-  function showSuggestions(list) {
-    suggestions.innerHTML = '';
-    list.forEach(item => {
-      const a = document.createElement('a');
-      a.href = '#';
-      a.className = 'list-group-item list-group-item-action py-1 px-2 small';
-      a.textContent = `${item.part_no}  —  ${item.part_name}`;
-      a.addEventListener('click', e => {
-        e.preventDefault();
-        searchInput.value = item.part_no;
-        doSearch(item.part_no);
-      });
-      suggestions.appendChild(a);
-    });
+  function showSuggestions(results) {
+    if (!results.length) {
+      suggestions.innerHTML = '<div class="px-3 py-2 text-muted small">검색 결과 없음</div>';
+      suggestions.style.display = 'block';
+      return;
+    }
+    suggestions.innerHTML = results.map(r => `
+      <div class="px-3 py-2 border-bottom" style="cursor:pointer;"
+           onmousedown="event.preventDefault();document.getElementById('search-part-no').dataset.selecting='1';selectPartByNoGlobal('${escHtml(r.part_no)}')">
+        <span class="fw-bold text-primary">${escHtml(r.part_no)}</span>
+        <span class="text-muted small ms-2">${escHtml(r.part_name)}</span>
+      </div>
+    `).join('');
     suggestions.style.display = 'block';
   }
 
@@ -240,25 +226,25 @@
     const val = this.value.trim();
     if (val.length < 2) { suggestions.style.display = 'none'; return; }
     searchTimeout = setTimeout(() => {
-      fetch(`${stockApiUrl}?part_no=${encodeURIComponent(val)}`)
+      fetch(`${partSearchApiUrl}?q=${encodeURIComponent(val)}`)
         .then(r => r.json())
-        .then(data => {
-          if (!data.ok && data.suggestions && data.suggestions.length) {
-            showSuggestions(data.suggestions);
-          } else if (data.ok) {
-            showSuggestions([{ part_no: data.part_no, part_name: data.part_name }]);
-          } else {
-            suggestions.style.display = 'none';
-          }
-        });
+        .then(data => showSuggestions(data.results || []));
     }, 300);
   });
 
-  document.addEventListener('click', e => {
-    if (!suggestions.contains(e.target) && e.target !== searchInput) {
-      suggestions.style.display = 'none';
+  searchInput.addEventListener('blur', function () {
+    setTimeout(() => { suggestions.style.display = 'none'; }, 200);
+  });
+
+  searchInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const val = searchInput.value.trim();
+      if (val) selectPartByNo(val);
     }
   });
+
+  window.selectPartByNoGlobal = selectPartByNo;
 
   function escHtml(str) {
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
