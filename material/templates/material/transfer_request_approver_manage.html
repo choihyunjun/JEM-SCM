@@ -1,0 +1,73 @@
+{% extends "material/material_base.html" %}
+{% block title %}이동요청 승인권한 관리{% endblock %}
+
+{% block material_content %}
+<div class="container-fluid py-3">
+
+  <div class="d-flex align-items-center mb-3 gap-2">
+    <a href="{% url 'material:transfer_request_list' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left"></i>
+    </a>
+    <h4 class="mb-0"><i class="bi bi-shield-check me-2 text-success"></i>이동요청 승인권한 관리</h4>
+  </div>
+
+  <div class="alert alert-info small py-2">
+    <i class="bi bi-info-circle me-1"></i>
+    체크된 사용자만 이동요청에 대해 <strong>승인 / 반려</strong> 버튼이 표시됩니다.
+    Superuser는 항상 승인 권한을 가집니다.
+  </div>
+
+  <form method="post">
+    {% csrf_token %}
+    <div class="card shadow-sm">
+      <div class="card-body p-0">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th style="width:50px" class="text-center">승인권한</th>
+              <th>이름</th>
+              <th>아이디</th>
+              <th>이메일</th>
+              <th>Superuser</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in users_with_flag %}
+            <tr class="{% if row.user.is_superuser %}table-secondary{% elif row.is_approver %}table-success{% endif %}">
+              <td class="text-center">
+                {% if row.user.is_superuser %}
+                  <i class="bi bi-check-circle-fill text-success" title="Superuser는 항상 승인 가능"></i>
+                {% else %}
+                  <input type="checkbox" name="approver_ids" value="{{ row.user.pk }}"
+                         {% if row.is_approver %}checked{% endif %}
+                         class="form-check-input">
+                {% endif %}
+              </td>
+              <td class="fw-bold">{{ row.user.get_full_name|default:"-" }}</td>
+              <td><code>{{ row.user.username }}</code></td>
+              <td class="small text-muted">{{ row.user.email|default:"-" }}</td>
+              <td>
+                {% if row.user.is_superuser %}
+                  <span class="badge bg-dark">superuser</span>
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center text-muted py-4">등록된 사용자가 없습니다.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="mt-3">
+      <button type="submit" class="btn btn-success px-4">
+        <i class="bi bi-floppy me-1"></i>저장
+      </button>
+    </div>
+  </form>
+
+</div>
+{% endblock %}

@@ -11009,8 +11009,8 @@ def mold_repair_detail(request, pk):
 # =============================================================================
 
 def _can_approve_transfer(user):
-    profile = _get_profile(user)
-    return user.is_superuser or (profile and getattr(profile, 'can_wms_stock_edit', False))
+    from material.models import TransferRequestApprover
+    return user.is_superuser or TransferRequestApprover.objects.filter(user=user).exists()
 
 
 @login_required
@@ -11345,3 +11345,39 @@ def api_transfer_request_lots(request):
         })
 
     return JsonResponse({'ok': True, 'lots': lots})
+
+
+@login_required
+def transfer_request_approver_manage(request):
+    """이동요청 승인권한자 관리 (superuser 전용)"""
+    from material.models import TransferRequestApprover
+    from django.contrib.auth.models import User as AuthUser
+
+    if not request.user.is_superuser:
+        messages.error(request, '관리자만 접근 가능합니다.')
+        return redirect('material:transfer_request_list')
+
+    approver_user_ids = set(TransferRequestApprover.objects.values_list('user_id', flat=True))
+    all_users = AuthUser.objects.filter(is_active=True).order_by('last_name', 'first_name', 'username')
+
+    if request.method == 'POST':
+        selected_ids = set(int(x) for x in request.POST.getlist('approver_ids'))
+        to_add = selected_ids - approver_user_ids
+        to_remove = approver_user_ids - selected_ids
+
+        for uid in to_add:
+            TransferRequestApprover.objects.get_or_create(
+                user_id=uid, defaults={'added_by': request.user}
+            )
+        TransferRequestApprover.objects.filter(user_id__in=to_remove).delete()
+
+        messages.success(request, '승인권한자 목록이 저장되었습니다.')
+        return redirect('material:transfer_request_approver_manage')
+
+    users_with_flag = [
+        {'user': u, 'is_approver': u.pk in approver_user_ids}
+        for u in all_users
+    ]
+    return render(request, 'material/transfer_request_approver_manage.html', {
+        'users_with_flag': users_with_flag,
+    })

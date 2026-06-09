@@ -1400,3 +1400,18 @@ class MaterialTransferRequestLine(models.Model):
 
     def __str__(self):
         return f"{self.request.request_no} {self.part.part_no} x {self.requested_qty}"
+
+
+class TransferRequestApprover(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='transfer_approver',
+                                verbose_name="승인자")
+    added_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                 related_name='+', verbose_name="등록자")
+    added_at = models.DateTimeField("등록일시", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "이동요청 승인권한자"
+        verbose_name_plural = "이동요청 승인권한자"
+
+    def __str__(self):
+        return self.user.get_full_name() or self.user.username

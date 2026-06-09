@@ -165,6 +165,7 @@ urlpatterns = [
     path('transfer-request/<int:pk>/cancel/', views.transfer_request_cancel, name='transfer_request_cancel'),
     path('api/transfer-request/stock/', views.api_transfer_request_stock, name='api_transfer_request_stock'),
     path('api/transfer-request/lots/', views.api_transfer_request_lots, name='api_transfer_request_lots'),
+    path('transfer-request/approvers/', views.transfer_request_approver_manage, name='transfer_request_approver_manage'),
 
     # 금형 수리 의뢰
     path('mold/repair/', views.mold_repair_list, name='mold_repair_list'),
