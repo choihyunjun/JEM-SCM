@@ -10650,6 +10650,148 @@ def mold_mt_erp_sync(request):
         return JsonResponse({'success': False, 'error': str(e)})
 
 
+@login_required
+@wms_permission_required('can_wms_stock_view')
+def api_mold_from_molding_diff(request):
+    """성형 마스터 vs 금형 MT 비교 — 미등록 품번 목록 반환"""
+    from .models import MoldingMaster, MoldMaster as MoldMasterModel
+
+    molding_part_nos = set(
+        MoldingMaster.objects.values_list('part_no', flat=True).distinct()
+    )
+    mold_part_nos = set(
+        MoldMasterModel.objects.values_list('part_no', flat=True)
+    )
+    missing = molding_part_nos - mold_part_nos
+
+    items = []
+    for part_no in sorted(missing):
+        mm = MoldingMaster.objects.filter(part_no=part_no).order_by('-id').first()
+        items.append({
+            'part_no': part_no,
+            'mold_name': mm.part_name or '',
+            'item_group': mm.item_group or '',
+            'cv_count': mm.cavity if mm.cavity and mm.cavity > 0 else 1,
+        })
+
+    return JsonResponse({'success': True, 'items': items, 'count': len(items)})
+
+
+@login_required
+@wms_permission_required('can_wms_stock_view')
+def api_mold_bulk_add_from_molding(request):
+    """성형 마스터 → 금형 MT 일괄 등록 후 2026/01 ~ 현재월 ERP 숏트수 동기화"""
+    from .models import MoldMaster as MoldMasterModel, MoldShotRecord
+    from .erp_api import call_erp_api
+    from django.conf import settings as django_settings
+    import json as _json, calendar
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST만 허용'}, status=405)
+
+    try:
+        body = _json.loads(request.body)
+        items = body.get('items', [])
+    except Exception:
+        return JsonResponse({'success': False, 'error': '잘못된 요청 형식'})
+
+    if not items:
+        return JsonResponse({'success': False, 'error': '등록할 항목이 없습니다.'})
+
+    def safe_int(val, default):
+        try:
+            return int(val) if val else default
+        except (ValueError, TypeError):
+            return default
+
+    # 1. 일괄 등록
+    created_part_nos = []
+    skipped = []
+    with transaction.atomic():
+        for item in items:
+            part_no = (item.get('part_no') or '').strip()
+            if not part_no:
+                continue
+            if MoldMasterModel.objects.filter(part_no=part_no).exists():
+                skipped.append(part_no)
+                continue
+            MoldMasterModel.objects.create(
+                part_no=part_no,
+                mold_name=(item.get('mold_name') or '').strip(),
+                item_group=(item.get('item_group') or '').strip(),
+                grade=(item.get('grade') or '').strip().upper(),
+                material_type=(item.get('material_type') or '').strip(),
+                cv_count=safe_int(item.get('cv_count'), 1),
+                guarantee_shots=safe_int(item.get('guarantee_shots'), 500000),
+            )
+            created_part_nos.append(part_no)
+
+    if not created_part_nos:
+        return JsonResponse({
+            'success': False,
+            'error': '등록된 품번이 없습니다. (이미 존재하는 품번만 있었을 수 있습니다.)',
+            'skipped': skipped,
+        })
+
+    # 2. 신규 등록 품번만 대상으로 ERP 숏트수 동기화 (2026/01 ~ 현재월)
+    new_mold_map = {
+        m.part_no: m
+        for m in MoldMasterModel.objects.filter(part_no__in=created_part_nos)
+    }
+
+    now = timezone.localtime()
+    sync_months = []
+    y, m = 2026, 1
+    while (y < now.year) or (y == now.year and m <= now.month):
+        sync_months.append((y, m))
+        m += 1
+        if m > 12:
+            m, y = 1, y + 1
+
+    sync_results = []
+    for year, month in sync_months:
+        _, days = calendar.monthrange(year, month)
+        erp_body = {
+            'coCd': django_settings.ERP_COMPANY_CODE,
+            'wrDtFrom': f'{year}{month:02d}01',
+            'wrDtTo': f'{year}{month:02d}{days:02d}',
+        }
+        ok, raw, err = call_erp_api('/apiproxy/api20A03S00901', erp_body)
+        if not ok:
+            sync_results.append({'year': year, 'month': month, 'synced': 0, 'error': err})
+            continue
+
+        data = (raw.get('resultData') or []) if raw else []
+        part_qty_agg = {}
+        for r in data:
+            item_cd = (r.get('itemCd') or '').strip()
+            work_qt = int(float(r.get('workQt', 0) or 0))
+            if item_cd in new_mold_map and work_qt > 0:
+                part_qty_agg[item_cd] = part_qty_agg.get(item_cd, 0) + work_qt
+
+        synced = 0
+        with transaction.atomic():
+            for part_no, total_qty in part_qty_agg.items():
+                mold = new_mold_map[part_no]
+                cv = mold.cv_count if mold.cv_count > 0 else 1
+                shots = total_qty // cv
+                if shots > 0:
+                    MoldShotRecord.objects.update_or_create(
+                        mold=mold, year=year, month=month,
+                        defaults={'shots': shots, 'source': 'ERP'},
+                    )
+                    synced += 1
+        sync_results.append({'year': year, 'month': month, 'synced': synced})
+
+    return JsonResponse({
+        'success': True,
+        'created': len(created_part_nos),
+        'skipped': len(skipped),
+        'created_list': created_part_nos,
+        'sync_results': sync_results,
+    })
+
+
 def _send_repair_notification(event_type, obj):
     """금형 수리 알림 발송 헬퍼"""
     from admin_app.notifications import send_notification
