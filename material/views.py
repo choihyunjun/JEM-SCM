@@ -10653,8 +10653,8 @@ def mold_mt_erp_sync(request):
 @login_required
 @wms_permission_required('can_wms_stock_view')
 def api_mold_from_molding_diff(request):
-    """성형 마스터 vs 금형 MT 비교 — 미등록 품번 목록 반환"""
-    from .models import MoldingMaster, MoldMaster as MoldMasterModel
+    """성형 마스터 vs 금형 MT 비교 — 미등록 품번 목록 + MT기준설정 등급 반환"""
+    from .models import MoldingMaster, MoldMaster as MoldMasterModel, MoldMTSetting
 
     molding_part_nos = set(
         MoldingMaster.objects.values_list('part_no', flat=True).distinct()
@@ -10674,7 +10674,17 @@ def api_mold_from_molding_diff(request):
             'cv_count': mm.cavity if mm.cavity and mm.cavity > 0 else 1,
         })
 
-    return JsonResponse({'success': True, 'items': items, 'count': len(items)})
+    grade_settings = [
+        {'grade': s.material_type, 'interval': s.grade_a}
+        for s in MoldMTSetting.objects.all().order_by('material_type')
+    ]
+
+    return JsonResponse({
+        'success': True,
+        'items': items,
+        'count': len(items),
+        'grade_settings': grade_settings,
+    })
 
 
 @login_required

@@ -680,6 +680,10 @@
                             성형 마스터에 있으나 금형 MT에 미등록된 품번 목록입니다.
                             <strong>등급·재료는 직접 입력</strong>하고, 등록할 항목만 체크하세요.
                         </div>
+                        <div class="mb-2">
+                            <input type="text" id="importSearchInput" class="form-control form-control-sm"
+                                placeholder="품번 또는 품명 검색..." autocomplete="off" oninput="filterImportTable(this.value)">
+                        </div>
                         <div class="d-flex align-items-center gap-2 mb-2">
                             <div class="form-check mb-0">
                                 <input class="form-check-input" type="checkbox" id="importSelectAll" onchange="toggleImportSelectAll(this)">
@@ -1352,6 +1356,7 @@ function submitERPSync() {
 
 // ─── 성형 마스터 가져오기 ───
 let _importItems = [];
+let _importGrades = [];  // MT기준설정에서 로드된 등급 목록
 
 function openImportFromMolding() {
     resetImportModal();
@@ -1372,7 +1377,9 @@ function resetImportModal() {
     document.getElementById('importNextBtn').disabled = true;
     document.getElementById('importConfirmBtn').disabled = false;
     document.getElementById('importSelectAll').checked = false;
+    document.getElementById('importSearchInput').value = '';
     _importItems = [];
+    _importGrades = [];
 }
 
 function fetchImportDiff() {
@@ -1386,6 +1393,7 @@ function fetchImportDiff() {
             return;
         }
         _importItems = data.items;
+        _importGrades = data.grade_settings || [];
         if (!_importItems.length) {
             document.getElementById('importEmptyArea').classList.remove('d-none');
             return;
@@ -1401,28 +1409,43 @@ function fetchImportDiff() {
     });
 }
 
+function buildGradeOptions() {
+    if (_importGrades.length) {
+        return '<option value="">-</option>' +
+            _importGrades.map(function(g) {
+                return '<option value="' + g.grade + '">' + g.grade + ' (' + g.interval.toLocaleString() + ')</option>';
+            }).join('');
+    }
+    // fallback: MT기준설정 없을 때
+    return '<option value="">-</option><option value="A">A</option><option value="B">B</option>';
+}
+
 function renderImportTable(items) {
     const tbody = document.getElementById('importTableBody');
     tbody.innerHTML = '';
+    const gradeOptions = buildGradeOptions();
     items.forEach(function(item, idx) {
         const tr = document.createElement('tr');
+        tr.dataset.partNo = item.part_no.toLowerCase();
+        tr.dataset.moldName = (item.mold_name || '').toLowerCase();
         tr.innerHTML =
             '<td class="text-center"><input type="checkbox" class="form-check-input import-chk" data-idx="' + idx + '" onchange="onImportCheckChange()"></td>' +
             '<td class="fw-bold text-primary">' + item.part_no + '</td>' +
             '<td><input type="text" class="form-control form-control-sm import-mold-name" data-idx="' + idx + '" value="' + (item.mold_name || '') + '" placeholder="금형명"></td>' +
             '<td>' + (item.item_group || '-') + '</td>' +
             '<td class="text-center"><input type="number" class="form-control form-control-sm import-cv text-center" data-idx="' + idx + '" value="' + (item.cv_count || 1) + '" min="1" style="width:55px;"></td>' +
-            '<td><select class="form-select form-select-sm import-grade" data-idx="' + idx + '">' +
-                '<option value="">-</option>' +
-                '<option value="A">A</option>' +
-                '<option value="B">B</option>' +
-                '<option value="C">C</option>' +
-                '<option value="D">D</option>' +
-                '<option value="E">E</option>' +
-            '</select></td>' +
+            '<td><select class="form-select form-select-sm import-grade" data-idx="' + idx + '">' + gradeOptions + '</select></td>' +
             '<td><input type="text" class="form-control form-control-sm import-material" data-idx="' + idx + '" placeholder="예: ABS" style="width:90px;"></td>' +
             '<td><input type="number" class="form-control form-control-sm import-guarantee text-center" data-idx="' + idx + '" value="500000" min="1"></td>';
         tbody.appendChild(tr);
+    });
+}
+
+function filterImportTable(val) {
+    const q = val.trim().toLowerCase();
+    document.querySelectorAll('#importTableBody tr').forEach(function(tr) {
+        const match = !q || tr.dataset.partNo.includes(q) || tr.dataset.moldName.includes(q);
+        tr.style.display = match ? '' : 'none';
     });
 }
 
