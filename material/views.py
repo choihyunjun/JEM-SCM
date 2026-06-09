@@ -11026,9 +11026,6 @@ def transfer_request_list(request):
         approved_lines=Count('lines', filter=DQ(lines__approved_qty__isnull=False)),
     )
 
-    if not can_approve:
-        qs = qs.filter(requested_by=request.user)
-
     status_filter = request.GET.get('status', '')
     if status_filter == 'PENDING':
         qs = qs.filter(status__in=['PENDING', 'PARTIAL'])
