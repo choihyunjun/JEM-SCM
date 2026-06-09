@@ -147,11 +147,13 @@
           data.lots.forEach(lot => {
             const opt = document.createElement('option');
             opt.value = lot.lot_no;
-            opt.textContent = `${lot.lot_label}  (${lot.qty.toLocaleString()}개)`;
+            opt.textContent = lot.fifo
+              ? `▶ ${lot.lot_label}  (총 ${lot.qty.toLocaleString()}개)`
+              : `${lot.lot_label}  (${lot.qty.toLocaleString()}개)`;
             opt.dataset.qty = lot.qty;
+            opt.dataset.fifo = lot.fifo ? '1' : '0';
             sel.appendChild(opt);
           });
-          // 첫 번째 선택 시 가용재고 표시
           updateAvail(sel, lineId);
         });
     });
@@ -167,7 +169,11 @@
     const opt = sel.options[sel.selectedIndex];
     const availCell = document.getElementById('avail-' + lineId);
     if (opt && opt.dataset.qty !== undefined) {
-      availCell.textContent = parseInt(opt.dataset.qty).toLocaleString() + '개';
+      if (opt.dataset.fifo === '1') {
+        availCell.innerHTML = `<span class="text-primary fw-bold">${parseInt(opt.dataset.qty).toLocaleString()}개</span><br><small class="text-muted">LOT 자동분할</small>`;
+      } else {
+        availCell.textContent = parseInt(opt.dataset.qty).toLocaleString() + '개';
+      }
       availCell.className = 'small text-success fw-bold avail-cell';
     } else {
       availCell.textContent = '-';

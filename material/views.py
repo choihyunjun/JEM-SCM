@@ -11143,7 +11143,7 @@ def transfer_request_approve(request, pk):
     line_inputs = []
     for line in pending_lines:
         if f'process_{line.pk}' not in request.POST:
-            continue  # 체크 안 된 라인 스킵
+            continue
         lot_str = request.POST.get(f'lot_{line.pk}', '').strip()
         qty_str = request.POST.get(f'qty_{line.pk}', '').strip()
         try:
@@ -11154,23 +11154,32 @@ def transfer_request_approve(request, pk):
             messages.error(request, f'{line.part.part_no}: 승인수량이 올바르지 않습니다.')
             return redirect('material:transfer_request_approve', pk=pk)
 
+        is_fifo = (lot_str == '__FIFO__')
         lot_no = None
-        if lot_str:
+        if not is_fifo and lot_str:
             try:
                 lot_no = datetime.date.fromisoformat(lot_str)
             except ValueError:
                 messages.error(request, f'{line.part.part_no}: LOT 날짜 형식 오류.')
                 return redirect('material:transfer_request_approve', pk=pk)
 
-        available = MaterialStock.objects.filter(
-            warehouse=from_wh, part=line.part, lot_no=lot_no
-        ).aggregate(total=Sum('quantity'))['total'] or 0
-        if available < qty:
-            lot_label = lot_str if lot_str else 'NULL(ERP미러)'
-            messages.error(request, f'{line.part.part_no} [LOT:{lot_label}]: 재고 부족 (가용 {available}, 신청 {qty})')
-            return redirect('material:transfer_request_approve', pk=pk)
+        if is_fifo:
+            total_avail = MaterialStock.objects.filter(
+                warehouse=from_wh, part=line.part, quantity__gt=0
+            ).aggregate(total=Sum('quantity'))['total'] or 0
+            if total_avail < qty:
+                messages.error(request, f'{line.part.part_no}: 재고 부족 (전체 가용 {total_avail}, 신청 {qty})')
+                return redirect('material:transfer_request_approve', pk=pk)
+        else:
+            available = MaterialStock.objects.filter(
+                warehouse=from_wh, part=line.part, lot_no=lot_no
+            ).aggregate(total=Sum('quantity'))['total'] or 0
+            if available < qty:
+                lot_label = lot_str if lot_str else 'NULL(ERP미러)'
+                messages.error(request, f'{line.part.part_no} [LOT:{lot_label}]: 재고 부족 (가용 {available}, 신청 {qty})')
+                return redirect('material:transfer_request_approve', pk=pk)
 
-        line_inputs.append((line, lot_no, qty))
+        line_inputs.append((line, lot_no, qty, is_fifo))
 
     if not line_inputs:
         messages.error(request, '처리할 품목을 1개 이상 체크해주세요.')
@@ -11182,36 +11191,80 @@ def transfer_request_approve(request, pk):
 
     try:
         with transaction.atomic():
-            for line, lot_no, qty in line_inputs:
-                stock = MaterialStock.objects.select_for_update().get(
-                    warehouse=from_wh, part=line.part, lot_no=lot_no
-                )
-                MaterialStock.objects.filter(pk=stock.pk).update(quantity=F('quantity') - qty)
-                target_stock, _ = MaterialStock.objects.get_or_create(
-                    warehouse=to_wh, part=line.part, lot_no=lot_no,
-                    defaults={'quantity': 0}
-                )
-                MaterialStock.objects.filter(pk=target_stock.pk).update(quantity=F('quantity') + qty)
-                target_stock.refresh_from_db()
+            for line, lot_no, qty, is_fifo in line_inputs:
+                if is_fifo:
+                    # FIFO: 오래된 LOT부터 순서대로 수량 소진
+                    fifo_stocks = list(MaterialStock.objects.filter(
+                        warehouse=from_wh, part=line.part, quantity__gt=0
+                    ).order_by(F('lot_no').asc(nulls_first=True)).select_for_update())
 
-                lot_label = lot_no.strftime('%Y-%m-%d') if lot_no else 'NULL'
-                trx = _create_trx(
-                    transaction_type='TRANSFER',
-                    date=now,
-                    part=line.part,
-                    quantity=qty,
-                    lot_no=lot_no,
-                    warehouse_from=from_wh,
-                    warehouse_to=to_wh,
-                    result_stock=target_stock.quantity,
-                    actor=request.user,
-                    remark=f'이동요청 {req.request_no} 승인 [LOT:{lot_label}]',
-                )
-                line.lot_no = lot_no
-                line.approved_qty = qty
-                line.transfer_transaction = trx
-                line.save()
-                erp_tasks.append((trx, qty))
+                    remaining = qty
+                    first_trx = None
+                    for s in fifo_stocks:
+                        if remaining <= 0:
+                            break
+                        take = min(int(s.quantity), remaining)
+                        MaterialStock.objects.filter(pk=s.pk).update(quantity=F('quantity') - take)
+                        target_stock, _ = MaterialStock.objects.get_or_create(
+                            warehouse=to_wh, part=line.part, lot_no=s.lot_no,
+                            defaults={'quantity': 0}
+                        )
+                        MaterialStock.objects.filter(pk=target_stock.pk).update(quantity=F('quantity') + take)
+                        target_stock.refresh_from_db()
+
+                        lot_label = s.lot_no.strftime('%Y-%m-%d') if s.lot_no else 'NULL'
+                        trx = _create_trx(
+                            transaction_type='TRANSFER',
+                            date=now,
+                            part=line.part,
+                            quantity=take,
+                            lot_no=s.lot_no,
+                            warehouse_from=from_wh,
+                            warehouse_to=to_wh,
+                            result_stock=target_stock.quantity,
+                            actor=request.user,
+                            remark=f'이동요청 {req.request_no} 승인 [FIFO:{lot_label}]',
+                        )
+                        erp_tasks.append((trx, take))
+                        if first_trx is None:
+                            first_trx = trx
+                        remaining -= take
+
+                    line.lot_no = None  # FIFO는 단일 LOT 없음
+                    line.approved_qty = qty
+                    line.transfer_transaction = first_trx
+                    line.save()
+
+                else:
+                    stock = MaterialStock.objects.select_for_update().get(
+                        warehouse=from_wh, part=line.part, lot_no=lot_no
+                    )
+                    MaterialStock.objects.filter(pk=stock.pk).update(quantity=F('quantity') - qty)
+                    target_stock, _ = MaterialStock.objects.get_or_create(
+                        warehouse=to_wh, part=line.part, lot_no=lot_no,
+                        defaults={'quantity': 0}
+                    )
+                    MaterialStock.objects.filter(pk=target_stock.pk).update(quantity=F('quantity') + qty)
+                    target_stock.refresh_from_db()
+
+                    lot_label = lot_no.strftime('%Y-%m-%d') if lot_no else 'NULL'
+                    trx = _create_trx(
+                        transaction_type='TRANSFER',
+                        date=now,
+                        part=line.part,
+                        quantity=qty,
+                        lot_no=lot_no,
+                        warehouse_from=from_wh,
+                        warehouse_to=to_wh,
+                        result_stock=target_stock.quantity,
+                        actor=request.user,
+                        remark=f'이동요청 {req.request_no} 승인 [LOT:{lot_label}]',
+                    )
+                    line.lot_no = lot_no
+                    line.approved_qty = qty
+                    line.transfer_transaction = trx
+                    line.save()
+                    erp_tasks.append((trx, qty))
 
             # 모든 라인 처리됐으면 APPROVED, 일부만이면 PARTIAL
             remaining = req.lines.filter(approved_qty__isnull=True).count()
@@ -11332,16 +11385,21 @@ def api_transfer_request_lots(request):
     except Warehouse.DoesNotExist:
         return JsonResponse({'ok': False, 'error': '창고 없음'})
 
-    stocks = MaterialStock.objects.filter(
+    stocks = list(MaterialStock.objects.filter(
         warehouse=wh, part=part, quantity__gt=0
-    ).order_by(F('lot_no').asc(nulls_first=True))
+    ).order_by(F('lot_no').asc(nulls_first=True)))
 
-    lots = []
+    if not stocks:
+        return JsonResponse({'ok': True, 'lots': []})
+
+    total_qty = int(sum(s.quantity for s in stocks))
+    lots = [{'lot_no': '__FIFO__', 'lot_label': f'전체 (FIFO 자동분할)', 'qty': total_qty, 'fifo': True}]
     for s in stocks:
         lots.append({
             'lot_no': s.lot_no.isoformat() if s.lot_no else '',
             'lot_label': s.lot_no.strftime('%Y-%m-%d') if s.lot_no else 'NULL (ERP 미러)',
             'qty': int(s.quantity),
+            'fifo': False,
         })
 
     return JsonResponse({'ok': True, 'lots': lots})
