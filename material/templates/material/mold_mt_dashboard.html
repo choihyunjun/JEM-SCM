@@ -1533,6 +1533,7 @@ function submitImportFromMolding() {
         resultArea.classList.remove('d-none');
 
         if (data.success) {
+            document.getElementById('importFooter2').classList.add('d-none');
             let syncSummary = '';
             if (data.sync_results && data.sync_results.length) {
                 const rows = data.sync_results.map(function(s) {
