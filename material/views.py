@@ -11031,7 +11031,9 @@ def transfer_request_list(request):
         qs = qs.filter(requested_by=request.user)
 
     status_filter = request.GET.get('status', '')
-    if status_filter:
+    if status_filter == 'PENDING':
+        qs = qs.filter(status__in=['PENDING', 'PARTIAL'])
+    elif status_filter:
         qs = qs.filter(status=status_filter)
 
     qs = qs.order_by('-created_at')
@@ -11270,9 +11272,8 @@ def transfer_request_cancel(request, pk):
         return redirect('material:transfer_request_list')
 
     req = get_object_or_404(MaterialTransferRequest, pk=pk, status='PENDING', requested_by=request.user)
-    req.status = 'CANCELLED'
-    req.save()
-    messages.success(request, f'요청이 취소되었습니다. ({req.request_no})')
+    req.delete()
+    messages.success(request, '요청이 취소되었습니다.')
     return redirect('material:transfer_request_list')
 
 
