@@ -11476,6 +11476,77 @@ def transfer_request_reject(request, pk):
 
 
 @login_required
+def transfer_request_revoke(request, pk):
+    """승인된 이동요청 취소 — 재고 역산 + ERP 삭제 + PENDING 복원"""
+    if request.method != 'POST':
+        return redirect('material:transfer_request_list')
+
+    from material.models import MaterialTransferRequest, MaterialTransaction
+    from material.erp_api import delete_erp_stock_move
+    import re
+
+    req = get_object_or_404(MaterialTransferRequest, pk=pk, status='APPROVED')
+
+    if not (_can_approve_transfer(request.user) or request.user.is_superuser):
+        messages.error(request, '권한이 없습니다.')
+        return redirect('material:transfer_request_list')
+
+    # 이 요청으로 생성된 모든 수불 찾기 (FIFO 분할 포함)
+    trxs = list(MaterialTransaction.objects.filter(
+        remark__startswith=f'이동요청 {req.request_no} 승인'
+    ).select_related('part', 'warehouse_from', 'warehouse_to'))
+
+    erp_messages = [t.erp_sync_message for t in trxs]
+
+    try:
+        with transaction.atomic():
+            for trx in trxs:
+                # 재고 역산: from_wh +=, to_wh -=
+                from_stock, _ = MaterialStock.objects.get_or_create(
+                    warehouse=trx.warehouse_from, part=trx.part, lot_no=trx.lot_no,
+                    defaults={'quantity': 0}
+                )
+                MaterialStock.objects.filter(pk=from_stock.pk).update(
+                    quantity=F('quantity') + trx.quantity
+                )
+                to_stock = MaterialStock.objects.filter(
+                    warehouse=trx.warehouse_to, part=trx.part, lot_no=trx.lot_no
+                ).first()
+                if to_stock:
+                    MaterialStock.objects.filter(pk=to_stock.pk).update(
+                        quantity=F('quantity') - trx.quantity
+                    )
+                trx.delete()
+
+            # 라인 초기화
+            req.lines.all().update(approved_qty=None, lot_no=None, transfer_transaction=None)
+
+            # 요청 PENDING으로 복원
+            req.status = 'PENDING'
+            req.warehouse_from = None
+            req.warehouse_to = None
+            req.approved_by = None
+            req.approved_at = None
+            req.save()
+
+    except Exception as e:
+        logger.exception('transfer_request_revoke error')
+        messages.error(request, f'취소 중 오류: {e}')
+        return redirect('material:transfer_request_list')
+
+    # ERP 삭제 (atomic 밖 — best effort)
+    for msg in erp_messages:
+        match = re.search(r'ERP 재고이동번호:\s*(\S+)', msg or '')
+        if match:
+            ok, err = delete_erp_stock_move(match.group(1))
+            if not ok:
+                logger.warning(f'ERP 이동취소 실패: {err}')
+
+    messages.success(request, f'{req.request_no} 승인이 취소되었습니다. 대기중으로 복원됩니다.')
+    return redirect('material:transfer_request_list')
+
+
+@login_required
 def transfer_request_cancel(request, pk):
     from material.models import MaterialTransferRequest
     if request.method != 'POST':

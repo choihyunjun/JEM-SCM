@@ -165,6 +165,7 @@ urlpatterns = [
     path('transfer-request/<int:pk>/approve/', views.transfer_request_approve, name='transfer_request_approve'),
     path('transfer-request/<int:pk>/reject/', views.transfer_request_reject, name='transfer_request_reject'),
     path('transfer-request/<int:pk>/cancel/', views.transfer_request_cancel, name='transfer_request_cancel'),
+    path('transfer-request/<int:pk>/revoke/', views.transfer_request_revoke, name='transfer_request_revoke'),
     path('api/transfer-request/stock/', views.api_transfer_request_stock, name='api_transfer_request_stock'),
     path('api/transfer-request/lots/', views.api_transfer_request_lots, name='api_transfer_request_lots'),
     path('transfer-request/approvers/', views.transfer_request_approver_manage, name='transfer_request_approver_manage'),

@@ -122,10 +122,17 @@
                   <br><small class="text-info"><i class="bi bi-slash-circle me-1"></i>일부미처리 ({{ req.approved_lines }}/{{ req.total_lines }})</small>
                 {% endif %}
               {% elif req.status == 'APPROVED' %}
+                {% if can_approve or request.user.is_superuser %}
+                  <button class="btn btn-outline-warning btn-sm py-0 px-2"
+                          data-bs-toggle="modal" data-bs-target="#revokeModal"
+                          data-pk="{{ req.pk }}"
+                          data-request-no="{{ req.request_no }}"
+                          onclick="event.stopPropagation()">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>승인취소
+                  </button>
+                {% endif %}
                 {% if req.approved_lines < req.total_lines %}
-                  <small class="text-muted"><i class="bi bi-exclamation-circle me-1"></i>일부미처리 ({{ req.approved_lines }}/{{ req.total_lines }})</small>
-                {% else %}
-                  -
+                  <small class="text-muted ms-1"><i class="bi bi-exclamation-circle me-1"></i>일부미처리 ({{ req.approved_lines }}/{{ req.total_lines }})</small>
                 {% endif %}
               {% elif req.status == 'REJECTED' and req.reject_reason %}
                 <small class="text-muted" title="{{ req.reject_reason }}"><i class="bi bi-info-circle"></i> {{ req.reject_reason|truncatechars:20 }}</small>
@@ -227,12 +234,53 @@
   </div>
 </div>
 {% endif %}
+
+{# ── 승인취소 모달 ── #}
+{% if can_approve or request.user.is_superuser %}
+<div class="modal fade" id="revokeModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-warning text-dark">
+        <h5 class="modal-title"><i class="bi bi-arrow-counterclockwise me-2"></i>승인 취소</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" id="revokeForm">
+        {% csrf_token %}
+        <div class="modal-body">
+          <p>요청번호: <strong id="revoke-request-no"></strong></p>
+          <div class="alert alert-warning py-2 small">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            SCM 재고가 원상복원되고 <strong>ERP 이동도 함께 취소</strong>됩니다.<br>
+            요청은 <strong>대기중</strong>으로 되돌아갑니다.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+          <button type="submit" class="btn btn-warning fw-bold">
+            <i class="bi bi-arrow-counterclockwise me-1"></i>승인 취소 확인
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
 {{ block.super }}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+
+  // 승인취소 모달
+  const revokeModal = document.getElementById('revokeModal');
+  if (revokeModal) {
+    revokeModal.addEventListener('show.bs.modal', function (e) {
+      const btn = e.relatedTarget;
+      document.getElementById('revoke-request-no').textContent = btn.dataset.requestNo;
+      document.getElementById('revokeForm').action = `/wms/transfer-request/${btn.dataset.pk}/revoke/`;
+    });
+  }
 
   // 반려 모달
   const rejectModal = document.getElementById('rejectModal');
