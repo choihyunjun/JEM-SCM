@@ -186,7 +186,10 @@
         </table>
         <div id="detail-remark" class="small text-muted"></div>
       </div>
-      <div class="modal-footer">
+      <div class="modal-footer justify-content-between">
+        <button type="button" class="btn btn-outline-primary btn-sm" id="btn-copy-lines">
+          <i class="bi bi-clipboard me-1"></i>텍스트 복사
+        </button>
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
       </div>
     </div>
@@ -295,7 +298,25 @@ document.addEventListener('DOMContentLoaded', function () {
       const remarkEl = document.getElementById('detail-remark');
       remarkEl.textContent = remark ? `사유: ${remark}` : '';
 
+      detailModal._currentLines = lines;
       detailModal.show();
+    });
+  });
+
+  document.getElementById('btn-copy-lines').addEventListener('click', function () {
+    const lines = detailModal._currentLines || [];
+    const requestNo = document.getElementById('detail-request-no').textContent;
+    const text = lines.map(l =>
+      `${l.part_no} - ${l.part_name} - ${l.requested_qty.toLocaleString()}`
+    ).join('\n');
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = this;
+      btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>복사 완료!';
+      btn.classList.replace('btn-outline-primary', 'btn-success');
+      setTimeout(() => {
+        btn.innerHTML = '<i class="bi bi-clipboard me-1"></i>텍스트 복사';
+        btn.classList.replace('btn-success', 'btn-outline-primary');
+      }, 2000);
     });
   });
 
