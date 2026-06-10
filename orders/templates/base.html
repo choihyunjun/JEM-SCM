@@ -770,7 +770,7 @@
                                     {% if user|has_perm:'can_scm_order_view' %}
                                     <a class="nav-link {% if request.resolver_match.url_name == 'order_list' %}active{% endif %}" href="{% url 'order_list' %}">발주 조회/승인</a>
                                     {% endif %}
-                                    {% if user|has_perm:'can_scm_order_edit' %}
+                                    {% if user|has_perm:'can_scm_order_edit' and not user|is_vendor %}
                                     <a class="nav-link {% if request.resolver_match.url_name == 'order_upload' %}active{% endif %}" href="{% url 'order_upload' %}">발주 등록</a>
                                     <a class="nav-link {% if request.resolver_match.url_name == 'erp_po_sync' %}active{% endif %}" href="{% url 'erp_po_sync' %}">ERP 발주 적용</a>
                                     {% endif %}

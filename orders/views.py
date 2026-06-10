@@ -4671,6 +4671,10 @@ def erp_po_sync(request):
     - POST action=search: ERP API로 발주 조회
     - POST action=apply: 선택 항목을 SCM Order로 등록
     """
+    if not request.user.is_superuser and _get_role(request.user) == 'VENDOR':
+        messages.error(request, "해당 메뉴에 대한 접근 권한이 없습니다.")
+        return redirect('order_list')
+
     from material.erp_api import fetch_erp_po_headers, fetch_erp_po_details
     from django.conf import settings as conf_settings
 

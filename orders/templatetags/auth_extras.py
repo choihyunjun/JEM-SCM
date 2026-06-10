@@ -41,6 +41,17 @@ def has_perm(user, perm_name):
     return getattr(profile, perm_name, False)
 
 
+@register.filter(name='is_vendor')
+def is_vendor(user):
+    """사용자가 협력사(VENDOR) 역할인지 확인"""
+    if not user or not user.is_authenticated:
+        return False
+    profile = getattr(user, 'profile', None)
+    if not profile:
+        return True  # 프로필 없으면 안전하게 vendor로 취급
+    return getattr(profile, 'role', None) == 'VENDOR'
+
+
 @register.filter(name='in_list')
 def in_list(value, arg):
     """
