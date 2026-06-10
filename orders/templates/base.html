@@ -382,6 +382,85 @@
             }
             body.sb-nav-fixed #layoutSidenav { margin-top: 96px; }
         }
+
+        /* ======================================================
+           전체 모바일 반응형 최적화  (max-width: 767.98px)
+           PC 레이아웃에 영향 없음
+           ====================================================== */
+        @media (max-width: 767.98px) {
+
+            /* ─── 1. form.row 필터폼: col-auto → 100% 세로 스택 ─── */
+            form.row > .col-auto {
+                width: 100% !important;
+                flex: 0 0 100% !important;
+                max-width: 100% !important;
+            }
+            /* col-md-2/3 필터 컬럼 → 모바일 2열 레이아웃 */
+            form.row > .col-md-2,
+            form.row > .col-md-3 {
+                flex: 0 0 50% !important;
+                max-width: 50% !important;
+                width: 50% !important;
+            }
+            /* 폼 컨트롤 전체 너비 (인라인 style="width:Xpx" 재정의) */
+            form.row .form-control,
+            form.row .form-select,
+            form.row .input-group {
+                width: 100% !important;
+                min-width: 0 !important;
+                max-width: 100% !important;
+            }
+
+            /* ─── 2. d-inline-flex 폼 → flex-wrap (QMS 필터 등) ─── */
+            form.d-inline-flex {
+                display: flex !important;
+                flex-wrap: wrap !important;
+                gap: 0.5rem !important;
+            }
+            form.d-inline-flex .form-select { flex: 1 1 130px; min-width: 0 !important; }
+            form.d-inline-flex .input-group {
+                flex: 1 1 200px;
+                width: auto !important;
+                min-width: 0 !important;
+            }
+            form.d-inline-flex .btn,
+            form.d-inline-flex a.btn { flex-shrink: 0; }
+
+            /* ─── 3. .scm-filter 내 d-flex 폼 래핑 (라벨목록 등) ─── */
+            .scm-filter { flex-wrap: wrap !important; }
+            .scm-filter form {
+                display: flex !important;
+                flex-wrap: wrap !important;
+                width: 100%;
+                gap: 0.5rem;
+            }
+            .scm-filter .form-select,
+            .scm-filter .form-control { width: 100% !important; min-width: 0 !important; }
+            .scm-filter .input-group { width: 100% !important; min-width: 0 !important; }
+
+            /* ─── 4. input-group 내 고정너비 form-control 재정의 ─── */
+            .input-group .form-control,
+            .input-group .form-select { min-width: 0 !important; }
+
+            /* ─── 5. 버튼 그룹 줄바꿈 ─── */
+            .btn-group { flex-wrap: wrap; }
+
+            /* ─── 6. 상단 헤더 / 카드 헤더 줄바꿈 ─── */
+            .d-flex.justify-content-between.align-items-center {
+                flex-wrap: wrap;
+                gap: 0.5rem;
+            }
+            .card-header.d-flex { flex-wrap: wrap; gap: 0.5rem; }
+
+            /* ─── 7. inventory_list 커스텀 영역 ─── */
+            .top-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; width: 100%; }
+            .control-block { display: flex; flex-wrap: wrap; gap: 0.5rem; width: 100%; }
+            .search-group { width: 100% !important; }
+
+            /* ─── 8. QMS 필터 상단 줄 (col-lg 비율 조정) ─── */
+            .col-lg-4, .col-lg-8 { width: 100%; }
+            .col-lg-8.text-end { text-align: left !important; }
+        }
     </style>
 </head>
 
@@ -1080,6 +1159,20 @@
             render(load());
         });
     })();
+    </script>
+
+    <script>
+    // 모바일: card-body 내 bare table을 table-responsive로 자동 래핑
+    document.addEventListener('DOMContentLoaded', function() {
+        if (window.innerWidth >= 768) return;
+        document.querySelectorAll('.card-body > .table, .card-body > table').forEach(function(tbl) {
+            if (tbl.closest('.table-responsive')) return;
+            var wrap = document.createElement('div');
+            wrap.className = 'table-responsive';
+            tbl.parentNode.insertBefore(wrap, tbl);
+            wrap.appendChild(tbl);
+        });
+    });
     </script>
 </body>
 </html>
