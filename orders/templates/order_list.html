@@ -102,7 +102,7 @@
                         </button>
                         <a href="{% url 'order_list' %}" class="btn btn-secondary">초기화</a>
 
-                        {% if user.is_superuser or (not is_vendor and user|has_perm:'can_scm_order_edit') %}
+                        {% if user.is_superuser or user|has_perm:'can_scm_order_edit' %}
                         <button type="button" class="btn btn-danger" onclick="deleteSelected();">
                             <i class="bi bi-trash"></i> 삭제
                         </button>
@@ -134,7 +134,7 @@
                     <table class="table table-bordered table-hover mb-0 scm-table">
                         <thead class="table-light">
                             <tr class="text-center align-middle">
-                                {% if user.is_superuser or (not is_vendor and user|has_perm:'can_scm_order_edit') %}
+                                {% if user.is_superuser or user|has_perm:'can_scm_order_edit' %}
                                 <th style="width: 35px;"><input type="checkbox" id="checkAll"></th>
                                 {% endif %}
 
@@ -181,7 +181,7 @@
                         <tbody>
                             {% for order in orders %}
                             <tr class="{% if order.is_closed %}table-secondary text-muted{% elif order.approved_at %}table-success{% endif %}" style="--bs-table-bg-opacity: .1;">
-                                {% if user.is_superuser or (not is_vendor and user|has_perm:'can_scm_order_edit') %}
+                                {% if user.is_superuser or user|has_perm:'can_scm_order_edit' %}
                                 <td class="text-center">
                                     <input type="checkbox" name="order_ids" value="{{ order.id }}">
                                 </td>
