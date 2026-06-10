@@ -427,6 +427,7 @@ def order_list(request):
         'due_soon_count': due_soon_count,
         'long_overdue_count': long_overdue_count,
         'today': today,
+        'is_vendor': _get_role(user) == 'VENDOR',
     })
 
 # ==========================================
