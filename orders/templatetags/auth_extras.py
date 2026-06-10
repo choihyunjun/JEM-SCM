@@ -2,6 +2,13 @@ from django import template
 
 register = template.Library()
 
+# VENDOR 계정이 절대 가질 수 없는 권한 목록 (편집/관리 계열)
+_VENDOR_BLOCKED_PERMS = frozenset({
+    'can_scm_order_edit', 'can_scm_incoming_edit', 'can_scm_admin', 'can_scm_report',
+    'can_register_orders', 'can_manage_incoming', 'can_manage_parts',
+    'can_view_reports', 'can_access_scm_admin',
+})
+
 @register.filter(name='has_group')
 def has_group(user, group_name):
     """
@@ -28,6 +35,7 @@ def has_perm(user, perm_name):
     사용법: {{ user|has_perm:'can_scm_order_edit' }}
 
     - superuser는 항상 True
+    - VENDOR 역할은 편집/관리 권한 불가
     - profile이 없으면 False
     - 권한 필드가 없으면 False
     """
@@ -38,18 +46,9 @@ def has_perm(user, perm_name):
     profile = getattr(user, 'profile', None)
     if not profile:
         return False
-    return getattr(profile, perm_name, False)
-
-
-@register.filter(name='is_vendor')
-def is_vendor(user):
-    """사용자가 협력사(VENDOR) 역할인지 확인"""
-    if not user or not user.is_authenticated:
+    if getattr(profile, 'role', None) == 'VENDOR' and perm_name in _VENDOR_BLOCKED_PERMS:
         return False
-    profile = getattr(user, 'profile', None)
-    if not profile:
-        return True  # 프로필 없으면 안전하게 vendor로 취급
-    return getattr(profile, 'role', None) == 'VENDOR'
+    return getattr(profile, perm_name, False)
 
 
 @register.filter(name='in_list')
