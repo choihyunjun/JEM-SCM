@@ -302,7 +302,7 @@
                             {% if m.c_over_guarantee %}
                                 <span class="badge bg-danger" style="font-size:0.6rem;">초과</span>
                             {% else %}
-                                <span class="badge bg-outline-success border text-success" style="font-size:0.6rem;">정상</span>
+                                <span class="badge bg-outline-success border text-success" style="font-size:0.6rem;">{{ m.c_guarantee_pct }}%</span>
                             {% endif %}
                         </td>
                         <td class="fw-bold" data-value="{{ m.c_total_shots }}">{{ m.c_total_shots|intcomma }}</td>
@@ -484,7 +484,7 @@
                         </div>
                         <div class="col-3 mb-2">
                             <label class="form-label small fw-bold mb-1">보증수량</label>
-                            <input type="number" name="guarantee_shots" class="form-control form-control-sm" value="500000">
+                            <input type="number" name="guarantee_shots" class="form-control form-control-sm" value="1000000">
                         </div>
                         <div class="col-4 mb-2">
                             <label class="form-label small fw-bold mb-1">누적숏트</label>
@@ -1436,7 +1436,7 @@ function renderImportTable(items) {
             '<td class="text-center"><input type="number" class="form-control form-control-sm import-cv text-center" data-idx="' + idx + '" value="' + (item.cv_count || 1) + '" min="1" style="width:55px;"></td>' +
             '<td><select class="form-select form-select-sm import-grade" data-idx="' + idx + '">' + gradeOptions + '</select></td>' +
             '<td><input type="text" class="form-control form-control-sm import-material" data-idx="' + idx + '" placeholder="예: ABS" style="width:90px;"></td>' +
-            '<td><input type="number" class="form-control form-control-sm import-guarantee text-center" data-idx="' + idx + '" value="500000" min="1"></td>';
+            '<td><input type="number" class="form-control form-control-sm import-guarantee text-center" data-idx="' + idx + '" value="1000000" min="1"></td>';
         tbody.appendChild(tr);
     });
 }
@@ -1474,7 +1474,7 @@ function goImportStep2() {
             cv_count: parseInt(document.querySelector('.import-cv[data-idx="' + idx + '"]').value) || 1,
             grade: document.querySelector('.import-grade[data-idx="' + idx + '"]').value,
             material_type: document.querySelector('.import-material[data-idx="' + idx + '"]').value.trim(),
-            guarantee_shots: parseInt(document.querySelector('.import-guarantee[data-idx="' + idx + '"]').value) || 500000,
+            guarantee_shots: parseInt(document.querySelector('.import-guarantee[data-idx="' + idx + '"]').value) || 1000000,
         });
     });
 

@@ -10106,6 +10106,7 @@ def mold_mt_dashboard(request):
         m.c_total_shots = m.total_shots_prev + m._monthly_shots
         m.c_remaining = m.guarantee_shots - m.c_total_shots
         m.c_over_guarantee = m.c_total_shots > m.guarantee_shots
+        m.c_guarantee_pct = round(m.c_total_shots / m.guarantee_shots * 100, 1) if m.guarantee_shots > 0 else 0
 
         # MT interval: A=50,000 / B=30,000
         interval = MT_INTERVAL_MAP.get(m.grade.upper(), 30000) if m.grade else 30000
