@@ -298,12 +298,17 @@
                         <td class="text-start" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;">{{ m.mold_name }}</td>
                         <td><span class="badge bg-secondary" style="font-size:0.65rem;">{{ m.grade|default:'-' }}</span></td>
                         <td>{{ m.material_type|default:'-' }}</td>
-                        <td>
-                            {% if m.c_over_guarantee %}
-                                <span class="badge bg-danger" style="font-size:0.6rem;">초과</span>
-                            {% else %}
-                                <span class="badge bg-outline-success border text-success" style="font-size:0.6rem;">{{ m.c_guarantee_pct }}%</span>
-                            {% endif %}
+                        <td data-value="{{ m.c_guarantee_pct }}">
+                            <div class="progress-bar-mt">
+                                {% if m.c_over_guarantee %}
+                                    <div class="bar bar-red" style="width:100%">초과</div>
+                                {% else %}
+                                    <div class="bar {% if m.c_guarantee_pct >= 80 %}bar-red{% elif m.c_guarantee_pct >= 60 %}bar-yellow{% else %}bar-green{% endif %}"
+                                         style="width:{{ m.c_guarantee_pct }}%">
+                                        {% if m.c_guarantee_pct >= 15 %}{{ m.c_guarantee_pct }}%{% endif %}
+                                    </div>
+                                {% endif %}
+                            </div>
                         </td>
                         <td class="fw-bold" data-value="{{ m.c_total_shots }}">{{ m.c_total_shots|intcomma }}</td>
                         <td style="color:#888;">{{ m.last_mt_shots|intcomma }}</td>
