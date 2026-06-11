@@ -69,6 +69,20 @@
 
     .badge-status { font-size: 0.68rem; padding: 3px 8px; border-radius: 10px; }
 
+    .badge-guarantee {
+        display: inline-block;
+        width: 46px;
+        text-align: center;
+        font-size: 0.65rem;
+        font-weight: 600;
+        padding: 2px 0;
+        border-radius: 4px;
+        color: white;
+    }
+    .bg-guarantee-green  { background: #48bb78; }
+    .bg-guarantee-yellow { background: #ecc94b; color: #333; }
+    .bg-guarantee-red    { background: #e53e3e; }
+
     .btn-mt-complete { font-size: 0.7rem; padding: 2px 7px; }
 
     .clickable-row { cursor: pointer; }
@@ -299,16 +313,15 @@
                         <td><span class="badge bg-secondary" style="font-size:0.65rem;">{{ m.grade|default:'-' }}</span></td>
                         <td>{{ m.material_type|default:'-' }}</td>
                         <td data-value="{{ m.c_guarantee_pct }}">
-                            <div class="progress-bar-mt">
-                                {% if m.c_over_guarantee %}
-                                    <div class="bar bar-red" style="width:100%">초과</div>
-                                {% else %}
-                                    <div class="bar {% if m.c_guarantee_pct >= 80 %}bar-red{% elif m.c_guarantee_pct >= 60 %}bar-yellow{% else %}bar-green{% endif %}"
-                                         style="width:{{ m.c_guarantee_pct }}%">
-                                        {% if m.c_guarantee_pct >= 15 %}{{ m.c_guarantee_pct }}%{% endif %}
-                                    </div>
-                                {% endif %}
-                            </div>
+                            {% if m.c_over_guarantee %}
+                                <span class="badge-guarantee bg-guarantee-red">초과</span>
+                            {% elif m.c_guarantee_pct >= 80 %}
+                                <span class="badge-guarantee bg-guarantee-red">{{ m.c_guarantee_pct }}%</span>
+                            {% elif m.c_guarantee_pct >= 60 %}
+                                <span class="badge-guarantee bg-guarantee-yellow">{{ m.c_guarantee_pct }}%</span>
+                            {% else %}
+                                <span class="badge-guarantee bg-guarantee-green">{{ m.c_guarantee_pct }}%</span>
+                            {% endif %}
                         </td>
                         <td class="fw-bold" data-value="{{ m.c_total_shots }}">{{ m.c_total_shots|intcomma }}</td>
                         <td style="color:#888;">{{ m.last_mt_shots|intcomma }}</td>
