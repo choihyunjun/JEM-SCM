@@ -21,7 +21,7 @@ class Migration(migrations.Migration):
                 ('part_no', models.CharField(db_index=True, max_length=50, verbose_name='부품번호')),
                 ('transfer_date', models.CharField(blank=True, max_length=20, verbose_name='이관일자')),
                 ('transfer_from', models.CharField(blank=True, max_length=50, verbose_name='이관처')),
-                ('guarantee_shots', models.IntegerField(default=500000, verbose_name='보증수명(숏)')),
+                ('guarantee_shots', models.IntegerField(default=1000000, verbose_name='보증수명(숏)')),
                 ('cv_count', models.IntegerField(default=1, verbose_name='C/V수')),
                 ('material_type', models.CharField(blank=True, max_length=30, verbose_name='재료구분')),
                 ('total_shots_prev', models.IntegerField(default=0, verbose_name='총사용숏트수(이전)')),

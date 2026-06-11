@@ -1101,7 +1101,7 @@ class MoldMaster(models.Model):
     part_no = models.CharField("부품번호", max_length=50, db_index=True)
     transfer_date = models.CharField("이관일자", max_length=20, blank=True)
     transfer_from = models.CharField("이관처", max_length=50, blank=True)
-    guarantee_shots = models.IntegerField("보증수명(숏)", default=500000)
+    guarantee_shots = models.IntegerField("보증수명(숏)", default=1000000)
     cv_count = models.IntegerField("C/V수", default=1)
     material_type = models.CharField("재료구분", max_length=30, blank=True)
     total_shots_prev = models.IntegerField("총사용숏트수(이전)", default=0)

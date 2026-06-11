@@ -10244,7 +10244,7 @@ def mold_mt_upload(request):
                 'item_group': str(row[0] or '').strip(),
                 'mold_name': str(row[2] or '').strip() if len(row) > 2 else '',
                 'grade': str(row[3] or '').strip().upper() if len(row) > 3 else '',
-                'guarantee_shots': safe_int(row[4] if len(row) > 4 else None, 500000),
+                'guarantee_shots': safe_int(row[4] if len(row) > 4 else None, 1000000),
                 'total_shots_prev': safe_int(row[5] if len(row) > 5 else None, 0),
                 'last_mt_shots': safe_int(row[6] if len(row) > 6 else None, 0),
             }
@@ -10297,7 +10297,7 @@ def mold_mt_add(request):
         grade=request.POST.get('grade', '').strip().upper(),
         material_type=request.POST.get('material_type', '').strip(),
         cv_count=safe_int(request.POST.get('cv_count'), 1),
-        guarantee_shots=safe_int(request.POST.get('guarantee_shots'), 500000),
+        guarantee_shots=safe_int(request.POST.get('guarantee_shots'), 1000000),
         total_shots_prev=safe_int(request.POST.get('total_shots_prev'), 0),
         last_mt_shots=safe_int(request.POST.get('last_mt_shots'), 0),
     )
@@ -10732,7 +10732,7 @@ def api_mold_bulk_add_from_molding(request):
                 grade=(item.get('grade') or '').strip().upper(),
                 material_type=(item.get('material_type') or '').strip(),
                 cv_count=safe_int(item.get('cv_count'), 1),
-                guarantee_shots=safe_int(item.get('guarantee_shots'), 500000),
+                guarantee_shots=safe_int(item.get('guarantee_shots'), 1000000),
             )
             created_part_nos.append(part_no)
 
