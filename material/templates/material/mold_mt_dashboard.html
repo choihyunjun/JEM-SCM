@@ -292,12 +292,12 @@
                         <th>금형명</th>
                         <th class="sortable" data-col="5">구분 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th>재료</th>
-                        <th>보증</th>
-                        <th class="sortable" data-col="8">누적숏트 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
+                        <th class="sortable" data-col="7">누적숏트 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th>이전MT</th>
-                        <th class="sortable" data-col="10">MT후 누적 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
+                        <th class="sortable" data-col="9">MT후 누적 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th>MT기준</th>
-                        <th class="sortable" data-col="12">MT진행률 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
+                        <th class="sortable" data-col="11">MT진행률 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
+                        <th class="sortable" data-col="12">보증 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th class="sortable" data-col="13">상태 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th style="width:40px">MT</th>
                     </tr>
@@ -312,17 +312,6 @@
                         <td class="text-start" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;">{{ m.mold_name }}</td>
                         <td><span class="badge bg-secondary" style="font-size:0.65rem;">{{ m.grade|default:'-' }}</span></td>
                         <td>{{ m.material_type|default:'-' }}</td>
-                        <td data-value="{{ m.c_guarantee_pct }}">
-                            {% if m.c_over_guarantee %}
-                                <span class="badge-guarantee bg-guarantee-red">초과</span>
-                            {% elif m.c_guarantee_pct >= 80 %}
-                                <span class="badge-guarantee bg-guarantee-red">{{ m.c_guarantee_pct }}%</span>
-                            {% elif m.c_guarantee_pct >= 60 %}
-                                <span class="badge-guarantee bg-guarantee-yellow">{{ m.c_guarantee_pct }}%</span>
-                            {% else %}
-                                <span class="badge-guarantee bg-guarantee-green">{{ m.c_guarantee_pct }}%</span>
-                            {% endif %}
-                        </td>
                         <td class="fw-bold" data-value="{{ m.c_total_shots }}">{{ m.c_total_shots|intcomma }}</td>
                         <td style="color:#888;">{{ m.last_mt_shots|intcomma }}</td>
                         <td class="fw-bold" data-value="{{ m.c_shots_since_mt }}" style="color:{% if m.c_mt_pct >= 100 %}#e53e3e{% elif m.c_mt_pct >= 80 %}#dd6b20{% else %}#2d3748{% endif %};">{{ m.c_shots_since_mt|intcomma }}</td>
@@ -334,6 +323,17 @@
                                     {% if m.c_mt_pct >= 15 %}{{ m.c_mt_pct }}%{% endif %}
                                 </div>
                             </div>
+                        </td>
+                        <td data-value="{{ m.c_guarantee_pct }}">
+                            {% if m.c_over_guarantee %}
+                                <span class="badge-guarantee bg-guarantee-red">초과</span>
+                            {% elif m.c_guarantee_pct >= 80 %}
+                                <span class="badge-guarantee bg-guarantee-red">{{ m.c_guarantee_pct }}%</span>
+                            {% elif m.c_guarantee_pct >= 60 %}
+                                <span class="badge-guarantee bg-guarantee-yellow">{{ m.c_guarantee_pct }}%</span>
+                            {% else %}
+                                <span class="badge-guarantee bg-guarantee-green">{{ m.c_guarantee_pct }}%</span>
+                            {% endif %}
                         </td>
                         <td data-value="{% if m.c_is_mt_due %}2{% elif m.c_mt_pct >= 80 %}1{% else %}0{% endif %}">
                             {% if m.c_is_mt_due %}
