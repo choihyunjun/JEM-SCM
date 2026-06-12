@@ -6361,12 +6361,18 @@ def raw_material_layout(request):
             else:
                 stock_status = 'safe'
 
+        part_id = rack.part.id if rack.part else 0
+        shortage = max(0, safety - stock_qty) if safety > 0 else 0
+
         return {
             'rack': rack,
             'stock_qty': stock_qty,
             'scanned_qty': scanned_qty,
             'stock_status': stock_status,
-            'base_qty': base_qty,  # 감사모드 오버라이드 입력 시 표시용 (base = actual + adjustment)
+            'base_qty': base_qty,
+            'part_id': part_id,
+            'safety_stock': safety,
+            'shortage_qty': shortage,
         }
 
     # A열, B열 분리 후 col_num 오름차순 정렬
@@ -11681,4 +11687,129 @@ def transfer_request_approver_manage(request):
     ]
     return render(request, 'material/transfer_request_approver_manage.html', {
         'users_with_flag': users_with_flag,
+    })
+
+
+# =============================================================================
+# 발주 요청 (Purchase Order Request)
+# =============================================================================
+
+def _can_purchase_approve(user):
+    if user.is_superuser:
+        return True
+    profile = _get_profile(user)
+    return profile and getattr(profile, 'can_wms_purchase_approve', False)
+
+
+@login_required
+def api_purchase_request_create(request):
+    """발주요청 생성 API (POST JSON) — 레이아웃 모달에서 호출"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST only'}, status=405)
+
+    import json
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        return JsonResponse({'success': False, 'error': '잘못된 요청'}, status=400)
+
+    part_id      = data.get('part_id', 0)
+    part_no      = str(data.get('part_no', '')).strip()
+    part_name    = str(data.get('part_name', '')).strip()
+    request_qty  = data.get('request_qty', 0)
+    reason       = str(data.get('reason', '')).strip()
+    current_qty  = data.get('current_qty', 0)
+    safety_qty   = data.get('safety_stock_qty', 0)
+    shortage_qty = data.get('shortage_qty', 0)
+
+    if not part_no or not request_qty or int(request_qty) < 1:
+        return JsonResponse({'success': False, 'error': '품번 또는 수량이 올바르지 않습니다.'})
+
+    from .models import PurchaseOrderRequest
+    from orders.models import Part
+
+    part_obj = None
+    vendor_name = ''
+    unit = 'kg'
+    if part_id:
+        try:
+            part_obj = Part.objects.get(id=part_id)
+            vendor_name = part_obj.vendor.name if part_obj.vendor else ''
+            unit = getattr(part_obj, 'unit', 'kg') or 'kg'
+        except Part.DoesNotExist:
+            pass
+
+    por = PurchaseOrderRequest.objects.create(
+        request_no       = PurchaseOrderRequest.generate_request_no(),
+        part             = part_obj,
+        part_no          = part_no,
+        part_name        = part_name,
+        unit             = unit,
+        vendor_name      = vendor_name,
+        current_qty      = current_qty,
+        safety_stock_qty = safety_qty,
+        shortage_qty     = shortage_qty,
+        request_qty      = request_qty,
+        reason           = reason,
+        requested_by     = request.user,
+    )
+    return JsonResponse({'success': True, 'request_no': por.request_no})
+
+
+@login_required
+def purchase_request_status(request):
+    """발주요청 현황 목록 + 상태 변경"""
+    from .models import PurchaseOrderRequest
+
+    can_approve = _can_purchase_approve(request.user)
+
+    # 상태 변경 POST
+    if request.method == 'POST' and can_approve:
+        por_id  = request.POST.get('por_id')
+        action  = request.POST.get('action')
+        note    = request.POST.get('note', '').strip()
+        next_status = {
+            'approve':    'APPROVED',
+            'progress':   'IN_PROGRESS',
+            'complete':   'COMPLETED',
+            'cancel':     'CANCELLED',
+        }.get(action)
+        if por_id and next_status:
+            try:
+                por = PurchaseOrderRequest.objects.get(pk=por_id)
+                por.status     = next_status
+                por.updated_by = request.user
+                if note:
+                    por.note = note
+                por.save()
+                messages.success(request, f'{por.request_no} 상태가 [{por.get_status_display()}](으)로 변경되었습니다.')
+            except PurchaseOrderRequest.DoesNotExist:
+                messages.error(request, '발주요청을 찾을 수 없습니다.')
+        return redirect('material:purchase_request_status')
+
+    # 목록 조회
+    qs = PurchaseOrderRequest.objects.select_related('requested_by', 'updated_by', 'part')
+
+    q             = request.GET.get('q', '').strip()
+    status_filter = request.GET.get('status', '')
+
+    if q:
+        from django.db.models import Q
+        qs = qs.filter(Q(part_no__icontains=q) | Q(part_name__icontains=q) | Q(request_no__icontains=q))
+    if status_filter:
+        qs = qs.filter(status=status_filter)
+
+    from django.core.paginator import Paginator
+    paginator  = Paginator(qs, 30)
+    page_obj   = paginator.get_page(request.GET.get('page', 1))
+
+    pending_count = PurchaseOrderRequest.objects.filter(status='PENDING').count()
+
+    return render(request, 'material/purchase_request_status.html', {
+        'page_obj':       page_obj,
+        'can_approve':    can_approve,
+        'q':              q,
+        'status_filter':  status_filter,
+        'status_choices': PurchaseOrderRequest.STATUS_CHOICES,
+        'pending_count':  pending_count,
     })

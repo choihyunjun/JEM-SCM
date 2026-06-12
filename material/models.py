@@ -1415,3 +1415,58 @@ class TransferRequestApprover(models.Model):
 
     def __str__(self):
         return self.user.get_full_name() or self.user.username
+
+
+# -----------------------------------------------------------------------------
+# 발주 요청 (Purchase Order Request)
+# -----------------------------------------------------------------------------
+class PurchaseOrderRequest(models.Model):
+    STATUS_CHOICES = [
+        ('PENDING',      '승인 대기'),
+        ('APPROVED',     '승인'),
+        ('IN_PROGRESS',  '발주진행중'),
+        ('COMPLETED',    '입고완료'),
+        ('CANCELLED',    '취소'),
+    ]
+
+    request_no       = models.CharField("신청번호", max_length=30, unique=True, db_index=True)
+    status           = models.CharField("상태", max_length=15, choices=STATUS_CHOICES, default='PENDING', db_index=True)
+
+    # 품목 (스냅샷 — 품목 삭제돼도 이력 보존)
+    part             = models.ForeignKey('orders.Part', on_delete=models.SET_NULL, null=True, related_name='purchase_requests', verbose_name="품목")
+    part_no          = models.CharField("품번", max_length=100)
+    part_name        = models.CharField("품명", max_length=200)
+    unit             = models.CharField("단위", max_length=20, default='EA')
+    vendor_name      = models.CharField("거래처", max_length=200, blank=True)
+
+    # 신청 시점 재고 스냅샷
+    current_qty      = models.DecimalField("신청 시 현재고", max_digits=15, decimal_places=2, default=0)
+    safety_stock_qty = models.DecimalField("안전재고", max_digits=15, decimal_places=2, default=0)
+    shortage_qty     = models.DecimalField("부족수량", max_digits=15, decimal_places=2, default=0)
+
+    request_qty      = models.DecimalField("발주요청 수량", max_digits=15, decimal_places=2)
+    reason           = models.TextField("요청사유", blank=True)
+
+    requested_by     = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='purchase_order_requests', verbose_name="요청자")
+    requested_at     = models.DateTimeField("요청일시", auto_now_add=True)
+
+    updated_by       = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='purchase_requests_updated', verbose_name="처리자")
+    updated_at       = models.DateTimeField("최종수정", auto_now=True)
+    note             = models.TextField("비고", blank=True)
+
+    class Meta:
+        verbose_name = "발주요청"
+        verbose_name_plural = "발주요청"
+        ordering = ['-requested_at']
+
+    def __str__(self):
+        return f"{self.request_no} [{self.get_status_display()}] {self.part_no}"
+
+    @classmethod
+    def generate_request_no(cls):
+        from django.utils import timezone
+        today = timezone.now().strftime('%Y%m%d')
+        prefix = f"POR-{today}-"
+        last = cls.objects.filter(request_no__startswith=prefix).order_by('-request_no').first()
+        seq = int(last.request_no.split('-')[-1]) + 1 if last else 1
+        return f"{prefix}{seq:04d}"

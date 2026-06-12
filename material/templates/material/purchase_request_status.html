@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% load auth_extras %}
+
+{% block title %}발주요청 현황{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="fw-bold mb-0"><i class="bi bi-cart-check me-2 text-danger"></i>발주요청 현황</h4>
+    {% if pending_count > 0 and can_approve %}
+    <span class="badge bg-danger" style="font-size:0.95rem;">대기 {{ pending_count }}건</span>
+    {% endif %}
+</div>
+
+<!-- 필터 -->
+<div class="card shadow-sm mb-3">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <input type="text" name="q" class="form-control form-control-sm"
+                       placeholder="품번 / 품명 / 신청번호" value="{{ q }}">
+            </div>
+            <div class="col-md-2">
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">전체 상태</option>
+                    {% for code, label in status_choices %}
+                    <option value="{{ code }}" {% if status_filter == code %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search"></i></button>
+                <a href="{% url 'material:purchase_request_status' %}" class="btn btn-sm btn-secondary">초기화</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 목록 -->
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0 align-middle" style="font-size:0.85rem;">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width:120px;">신청번호</th>
+                        <th style="width:100px;">품번</th>
+                        <th>품명</th>
+                        <th style="width:100px;">거래처</th>
+                        <th class="text-end" style="width:70px;">현재고</th>
+                        <th class="text-end" style="width:70px;">안전재고</th>
+                        <th class="text-end" style="width:70px;">부족수량</th>
+                        <th class="text-end" style="width:80px;">요청수량</th>
+                        <th style="width:80px;">요청자</th>
+                        <th style="width:90px;">요청일시</th>
+                        <th style="width:80px;">상태</th>
+                        <th style="width:70px;">처리자</th>
+                        <th style="width:130px;">비고</th>
+                        {% if can_approve %}<th style="width:160px;"></th>{% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for por in page_obj %}
+                    <tr class="{% if por.status == 'PENDING' %}table-warning{% elif por.status == 'COMPLETED' %}table-success{% endif %}">
+                        <td><small class="text-muted">{{ por.request_no }}</small></td>
+                        <td><strong class="text-primary">{{ por.part_no }}</strong></td>
+                        <td class="text-truncate" style="max-width:180px;">{{ por.part_name }}</td>
+                        <td><small>{{ por.vendor_name|default:"-" }}</small></td>
+                        <td class="text-end">{{ por.current_qty|floatformat:0 }}</td>
+                        <td class="text-end">{{ por.safety_stock_qty|floatformat:0 }}</td>
+                        <td class="text-end {% if por.shortage_qty > 0 %}text-danger fw-bold{% endif %}">
+                            {{ por.shortage_qty|floatformat:0 }}
+                        </td>
+                        <td class="text-end fw-bold text-primary">{{ por.request_qty|floatformat:0 }}</td>
+                        <td><small>{{ por.requested_by.get_full_name|default:por.requested_by.username }}</small></td>
+                        <td><small>{{ por.requested_at|date:"m/d H:i" }}</small></td>
+                        <td>
+                            {% if por.status == 'PENDING' %}
+                            <span class="badge bg-warning text-dark">{{ por.get_status_display }}</span>
+                            {% elif por.status == 'APPROVED' %}
+                            <span class="badge bg-primary">{{ por.get_status_display }}</span>
+                            {% elif por.status == 'IN_PROGRESS' %}
+                            <span class="badge bg-info text-dark">{{ por.get_status_display }}</span>
+                            {% elif por.status == 'COMPLETED' %}
+                            <span class="badge bg-success">{{ por.get_status_display }}</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ por.get_status_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td><small>{{ por.updated_by.get_full_name|default:por.updated_by.username|default:"-" }}</small></td>
+                        <td>
+                            <small class="text-muted">
+                                {% if por.reason %}{{ por.reason|truncatechars:20 }}{% endif %}
+                                {% if por.note %}<br><span class="text-info">{{ por.note|truncatechars:20 }}</span>{% endif %}
+                            </small>
+                        </td>
+                        {% if can_approve %}
+                        <td>
+                            <div class="d-flex gap-1 flex-wrap">
+                                {% if por.status == 'PENDING' %}
+                                <form method="post" class="d-inline">{% csrf_token %}
+                                    <input type="hidden" name="por_id" value="{{ por.pk }}">
+                                    <input type="hidden" name="action" value="approve">
+                                    <button class="btn btn-primary btn-sm py-0 px-2" style="font-size:0.75rem;"
+                                            onclick="return confirm('승인 하시겠습니까?')">승인</button>
+                                </form>
+                                <form method="post" class="d-inline">{% csrf_token %}
+                                    <input type="hidden" name="por_id" value="{{ por.pk }}">
+                                    <input type="hidden" name="action" value="cancel">
+                                    <button class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:0.75rem;"
+                                            onclick="return confirm('취소 하시겠습니까?')">취소</button>
+                                </form>
+                                {% elif por.status == 'APPROVED' %}
+                                <form method="post" class="d-inline">{% csrf_token %}
+                                    <input type="hidden" name="por_id" value="{{ por.pk }}">
+                                    <input type="hidden" name="action" value="progress">
+                                    <button class="btn btn-info btn-sm py-0 px-2" style="font-size:0.75rem;"
+                                            onclick="return confirm('발주진행 처리 하시겠습니까?')">발주진행</button>
+                                </form>
+                                {% elif por.status == 'IN_PROGRESS' %}
+                                <form method="post" class="d-inline">{% csrf_token %}
+                                    <input type="hidden" name="por_id" value="{{ por.pk }}">
+                                    <input type="hidden" name="action" value="complete">
+                                    <button class="btn btn-success btn-sm py-0 px-2" style="font-size:0.75rem;"
+                                            onclick="return confirm('입고완료 처리 하시겠습니까?')">입고완료</button>
+                                </form>
+                                {% endif %}
+                                {% if por.status != 'COMPLETED' and por.status != 'CANCELLED' %}
+                                <button class="btn btn-outline-secondary btn-sm py-0 px-1" style="font-size:0.7rem;"
+                                        onclick="openNoteModal({{ por.pk }}, '{{ por.note|escapejs }}')">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="{{ can_approve|yesno:'14,13' }}" class="text-center py-5 text-muted">
+                            <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                            발주요청 내역이 없습니다.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 페이징 -->
+{% if page_obj.has_other_pages %}
+<nav class="mt-3">
+    <ul class="pagination pagination-sm justify-content-center">
+        {% if page_obj.has_previous %}
+        <li class="page-item"><a class="page-link" href="?page=1&status={{ status_filter }}&q={{ q }}">«</a></li>
+        <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&status={{ status_filter }}&q={{ q }}">‹</a></li>
+        {% endif %}
+        <li class="page-item active"><span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
+        {% if page_obj.has_next %}
+        <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&status={{ status_filter }}&q={{ q }}">›</a></li>
+        <li class="page-item"><a class="page-link" href="?page={{ page_obj.paginator.num_pages }}&status={{ status_filter }}&q={{ q }}">»</a></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+<!-- 비고 수정 모달 -->
+{% if can_approve %}
+<div class="modal fade" id="noteModal" tabindex="-1">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title">비고 수정</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" id="noteForm">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="note">
+                <input type="hidden" name="por_id" id="note_por_id">
+                <div class="modal-body">
+                    <textarea name="note" id="note_text" class="form-control" rows="3" placeholder="비고 입력..."></textarea>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button>
+                    <button type="submit" class="btn btn-primary btn-sm">저장</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if can_approve %}
+<script>
+function openNoteModal(porId, currentNote) {
+    document.getElementById('note_por_id').value = porId;
+    document.getElementById('note_text').value = currentNote;
+    new bootstrap.Modal(document.getElementById('noteModal')).show();
+}
+</script>
+{% endif %}
+
+{% endblock %}

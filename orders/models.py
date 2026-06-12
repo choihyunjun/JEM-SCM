@@ -337,6 +337,9 @@ class UserProfile(models.Model):
     # 이동 요청
     can_wms_transfer_request = models.BooleanField(default=False, verbose_name="재료 이동 요청")
 
+    # 발주 요청
+    can_wms_purchase_approve = models.BooleanField(default=False, verbose_name="발주요청 승인/상태관리")
+
     # ========== QMS 권한 (View/Edit 분리) ==========
     # 4M 변경점 관리
     can_qms_4m_view = models.BooleanField(default=False, verbose_name="4M 조회")

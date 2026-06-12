@@ -488,7 +488,7 @@
             <div class="wall-title wall-2f">2공장</div>
             <div class="pallet-grid">
                 {% for cell in wall_a.1 %}
-                <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.base_qty }}" onclick="showScanHistory(this)"{% endif %}>
+                <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.base_qty }}" data-stock-status="{{ cell.stock_status }}" data-part-id="{{ cell.part_id }}" data-safety-stock="{{ cell.safety_stock }}" data-current-qty="{{ cell.stock_qty }}" data-shortage-qty="{{ cell.shortage_qty }}" onclick="showScanHistory(this)"{% endif %}>
                     <div class="rack-position">{{ cell.rack.position_code }}</div>
                     {% if cell.rack.part %}
                     <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
@@ -502,7 +502,7 @@
             </div>
             <div class="pallet-grid" style="margin-top: 15px;">
                 {% for cell in wall_a.2 %}
-                <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.base_qty }}" onclick="showScanHistory(this)"{% endif %}>
+                <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.base_qty }}" data-stock-status="{{ cell.stock_status }}" data-part-id="{{ cell.part_id }}" data-safety-stock="{{ cell.safety_stock }}" data-current-qty="{{ cell.stock_qty }}" data-shortage-qty="{{ cell.shortage_qty }}" onclick="showScanHistory(this)"{% endif %}>
                     <div class="rack-position">{{ cell.rack.position_code }}</div>
                     {% if cell.rack.part %}
                     <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
@@ -535,7 +535,7 @@
                     <div class="floor-col">
                         <div class="cells-stack">
                             {% for cell in wall_a.2 %}
-                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.base_qty }}" onclick="showScanHistory(this)"{% endif %}>
+                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.base_qty }}" data-stock-status="{{ cell.stock_status }}" data-part-id="{{ cell.part_id }}" data-safety-stock="{{ cell.safety_stock }}" data-current-qty="{{ cell.stock_qty }}" data-shortage-qty="{{ cell.shortage_qty }}" onclick="showScanHistory(this)"{% endif %}>
                                 <div class="rack-position">{{ cell.rack.position_code }}</div>
                                 {% if cell.rack.part %}
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
@@ -551,7 +551,7 @@
                     <div class="floor-col">
                         <div class="cells-stack">
                             {% for cell in wall_a.1 %}
-                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.base_qty }}" onclick="showScanHistory(this)"{% endif %}>
+                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.base_qty }}" data-stock-status="{{ cell.stock_status }}" data-part-id="{{ cell.part_id }}" data-safety-stock="{{ cell.safety_stock }}" data-current-qty="{{ cell.stock_qty }}" data-shortage-qty="{{ cell.shortage_qty }}" onclick="showScanHistory(this)"{% endif %}>
                                 <div class="rack-position">{{ cell.rack.position_code }}</div>
                                 {% if cell.rack.part %}
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
@@ -585,7 +585,7 @@
                     <div class="floor-col">
                         <div class="cells-stack">
                             {% for cell in wall_b.1 %}
-                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.base_qty }}" onclick="showScanHistory(this)"{% endif %}>
+                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.base_qty }}" data-stock-status="{{ cell.stock_status }}" data-part-id="{{ cell.part_id }}" data-safety-stock="{{ cell.safety_stock }}" data-current-qty="{{ cell.stock_qty }}" data-shortage-qty="{{ cell.shortage_qty }}" onclick="showScanHistory(this)"{% endif %}>
                                 <div class="rack-position">{{ cell.rack.position_code }}</div>
                                 {% if cell.rack.part %}
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
@@ -601,7 +601,7 @@
                     <div class="floor-col">
                         <div class="cells-stack">
                             {% for cell in wall_b.2 %}
-                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.base_qty }}" onclick="showScanHistory(this)"{% endif %}>
+                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.base_qty }}" data-stock-status="{{ cell.stock_status }}" data-part-id="{{ cell.part_id }}" data-safety-stock="{{ cell.safety_stock }}" data-current-qty="{{ cell.stock_qty }}" data-shortage-qty="{{ cell.shortage_qty }}" onclick="showScanHistory(this)"{% endif %}>
                                 <div class="rack-position">{{ cell.rack.position_code }}</div>
                                 {% if cell.rack.part %}
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
@@ -735,6 +735,71 @@
 </div>
 
 <!-- 투입 취소 확인 모달 -->
+<!-- ===================== 발주요청 모달 ===================== -->
+<div class="modal fade" id="purchaseRequestModal" tabindex="-1" style="z-index:2100;">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius:12px; border:none; box-shadow:0 12px 40px rgba(0,0,0,0.2);">
+            <div class="modal-header py-3" style="background:linear-gradient(135deg,#dc2626,#ef4444); color:#fff; border-radius:12px 12px 0 0;">
+                <h6 class="modal-title mb-0"><i class="bi bi-cart-plus me-2"></i>발주요청</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <!-- 품목 정보 (읽기 전용) -->
+                <div class="rounded-3 p-3 mb-3" style="background:#f8fafc; border:1px solid #e2e8f0;">
+                    <div class="row g-2 text-center">
+                        <div class="col-6">
+                            <small class="text-muted d-block">품번</small>
+                            <strong id="por_part_no" style="font-size:0.95rem;"></strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">품명</small>
+                            <span id="por_part_name" class="small"></span>
+                        </div>
+                    </div>
+                    <hr class="my-2">
+                    <div class="row g-2 text-center">
+                        <div class="col-4">
+                            <small class="text-muted d-block">현재고</small>
+                            <span id="por_current_qty" class="fw-bold text-danger fs-5"></span>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-muted d-block">안전재고</small>
+                            <span id="por_safety_stock" class="fw-bold text-secondary fs-5"></span>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-muted d-block">부족수량</small>
+                            <span id="por_shortage_qty" class="fw-bold text-danger fs-5"></span>
+                        </div>
+                    </div>
+                </div>
+                <!-- 요청 수량 -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold small">발주요청 수량 <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <input type="number" id="por_request_qty" class="form-control"
+                               min="1" step="1" placeholder="수량 입력">
+                        <span class="input-group-text small" id="por_unit_label">EA</span>
+                    </div>
+                    <div class="form-text">부족수량이 자동 입력됩니다. 필요 시 수정하세요.</div>
+                </div>
+                <!-- 요청사유 -->
+                <div class="mb-2">
+                    <label class="form-label fw-bold small">요청사유</label>
+                    <textarea id="por_reason" class="form-control" rows="2"
+                              placeholder="안전재고 부족으로 인한 발주 요청 등..."></textarea>
+                </div>
+                <div id="por_error" class="alert alert-danger py-2 small" style="display:none;"></div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn btn-danger btn-sm" onclick="submitPurchaseRequest()">
+                    <i class="bi bi-send me-1"></i>발주요청 제출
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="cancelConfirmModal" tabindex="-1" style="z-index:2000;">
     <div class="modal-dialog modal-dialog-centered modal-sm">
         <div class="modal-content" style="border-radius:12px; border:none; box-shadow:0 12px 40px rgba(0,0,0,0.2);">
@@ -815,6 +880,19 @@
                     <div id="overrideResult" style="display:none; font-size:0.82rem; padding:6px 10px; border-radius:6px; margin-top:6px;"></div>
                 </div>
                 {% endif %}
+                <!-- 안전재고 부족 배너 (danger 상태일 때 JS로 표시) -->
+                <div id="safetyAlertBanner" style="display:none;" class="mb-3 p-3 rounded-3 d-flex justify-content-between align-items-center"
+                     style="background:#fff1f2; border:1px solid #fca5a5;">
+                    <div>
+                        <span class="badge bg-danger me-2" style="font-size:0.8rem;">⚠ 안전재고 부족품</span>
+                        <small class="text-danger fw-bold" id="safetyAlertText"></small>
+                    </div>
+                    <button type="button" class="btn btn-danger btn-sm"
+                            onclick="openPurchaseRequestModal()">
+                        <i class="bi bi-cart-plus me-1"></i>발주요청
+                    </button>
+                </div>
+
                 <!-- 도착 창고 선택 + 바코드 스캔 입력 -->
                 <div class="mb-3">
                     <div class="d-flex align-items-center gap-2 mb-2">
@@ -1242,6 +1320,9 @@ function openQuickScan() {
     modal.show();
 }
 
+// 발주요청 현재 대상 저장
+let _porPartId = 0, _porPartNo = '', _porPartName = '', _porCurrentQty = 0, _porSafetyStock = 0, _porShortageQty = 0;
+
 function showScanHistory(el) {
     const partNo = el.dataset.partNo;
     const partName = el.dataset.partName;
@@ -1261,9 +1342,109 @@ function showScanHistory(el) {
         if (overrideResult) overrideResult.style.display = 'none';
     }
 
+    // 안전재고 부족 배너
+    const status = el.dataset.stockStatus || '';
+    _porPartId = parseInt(el.dataset.partId || '0');
+    _porPartNo = partNo;
+    _porPartName = partName;
+    _porCurrentQty = parseFloat(el.dataset.currentQty || '0');
+    _porSafetyStock = parseFloat(el.dataset.safetyStock || '0');
+    _porShortageQty = parseFloat(el.dataset.shortageQty || '0');
+
+    const banner = document.getElementById('safetyAlertBanner');
+    if (status === 'danger' && _porSafetyStock > 0) {
+        document.getElementById('safetyAlertText').textContent =
+            `현재고 ${_porCurrentQty.toFixed(0)} / 안전재고 ${_porSafetyStock.toFixed(0)} — 부족 ${_porShortageQty.toFixed(0)}`;
+        banner.style.display = 'flex';
+        banner.style.background = '#fff1f2';
+        banner.style.border = '1px solid #fca5a5';
+    } else {
+        banner.style.display = 'none';
+    }
+
     const modal = new bootstrap.Modal(scanModal);
     modal.show();
     loadScanHistory(partNo);
+}
+
+function openPurchaseRequestModal() {
+    // scanHistoryModal 뒤로 보내고 발주요청 모달 열기
+    document.getElementById('por_part_no').textContent = _porPartNo;
+    document.getElementById('por_part_name').textContent = _porPartName;
+    document.getElementById('por_current_qty').textContent = _porCurrentQty.toFixed(0);
+    document.getElementById('por_safety_stock').textContent = _porSafetyStock.toFixed(0);
+    document.getElementById('por_shortage_qty').textContent = _porShortageQty.toFixed(0);
+    document.getElementById('por_request_qty').value = Math.max(1, Math.ceil(_porShortageQty));
+    document.getElementById('por_reason').value = '';
+    document.getElementById('por_error').style.display = 'none';
+
+    const porModal = new bootstrap.Modal(document.getElementById('purchaseRequestModal'));
+    porModal.show();
+}
+
+function submitPurchaseRequest() {
+    const qty = parseInt(document.getElementById('por_request_qty').value || '0');
+    const reason = document.getElementById('por_reason').value.trim();
+    const errEl = document.getElementById('por_error');
+
+    if (!qty || qty < 1) {
+        errEl.textContent = '발주요청 수량을 입력하세요.';
+        errEl.style.display = 'block';
+        return;
+    }
+
+    const btn = document.querySelector('#purchaseRequestModal .btn-danger');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>제출 중...';
+
+    fetch('{% url "material:api_purchase_request_create" %}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken()},
+        body: JSON.stringify({
+            part_id: _porPartId,
+            part_no: _porPartNo,
+            part_name: _porPartName,
+            current_qty: _porCurrentQty,
+            safety_stock_qty: _porSafetyStock,
+            shortage_qty: _porShortageQty,
+            request_qty: qty,
+            reason: reason,
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('purchaseRequestModal')).hide();
+            showToast('발주요청이 접수되었습니다. (' + data.request_no + ')', 'success');
+        } else {
+            errEl.textContent = data.error || '오류가 발생했습니다.';
+            errEl.style.display = 'block';
+        }
+    })
+    .catch(() => {
+        errEl.textContent = '네트워크 오류가 발생했습니다.';
+        errEl.style.display = 'block';
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-send me-1"></i>발주요청 제출';
+    });
+}
+
+function getCsrfToken() {
+    const el = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (el) return el.value;
+    const m = document.cookie.match(/csrftoken=([^;]+)/);
+    return m ? m[1] : '';
+}
+
+function showToast(msg, type='info') {
+    const bg = type === 'success' ? '#22c55e' : type === 'danger' ? '#ef4444' : '#3b82f6';
+    const div = document.createElement('div');
+    div.style.cssText = `position:fixed;bottom:24px;right:24px;z-index:9999;padding:12px 20px;border-radius:8px;color:#fff;font-size:0.9rem;box-shadow:0 4px 12px rgba(0,0,0,0.15);background:${bg};`;
+    div.textContent = msg;
+    document.body.appendChild(div);
+    setTimeout(() => div.remove(), 3500);
 }
 
 function loadScanHistory(partNo) {

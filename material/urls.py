@@ -177,4 +177,8 @@ urlpatterns = [
     path('mold/repair/<int:pk>/update/', views.mold_repair_update, name='mold_repair_update'),
     path('mold/repair/<int:pk>/delete/', views.mold_repair_delete, name='mold_repair_delete'),
     path('mold/repair/<int:pk>/detail/', views.mold_repair_detail, name='mold_repair_detail'),
+
+    # 발주 요청
+    path('purchase-request/', views.purchase_request_status, name='purchase_request_status'),
+    path('api/purchase-request/create/', views.api_purchase_request_create, name='api_purchase_request_create'),
 ]

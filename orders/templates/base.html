@@ -875,6 +875,7 @@
                                     {% if user|has_perm:'can_wms_storage_setting' %}<a class="nav-link {% if request.resolver_match.url_name == 'raw_material_setting' %}active{% endif %}" href="{% url 'material:raw_material_setting' %}">품목 설정</a>{% endif %}
                                     {% if user|has_perm:'can_wms_storage_expiry' %}<a class="nav-link {% if request.resolver_match.url_name == 'raw_material_expiry' %}active{% endif %}" href="{% url 'material:raw_material_expiry' %}">유효기간 관리</a>{% endif %}
                                     {% if user|has_perm:'can_wms_transfer_request' %}<a class="nav-link {% if 'transfer_request' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'material:transfer_request_list' %}">재료 이동 요청</a>{% endif %}
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'purchase_request_status' %}active{% endif %}" href="{% url 'material:purchase_request_status' %}">발주요청 현황{% if user|has_perm:'can_wms_purchase_approve' %}<span class="badge bg-danger ms-1" id="sidebarPorBadge" style="display:none;font-size:0.7rem;"></span>{% endif %}</a>
                                 </nav>
                             </div>
                             {% endif %}
