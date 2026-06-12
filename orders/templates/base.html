@@ -1007,7 +1007,7 @@
             <main>
                 <div class="container-fluid px-4 py-4">
                     {% if messages %}
-                        {% for message in messages %}
+                        {% for message in messages|unique_messages %}
                         <div class="alert alert-{{ message.tags }} alert-dismissible fade show shadow-sm" role="alert">
                             {% if message.tags == 'success' %}<i class="bi bi-check-circle-fill me-2"></i>{% endif %}
                             {% if message.tags == 'error' or message.tags == 'danger' %}<i class="bi bi-exclamation-triangle-fill me-2"></i>{% endif %}

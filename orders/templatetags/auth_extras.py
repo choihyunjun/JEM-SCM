@@ -2,6 +2,18 @@ from django import template
 
 register = template.Library()
 
+@register.filter(name='unique_messages')
+def unique_messages(messages_list):
+    """중복 메시지 제거 — 동일 텍스트 메시지는 첫 번째만 표시"""
+    seen = set()
+    result = []
+    for msg in messages_list:
+        key = str(msg)
+        if key not in seen:
+            seen.add(key)
+            result.append(msg)
+    return result
+
 # VENDOR 계정이 절대 가질 수 없는 권한 목록 (편집/관리 계열)
 _VENDOR_BLOCKED_PERMS = frozenset({
     'can_scm_order_edit', 'can_scm_incoming_edit', 'can_scm_admin', 'can_scm_report',
