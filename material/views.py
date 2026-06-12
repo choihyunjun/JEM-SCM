@@ -6327,6 +6327,9 @@ def raw_material_layout(request):
         scanned_qty = 0
         stock_status = 'empty'
         base_qty = 0
+        part_id = 0
+        safety = 0
+        shortage = 0
 
         if rack.part:
             # 실재고 (3200 원재료창고)
