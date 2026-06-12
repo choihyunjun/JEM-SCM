@@ -11809,20 +11809,23 @@ def api_purchase_request_create(request):
         except Part.DoesNotExist:
             pass
 
-    por = PurchaseOrderRequest.objects.create(
-        request_no       = PurchaseOrderRequest.generate_request_no(),
-        part             = part_obj,
-        part_no          = part_no,
-        part_name        = part_name,
-        unit             = unit,
-        vendor_name      = vendor_name,
-        current_qty      = current_qty,
-        safety_stock_qty = safety_qty,
-        shortage_qty     = shortage_qty,
-        request_qty      = request_qty,
-        reason           = reason,
-        requested_by     = request.user,
-    )
+    try:
+        por = PurchaseOrderRequest.objects.create(
+            request_no       = PurchaseOrderRequest.generate_request_no(),
+            part             = part_obj,
+            part_no          = part_no,
+            part_name        = part_name,
+            unit             = unit,
+            vendor_name      = vendor_name,
+            current_qty      = current_qty,
+            safety_stock_qty = safety_qty,
+            shortage_qty     = shortage_qty,
+            request_qty      = request_qty,
+            reason           = reason,
+            requested_by     = request.user,
+        )
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f'[DB오류] {type(e).__name__}: {e}'})
     return JsonResponse({'success': True, 'request_no': por.request_no})
 
 
