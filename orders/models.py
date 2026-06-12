@@ -303,6 +303,40 @@ class UserProfile(models.Model):
     can_wms_field_view = models.BooleanField(default=False, verbose_name="현장 지원 조회")
     can_wms_field_edit = models.BooleanField(default=False, verbose_name="현장 지원 처리")
 
+    # ========== WMS 세부 메뉴별 권한 ==========
+    # 재고 관리 세부
+    can_wms_stock_list = models.BooleanField(default=False, verbose_name="자재 재고 현황")
+    can_wms_stock_transfer = models.BooleanField(default=False, verbose_name="재고 이동 처리")
+    can_wms_transfer_history = models.BooleanField(default=False, verbose_name="재고 이동 현황")
+    can_wms_transaction_history = models.BooleanField(default=False, verbose_name="기간별 수불 대장")
+    can_wms_lot_allocation = models.BooleanField(default=False, verbose_name="LOT 별도 적용")
+
+    # 입고 관리 세부
+    can_wms_incoming_process = models.BooleanField(default=False, verbose_name="입고 처리")
+    can_wms_incoming_history = models.BooleanField(default=False, verbose_name="입고 내역 조회")
+    can_wms_incoming_label = models.BooleanField(default=False, verbose_name="입고라벨 발행")
+
+    # 출고 관리 세부
+    can_wms_outgoing_process = models.BooleanField(default=False, verbose_name="출고 처리")
+    can_wms_outgoing_history = models.BooleanField(default=False, verbose_name="출고 내역 조회")
+    can_wms_outbound = models.BooleanField(default=False, verbose_name="생산 자재 불출")
+    can_wms_stock_return = models.BooleanField(default=False, verbose_name="불량 반품 처리")
+
+    # BOM 관리 세부
+    can_wms_bom_list = models.BooleanField(default=False, verbose_name="BOM 조회")
+    can_wms_bom_upload = models.BooleanField(default=False, verbose_name="BOM 업로드")
+    can_wms_bom_calc = models.BooleanField(default=False, verbose_name="소요량 계산")
+
+    # 창고 설정 세부
+    can_wms_erp_sync = models.BooleanField(default=False, verbose_name="기초재고 동기화")
+    can_wms_storage_layout = models.BooleanField(default=False, verbose_name="창고 레이아웃")
+    can_wms_storage_rack = models.BooleanField(default=False, verbose_name="랙 위치 관리")
+    can_wms_storage_setting = models.BooleanField(default=False, verbose_name="품목 설정")
+    can_wms_storage_expiry = models.BooleanField(default=False, verbose_name="유효기간 관리")
+
+    # 이동 요청
+    can_wms_transfer_request = models.BooleanField(default=False, verbose_name="재료 이동 요청")
+
     # ========== QMS 권한 (View/Edit 분리) ==========
     # 4M 변경점 관리
     can_qms_4m_view = models.BooleanField(default=False, verbose_name="4M 조회")

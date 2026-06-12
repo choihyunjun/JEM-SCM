@@ -201,7 +201,16 @@ def login_success(request):
         return redirect('scm_alert_dashboard')
 
     # WMS 권한이 있으면 WMS로
-    if profile.can_wms_stock_view or profile.can_wms_inout_view or profile.can_wms_bom_view:
+    if any([
+        profile.can_wms_stock_list, profile.can_wms_stock_transfer, profile.can_wms_transfer_history,
+        profile.can_wms_transaction_history, profile.can_wms_lot_allocation, profile.can_wms_incoming_process,
+        profile.can_wms_incoming_history, profile.can_wms_incoming_label, profile.can_wms_outgoing_process,
+        profile.can_wms_outgoing_history, profile.can_wms_outbound, profile.can_wms_stock_return,
+        profile.can_wms_bom_list, profile.can_wms_bom_upload, profile.can_wms_bom_calc,
+        profile.can_wms_erp_sync, profile.can_wms_storage_layout, profile.can_wms_storage_rack,
+        profile.can_wms_storage_setting, profile.can_wms_storage_expiry, profile.can_wms_transfer_request,
+        profile.can_wms_stock_view, profile.can_wms_inout_view, profile.can_wms_bom_view,
+    ]):
         return redirect('material:dashboard')
 
     # QMS 권한이 있으면 QMS로
@@ -3659,17 +3668,36 @@ def user_permission_manage(request):
             ('can_scm_report', '📊 납기준수율 리포트'),
             ('can_scm_admin', '🔧 관리자'),
         ],
-        'WMS (자재관리)': [
-            ('can_wms_stock_view', '📋 재고/수불 조회'),
-            ('can_wms_stock_edit', '✏️ 재고 조정/이동'),
-            ('can_wms_inout_view', '📋 입출고 내역 조회'),
-            ('can_wms_inout_edit', '✏️ 입출고 처리'),
-            ('can_wms_bom_view', '📋 BOM 조회'),
-            ('can_wms_bom_edit', '✏️ BOM 등록/수정'),
-            ('can_wms_label_view', '📋 입고라벨 조회'),
-            ('can_wms_label_edit', '✏️ 입고라벨 발행/취소'),
-            ('can_wms_field_view', '📋 현장 지원 조회'),
-            ('can_wms_field_edit', '✏️ 현장 지원 처리'),
+        'WMS — 재고/수불 관리': [
+            ('can_wms_stock_list', '📋 자재 재고 현황'),
+            ('can_wms_stock_transfer', '🔄 재고 이동 처리'),
+            ('can_wms_transfer_history', '📋 재고 이동 현황'),
+            ('can_wms_transaction_history', '📋 기간별 수불 대장'),
+            ('can_wms_lot_allocation', '✏️ LOT 별도 적용'),
+        ],
+        'WMS — 입고 관리': [
+            ('can_wms_incoming_process', '✏️ 입고 처리'),
+            ('can_wms_incoming_history', '📋 입고 내역 조회'),
+            ('can_wms_incoming_label', '🏷️ 입고라벨 발행'),
+        ],
+        'WMS — 출고 관리': [
+            ('can_wms_outgoing_process', '✏️ 출고 처리'),
+            ('can_wms_outgoing_history', '📋 출고 내역 조회'),
+            ('can_wms_outbound', '📦 생산 자재 불출'),
+            ('can_wms_stock_return', '↩️ 불량 반품 처리'),
+        ],
+        'WMS — BOM 관리': [
+            ('can_wms_bom_list', '📋 BOM 조회'),
+            ('can_wms_bom_upload', '⬆️ BOM 업로드'),
+            ('can_wms_bom_calc', '🔢 소요량 계산'),
+        ],
+        'WMS — ERP/보관 관리': [
+            ('can_wms_erp_sync', '🔄 기초재고 동기화'),
+            ('can_wms_storage_layout', '🗺️ 창고 레이아웃'),
+            ('can_wms_storage_rack', '📐 랙 위치 관리'),
+            ('can_wms_storage_setting', '⚙️ 품목 설정'),
+            ('can_wms_storage_expiry', '📅 유효기간 관리'),
+            ('can_wms_transfer_request', '📩 재료 이동 요청'),
         ],
         'QMS (품질관리)': [
             ('can_qms_4m_view', '📋 4M 변경 조회'),
