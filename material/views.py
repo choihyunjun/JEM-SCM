@@ -212,20 +212,20 @@ def dashboard(request):
         lot_no__lt=fifo_warning_date
     ).count()
 
-    # ========== 6. 금일 입고/출고 이력 (이동·보정 제외, 하루치 누적) ==========
+    # ========== 6. 금일 입고/출고 이력 (이동·보정 제외, 최근 50건) ==========
     recent_inbound = MaterialTransaction.objects.select_related(
         'part', 'warehouse_from', 'warehouse_to', 'vendor', 'actor'
     ).filter(
         date__date=today,
         transaction_type__in=['IN_SCM', 'IN_MANUAL', 'IN_ERP', 'RCV_ERP']
-    ).order_by('-date')
+    ).order_by('-date')[:50]
 
     recent_outbound = list(MaterialTransaction.objects.select_related(
         'part', 'part__vendor', 'warehouse_from', 'warehouse_to', 'vendor', 'actor'
     ).filter(
         date__date=today,
         transaction_type__in=['OUT_PROD', 'OUT_RETURN', 'OUT_MANUAL', 'OUT_ERP', 'ISU_ERP']
-    ).order_by('-date'))
+    ).order_by('-date')[:50])
 
     # 거래처 표시: vendor → part.vendor → remark에서 추출
     import re as _re
@@ -267,19 +267,23 @@ def dashboard(request):
         }
 
     # ========== 10. 재고 부족 경고 (재고 0인 품목 중 최근 출고 이력 있는 것) ==========
-    # 최근 7일 내 출고된 품목 중 현재 재고가 0인 것
-    recent_out_parts = MaterialTransaction.objects.filter(
+    # 최근 7일 내 출고된 품목 ID (1 쿼리)
+    recent_out_part_ids = list(MaterialTransaction.objects.filter(
         date__date__gte=today - timedelta(days=7),
         transaction_type__in=['OUT_PROD', 'OUT_RETURN']
-    ).values_list('part_id', flat=True).distinct()
+    ).values_list('part_id', flat=True).distinct())
 
-    zero_stock_parts = []
-    for part_id in recent_out_parts:
-        total = MaterialStock.objects.filter(part_id=part_id).aggregate(total=Sum('quantity'))['total'] or 0
-        if total <= 0:
-            part = Part.objects.filter(id=part_id).first()
-            if part:
-                zero_stock_parts.append(part)
+    # 해당 품목들의 재고 합계를 한 번에 집계 (1 쿼리)
+    stock_totals = dict(
+        MaterialStock.objects.filter(part_id__in=recent_out_part_ids)
+        .values('part_id')
+        .annotate(total=Sum('quantity'))
+        .values_list('part_id', 'total')
+    )
+    zero_part_ids = [pid for pid in recent_out_part_ids if (stock_totals.get(pid) or 0) <= 0]
+
+    # 재고 0 품목 한 번에 조회 (1 쿼리)
+    zero_stock_parts = list(Part.objects.filter(id__in=zero_part_ids))
     zero_stock_count = len(zero_stock_parts)
 
     context = {
@@ -364,15 +368,15 @@ def dashboard_api(request):
         quantity__gt=0, lot_no__isnull=False, lot_no__lt=fifo_warning_date
     ).count()
 
-    # 입고 이력 (금일 전체)
+    # 입고 이력 (금일 최근 50건)
     inbound = list(MaterialTransaction.objects.filter(
         date__date=today,
         transaction_type__in=['IN_SCM', 'IN_MANUAL', 'IN_ERP', 'RCV_ERP']
     ).order_by('-date').values(
         'date', 'transaction_type', 'part__part_no', 'quantity',
         'warehouse_from__name', 'warehouse_to__name', 'vendor__name'
-    ))
-    # 출고 이력 (금일 전체)
+    )[:50])
+    # 출고 이력 (금일 최근 50건)
     outbound = list(MaterialTransaction.objects.filter(
         date__date=today,
         transaction_type__in=['OUT_PROD', 'OUT_RETURN', 'OUT_MANUAL', 'OUT_ERP', 'ISU_ERP']
@@ -380,7 +384,7 @@ def dashboard_api(request):
         'date', 'transaction_type', 'part__part_no', 'quantity',
         'warehouse_from__name', 'warehouse_to__name', 'vendor__name',
         'part__vendor__name', 'remark'
-    ))
+    )[:50])
 
     TX_DISPLAY = dict(MaterialTransaction.TYPE_CHOICES)
     import re as _re_api
