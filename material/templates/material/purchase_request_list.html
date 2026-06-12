@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% load auth_extras %}
+
+{% block title %}발주신청 목록{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="fw-bold mb-0"><i class="bi bi-cart-plus me-2"></i>발주신청 목록</h4>
+    <a href="{% url 'material:purchase_request_create' %}" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-lg me-1"></i>발주신청
+    </a>
+</div>
+
+<!-- 필터 -->
+<div class="card shadow-sm mb-3">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <input type="text" name="q" class="form-control form-control-sm"
+                       placeholder="품번 / 품명 / 신청번호" value="{{ q }}">
+            </div>
+            <div class="col-md-2">
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">전체 상태</option>
+                    {% for code, label in status_choices %}
+                    <option value="{{ code }}" {% if status_filter == code %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search"></i></button>
+                <a href="{% url 'material:purchase_request_list' %}" class="btn btn-sm btn-secondary">초기화</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 목록 -->
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>신청번호</th>
+                        <th>품번</th>
+                        <th>품명</th>
+                        <th>거래처</th>
+                        <th class="text-end">현재고</th>
+                        <th class="text-end">안전재고</th>
+                        <th class="text-end">부족수량</th>
+                        <th class="text-end">신청수량</th>
+                        <th>신청사유</th>
+                        <th>신청자</th>
+                        <th>신청일시</th>
+                        <th>상태</th>
+                        <th>승인자</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for por in page_obj %}
+                    <tr>
+                        <td><small class="text-muted">{{ por.request_no }}</small></td>
+                        <td><strong>{{ por.part_no }}</strong></td>
+                        <td>{{ por.part_name }}</td>
+                        <td>{{ por.vendor_name|default:"-" }}</td>
+                        <td class="text-end">{{ por.current_qty|floatformat:0 }}</td>
+                        <td class="text-end">{{ por.safety_stock_qty|floatformat:0 }}</td>
+                        <td class="text-end {% if por.shortage_qty > 0 %}text-danger fw-bold{% endif %}">
+                            {{ por.shortage_qty|floatformat:0 }}
+                        </td>
+                        <td class="text-end fw-bold text-primary">{{ por.request_qty|floatformat:0 }}</td>
+                        <td><small>{{ por.reason|default:"-"|truncatechars:30 }}</small></td>
+                        <td><small>{{ por.requested_by.get_full_name|default:por.requested_by.username }}</small></td>
+                        <td><small>{{ por.requested_at|date:"m/d H:i" }}</small></td>
+                        <td>
+                            {% if por.status == 'PENDING' %}
+                            <span class="badge bg-warning text-dark">{{ por.get_status_display }}</span>
+                            {% elif por.status == 'APPROVED' %}
+                            <span class="badge bg-success">{{ por.get_status_display }}</span>
+                            {% elif por.status == 'REJECTED' %}
+                            <span class="badge bg-danger">{{ por.get_status_display }}</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ por.get_status_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <small>
+                                {% if por.approved_by %}{{ por.approved_by.get_full_name|default:por.approved_by.username }}{% else %}-{% endif %}
+                                {% if por.approved_at %}<br><span class="text-muted">{{ por.approved_at|date:"m/d H:i" }}</span>{% endif %}
+                            </small>
+                        </td>
+                        <td>
+                            {% if por.status == 'PENDING' %}
+                                {% if can_approve %}
+                                <!-- 승인/반려 폼 -->
+                                <div class="d-flex gap-1">
+                                    <form method="post" action="{% url 'material:purchase_request_action' por.pk %}" class="d-inline">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="approve">
+                                        <button type="submit" class="btn btn-success btn-sm py-0 px-2"
+                                                onclick="return confirm('{{ por.request_no }} 발주신청을 승인하시겠습니까?')">
+                                            승인
+                                        </button>
+                                    </form>
+                                    <button type="button" class="btn btn-danger btn-sm py-0 px-2"
+                                            data-bs-toggle="modal" data-bs-target="#rejectModal{{ por.pk }}">
+                                        반려
+                                    </button>
+                                </div>
+                                {% endif %}
+                                <!-- 취소 (본인만) -->
+                                {% if por.requested_by == request.user or can_approve %}
+                                <form method="post" action="{% url 'material:purchase_request_action' por.pk %}" class="d-inline mt-1">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="cancel">
+                                    <button type="submit" class="btn btn-outline-secondary btn-sm py-0 px-2"
+                                            onclick="return confirm('신청을 취소하시겠습니까?')">
+                                        취소
+                                    </button>
+                                </form>
+                                {% endif %}
+                            {% endif %}
+                            {% if por.status == 'REJECTED' and por.reject_reason %}
+                            <small class="text-danger d-block mt-1">반려: {{ por.reject_reason|truncatechars:20 }}</small>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="14" class="text-center py-5 text-muted">
+                            <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                            발주신청 내역이 없습니다.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 페이징 -->
+{% if page_obj.has_other_pages %}
+<nav class="mt-3">
+    <ul class="pagination pagination-sm justify-content-center">
+        {% if page_obj.has_previous %}
+        <li class="page-item"><a class="page-link" href="?page=1&status={{ status_filter }}&q={{ q }}">«</a></li>
+        <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&status={{ status_filter }}&q={{ q }}">‹</a></li>
+        {% endif %}
+        <li class="page-item active"><span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
+        {% if page_obj.has_next %}
+        <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&status={{ status_filter }}&q={{ q }}">›</a></li>
+        <li class="page-item"><a class="page-link" href="?page={{ page_obj.paginator.num_pages }}&status={{ status_filter }}&q={{ q }}">»</a></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+<!-- 반려 모달들 -->
+{% for por in page_obj %}
+{% if por.status == 'PENDING' and can_approve %}
+<div class="modal fade" id="rejectModal{{ por.pk }}" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header py-2 bg-danger text-white">
+                <h6 class="modal-title">반려 — {{ por.request_no }}</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{% url 'material:purchase_request_action' por.pk %}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="reject">
+                <div class="modal-body">
+                    <label class="form-label small fw-bold">반려사유</label>
+                    <textarea name="reject_reason" class="form-control form-control-sm" rows="3"
+                              placeholder="반려 사유를 입력하세요"></textarea>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">취소</button>
+                    <button type="submit" class="btn btn-danger btn-sm">반려 처리</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endfor %}
+{% endblock %}

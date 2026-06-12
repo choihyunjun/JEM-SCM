@@ -170,6 +170,11 @@ urlpatterns = [
     path('api/transfer-request/lots/', views.api_transfer_request_lots, name='api_transfer_request_lots'),
     path('transfer-request/approvers/', views.transfer_request_approver_manage, name='transfer_request_approver_manage'),
 
+    # 발주신청
+    path('purchase-request/', views.purchase_request_list, name='purchase_request_list'),
+    path('purchase-request/create/', views.purchase_request_create, name='purchase_request_create'),
+    path('purchase-request/<int:pk>/action/', views.purchase_request_action, name='purchase_request_action'),
+
     # 금형 수리 의뢰
     path('mold/repair/', views.mold_repair_list, name='mold_repair_list'),
     path('mold/repair/create/', views.mold_repair_create, name='mold_repair_create'),

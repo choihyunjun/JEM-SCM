@@ -879,6 +879,17 @@
                             </div>
                             {% endif %}
 
+                            {# 발주신청 — WMS 접근 가능한 모든 사용자 #}
+                            <div class="sb-sidenav-menu-heading">구매요청</div>
+                            <a class="nav-link {% if 'purchase_request' in request.resolver_match.url_name %}active{% endif %}"
+                               href="{% url 'material:purchase_request_list' %}">
+                                <div class="sb-nav-link-icon"><i class="bi bi-cart-plus"></i></div>
+                                발주신청
+                                {% if user|has_perm:'can_wms_purchase_approve' %}
+                                <span class="badge bg-warning text-dark ms-auto" id="pendingPurchaseBadge" style="display:none;"></span>
+                                {% endif %}
+                            </a>
+
                         {# ====================================================== #}
                         {# 2-1. 생산현장관리 메뉴 #}
                         {# ====================================================== #}
