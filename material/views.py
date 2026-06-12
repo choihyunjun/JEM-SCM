@@ -7295,8 +7295,8 @@ def api_raw_material_auto_stock(request):
                 'part_no': s.part.part_no,
                 'part_name': s.part.part_name,
                 'monthly_avg': round(monthly_avg),
-                'suggested_safety': round(monthly_avg * 0.4),
-                'suggested_warning': round(monthly_avg * 0.3),
+                'suggested_safety': round(monthly_avg * 0.4 / 25) * 25,
+                'suggested_warning': round(monthly_avg * 0.3 / 25) * 25,
                 'current_safety': s.safety_stock,
                 'current_warning': s.warning_stock,
             })
@@ -7314,8 +7314,8 @@ def api_raw_material_auto_stock(request):
             continue
         monthly_avg = total / 3
         RawMaterialSetting.objects.filter(part_id=pid).update(
-            safety_stock=round(monthly_avg * 0.4),
-            warning_stock=round(monthly_avg * 0.3),
+            safety_stock=round(monthly_avg * 0.4 / 25) * 25,
+            warning_stock=round(monthly_avg * 0.3 / 25) * 25,
         )
         updated += 1
     return JsonResponse({'updated': updated})
