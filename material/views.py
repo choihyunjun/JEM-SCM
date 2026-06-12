@@ -71,7 +71,7 @@ def wms_permission_required(*permission_fields):
     return decorator
 
 # WMS(Material) 앱 모델
-from .models import Warehouse, MaterialStock, MaterialTransaction
+from .models import Warehouse, MaterialStock, MaterialTransaction, PurchaseOrderRequest, RawMaterialSetting
 
 from django.http import JsonResponse, HttpResponse
 import openpyxl
@@ -464,6 +464,7 @@ def stock_list(request):
         if view_mode == 'summary':
             # 전체 합계 모드: 품목별 전체 재고 합계
             stock_data = stocks.values(
+                'part__id',
                 'part__part_no',
                 'part__part_name',
                 'part__part_group',
@@ -513,7 +514,21 @@ def stock_list(request):
                 item['erp_qty'] = erp_qty
                 item['erp_diff'] = item['total_qty'] - erp_qty
 
-    # 5. 필터용 데이터
+    # 5. 안전재고 정보 추가 (발주신청 버튼 표시용)
+    stock_data = list(stock_data)
+    _part_ids = [item['part__id'] for item in stock_data if item.get('part__id')]
+    if _part_ids:
+        _safety_map = {
+            s.part_id: s.safety_stock
+            for s in RawMaterialSetting.objects.filter(part_id__in=_part_ids)
+        }
+        for item in stock_data:
+            pid = item.get('part__id')
+            safety = _safety_map.get(pid, 0) if pid else 0
+            item['safety_stock'] = safety
+            item['below_safety'] = bool(pid and safety > 0 and item['total_qty'] <= safety)
+
+    # 6. 필터용 데이터
     part_groups = Part.objects.values_list('part_group', flat=True).distinct().order_by('part_group')
     warehouses = Warehouse.objects.all().order_by('code')
 
@@ -11682,3 +11697,167 @@ def transfer_request_approver_manage(request):
     return render(request, 'material/transfer_request_approver_manage.html', {
         'users_with_flag': users_with_flag,
     })
+
+
+# =============================================================================
+# 발주신청 (Purchase Order Request)
+# =============================================================================
+
+def _has_purchase_approve(user):
+    if user.is_superuser:
+        return True
+    profile = _get_profile(user)
+    return profile and getattr(profile, 'can_wms_purchase_approve', False)
+
+
+@login_required
+def purchase_request_list(request):
+    """발주신청 목록 — WMS 접근 가능한 모든 사용자"""
+    from .models import RawMaterialSetting
+
+    status_filter = request.GET.get('status', '')
+    q = request.GET.get('q', '')
+
+    qs = PurchaseOrderRequest.objects.select_related('part', 'requested_by', 'approved_by')
+
+    if status_filter:
+        qs = qs.filter(status=status_filter)
+    if q:
+        qs = qs.filter(
+            models.Q(part_no__icontains=q) |
+            models.Q(part_name__icontains=q) |
+            models.Q(request_no__icontains=q)
+        )
+
+    paginator = Paginator(qs, 30)
+    page_obj = paginator.get_page(request.GET.get('page', 1))
+
+    return render(request, 'material/purchase_request_list.html', {
+        'page_obj': page_obj,
+        'status_filter': status_filter,
+        'q': q,
+        'can_approve': _has_purchase_approve(request.user),
+        'status_choices': PurchaseOrderRequest.STATUS_CHOICES,
+    })
+
+
+@login_required
+def purchase_request_create(request):
+    """발주신청 생성 — part_id 파라미터로 품목 자동 채우기"""
+    from .models import RawMaterialSetting
+
+    part_id = request.GET.get('part_id') or request.POST.get('part_id')
+    part = None
+    current_qty = 0
+    safety_stock_qty = 0
+    shortage_qty = 0
+    vendor_name = ''
+
+    if part_id:
+        part = Part.objects.filter(id=part_id).first()
+        if part:
+            current_qty = MaterialStock.objects.filter(part=part).aggregate(
+                total=Sum('quantity')
+            )['total'] or 0
+            setting = getattr(part, 'raw_material_setting', None)
+            if setting:
+                safety_stock_qty = setting.safety_stock
+                shortage_qty = max(0, safety_stock_qty - current_qty)
+            vendor_name = part.vendor.name if part.vendor else ''
+
+    if request.method == 'POST':
+        part_id_post = request.POST.get('part_id')
+        part_obj = Part.objects.filter(id=part_id_post).first() if part_id_post else None
+
+        req_qty = request.POST.get('request_qty', '0').replace(',', '')
+        try:
+            req_qty = float(req_qty)
+        except (ValueError, TypeError):
+            req_qty = 0
+
+        if not part_obj:
+            messages.error(request, '품목을 선택해주세요.')
+            return redirect('material:purchase_request_create')
+
+        if req_qty <= 0:
+            messages.error(request, '발주신청 수량을 올바르게 입력해주세요.')
+            return render(request, 'material/purchase_request_create.html', {
+                'part': part_obj, 'current_qty': current_qty,
+                'safety_stock_qty': safety_stock_qty, 'shortage_qty': shortage_qty,
+                'vendor_name': vendor_name,
+            })
+
+        cur_qty = float(request.POST.get('current_qty', 0) or 0)
+        saf_qty = float(request.POST.get('safety_stock_qty', 0) or 0)
+        sho_qty = float(request.POST.get('shortage_qty', 0) or 0)
+
+        PurchaseOrderRequest.objects.create(
+            request_no=PurchaseOrderRequest.generate_request_no(),
+            part=part_obj,
+            part_no=part_obj.part_no,
+            part_name=part_obj.part_name,
+            unit=getattr(part_obj, 'unit', 'EA') or 'EA',
+            vendor_name=part_obj.vendor.name if part_obj.vendor else '',
+            current_qty=cur_qty,
+            safety_stock_qty=saf_qty,
+            shortage_qty=sho_qty,
+            request_qty=req_qty,
+            reason=request.POST.get('reason', '').strip(),
+            requested_by=request.user,
+        )
+        messages.success(request, f'{part_obj.part_no} 발주신청이 접수되었습니다.')
+        return redirect('material:purchase_request_list')
+
+    return render(request, 'material/purchase_request_create.html', {
+        'part': part,
+        'current_qty': current_qty,
+        'safety_stock_qty': safety_stock_qty,
+        'shortage_qty': shortage_qty,
+        'vendor_name': vendor_name,
+    })
+
+
+@login_required
+def purchase_request_action(request, pk):
+    """승인 / 반려 / 취소 처리"""
+    por = get_object_or_404(PurchaseOrderRequest, pk=pk)
+
+    if request.method != 'POST':
+        return redirect('material:purchase_request_list')
+
+    action = request.POST.get('action')
+
+    if action in ('approve', 'reject'):
+        if not _has_purchase_approve(request.user):
+            messages.error(request, '승인 권한이 없습니다.')
+            return redirect('material:purchase_request_list')
+        if por.status != 'PENDING':
+            messages.error(request, '이미 처리된 신청입니다.')
+            return redirect('material:purchase_request_list')
+        if action == 'approve':
+            por.status = 'APPROVED'
+            por.approved_by = request.user
+            por.approved_at = timezone.now()
+            por.save()
+            messages.success(request, f'{por.request_no} 승인 완료.')
+        else:
+            reject_reason = request.POST.get('reject_reason', '').strip()
+            por.status = 'REJECTED'
+            por.approved_by = request.user
+            por.approved_at = timezone.now()
+            por.reject_reason = reject_reason
+            por.save()
+            messages.warning(request, f'{por.request_no} 반려 처리되었습니다.')
+
+    elif action == 'cancel':
+        if por.requested_by != request.user and not _has_purchase_approve(request.user):
+            messages.error(request, '본인 신청만 취소할 수 있습니다.')
+            return redirect('material:purchase_request_list')
+        if por.status not in ('PENDING',):
+            messages.error(request, '대기중 상태만 취소할 수 있습니다.')
+            return redirect('material:purchase_request_list')
+        por.status = 'CANCELLED'
+        por.save()
+        messages.info(request, f'{por.request_no} 취소되었습니다.')
+
+    return redirect('material:purchase_request_list')

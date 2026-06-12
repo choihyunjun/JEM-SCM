@@ -209,7 +209,7 @@ def login_success(request):
         profile.can_wms_bom_list, profile.can_wms_bom_upload, profile.can_wms_bom_calc,
         profile.can_wms_erp_sync, profile.can_wms_storage_layout, profile.can_wms_storage_rack,
         profile.can_wms_storage_setting, profile.can_wms_storage_expiry, profile.can_wms_transfer_request,
-        profile.can_wms_stock_view, profile.can_wms_inout_view, profile.can_wms_bom_view,
+        profile.can_wms_purchase_approve, profile.can_wms_stock_view, profile.can_wms_inout_view, profile.can_wms_bom_view,
     ]):
         return redirect('material:dashboard')
 
@@ -3698,6 +3698,7 @@ def user_permission_manage(request):
             ('can_wms_storage_setting', '⚙️ 품목 설정'),
             ('can_wms_storage_expiry', '📅 유효기간 관리'),
             ('can_wms_transfer_request', '📩 재료 이동 요청'),
+            ('can_wms_purchase_approve', '✅ 발주신청 승인'),
         ],
         'QMS (품질관리)': [
             ('can_qms_4m_view', '📋 4M 변경 조회'),

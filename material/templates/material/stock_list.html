@@ -94,6 +94,7 @@
                                 <th>품명</th>
                                 <th style="width: 15%;">협력사</th>
                                 <th style="width: 10%;" class="table-primary">SCM재고</th>
+                                <th style="width: 6%;"></th>
                                 {% if show_erp %}
                                 <th style="width: 10%;" class="table-warning">ERP총량</th>
                                 <th style="width: 8%;" class="table-danger">차이</th>
@@ -112,13 +113,26 @@
                                     <td class="fw-bold text-primary">{{ item.part__part_no }}</td>
                                     <td class="text-start text-truncate" style="max-width: 300px;">{{ item.part__part_name }}</td>
                                     <td class="text-truncate" style="max-width: 150px;">{{ item.part__vendor__name }}</td>
-                                    <td class="fw-bold text-end pe-3 fs-6 cursor-pointer lot-detail-cell {% if item.total_qty < 0 %}text-danger{% endif %}"
+                                    <td class="fw-bold text-end pe-3 fs-6 cursor-pointer lot-detail-cell {% if item.total_qty < 0 %}text-danger{% elif item.below_safety %}text-danger{% endif %}"
                                         data-part-no="{{ item.part__part_no }}"
                                         data-warehouse-code="{{ item.warehouse__code }}"
                                         title="더블클릭하여 LOT별 상세 보기"
                                         ondblclick="showLotDetails('{{ item.part__part_no }}', '{{ item.warehouse__code }}')">
                                         {{ item.total_qty|intcomma }}
+                                        {% if item.below_safety %}
+                                        <div class="text-danger small" style="font-size: 0.65rem;">⚠ 안전재고 미달</div>
+                                        {% else %}
                                         <div class="text-info small" style="font-size: 0.65rem;">🔍 LOT 상세</div>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">
+                                        {% if item.below_safety %}
+                                        <a href="{% url 'material:purchase_request_create' %}?part_id={{ item.part__id }}"
+                                           class="btn btn-danger btn-sm py-0 px-2" style="font-size: 0.75rem;"
+                                           title="안전재고 미달 — 발주신청">
+                                            <i class="bi bi-cart-plus"></i> 발주신청
+                                        </a>
+                                        {% endif %}
                                     </td>
                                     {% if show_erp %}
                                     <td class="fw-bold text-end pe-3 text-warning">{{ item.erp_qty|intcomma }}</td>
@@ -132,12 +146,25 @@
                                     <td class="fw-bold text-primary">{{ item.part__part_no }}</td>
                                     <td class="text-start text-truncate" style="max-width: 300px;">{{ item.part__part_name }}</td>
                                     <td class="text-truncate" style="max-width: 150px;">{{ item.part__vendor__name }}</td>
-                                    <td class="fw-bold text-end pe-3 fs-6 cursor-pointer lot-detail-cell {% if item.total_qty < 0 %}text-danger{% else %}text-primary{% endif %}"
+                                    <td class="fw-bold text-end pe-3 fs-6 cursor-pointer lot-detail-cell {% if item.total_qty < 0 %}text-danger{% elif item.below_safety %}text-danger{% else %}text-primary{% endif %}"
                                         data-part-no="{{ item.part__part_no }}"
                                         title="더블클릭하여 LOT별 상세 보기 (전체 창고)"
                                         ondblclick="showLotDetails('{{ item.part__part_no }}', null)">
                                         {{ item.total_qty|intcomma }}
+                                        {% if item.below_safety %}
+                                        <div class="text-danger small" style="font-size: 0.65rem;">⚠ 안전재고 미달</div>
+                                        {% else %}
                                         <div class="text-info small" style="font-size: 0.65rem;">🔍 LOT 상세</div>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">
+                                        {% if item.below_safety %}
+                                        <a href="{% url 'material:purchase_request_create' %}?part_id={{ item.part__id }}"
+                                           class="btn btn-danger btn-sm py-0 px-2" style="font-size: 0.75rem;"
+                                           title="안전재고 미달 — 발주신청">
+                                            <i class="bi bi-cart-plus"></i> 발주신청
+                                        </a>
+                                        {% endif %}
                                     </td>
                                     {% if show_erp %}
                                     <td class="text-muted small text-center">창고 지정 필요</td>
@@ -147,7 +174,7 @@
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="{% if show_erp %}8{% else %}6{% endif %}" class="py-5 text-muted">
+                                <td colspan="{% if show_erp %}9{% else %}7{% endif %}" class="py-5 text-muted">
                                     <i class="bi bi-emoji-dizzy fs-3 d-block mb-2"></i>
                                     조건에 맞는 재고 데이터가 없습니다.
                                 </td>
