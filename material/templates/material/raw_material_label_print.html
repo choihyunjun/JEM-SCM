@@ -250,6 +250,29 @@
         .empty-state p { font-size: 18pt; margin-bottom: 15px; }
         .empty-state a { color: #3498db; }
 
+        /* 합격 도장 */
+        .stamp-approved {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20mm;
+            height: 20mm;
+            border: 3px double #000;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0.45;
+            pointer-events: none;
+        }
+        .stamp-approved span {
+            font-size: 13pt;
+            font-weight: 900;
+            color: #000;
+            letter-spacing: 1px;
+        }
+
         /* 인쇄 기본 (no-print 숨기기) */
         @media print {
             body { background: white; margin: 0; padding: 0; }
@@ -350,7 +373,7 @@
                     {% endif %}
                 </div>
             </div>
-
+            <div class="stamp-approved"><span>합격</span></div>
         </div>
         {% empty %}
         <div class="empty-state">
