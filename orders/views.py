@@ -3800,7 +3800,7 @@ def user_permission_manage(request):
                         RoleDefaultPermission.objects.create(role=role_to_save, permission_field=field_name)
             role_label = dict(UserProfile.ROLE_CHOICES).get(role_to_save, role_to_save)
             messages.success(request, f'"{role_label}" 역할의 기본 권한이 저장되었습니다.')
-        return redirect(f"{request.path}?tab=role_defaults{'&user_id=' + str(selected_user_id) if selected_user_id else ''}")
+        return redirect(f"{request.path}?tab=role_defaults&default_role={role_to_save}{'&user_id=' + str(selected_user_id) if selected_user_id else ''}")
 
     # 역할별 기본 권한 현황 조회
     role_defaults = {}

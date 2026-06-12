@@ -338,6 +338,14 @@ document.addEventListener('DOMContentLoaded', function() {
     if (params.get('tab') === 'role_defaults') {
         var tabEl = document.getElementById('role-default-tab');
         if (tabEl) new bootstrap.Tab(tabEl).show();
+
+        var savedRole = params.get('default_role');
+        if (savedRole) {
+            setTimeout(function() {
+                var roleTabEl = document.getElementById('role-' + savedRole + '-tab');
+                if (roleTabEl) new bootstrap.Tab(roleTabEl).show();
+            }, 50);
+        }
     }
 });
 
