@@ -106,6 +106,7 @@ urlpatterns = [
     path('raw-material/incoming/', views.raw_material_incoming, name='raw_material_incoming'),
     path('raw-material/rack-manage/', views.raw_material_rack_manage, name='raw_material_rack_manage'),
     path('raw-material/setting/', views.raw_material_setting, name='raw_material_setting'),
+    path('raw-material/setting/auto-stock/', views.api_raw_material_auto_stock, name='api_raw_material_auto_stock'),
     path('raw-material/expiry/', views.raw_material_expiry, name='raw_material_expiry'),
     path('raw-material/label-print/', views.raw_material_label_print, name='raw_material_label_print'),
     path('raw-material/pallet-label/create/', views.pallet_label_create, name='pallet_label_create'),

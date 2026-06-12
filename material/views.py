@@ -7255,6 +7255,72 @@ def raw_material_setting(request):
     return render(request, 'material/raw_material_setting.html', context)
 
 
+@wms_permission_required('can_wms_storage_setting')
+def api_raw_material_auto_stock(request):
+    """
+    3개월 ISU_ERP 출고 기준 월평균 사용량 계산 → 안전/경고재고 자동 제안/적용
+    GET  → 미리보기 JSON 반환
+    POST → 선택한 품목에 일괄 적용
+    """
+    import json
+    from datetime import timedelta
+    from django.db.models import Sum
+    from django.utils import timezone
+
+    three_months_ago = timezone.now() - timedelta(days=90)
+
+    settings_qs = RawMaterialSetting.objects.select_related('part').all()
+
+    usage_qs = (
+        MaterialTransaction.objects
+        .filter(
+            transaction_type='ISU_ERP',
+            date__gte=three_months_ago,
+            part_id__in=settings_qs.values_list('part_id', flat=True),
+        )
+        .values('part_id')
+        .annotate(total=Sum('quantity'))
+    )
+    usage_map = {u['part_id']: abs(u['total']) for u in usage_qs}
+
+    if request.method == 'GET':
+        results = []
+        for s in settings_qs:
+            total = usage_map.get(s.part_id, 0)
+            if total == 0:
+                continue
+            monthly_avg = total / 3
+            results.append({
+                'part_id': s.part_id,
+                'part_no': s.part.part_no,
+                'part_name': s.part.part_name,
+                'monthly_avg': round(monthly_avg),
+                'suggested_safety': round(monthly_avg * 0.4),
+                'suggested_warning': round(monthly_avg * 0.3),
+                'current_safety': s.safety_stock,
+                'current_warning': s.warning_stock,
+            })
+        results.sort(key=lambda x: x['part_no'])
+        return JsonResponse({'results': results})
+
+    # POST: 선택 품목 일괄 저장
+    data = json.loads(request.body)
+    part_ids = data.get('part_ids', [])
+    updated = 0
+    for pid in part_ids:
+        pid = int(pid)
+        total = usage_map.get(pid, 0)
+        if total == 0:
+            continue
+        monthly_avg = total / 3
+        RawMaterialSetting.objects.filter(part_id=pid).update(
+            safety_stock=round(monthly_avg * 0.4),
+            warning_stock=round(monthly_avg * 0.3),
+        )
+        updated += 1
+    return JsonResponse({'updated': updated})
+
+
 @wms_permission_required('can_wms_stock_view')
 def api_raw_material_labels(request):
     """
