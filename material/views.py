@@ -6353,10 +6353,10 @@ def raw_material_layout(request):
                 warning = 0
 
             if stock_qty <= 0:
-                stock_status = 'empty'
-            elif stock_qty < warning:
                 stock_status = 'danger'
-            elif stock_qty < safety:
+            elif warning > 0 and stock_qty < warning:
+                stock_status = 'danger'
+            elif safety > 0 and stock_qty < safety:
                 stock_status = 'warning'
             else:
                 stock_status = 'safe'
