@@ -66,7 +66,7 @@ def wms_permission_required(*permission_fields):
                             return view_func(request, *args, **kwargs)
 
             messages.error(request, "해당 메뉴에 대한 접근 권한이 없습니다.")
-            return redirect('material:dashboard')
+            return redirect('order_list')
         return _wrapped_view
     return decorator
 
@@ -126,7 +126,18 @@ def check_closing_date(target_date):
 # 1. 대시보드 및 재고 조회
 # =============================================================================
 
-@wms_permission_required('can_wms_stock_view')
+@wms_permission_required(
+    # 신 권한 — 21개 중 하나라도 있으면 대시보드 접근 허용
+    'can_wms_stock_list', 'can_wms_stock_transfer', 'can_wms_transfer_history',
+    'can_wms_transaction_history', 'can_wms_lot_allocation',
+    'can_wms_incoming_process', 'can_wms_incoming_history', 'can_wms_incoming_label',
+    'can_wms_outgoing_process', 'can_wms_outgoing_history', 'can_wms_outbound', 'can_wms_stock_return',
+    'can_wms_bom_list', 'can_wms_bom_upload', 'can_wms_bom_calc',
+    'can_wms_erp_sync', 'can_wms_storage_layout', 'can_wms_storage_rack',
+    'can_wms_storage_setting', 'can_wms_storage_expiry', 'can_wms_transfer_request',
+    # 구 권한 — 하위 호환
+    'can_wms_stock_view',
+)
 def dashboard(request):
     """자재 관리 대시보드 - 종합 현황판"""
     from datetime import timedelta
@@ -312,7 +323,16 @@ def dashboard(request):
     return render(request, 'material/dashboard.html', context)
 
 
-@wms_permission_required('can_wms_stock_view')
+@wms_permission_required(
+    'can_wms_stock_list', 'can_wms_stock_transfer', 'can_wms_transfer_history',
+    'can_wms_transaction_history', 'can_wms_lot_allocation',
+    'can_wms_incoming_process', 'can_wms_incoming_history', 'can_wms_incoming_label',
+    'can_wms_outgoing_process', 'can_wms_outgoing_history', 'can_wms_outbound', 'can_wms_stock_return',
+    'can_wms_bom_list', 'can_wms_bom_upload', 'can_wms_bom_calc',
+    'can_wms_erp_sync', 'can_wms_storage_layout', 'can_wms_storage_rack',
+    'can_wms_storage_setting', 'can_wms_storage_expiry', 'can_wms_transfer_request',
+    'can_wms_stock_view',
+)
 def dashboard_api(request):
     """대시보드 AJAX 폴링용 JSON API"""
     from django.http import JsonResponse
