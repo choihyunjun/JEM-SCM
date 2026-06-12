@@ -334,9 +334,8 @@ class UserProfile(models.Model):
     can_wms_storage_setting = models.BooleanField(default=False, verbose_name="품목 설정")
     can_wms_storage_expiry = models.BooleanField(default=False, verbose_name="유효기간 관리")
 
-    # 이동 요청 / 발주신청
+    # 이동 요청
     can_wms_transfer_request = models.BooleanField(default=False, verbose_name="재료 이동 요청")
-    can_wms_purchase_approve = models.BooleanField(default=False, verbose_name="발주신청 승인")
 
     # ========== QMS 권한 (View/Edit 분리) ==========
     # 4M 변경점 관리
