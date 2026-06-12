@@ -8,7 +8,7 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h3 class="fw-bold">BOM 조회</h3>
         <div>
-            {% if user|has_perm:'can_wms_bom_edit' %}
+            {% if user|has_perm:'can_wms_bom_upload' %}
             <form method="post" action="{% url 'material:bom_sync' %}" class="d-inline" id="syncForm">
                 {% csrf_token %}
                 {% if sync_running %}

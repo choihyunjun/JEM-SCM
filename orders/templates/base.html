@@ -545,7 +545,7 @@
             <i class="bi bi-shield-check me-1"></i>QMS
         </a>
         {% endif %}
-        {% if user|has_perm:'can_wms_stock_view' or user|has_perm:'can_wms_inout_view' or user|has_perm:'can_wms_bom_view' or user|has_perm:'can_wms_inout' %}
+        {% if user|has_perm:'can_wms_stock_list' or user|has_perm:'can_wms_stock_transfer' or user|has_perm:'can_wms_transfer_history' or user|has_perm:'can_wms_transaction_history' or user|has_perm:'can_wms_lot_allocation' or user|has_perm:'can_wms_incoming_process' or user|has_perm:'can_wms_incoming_history' or user|has_perm:'can_wms_incoming_label' or user|has_perm:'can_wms_outgoing_process' or user|has_perm:'can_wms_outgoing_history' or user|has_perm:'can_wms_outbound' or user|has_perm:'can_wms_stock_return' or user|has_perm:'can_wms_bom_list' or user|has_perm:'can_wms_bom_upload' or user|has_perm:'can_wms_bom_calc' or user|has_perm:'can_wms_erp_sync' or user|has_perm:'can_wms_storage_layout' or user|has_perm:'can_wms_storage_rack' or user|has_perm:'can_wms_storage_setting' or user|has_perm:'can_wms_storage_expiry' or user|has_perm:'can_wms_transfer_request' or user|has_perm:'can_wms_stock_view' or user|has_perm:'can_wms_inout_view' or user|has_perm:'can_wms_bom_view' or user|has_perm:'can_wms_inout' %}
         <a href="{% url 'material:dashboard' %}" class="mobile-system-tab {% if request.resolver_match.app_name == 'material' and not request.resolver_match.url_name|in_list:'production_main,molding_utilization,molding_analytics,molding_master_list,process_tag_form,stock_check,stock_check_result,mold_mt_dashboard,mold_repair_list' %}active-system{% endif %}">
             <i class="bi bi-box-seam me-1"></i>WMS
         </a>

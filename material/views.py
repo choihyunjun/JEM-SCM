@@ -30,12 +30,25 @@ def _get_profile(user):
     except Exception:
         return None
 
-def wms_permission_required(permission_field):
+def wms_permission_required(*permission_fields):
     """
-    WMS 메뉴 권한 체크 데코레이터
+    WMS 메뉴 권한 체크 데코레이터 (OR 조건: 하나라도 True면 통과)
     - superuser는 모든 권한
-    - 일반 사용자는 UserProfile의 해당 필드가 True여야 접근 가능
+    - 복수 권한 전달 가능: @wms_permission_required('can_a', 'can_b')
     """
+    legacy_map = {
+        'can_wms_stock_view': ['can_wms_inout', 'can_wms_adjustment'],
+        'can_wms_stock_edit': ['can_wms_adjustment'],
+        'can_wms_inout_view': ['can_wms_inout'],
+        'can_wms_inout_edit': ['can_wms_inout'],
+        'can_wms_bom_view': ['can_wms_bom'],
+        'can_wms_bom_edit': ['can_wms_bom'],
+        'can_wms_label_view': ['can_wms_inout_view', 'can_wms_inout'],
+        'can_wms_label_edit': ['can_wms_inout_edit', 'can_wms_inout'],
+        'can_wms_field_view': ['can_wms_stock_view', 'can_wms_inout'],
+        'can_wms_field_edit': ['can_wms_stock_edit', 'can_wms_adjustment'],
+    }
+
     def decorator(view_func):
         @wraps(view_func)
         @login_required
@@ -45,25 +58,12 @@ def wms_permission_required(permission_field):
 
             profile = _get_profile(request.user)
             if profile:
-                # 새 권한 필드 체크
-                if getattr(profile, permission_field, False):
-                    return view_func(request, *args, **kwargs)
-                # 레거시 필드 폴백 (하위 호환)
-                legacy_map = {
-                    'can_wms_stock_view': ['can_wms_inout', 'can_wms_adjustment'],
-                    'can_wms_stock_edit': ['can_wms_adjustment'],
-                    'can_wms_inout_view': ['can_wms_inout'],
-                    'can_wms_inout_edit': ['can_wms_inout'],
-                    'can_wms_bom_view': ['can_wms_bom'],
-                    'can_wms_bom_edit': ['can_wms_bom'],
-                    'can_wms_label_view': ['can_wms_inout_view', 'can_wms_inout'],
-                    'can_wms_label_edit': ['can_wms_inout_edit', 'can_wms_inout'],
-                    'can_wms_field_view': ['can_wms_stock_view', 'can_wms_inout'],
-                    'can_wms_field_edit': ['can_wms_stock_edit', 'can_wms_adjustment'],
-                }
-                for legacy_field in legacy_map.get(permission_field, []):
-                    if getattr(profile, legacy_field, False):
+                for pf in permission_fields:
+                    if getattr(profile, pf, False):
                         return view_func(request, *args, **kwargs)
+                    for legacy_field in legacy_map.get(pf, []):
+                        if getattr(profile, legacy_field, False):
+                            return view_func(request, *args, **kwargs)
 
             messages.error(request, "해당 메뉴에 대한 접근 권한이 없습니다.")
             return redirect('material:dashboard')
@@ -3535,7 +3535,7 @@ def api_part_exists(request):
 # =============================================================================
 # 6. LOT 관리 - LOT별 재고 상세 조회 API
 # =============================================================================
-@wms_permission_required('can_wms_stock_view')
+@wms_permission_required('can_wms_stock_list', 'can_wms_lot_allocation', 'can_wms_stock_transfer')
 def get_lot_details(request, part_no):
     """
     특정 품목의 LOT별 재고 상세 정보를 JSON으로 반환 (WMS용)
@@ -3631,7 +3631,7 @@ def get_lot_details(request, part_no):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@wms_permission_required('can_wms_stock_view')
+@wms_permission_required('can_wms_lot_allocation', 'can_wms_stock_transfer', 'can_wms_outgoing_process')
 def api_get_available_lots(request):
     """
     [재고 이동용] 특정 품번 + 보내는 창고의 사용 가능한 LOT 목록 반환
@@ -4010,7 +4010,7 @@ def lot_allocation(request):
     return render(request, 'material/lot_allocation.html', context)
 
 
-@wms_permission_required('can_wms_stock_view')
+@wms_permission_required('can_wms_lot_allocation', 'can_wms_stock_list')
 def api_null_stock_info(request):
     """
     [API] NULL 재고 정보 조회 (LOT 배분용)
@@ -5114,7 +5114,7 @@ def bom_calc_export(request):
     return response
 
 
-@wms_permission_required('can_wms_bom_view')
+@wms_permission_required('can_wms_bom_calc')
 def bom_calc_batch_export(request):
     """
     [WMS] 일괄 소요량 계산 결과 엑셀 다운로드
@@ -5278,7 +5278,7 @@ def bom_calc_batch_export(request):
     return response
 
 
-@wms_permission_required('can_wms_bom_view')
+@wms_permission_required('can_wms_bom_calc')
 def bom_calc_demand_export(request):
     """
     [WMS] 소요량 변환 엑셀 다운로드 (필요일자/모품번/자품번/자품명/필요수량/거래처)
@@ -5329,7 +5329,7 @@ def bom_calc_demand_export(request):
     return response
 
 
-@wms_permission_required('can_wms_bom_view')
+@wms_permission_required('can_wms_bom_calc')
 def api_bom_calculate(request):
     """
     [API] 소요량 계산 AJAX 엔드포인트 (다단계 BOM 전개)
@@ -5362,7 +5362,7 @@ def api_bom_calculate(request):
     })
 
 
-@wms_permission_required('can_wms_bom_edit')
+@wms_permission_required('can_wms_bom_upload', 'can_wms_bom_calc')
 def bom_sync_missing(request):
     """
     [WMS] BOM 없는 품번을 ERP에서 개별 동기화하는 AJAX API
@@ -5402,7 +5402,7 @@ def bom_sync_missing(request):
         })
 
 
-@wms_permission_required('can_wms_bom_edit')
+@wms_permission_required('can_wms_bom_calc')
 def bom_register_demand(request):
     """
     [WMS] BOM 일괄 소요량 계산 결과를 SCM 소요량(Demand)으로 등록
