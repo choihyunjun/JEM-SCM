@@ -485,11 +485,11 @@
     </div>
     <div class="table-responsive">
         <table class="table table-sm table-bordered text-center mb-0" style="font-size:0.82rem;">
-            <thead>
-                <tr style="background:#2d3748;color:#fff;">
+            <thead class="table-light">
+                <tr>
                     <th style="min-width:90px;">구분</th>
                     {% for t in tonnage_table %}<th>{{ t.tonnage }}t</th>{% endfor %}
-                    <th style="background:#4a5568;">TOTAL</th>
+                    <th>TOTAL</th>
                 </tr>
             </thead>
             <tbody>
@@ -530,11 +530,11 @@
     </div>
     <div class="table-responsive">
         <table class="table table-sm table-bordered text-center mb-0" style="font-size:0.82rem;">
-            <thead>
-                <tr style="background:#2d3748;color:#fff;">
+            <thead class="table-light">
+                <tr>
                     <th style="min-width:110px;">구분</th>
                     {% for row in tonnage_time_table %}<th>{{ row.tonnage }}t</th>{% endfor %}
-                    <th style="background:#4a5568;">평균</th>
+                    <th>평균</th>
                 </tr>
             </thead>
             <tbody>
@@ -590,12 +590,12 @@
     </div>
     <div class="table-responsive">
         <table class="table table-sm table-bordered text-center mb-0" style="font-size:0.82rem;">
-            <thead>
-                <tr style="background:#2d3748;color:#fff;">
+            <thead class="table-light">
+                <tr>
                     <th style="min-width:70px;width:80px;">구분</th>
                     <th style="min-width:80px;">유실항목</th>
                     {% for t in all_tonnages %}<th>{{ t }}t</th>{% endfor %}
-                    <th style="background:#4a5568;">TOTAL</th>
+                    <th>TOTAL</th>
                 </tr>
             </thead>
             <tbody>
@@ -645,8 +645,8 @@
     </div>
     <div class="table-responsive">
         <table class="table table-sm table-bordered text-center mb-0" style="font-size:0.82rem;">
-            <thead>
-                <tr style="background:#2d3748;color:#fff;">
+            <thead class="table-light">
+                <tr>
                     <th style="min-width:70px;">호기</th>
                     <th>근무구분</th>
                     <th>근무시간(분)</th>
@@ -686,18 +686,16 @@
                     <td class="machine-time-cell" data-setting="{{ m.time_rate }}" data-actual="{{ m.time_rate_actual }}">{{ m.time_rate }}%</td>
                 </tr>
                 {% endfor %}
-                <tr style="background:#2d3748;color:#fff;border-top:2px solid #4a5568;">
+                <tr style="background:#edf2f7;border-top:2px solid #cbd5e0;">
                     <td class="fw-bold">전체</td>
                     <td>-</td>
                     <td class="text-muted">-</td>
-                    <td class="fw-bold" style="color:#68d391;">{{ group.total.operating|intcomma }}</td>
-                    <td style="color:#fbd38d;">{{ group.total.mgmt_loss|intcomma }}</td>
-                    <td style="color:#fc8181;">{{ group.total.time_loss|intcomma }}</td>
+                    <td class="fw-bold text-success">{{ group.total.operating|intcomma }}</td>
+                    <td class="text-warning">{{ group.total.mgmt_loss|intcomma }}</td>
+                    <td class="text-danger">{{ group.total.time_loss|intcomma }}</td>
                     <td class="fw-bold">{{ group.total.loss|intcomma }}</td>
-                    <td>
-                        <span style="color:{% if group.total.util >= 90 %}#68d391{% elif group.total.util >= 70 %}#fbd38d{% else %}#fc8181{% endif %};font-weight:600;">
-                            {{ group.total.util }}%
-                        </span>
+                    <td class="fw-bold {% if group.total.util >= 90 %}text-success{% elif group.total.util >= 70 %}text-warning{% else %}text-danger{% endif %}">
+                        {{ group.total.util }}%
                     </td>
                     <td class="machine-time-cell" data-setting="{{ group.total.time_rate }}" data-actual="{{ group.total.time_rate_actual }}">{{ group.total.time_rate }}%</td>
                 </tr>
