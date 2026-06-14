@@ -9511,10 +9511,13 @@ def molding_analytics(request):
     machine_operating = defaultdict(int)   # {code: operating_minutes 합계}
     machine_base = defaultdict(int)        # {code: base_minutes 합계}
     machine_loss_cat = defaultdict(lambda: defaultdict(int))  # {code: {category: minutes}}
+    machine_shifts = defaultdict(set)      # {code: {'주간', '야간'}}
 
     for r in records_list:
         machine_operating[r.machine.code] += r.operating_minutes
         machine_base[r.machine.code] += r.base_minutes
+        if r.shift:
+            machine_shifts[r.machine.code].add(r.shift)
 
     for detail in MoldingLossDetail.objects.filter(
         record__date__year=year, record__date__month=month
@@ -9537,6 +9540,15 @@ def molding_analytics(request):
             loss_total = mgmt + time_loss
             util = round(op / base * 100, 1) if base else 0
             time_r = round(op / work_per_machine_min * 100, 1) if work_per_machine_min else 0
+            shifts = machine_shifts.get(m.code, set())
+            if '주간' in shifts and '야간' in shifts:
+                shift_label = '주야간'
+            elif '주간' in shifts:
+                shift_label = '주간'
+            elif '야간' in shifts:
+                shift_label = '야간'
+            else:
+                shift_label = '-'
             rows.append({
                 'code': m.code,
                 'operating': round(op, 1),
@@ -9545,6 +9557,7 @@ def molding_analytics(request):
                 'loss': round(loss_total, 1),
                 'util': util,
                 'time_rate': time_r,
+                'shift_label': shift_label,
             })
         machine_analysis_table.append({'tonnage': t, 'machines': rows})
 
