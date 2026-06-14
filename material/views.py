@@ -9475,11 +9475,11 @@ def molding_analytics(request):
         tonnage_time_table.append({
             'tonnage': t,
             'count': count,
-            'work_h': round(work_per_machine_min / 60, 1),
-            'operating_h': round(td['operating'] / count / 60, 1) if count else 0,
-            'mgmt_loss_h': round(mgmt_loss / count / 60, 1) if count else 0,
-            'time_loss_h': round(time_loss / count / 60, 1) if count else 0,
-            'loss_h': round(loss_total / count / 60, 1) if count else 0,
+            'work_h': round(work_per_machine_min, 1),
+            'operating_h': round(td['operating'] / count, 1) if count else 0,
+            'mgmt_loss_h': round(mgmt_loss / count, 1) if count else 0,
+            'time_loss_h': round(time_loss / count, 1) if count else 0,
+            'loss_h': round(loss_total / count, 1) if count else 0,
         })
 
     # TOTAL 행
@@ -9488,11 +9488,11 @@ def molding_analytics(request):
     total_mgmt_all = sum(sum(loss_by_tonnage_cat[t].get(c, 0) for c in MOLDING_MGMT_LOSS) for t in all_tonnages)
     total_loss_all = sum(sum(loss_by_tonnage_cat[t].values()) for t in all_tonnages)
     tonnage_time_total = {
-        'work_h': round(work_per_machine_min / 60, 1),
-        'operating_h': round(total_operating_all / total_count_all / 60, 1) if total_count_all else 0,
-        'mgmt_loss_h': round(total_mgmt_all / total_count_all / 60, 1) if total_count_all else 0,
-        'time_loss_h': round((total_loss_all - total_mgmt_all) / total_count_all / 60, 1) if total_count_all else 0,
-        'loss_h': round(total_loss_all / total_count_all / 60, 1) if total_count_all else 0,
+        'work_h': round(work_per_machine_min, 1),
+        'operating_h': round(total_operating_all / total_count_all, 1) if total_count_all else 0,
+        'mgmt_loss_h': round(total_mgmt_all / total_count_all, 1) if total_count_all else 0,
+        'time_loss_h': round((total_loss_all - total_mgmt_all) / total_count_all, 1) if total_count_all else 0,
+        'loss_h': round(total_loss_all / total_count_all, 1) if total_count_all else 0,
     }
 
     # 유실항목별 × TON별 표
@@ -9501,9 +9501,9 @@ def molding_analytics(request):
         row = {'label': label, 'is_mgmt': cat in MOLDING_MGMT_LOSS, 'values': [], 'total': 0}
         for t in all_tonnages:
             v = loss_by_tonnage_cat[t].get(cat, 0)
-            row['values'].append(round(v / 60, 1))
+            row['values'].append(round(v, 1))
             row['total'] += v
-        row['total'] = round(row['total'] / 60, 1)
+        row['total'] = round(row['total'], 1)
         loss_category_table.append(row)
 
     # ─── 년도 목록 ───
