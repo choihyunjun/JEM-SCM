@@ -268,6 +268,11 @@
             <i class="bi bi-table me-1"></i>표 (가동률 세부현황)
         </button>
     </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabMachine" type="button" role="tab">
+            <i class="bi bi-cpu me-1"></i>호기별 세부분석
+        </button>
+    </li>
 </ul>
 
 <div class="tab-content">
@@ -620,6 +625,56 @@
 </div>
 
 </div><!-- /tabTables -->
+
+<!-- ═══════════════════ 호기별 세부분석 탭 ═══════════════════ -->
+<div class="tab-pane fade" id="tabMachine" role="tabpanel">
+
+{% for group in machine_analysis_table %}
+{% if group.machines %}
+<div class="chart-card mb-3">
+    <div class="chart-title">
+        <i class="bi bi-hdd-stack me-1"></i>{{ group.tonnage }}t
+        <small class="text-muted ms-2" style="font-size:0.75rem;">{{ group.machines|length }}대 / 가동시간·LOSS: 분 단위</small>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm table-bordered text-center mb-0" style="font-size:0.82rem;">
+            <thead>
+                <tr style="background:#2d3748;color:#fff;">
+                    <th style="min-width:70px;">호기</th>
+                    <th>근무시간(분)</th>
+                    <th>가동시간(분)</th>
+                    <th>관리LOSS(분)</th>
+                    <th>시간LOSS(분)</th>
+                    <th>유실합계(분)</th>
+                    <th>설비가동률</th>
+                    <th>시간가동률</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in group.machines %}
+                <tr>
+                    <td class="fw-bold">{{ m.code }}</td>
+                    <td class="text-muted">{{ work_per_machine_min|intcomma }}</td>
+                    <td class="fw-bold" style="color:#38a169;">{{ m.operating|intcomma }}</td>
+                    <td style="color:#e2a317;">{{ m.mgmt_loss|intcomma }}</td>
+                    <td style="color:#e53e3e;">{{ m.time_loss|intcomma }}</td>
+                    <td class="fw-bold">{{ m.loss|intcomma }}</td>
+                    <td>
+                        <span style="color:{% if m.util >= 90 %}#38a169{% elif m.util >= 70 %}#e2a317{% else %}#e53e3e{% endif %};font-weight:600;">
+                            {{ m.util }}%
+                        </span>
+                    </td>
+                    <td>{{ m.time_rate }}%</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endfor %}
+
+</div><!-- /tabMachine -->
 </div><!-- /tab-content -->
 
 {% endblock %}

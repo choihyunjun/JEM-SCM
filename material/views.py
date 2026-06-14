@@ -9506,6 +9506,48 @@ def molding_analytics(request):
         row['total'] = round(row['total'], 1)
         loss_category_table.append(row)
 
+    # ─── 호기별 세부분석 ───
+    machine_by_code = {m.code: m for m in MoldingMachine.objects.filter(is_active=True)}
+    machine_operating = defaultdict(int)   # {code: operating_minutes 합계}
+    machine_base = defaultdict(int)        # {code: base_minutes 합계}
+    machine_loss_cat = defaultdict(lambda: defaultdict(int))  # {code: {category: minutes}}
+
+    for r in records_list:
+        machine_operating[r.machine.code] += r.operating_minutes
+        machine_base[r.machine.code] += r.base_minutes
+
+    for detail in MoldingLossDetail.objects.filter(
+        record__date__year=year, record__date__month=month
+    ).select_related('record__machine'):
+        machine_loss_cat[detail.record.machine.code][detail.category] += detail.minutes
+
+    machine_analysis_table = []
+    for t in all_tonnages:
+        machines_in_tonnage = sorted(
+            [m for m in machine_by_code.values() if m.tonnage == t],
+            key=lambda m: m.code
+        )
+        rows = []
+        for m in machines_in_tonnage:
+            op = machine_operating.get(m.code, 0)
+            base = machine_base.get(m.code, 0)
+            loss_cats = machine_loss_cat.get(m.code, {})
+            mgmt = sum(loss_cats.get(c, 0) for c in MOLDING_MGMT_LOSS)
+            time_loss = sum(v for c, v in loss_cats.items() if c not in MOLDING_MGMT_LOSS)
+            loss_total = mgmt + time_loss
+            util = round(op / base * 100, 1) if base else 0
+            time_r = round(op / work_per_machine_min * 100, 1) if work_per_machine_min else 0
+            rows.append({
+                'code': m.code,
+                'operating': round(op, 1),
+                'mgmt_loss': round(mgmt, 1),
+                'time_loss': round(time_loss, 1),
+                'loss': round(loss_total, 1),
+                'util': util,
+                'time_rate': time_r,
+            })
+        machine_analysis_table.append({'tonnage': t, 'machines': rows})
+
     # ─── 년도 목록 ───
     year_range = list(range(2024, now.year + 2))
 
@@ -9529,6 +9571,8 @@ def molding_analytics(request):
         'tonnage_time_table': tonnage_time_table,
         'tonnage_time_total': tonnage_time_total,
         'loss_category_table': loss_category_table,
+        'machine_analysis_table': machine_analysis_table,
+        'work_per_machine_min': work_per_machine_min,
         # Chart 1: Daily trend
         'daily_labels': json.dumps(daily_labels, ensure_ascii=False),
         'daily_rates': json.dumps(daily_rates),
