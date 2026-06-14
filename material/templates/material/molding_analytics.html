@@ -686,6 +686,21 @@
                     <td>{{ m.time_rate }}%</td>
                 </tr>
                 {% endfor %}
+                <tr style="background:#2d3748;color:#fff;border-top:2px solid #4a5568;">
+                    <td class="fw-bold">전체</td>
+                    <td>-</td>
+                    <td class="text-muted">-</td>
+                    <td class="fw-bold" style="color:#68d391;">{{ group.total.operating|intcomma }}</td>
+                    <td style="color:#fbd38d;">{{ group.total.mgmt_loss|intcomma }}</td>
+                    <td style="color:#fc8181;">{{ group.total.time_loss|intcomma }}</td>
+                    <td class="fw-bold">{{ group.total.loss|intcomma }}</td>
+                    <td>
+                        <span style="color:{% if group.total.util >= 90 %}#68d391{% elif group.total.util >= 70 %}#fbd38d{% else %}#fc8181{% endif %};font-weight:600;">
+                            {{ group.total.util }}%
+                        </span>
+                    </td>
+                    <td>{{ group.total.time_rate }}%</td>
+                </tr>
             </tbody>
         </table>
     </div>

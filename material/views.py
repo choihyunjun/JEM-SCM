@@ -9552,6 +9552,7 @@ def molding_analytics(request):
             rows.append({
                 'code': m.code,
                 'operating': round(op, 1),
+                'base': base,
                 'mgmt_loss': round(mgmt, 1),
                 'time_loss': round(time_loss, 1),
                 'loss': round(loss_total, 1),
@@ -9561,7 +9562,23 @@ def molding_analytics(request):
             })
         active_cnt = sum(1 for r in rows if r['shift_label'] != '-')
         inactive_cnt = len(rows) - active_cnt
-        machine_analysis_table.append({'tonnage': t, 'machines': rows, 'active_cnt': active_cnt, 'inactive_cnt': inactive_cnt})
+        total_op = sum(r['operating'] for r in rows)
+        total_base = sum(r['base'] for r in rows)
+        total_mgmt = sum(r['mgmt_loss'] for r in rows)
+        total_time_loss = sum(r['time_loss'] for r in rows)
+        total_loss = sum(r['loss'] for r in rows)
+        total_util = round(total_op / total_base * 100, 1) if total_base else 0
+        total_time_cap = len(rows) * work_per_machine_min
+        total_time_r = round(total_op / total_time_cap * 100, 1) if total_time_cap else 0
+        group_total = {
+            'operating': round(total_op, 1),
+            'mgmt_loss': round(total_mgmt, 1),
+            'time_loss': round(total_time_loss, 1),
+            'loss': round(total_loss, 1),
+            'util': total_util,
+            'time_rate': total_time_r,
+        }
+        machine_analysis_table.append({'tonnage': t, 'machines': rows, 'active_cnt': active_cnt, 'inactive_cnt': inactive_cnt, 'total': group_total})
 
     # ─── 년도 목록 ───
     year_range = list(range(2024, now.year + 2))
