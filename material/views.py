@@ -9540,6 +9540,7 @@ def molding_analytics(request):
             loss_total = mgmt + time_loss
             util = round(op / base * 100, 1) if base else 0
             time_r = round(op / work_per_machine_min * 100, 1) if work_per_machine_min else 0
+            time_r_actual = round(op / work_per_machine_actual * 100, 1) if work_per_machine_actual else 0
             shifts = machine_shifts.get(m.code, set())
             if '주간' in shifts and '야간' in shifts:
                 shift_label = '주야간'
@@ -9558,6 +9559,7 @@ def molding_analytics(request):
                 'loss': round(loss_total, 1),
                 'util': util,
                 'time_rate': time_r,
+                'time_rate_actual': time_r_actual,
                 'shift_label': shift_label,
             })
         active_cnt = sum(1 for r in rows if r['shift_label'] != '-')
@@ -9570,6 +9572,8 @@ def molding_analytics(request):
         total_util = round(total_op / total_base * 100, 1) if total_base else 0
         total_time_cap = len(rows) * work_per_machine_min
         total_time_r = round(total_op / total_time_cap * 100, 1) if total_time_cap else 0
+        total_time_cap_actual = len(rows) * work_per_machine_actual
+        total_time_r_actual = round(total_op / total_time_cap_actual * 100, 1) if total_time_cap_actual else 0
         group_total = {
             'operating': round(total_op, 1),
             'mgmt_loss': round(total_mgmt, 1),
@@ -9577,6 +9581,7 @@ def molding_analytics(request):
             'loss': round(total_loss, 1),
             'util': total_util,
             'time_rate': total_time_r,
+            'time_rate_actual': total_time_r_actual,
         }
         machine_analysis_table.append({'tonnage': t, 'machines': rows, 'active_cnt': active_cnt, 'inactive_cnt': inactive_cnt, 'total': group_total})
 
@@ -9605,6 +9610,7 @@ def molding_analytics(request):
         'loss_category_table': loss_category_table,
         'machine_analysis_table': machine_analysis_table,
         'work_per_machine_min': work_per_machine_min,
+        'work_per_machine_actual': work_per_machine_actual,
         # Chart 1: Daily trend
         'daily_labels': json.dumps(daily_labels, ensure_ascii=False),
         'daily_rates': json.dumps(daily_rates),

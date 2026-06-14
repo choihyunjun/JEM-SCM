@@ -683,7 +683,7 @@
                             {{ m.util }}%
                         </span>
                     </td>
-                    <td>{{ m.time_rate }}%</td>
+                    <td class="machine-time-cell" data-setting="{{ m.time_rate }}" data-actual="{{ m.time_rate_actual }}">{{ m.time_rate }}%</td>
                 </tr>
                 {% endfor %}
                 <tr style="background:#2d3748;color:#fff;border-top:2px solid #4a5568;">
@@ -699,7 +699,7 @@
                             {{ group.total.util }}%
                         </span>
                     </td>
-                    <td>{{ group.total.time_rate }}%</td>
+                    <td class="machine-time-cell" data-setting="{{ group.total.time_rate }}" data-actual="{{ group.total.time_rate_actual }}">{{ group.total.time_rate }}%</td>
                 </tr>
             </tbody>
         </table>
@@ -1255,7 +1255,7 @@ function toggleTimeBase(mode) {
         ? '가동시간 / 전체근무시간 ({{ setting_work_days }}일)'
         : '가동시간 / 실적근무시간 ({{ actual_work_days }}일)';
 
-    // 톤수별 테이블
+    // 톤수별 테이블 (차트탭)
     document.querySelectorAll('.tonnage-time-cell').forEach(function(td) {
         var v = parseFloat(td.dataset[mode]);
         td.textContent = v > 0 ? v + '%' : '-';
@@ -1263,6 +1263,22 @@ function toggleTimeBase(mode) {
         if (v >= 90) td.classList.add('text-success');
         else if (v >= 70) td.classList.add('text-warning');
         else if (v > 0) td.classList.add('text-danger');
+    });
+
+    // 톤수별 테이블 (표탭)
+    document.querySelectorAll('.tonnage-time-cell2').forEach(function(td) {
+        var v = parseFloat(td.dataset[mode]);
+        td.textContent = v > 0 ? v + '%' : '-';
+        td.className = 'tonnage-time-cell2';
+        if (v >= 90) td.classList.add('text-success');
+        else if (v >= 70) td.classList.add('text-warning');
+        else if (v > 0) td.classList.add('text-danger');
+    });
+
+    // 호기별 세부분석 탭
+    document.querySelectorAll('.machine-time-cell').forEach(function(td) {
+        var v = parseFloat(td.dataset[mode]);
+        td.textContent = v > 0 ? v + '%' : '0%';
     });
 }
 </script>
