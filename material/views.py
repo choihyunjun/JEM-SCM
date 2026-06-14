@@ -9559,7 +9559,9 @@ def molding_analytics(request):
                 'time_rate': time_r,
                 'shift_label': shift_label,
             })
-        machine_analysis_table.append({'tonnage': t, 'machines': rows})
+        active_cnt = sum(1 for r in rows if r['shift_label'] != '-')
+        inactive_cnt = len(rows) - active_cnt
+        machine_analysis_table.append({'tonnage': t, 'machines': rows, 'active_cnt': active_cnt, 'inactive_cnt': inactive_cnt})
 
     # ─── 년도 목록 ───
     year_range = list(range(2024, now.year + 2))

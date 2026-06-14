@@ -632,9 +632,16 @@
 {% for group in machine_analysis_table %}
 {% if group.machines %}
 <div class="chart-card mb-3">
-    <div class="chart-title">
-        <i class="bi bi-hdd-stack me-1"></i>{{ group.tonnage }}t
-        <small class="text-muted ms-2" style="font-size:0.75rem;">{{ group.machines|length }}대 / 가동시간·LOSS: 분 단위</small>
+    <div class="chart-title d-flex justify-content-between align-items-center">
+        <span>
+            <i class="bi bi-hdd-stack me-1"></i>{{ group.tonnage }}t
+            <small class="text-muted ms-2" style="font-size:0.75rem;">{{ group.machines|length }}대 / 가동시간·LOSS: 분 단위</small>
+        </span>
+        <span style="font-size:0.8rem;font-weight:normal;">
+            <span style="color:#38a169;font-weight:600;">● 가동 {{ group.active_cnt }}대</span>
+            <span class="mx-2" style="color:#cbd5e0;">|</span>
+            <span style="color:#a0aec0;">○ 비가동 {{ group.inactive_cnt }}대</span>
+        </span>
     </div>
     <div class="table-responsive">
         <table class="table table-sm table-bordered text-center mb-0" style="font-size:0.82rem;">
