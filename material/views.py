@@ -9414,7 +9414,7 @@ def molding_analytics(request):
         machine_total_qty[r.machine.code] += r.product_qty
 
     machine_modal_data = {}
-    for code in machine_by_code:
+    for code in machine_production:
         parts = machine_production.get(code, {})
         items = []
         for pno, qty in sorted(parts.items(), key=lambda x: -x[1]):
