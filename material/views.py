@@ -9406,6 +9406,29 @@ def molding_analytics(request):
             items.append({'name': name, 'qty': qty})
         machine_detail_data[code] = items
 
+    # 호기별 모달용 데이터 (기종별 실적 + 불량)
+    machine_defect = defaultdict(int)
+    machine_total_qty = defaultdict(int)
+    for r in records_list:
+        machine_defect[r.machine.code] += r.defect_qty
+        machine_total_qty[r.machine.code] += r.product_qty
+
+    machine_modal_data = {}
+    for code in machine_by_code:
+        parts = machine_production.get(code, {})
+        items = []
+        for pno, qty in sorted(parts.items(), key=lambda x: -x[1]):
+            pname = ''
+            if pno in part_cache:
+                pg = part_cache[pno]
+                pname = pg[1] if isinstance(pg, tuple) else (pg.part_name if hasattr(pg, 'part_name') else '')
+            items.append({'pno': pno, 'pname': pname, 'qty': qty})
+        machine_modal_data[code] = {
+            'items': items,
+            'total_qty': machine_total_qty.get(code, 0),
+            'defect_qty': machine_defect.get(code, 0),
+        }
+
     # ─── 차트 6: 월별 트렌드 최근 6개월 ───
     current_date = date(year, month, 1)
     monthly_labels = []
@@ -9632,6 +9655,7 @@ def molding_analytics(request):
         'machine_days_labels': json.dumps(machine_days_labels, ensure_ascii=False),
         'machine_days_values': json.dumps(machine_days_values),
         'machine_detail_data': json.dumps(machine_detail_data, ensure_ascii=False),
+        'machine_modal_data': json.dumps(machine_modal_data, ensure_ascii=False),
         # Chart 6: Monthly trend
         'monthly_labels': json.dumps(monthly_labels, ensure_ascii=False),
         'monthly_utilization': json.dumps(monthly_utilization),
