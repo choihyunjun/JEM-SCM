@@ -17,10 +17,37 @@ logger = logging.getLogger(__name__)
 class Command(BaseCommand):
     help = 'ERP 생산입고 데이터 일일 자동 동기화 (성형 가동률 + 금형 MT)'
 
+    def add_arguments(self, parser):
+        parser.add_argument('--year', type=int, help='동기화 연도 (기본: 현재 연도)')
+        parser.add_argument('--month', type=int, help='동기화 월 (기본: 현재 월)')
+        parser.add_argument('--all-months', action='store_true', help='해당 연도 1월부터 현재 월까지 전체 동기화')
+
     def handle(self, *args, **options):
         now = timezone.localtime()
-        year = now.year
-        month = now.month
+        year = options['year'] or now.year
+        month = options['month'] or now.month
+
+        if options['all_months']:
+            end_month = now.month if year == now.year else 12
+            months = range(1, end_month + 1)
+            self.stdout.write(f'[{now:%Y-%m-%d %H:%M}] {year}년 1~{end_month}월 전체 동기화 시작')
+            for m in months:
+                self.stdout.write(f'\n── {year}년 {m}월 ──')
+                try:
+                    r1 = self.sync_molding(year, m)
+                    self.stdout.write(self.style.SUCCESS(f'  성형 가동률: {r1}'))
+                except Exception as e:
+                    logger.exception(f'성형 가동률 동기화 오류 ({m}월)')
+                    self.stdout.write(self.style.ERROR(f'  성형 가동률 오류: {e}'))
+                try:
+                    r2 = self.sync_mold_mt(year, m)
+                    self.stdout.write(self.style.SUCCESS(f'  금형 MT: {r2}'))
+                except Exception as e:
+                    logger.exception(f'금형 MT 동기화 오류 ({m}월)')
+                    self.stdout.write(self.style.ERROR(f'  금형 MT 오류: {e}'))
+            self.stdout.write(self.style.SUCCESS(f'\n{year}년 전체 동기화 완료'))
+            return
+
         self.stdout.write(f'[{now:%Y-%m-%d %H:%M}] ERP 일일 동기화 시작 (대상: {year}년 {month}월)')
 
         # 1) 성형 가동률 동기화
