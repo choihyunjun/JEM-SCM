@@ -9512,12 +9512,15 @@ def molding_analytics(request):
     machine_base = defaultdict(int)        # {code: base_minutes 합계}
     machine_loss_cat = defaultdict(lambda: defaultdict(int))  # {code: {category: minutes}}
     machine_shifts = defaultdict(set)      # {code: {'주간', '야간'}}
+    machine_op_dates = defaultdict(set)    # {code: {date, ...}}
 
     for r in records_list:
         machine_operating[r.machine.code] += r.operating_minutes
         machine_base[r.machine.code] += r.base_minutes
         if r.shift:
             machine_shifts[r.machine.code].add(r.shift)
+        if r.operating_minutes > 0:
+            machine_op_dates[r.machine.code].add(r.date)
 
     for detail in MoldingLossDetail.objects.filter(
         record__date__year=year, record__date__month=month
@@ -9561,6 +9564,7 @@ def molding_analytics(request):
                 'time_rate': time_r,
                 'time_rate_actual': time_r_actual,
                 'shift_label': shift_label,
+                'op_days': len(machine_op_dates.get(m.code, set())),
             })
         active_cnt = sum(1 for r in rows if r['shift_label'] != '-')
         inactive_cnt = len(rows) - active_cnt

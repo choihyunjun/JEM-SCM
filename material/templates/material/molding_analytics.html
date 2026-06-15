@@ -649,6 +649,7 @@
                 <tr>
                     <th style="min-width:70px;">호기</th>
                     <th>근무구분</th>
+                    <th>가동일수</th>
                     <th>근무시간(분)</th>
                     <th>가동시간(분)</th>
                     <th>관리LOSS(분)</th>
@@ -673,6 +674,7 @@
                             <span class="text-muted">-</span>
                         {% endif %}
                     </td>
+                    <td class="text-muted">{% if m.op_days > 0 %}{{ m.op_days }}일{% else %}-{% endif %}</td>
                     <td class="text-muted">{{ work_per_machine_min|intcomma }}</td>
                     <td class="fw-bold" style="color:#38a169;">{{ m.operating|intcomma }}</td>
                     <td style="color:#e2a317;">{{ m.mgmt_loss|intcomma }}</td>
@@ -689,6 +691,7 @@
                 <tr style="background:#edf2f7;border-top:2px solid #cbd5e0;">
                     <td class="fw-bold">전체</td>
                     <td>-</td>
+                    <td class="text-muted">-</td>
                     <td class="text-muted">-</td>
                     <td class="fw-bold text-success">{{ group.total.operating|intcomma }}</td>
                     <td class="text-warning">{{ group.total.mgmt_loss|intcomma }}</td>
