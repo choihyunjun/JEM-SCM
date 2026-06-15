@@ -43,7 +43,7 @@ class Command(BaseCommand):
 
     def sync_molding(self, year, month):
         """성형 가동률 ERP 동기화"""
-        from material.models import MoldingMachine, MoldingDailyRecord, MoldingERPSyncLog, MoldingWorkSetting
+        from material.models import MoldingMachine, MoldingDailyRecord, MoldingERPSyncLog, MoldingWorkSetting, MoldingProductDetail
         from material.erp_api import fetch_erp_receipt_list, call_erp_api
         from datetime import date as dt_date
         from django.conf import settings as django_settings
@@ -100,10 +100,17 @@ class Command(BaseCommand):
                 shift = '야간' if shift_nm == '야간' else '주간'
                 key = (machine_code, rcv_dt, shift)
                 if key not in daily_agg:
-                    daily_agg[key] = {'part_qty': {}, 'tonnage': 0}
+                    daily_agg[key] = {'part_good': {}, 'part_bad': {}, 'part_nm': {}}
                 item_cd = r.get('itemCd', '')
+                item_nm = (r.get('itemNm', '') or '').strip()
                 qty = int(r.get('rcvQt', 0) or 0)
-                daily_agg[key]['part_qty'][item_cd] = daily_agg[key]['part_qty'].get(item_cd, 0) + qty
+                bad_yn = r.get('badYn', '0')
+                if item_cd:
+                    daily_agg[key]['part_nm'][item_cd] = item_nm
+                    if bad_yn == '1':
+                        daily_agg[key]['part_bad'][item_cd] = daily_agg[key]['part_bad'].get(item_cd, 0) + qty
+                    else:
+                        daily_agg[key]['part_good'][item_cd] = daily_agg[key]['part_good'].get(item_cd, 0) + qty
 
             record_count = 0
             machine_codes = set()
@@ -120,11 +127,14 @@ class Command(BaseCommand):
                     defaults={'status': '가동', 'base_minutes': base_min, 'erp_synced': True}
                 )
                 record.status = '가동'
-                part_qty = agg['part_qty']
+                part_good = agg['part_good']
+                part_bad = agg['part_bad']
+                part_nm = agg['part_nm']
+                all_items = sorted(set(part_good) | set(part_bad))
+                record.product_qty = sum(part_good.values()) + sum(part_bad.values())
                 record.product_part_no = ' | '.join(
-                    f"{p}: {q:,}" for p, q in sorted(part_qty.items())
+                    f"{p}: {(part_good.get(p, 0) + part_bad.get(p, 0)):,}" for p in all_items
                 )[:500]
-                record.product_qty = sum(part_qty.values())
                 record.defect_qty = bad_qty_agg.get((mc, dt_str, shift), 0)
                 record.erp_synced = True
                 if not record.input_completed:
@@ -139,6 +149,18 @@ class Command(BaseCommand):
                         record.utilization_rate = rate
                         record.time_rate = rate
                 record.save()
+
+                # 품번별 양품/불량 저장
+                MoldingProductDetail.objects.filter(record=record).delete()
+                MoldingProductDetail.objects.bulk_create([
+                    MoldingProductDetail(
+                        record=record,
+                        item_cd=icd,
+                        item_nm=part_nm.get(icd, ''),
+                        good_qty=part_good.get(icd, 0),
+                        bad_qty=part_bad.get(icd, 0),
+                    ) for icd in all_items
+                ])
                 record_count += 1
 
             MoldingERPSyncLog.objects.create(

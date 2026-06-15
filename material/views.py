@@ -8673,7 +8673,7 @@ def api_check_open_orders(request):
 def molding_utilization(request):
     """성형 가동률 대시보드"""
     from .models import (MoldingMachine, MoldingDailyRecord, MoldingERPSyncLog,
-                         MoldingWorkSetting, MOLDING_LOSS_CATEGORIES)
+                         MoldingWorkSetting, MOLDING_LOSS_CATEGORIES, MoldingProductDetail)
     import calendar
 
     year = int(request.GET.get('year', timezone.localtime().year))
@@ -9406,28 +9406,67 @@ def molding_analytics(request):
             items.append({'name': name, 'qty': qty})
         machine_detail_data[code] = items
 
-    # 호기별 모달용 데이터 (기종별 실적 + 불량)
-    machine_defect = defaultdict(int)
+    # 호기별 모달용 데이터 (품번별 양품/불량 — MoldingProductDetail)
+    record_ids = [r.id for r in records_list]
+    product_details = MoldingProductDetail.objects.filter(
+        record_id__in=record_ids
+    ).select_related('record__machine')
+
+    # machine → {item_cd: {good, bad, nm}}
+    machine_item_agg = defaultdict(lambda: defaultdict(lambda: {'good': 0, 'bad': 0, 'nm': ''}))
+    for pd in product_details:
+        mc = pd.record.machine.code
+        machine_item_agg[mc][pd.item_cd]['good'] += pd.good_qty
+        machine_item_agg[mc][pd.item_cd]['bad'] += pd.bad_qty
+        if not machine_item_agg[mc][pd.item_cd]['nm']:
+            machine_item_agg[mc][pd.item_cd]['nm'] = pd.item_nm
+
+    # fallback: 기존 machine_production에서 합산 (MoldingProductDetail 없는 구형 레코드 대비)
     machine_total_qty = defaultdict(int)
+    machine_defect = defaultdict(int)
     for r in records_list:
-        machine_defect[r.machine.code] += r.defect_qty
         machine_total_qty[r.machine.code] += r.product_qty
+        machine_defect[r.machine.code] += r.defect_qty
 
     machine_modal_data = {}
-    for code in machine_production:
-        parts = machine_production.get(code, {})
-        items = []
-        for pno, qty in sorted(parts.items(), key=lambda x: -x[1]):
-            pname = ''
-            if pno in part_cache:
-                pg = part_cache[pno]
-                pname = pg[1] if isinstance(pg, tuple) else (pg.part_name if hasattr(pg, 'part_name') else '')
-            items.append({'pno': pno, 'pname': pname, 'qty': qty})
-        machine_modal_data[code] = {
-            'items': items,
-            'total_qty': machine_total_qty.get(code, 0),
-            'defect_qty': machine_defect.get(code, 0),
-        }
+    all_modal_codes = set(machine_item_agg.keys()) | set(machine_production.keys())
+    for code in all_modal_codes:
+        if code in machine_item_agg:
+            items = []
+            total_good = total_bad = 0
+            for icd, vals in sorted(machine_item_agg[code].items(),
+                                    key=lambda x: -(x[1]['good'] + x[1]['bad'])):
+                items.append({
+                    'pno': icd,
+                    'pname': vals['nm'],
+                    'good_qty': vals['good'],
+                    'bad_qty': vals['bad'],
+                    'qty': vals['good'] + vals['bad'],
+                })
+                total_good += vals['good']
+                total_bad += vals['bad']
+            machine_modal_data[code] = {
+                'items': items,
+                'total_qty': total_good + total_bad,
+                'good_qty': total_good,
+                'defect_qty': total_bad,
+            }
+        else:
+            # 구형 데이터 fallback
+            parts = machine_production.get(code, {})
+            items = []
+            for pno, qty in sorted(parts.items(), key=lambda x: -x[1]):
+                pname = ''
+                if pno in part_cache:
+                    pg = part_cache[pno]
+                    pname = pg[1] if isinstance(pg, tuple) else (pg.part_name if hasattr(pg, 'part_name') else '')
+                items.append({'pno': pno, 'pname': pname, 'good_qty': qty, 'bad_qty': 0, 'qty': qty})
+            machine_modal_data[code] = {
+                'items': items,
+                'total_qty': machine_total_qty.get(code, 0),
+                'good_qty': machine_total_qty.get(code, 0),
+                'defect_qty': machine_defect.get(code, 0),
+            }
 
     # ─── 차트 6: 월별 트렌드 최근 6개월 ───
     current_date = date(year, month, 1)

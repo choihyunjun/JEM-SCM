@@ -988,6 +988,27 @@ class MoldingLossDetail(models.Model):
         return f"{self.record} - {self.category}: {self.minutes}분"
 
 
+class MoldingProductDetail(models.Model):
+    """성형기 품번별 생산 실적 (ERP 동기화)"""
+    record = models.ForeignKey(MoldingDailyRecord, on_delete=models.CASCADE, related_name='product_details')
+    item_cd = models.CharField("품번", max_length=30)
+    item_nm = models.CharField("품명", max_length=100, blank=True)
+    good_qty = models.IntegerField("양품수량", default=0)
+    bad_qty = models.IntegerField("불량수량", default=0)
+
+    class Meta:
+        verbose_name = "품번별 생산실적"
+        verbose_name_plural = "17. 품번별 생산실적"
+        unique_together = ('record', 'item_cd')
+
+    def __str__(self):
+        return f"{self.record} - {self.item_cd}: 양품{self.good_qty}/불량{self.bad_qty}"
+
+    @property
+    def total_qty(self):
+        return self.good_qty + self.bad_qty
+
+
 class MoldingERPSyncLog(models.Model):
     """ERP 생산입고 동기화 이력"""
     year = models.IntegerField("년도")

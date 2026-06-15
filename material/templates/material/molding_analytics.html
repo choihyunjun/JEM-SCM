@@ -737,11 +737,13 @@
                     <table class="table table-sm table-bordered text-center mb-0" style="font-size:0.83rem;">
                         <thead class="table-light">
                             <tr>
-                                <th style="width:50px;">#</th>
+                                <th style="width:40px;">#</th>
                                 <th class="text-start ps-2">품번</th>
                                 <th class="text-start ps-2">품명</th>
-                                <th style="width:120px;">생산수량</th>
-                                <th style="width:100px;">비율</th>
+                                <th style="width:95px;">생산수량</th>
+                                <th style="width:85px;" class="text-success">양품</th>
+                                <th style="width:85px;" class="text-danger">불량</th>
+                                <th style="width:80px;">비율</th>
                             </tr>
                         </thead>
                         <tbody id="machineModalBody"></tbody>
@@ -1330,39 +1332,51 @@ function openMachineModal(code, tonnage) {
     document.getElementById('machineModalCode').textContent = code + ' (' + tonnage + 't)';
 
     var totalQty = data ? data.total_qty : 0;
+    var goodQty  = data ? (data.good_qty !== undefined ? data.good_qty : totalQty - data.defect_qty) : 0;
     var defectQty = data ? data.defect_qty : 0;
     var defectRate = totalQty > 0 ? (defectQty / totalQty * 100).toFixed(1) : '0.0';
 
-    var goodQty = totalQty - defectQty;
-    document.getElementById('modalTotalQty').textContent = totalQty.toLocaleString() + '개';
-    document.getElementById('modalGoodQty').textContent = goodQty.toLocaleString() + '개';
+    document.getElementById('modalTotalQty').textContent  = totalQty.toLocaleString() + '개';
+    document.getElementById('modalGoodQty').textContent   = goodQty.toLocaleString() + '개';
     document.getElementById('modalDefectQty').textContent = defectQty.toLocaleString() + '개';
     document.getElementById('modalDefectRate').textContent = defectRate + '%';
 
     var tbody = document.getElementById('machineModalBody');
     tbody.innerHTML = '';
 
-    var items = (data && data.items.length) ? data.items : [];
+    var items = (data && data.items && data.items.length) ? data.items : [];
     if (items.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-muted py-3">생산 실적 없음</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="text-muted py-3">생산 실적 없음</td></tr>';
     } else {
-        var grandTotal = items.reduce(function(s, i) { return s + i.qty; }, 0);
+        var grandTotal  = items.reduce(function(s, i) { return s + i.qty; }, 0);
+        var grandGood   = items.reduce(function(s, i) { return s + (i.good_qty || 0); }, 0);
+        var grandBad    = items.reduce(function(s, i) { return s + (i.bad_qty || 0); }, 0);
         items.forEach(function(item, idx) {
             var pct = grandTotal > 0 ? (item.qty / grandTotal * 100).toFixed(1) : '0.0';
             var bar = '<div style="background:#e2e8f0;border-radius:3px;height:6px;margin-top:3px;">' +
                       '<div style="background:#3182ce;width:' + pct + '%;height:6px;border-radius:3px;"></div></div>';
+            var badCell = item.bad_qty > 0
+                ? '<td class="fw-bold text-danger">' + item.bad_qty.toLocaleString() + '</td>'
+                : '<td class="text-muted">0</td>';
             tbody.innerHTML +=
                 '<tr>' +
                 '<td class="text-muted">' + (idx + 1) + '</td>' +
                 '<td class="text-start ps-2 fw-bold" style="font-size:0.8rem;">' + item.pno + '</td>' +
                 '<td class="text-start ps-2 text-muted" style="font-size:0.8rem;">' + (item.pname || '-') + '</td>' +
-                '<td class="fw-bold text-success">' + item.qty.toLocaleString() + '</td>' +
+                '<td class="fw-bold">' + item.qty.toLocaleString() + '</td>' +
+                '<td class="text-success">' + (item.good_qty || 0).toLocaleString() + '</td>' +
+                badCell +
                 '<td>' + pct + '%' + bar + '</td>' +
                 '</tr>';
         });
+        var badSumCell = grandBad > 0
+            ? '<td class="fw-bold text-danger">' + grandBad.toLocaleString() + '</td>'
+            : '<td class="text-muted">0</td>';
         tbody.innerHTML += '<tr style="background:#edf2f7;font-weight:600;">' +
             '<td colspan="3" class="text-end pe-3">합계</td>' +
-            '<td class="text-success">' + grandTotal.toLocaleString() + '</td>' +
+            '<td>' + grandTotal.toLocaleString() + '</td>' +
+            '<td class="text-success">' + grandGood.toLocaleString() + '</td>' +
+            badSumCell +
             '<td>100%</td></tr>';
     }
 
