@@ -70,6 +70,7 @@ class Command(BaseCommand):
         wr_ok, wr_data, wr_err = call_erp_api('/apiproxy/api20A03S00901', wr_body)
         work_time_agg = {}
         bad_qty_agg = {}
+        product_agg = {}  # (equipNm, wrDt, shift, itemCd) → {good, bad, nm}
         if wr_ok and wr_data:
             for r in wr_data.get('resultData', []) or []:
                 en = (r.get('equipNm') or '').strip()
@@ -86,6 +87,15 @@ class Command(BaseCommand):
                     bad_qty_agg[key] = 0
                 work_time_agg[key] += int(float(r.get('workTm', 0) or 0))
                 bad_qty_agg[key] += int(float(r.get('badQt', 0) or 0))
+                # 품번별 양품/불량 집계 (goodQt, badQt 필드 활용)
+                item_cd = (r.get('itemCd') or '').strip()
+                item_nm = (r.get('itemNm') or '').strip()
+                if item_cd:
+                    prod_key = (en, wr_dt, shift, item_cd)
+                    if prod_key not in product_agg:
+                        product_agg[prod_key] = {'good': 0, 'bad': 0, 'nm': item_nm}
+                    product_agg[prod_key]['good'] += int(float(r.get('goodQt', 0) or 0))
+                    product_agg[prod_key]['bad'] += int(float(r.get('badQt', 0) or 0))
 
         with transaction.atomic():
             molding_data = [r for r in data if re.match(r'^M\d', (r.get('equipNm') or ''))]
@@ -150,17 +160,21 @@ class Command(BaseCommand):
                         record.time_rate = rate
                 record.save()
 
-                # 품번별 양품/불량 저장
-                MoldingProductDetail.objects.filter(record=record).delete()
-                MoldingProductDetail.objects.bulk_create([
+                # 품번별 양품/불량 저장 (작업실적 API goodQt/badQt 기준)
+                details = [
                     MoldingProductDetail(
                         record=record,
                         item_cd=icd,
-                        item_nm=part_nm.get(icd, ''),
-                        good_qty=part_good.get(icd, 0),
-                        bad_qty=part_bad.get(icd, 0),
-                    ) for icd in all_items
-                ])
+                        item_nm=vals['nm'],
+                        good_qty=vals['good'],
+                        bad_qty=vals['bad'],
+                    )
+                    for (eq, dt, sh, icd), vals in product_agg.items()
+                    if eq == mc and dt == dt_str and sh == shift
+                ]
+                if details:
+                    MoldingProductDetail.objects.filter(record=record).delete()
+                    MoldingProductDetail.objects.bulk_create(details)
                 record_count += 1
 
             MoldingERPSyncLog.objects.create(
