@@ -9253,7 +9253,8 @@ def molding_analytics(request):
     """성형 가동률 분석 대시보드 (6가지 차트 + KPI)"""
     from .models import (
         MoldingMachine, MoldingDailyRecord, MoldingLossDetail,
-        MoldingWorkSetting, MOLDING_LOSS_CATEGORIES, MOLDING_MGMT_LOSS
+        MoldingWorkSetting, MOLDING_LOSS_CATEGORIES, MOLDING_MGMT_LOSS,
+        MoldingProductDetail
     )
     from collections import defaultdict
     from django.db.models import Avg, Sum, Count, F
