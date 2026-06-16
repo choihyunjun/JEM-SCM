@@ -69,7 +69,7 @@
             <td>
               {% for line in lines %}
                 {% if forloop.counter <= 2 %}
-                  <span class="badge bg-secondary me-1">{{ line.part.part_no }}</span>
+                  <span class="badge bg-secondary me-1">{{ line.part.part_no }}</span><small class="text-muted me-2">{{ line.part.part_name|truncatechars:15 }}</small>
                 {% endif %}
               {% endfor %}
               {% with cnt=lines|length %}
