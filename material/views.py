@@ -11422,12 +11422,17 @@ def transfer_request_list(request):
     from material.models import MaterialTransferRequest
     can_approve = _can_approve_transfer(request.user)
 
-    from django.db.models import Count, Q as DQ
+    from django.db.models import Count, Q as DQ, Case, When, IntegerField
     qs = MaterialTransferRequest.objects.select_related(
         'requested_by', 'approved_by', 'warehouse_from', 'warehouse_to'
     ).prefetch_related('lines__part').annotate(
         total_lines=Count('lines'),
         approved_lines=Count('lines', filter=DQ(lines__approved_qty__isnull=False)),
+        status_priority=Case(
+            When(status__in=['PENDING', 'PARTIAL'], then=0),
+            default=1,
+            output_field=IntegerField(),
+        ),
     )
 
     status_filter = request.GET.get('status', '')
@@ -11436,7 +11441,7 @@ def transfer_request_list(request):
     elif status_filter:
         qs = qs.filter(status=status_filter)
 
-    qs = qs.order_by('-created_at')
+    qs = qs.order_by('status_priority', '-created_at')
 
     from django.core.paginator import Paginator
     paginator = Paginator(qs, 30)
