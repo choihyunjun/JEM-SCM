@@ -70,7 +70,7 @@
               {% with cnt=lines|length %}
                 {% if cnt == 1 %}
                   {% for line in lines %}
-                    <span class="badge bg-secondary me-1 text-center" style="display:inline-block; width:70px;">{{ line.part.part_no }}</span><small class="text-muted">{{ line.part.part_name|truncatechars:30 }}</small>
+                    <span class="badge bg-secondary me-2 text-center" style="display:inline-block; width:70px;">{{ line.part.part_no }}</span><small class="text-muted">{{ line.part.part_name|truncatechars:30 }}</small>
                   {% endfor %}
                 {% else %}
                   {% for line in lines %}
