@@ -67,14 +67,20 @@
               data-wh-to="{{ req.warehouse_to.name|default:"" }}">
             <td><code>{{ req.request_no }}</code></td>
             <td>
-              {% for line in lines %}
-                {% if forloop.counter <= 2 %}
-                  <span class="badge bg-secondary me-1 text-center" style="display:inline-block; width:70px;">{{ line.part.part_no }}</span><small class="text-muted me-2">{{ line.part.part_name|truncatechars:15 }}</small>
-                {% endif %}
-              {% endfor %}
               {% with cnt=lines|length %}
-                {% if cnt > 2 %}<span class="text-muted small">외 {{ cnt|add:"-2" }}건 </span>{% endif %}
-                <span class="text-muted small">({{ cnt }}품목)</span>
+                {% if cnt == 1 %}
+                  {% for line in lines %}
+                    <span class="badge bg-secondary me-1 text-center" style="display:inline-block; width:70px;">{{ line.part.part_no }}</span><small class="text-muted">{{ line.part.part_name|truncatechars:30 }}</small>
+                  {% endfor %}
+                {% else %}
+                  {% for line in lines %}
+                    {% if forloop.counter <= 2 %}
+                      <span class="badge bg-secondary me-1 text-center" style="display:inline-block; width:70px;">{{ line.part.part_no }}</span><small class="text-muted me-2">{{ line.part.part_name|truncatechars:15 }}</small>
+                    {% endif %}
+                  {% endfor %}
+                  {% if cnt > 2 %}<span class="text-muted small">외 {{ cnt|add:"-2" }}건 </span>{% endif %}
+                  <span class="text-muted small">({{ cnt }}품목)</span>
+                {% endif %}
               {% endwith %}
             </td>
             <td class="d-none d-md-table-cell">{{ req.requested_by.get_full_name|default:req.requested_by.username }}</td>
