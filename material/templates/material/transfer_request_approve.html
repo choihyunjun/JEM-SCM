@@ -41,7 +41,7 @@
             <select name="warehouse_from" id="wh-from" class="form-select" required>
               <option value="">-- 선택 --</option>
               {% for wh in warehouses %}
-              <option value="{{ wh.pk }}" data-pk="{{ wh.pk }}">{{ wh.name }} ({{ wh.code }})</option>
+              <option value="{{ wh.pk }}" data-pk="{{ wh.pk }}">{{ wh.code }} - {{ wh.name }}</option>
               {% endfor %}
             </select>
           </div>
@@ -50,7 +50,7 @@
             <select name="warehouse_to" id="wh-to" class="form-select" required>
               <option value="">-- 선택 --</option>
               {% for wh in warehouses %}
-              <option value="{{ wh.pk }}">{{ wh.name }} ({{ wh.code }})</option>
+              <option value="{{ wh.pk }}">{{ wh.code }} - {{ wh.name }}</option>
               {% endfor %}
             </select>
           </div>
