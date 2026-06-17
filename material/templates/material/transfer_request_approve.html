@@ -120,10 +120,6 @@
   const lotsApiUrl = "{% url 'material:api_transfer_request_lots' %}";
   const whFromSelect = document.getElementById('wh-from');
 
-  if (whFromSelect.value) {
-    whFromSelect.dispatchEvent(new Event('change'));
-  }
-
   whFromSelect.addEventListener('change', function () {
     const whId = this.value;
     document.querySelectorAll('.lot-select').forEach(sel => {
@@ -206,6 +202,10 @@
       el.disabled = disabled;
     });
     row.style.opacity = disabled ? '0.4' : '';
+  }
+
+  if (whFromSelect.value) {
+    whFromSelect.dispatchEvent(new Event('change'));
   }
 })();
 </script>
