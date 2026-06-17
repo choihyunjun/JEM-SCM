@@ -35,9 +35,14 @@
     </li>
   </ul>
 
-  <form method="get" class="mb-3 d-flex gap-2" style="max-width:400px;">
+  <form method="get" id="searchForm" class="mb-3 d-flex gap-2 align-items-center" style="max-width:440px;">
     <input type="hidden" name="status" value="{{ status_filter }}">
-    <input type="text" name="q" class="form-control form-control-sm" placeholder="품번 / 품명 검색" value="{{ q }}">
+    <div class="position-relative flex-grow-1">
+      <input type="text" name="q" id="reqSearchInput" class="form-control form-control-sm"
+             placeholder="품번 / 품명 검색" value="{{ q }}" autocomplete="off">
+      <div id="reqSearchDropdown" class="position-absolute w-100 bg-white border rounded shadow-sm"
+           style="display:none; z-index:1050; max-height:260px; overflow-y:auto; top:100%;"></div>
+    </div>
     <button type="submit" class="btn btn-outline-secondary btn-sm px-3"><i class="bi bi-search"></i></button>
     {% if q %}<a href="?status={{ status_filter }}" class="btn btn-outline-danger btn-sm px-2"><i class="bi bi-x-lg"></i></a>{% endif %}
   </form>
@@ -286,6 +291,47 @@
 {{ block.super }}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+
+  // 품번/품명 자동완성 검색
+  const reqInput = document.getElementById('reqSearchInput');
+  const reqDropdown = document.getElementById('reqSearchDropdown');
+  const searchForm = document.getElementById('searchForm');
+  let searchTimer = null;
+
+  reqInput.addEventListener('input', function () {
+    clearTimeout(searchTimer);
+    const q = this.value.trim();
+    if (q.length < 2) { reqDropdown.style.display = 'none'; return; }
+    searchTimer = setTimeout(async () => {
+      try {
+        const res = await fetch("{% url 'material:api_part_search' %}?q=" + encodeURIComponent(q));
+        const data = await res.json();
+        if (!data.results || data.results.length === 0) {
+          reqDropdown.innerHTML = '<div class="px-3 py-2 text-muted small">검색 결과 없음</div>';
+          reqDropdown.style.display = 'block';
+          return;
+        }
+        reqDropdown.innerHTML = data.results.map(r =>
+          `<div class="px-3 py-2 border-bottom" style="cursor:pointer;"
+               onmousedown="selectReqPart('${r.part_no.replace(/'/g,"\\'")}')">
+            <span class="fw-bold text-primary">${r.part_no}</span>
+            <span class="text-muted small ms-2">${r.part_name}</span>
+           </div>`
+        ).join('');
+        reqDropdown.style.display = 'block';
+      } catch(e) { reqDropdown.style.display = 'none'; }
+    }, 300);
+  });
+
+  reqInput.addEventListener('blur', function () {
+    setTimeout(() => { reqDropdown.style.display = 'none'; }, 200);
+  });
+
+  window.selectReqPart = function (partNo) {
+    reqInput.value = partNo;
+    reqDropdown.style.display = 'none';
+    searchForm.submit();
+  };
 
   // 승인취소 모달
   const revokeModal = document.getElementById('revokeModal');
