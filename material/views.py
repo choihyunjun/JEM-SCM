@@ -11441,6 +11441,12 @@ def transfer_request_list(request):
     elif status_filter:
         qs = qs.filter(status=status_filter)
 
+    q = request.GET.get('q', '').strip()
+    if q:
+        qs = qs.filter(
+            DQ(lines__part__part_no__icontains=q) | DQ(lines__part__part_name__icontains=q)
+        ).distinct()
+
     qs = qs.order_by('status_priority', '-created_at')
 
     from django.core.paginator import Paginator
@@ -11451,6 +11457,7 @@ def transfer_request_list(request):
         'requests_page': requests_page,
         'can_approve': can_approve,
         'status_filter': status_filter,
+        'q': q,
         'STATUS_CHOICES': MaterialTransferRequest.STATUS_CHOICES,
     })
 
