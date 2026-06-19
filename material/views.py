@@ -9590,6 +9590,17 @@ def molding_analytics(request):
     ).select_related('record__machine'):
         machine_loss_cat[detail.record.machine.code][detail.category] += detail.minutes
 
+    # machine_modal_data에 유실 세부항목 추가
+    for code, mdata in machine_modal_data.items():
+        cats = machine_loss_cat.get(code, {})
+        loss_detail = [
+            {'cat': cat, 'minutes': cats[cat]}
+            for cat in cats if cats[cat] > 0
+        ]
+        loss_detail.sort(key=lambda x: -x['minutes'])
+        mdata['loss_detail'] = loss_detail
+        mdata['loss_total'] = sum(x['minutes'] for x in loss_detail)
+
     machine_analysis_table = []
     for t in all_tonnages:
         machines_in_tonnage = sorted(
