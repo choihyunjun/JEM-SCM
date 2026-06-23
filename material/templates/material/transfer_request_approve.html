@@ -92,8 +92,9 @@
               <td>
                 <input type="number" name="qty_{{ line.pk }}"
                        class="form-control form-control-sm text-end qty-input"
-                       min="1" max="{{ line.requested_qty }}"
-                       value="{{ line.requested_qty }}">
+                       min="1"
+                       value="{{ line.requested_qty }}"
+                       data-requested="{{ line.requested_qty }}">
               </td>
               <td class="small text-muted avail-cell" id="avail-{{ line.pk }}">-</td>
             </tr>
@@ -168,16 +169,46 @@
   function updateAvail(sel, lineId) {
     const opt = sel.options[sel.selectedIndex];
     const availCell = document.getElementById('avail-' + lineId);
+    const row = sel.closest('tr');
+    const qtyInput = row.querySelector('.qty-input');
+
     if (opt && opt.dataset.qty !== undefined) {
+      const availQty = parseInt(opt.dataset.qty);
+      const requestedQty = parseInt(qtyInput.dataset.requested);
+
+      // max를 가용재고로 업데이트
+      qtyInput.max = availQty;
+      // 현재 입력값이 가용재고 초과면 클램프
+      if (parseInt(qtyInput.value) > availQty) {
+        qtyInput.value = availQty;
+      }
+
       if (opt.dataset.fifo === '1') {
-        availCell.innerHTML = `<span class="text-primary fw-bold">${parseInt(opt.dataset.qty).toLocaleString()}개</span><br><small class="text-muted">LOT 자동분할</small>`;
+        availCell.innerHTML = `<span class="text-primary fw-bold">${availQty.toLocaleString()}개</span><br><small class="text-muted">LOT 자동분할</small>`;
       } else {
-        availCell.textContent = parseInt(opt.dataset.qty).toLocaleString() + '개';
+        availCell.textContent = availQty.toLocaleString() + '개';
       }
       availCell.className = 'small text-success fw-bold avail-cell';
+
+      // 요청수량 초과 안내
+      qtyInput.oninput = function () {
+        const v = parseInt(this.value) || 0;
+        let hint = row.querySelector('.qty-over-hint');
+        if (v > requestedQty) {
+          if (!hint) {
+            hint = document.createElement('div');
+            hint.className = 'qty-over-hint text-warning small mt-1';
+            this.parentNode.appendChild(hint);
+          }
+          hint.textContent = `※ 요청(${requestedQty.toLocaleString()}) 초과`;
+        } else if (hint) {
+          hint.remove();
+        }
+      };
     } else {
       availCell.textContent = '-';
       availCell.className = 'small text-muted avail-cell';
+      qtyInput.removeAttribute('max');
     }
   }
 
