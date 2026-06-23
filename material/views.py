@@ -11726,8 +11726,11 @@ def transfer_request_reject(request, pk):
 
     req = get_object_or_404(MaterialTransferRequest, pk=pk, status__in=['PENDING', 'PARTIAL'])
 
-    if not _can_approve_transfer(request.user) or req.requested_by == request.user:
+    if not _can_approve_transfer(request.user):
         messages.error(request, '권한이 없습니다.')
+        return redirect('material:transfer_request_list')
+    if req.requested_by == request.user and not request.user.is_superuser:
+        messages.error(request, '본인 요청은 직접 반려할 수 없습니다.')
         return redirect('material:transfer_request_list')
     reason = request.POST.get('reject_reason', '').strip()
 
