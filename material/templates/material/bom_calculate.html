@@ -33,6 +33,11 @@
                 <i class="bi bi-file-earmark-excel me-1"></i>엑셀 일괄 계산
             </button>
         </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="group-tab" data-bs-toggle="tab" data-bs-target="#group" type="button" role="tab">
+                <i class="bi bi-grid me-1"></i>품목군별 BOM 다운로드
+            </button>
+        </li>
     </ul>
 
     <div class="tab-content" id="calcTabsContent">
@@ -70,6 +75,71 @@
                         </div>
                         <div class="form-text mt-2">품번 또는 품명의 일부를 입력하세요</div>
                     </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- 품목군별 BOM 다운로드 탭 -->
+        <div class="tab-pane fade" id="group" role="tabpanel">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card mb-4">
+                        <div class="card-header bg-primary text-white">
+                            <i class="bi bi-grid me-2"></i>품목군별 BOM 일괄 다운로드
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted small mb-4">
+                                <i class="bi bi-info-circle me-1"></i>
+                                선택한 품목군(계정구분)에 속한 <strong>모든 제품의 BOM</strong>을 한 번에 엑셀로 다운로드합니다.<br>
+                                정미수량(qty=1) 기준으로 BOM 구조가 출력됩니다.
+                            </p>
+                            <form method="get" action="{% url 'material:bom_group_export' %}">
+                                <div class="mb-4">
+                                    <label class="form-label fw-bold">계정구분 선택</label>
+                                    <select name="account_type" class="form-select form-select-lg">
+                                        <option value="">전체 (제품 + 반제품)</option>
+                                        <option value="제품">제품</option>
+                                        <option value="반제품">반제품</option>
+                                    </select>
+                                </div>
+                                <div class="d-grid">
+                                    <button type="submit" class="btn btn-primary btn-lg">
+                                        <i class="bi bi-file-earmark-arrow-down me-2"></i>BOM 엑셀 다운로드
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header bg-info text-white">
+                            <i class="bi bi-question-circle me-2"></i>출력 파일 형식
+                        </div>
+                        <div class="card-body">
+                            <table class="table table-sm table-bordered mb-3">
+                                <thead class="table-light">
+                                    <tr><th>컬럼</th><th>설명</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td><code>계정구분</code></td><td>제품 / 반제품</td></tr>
+                                    <tr><td><code>모품번</code></td><td>제품 품번</td></tr>
+                                    <tr><td><code>모품명</code></td><td>제품명</td></tr>
+                                    <tr><td><code>LEVEL</code></td><td>BOM 레벨 (0=모품, 1=직접자재, 2+=반제품하위)</td></tr>
+                                    <tr><td><code>자품번</code></td><td>자재/부품 품번</td></tr>
+                                    <tr><td><code>자품명</code></td><td>자재/부품명</td></tr>
+                                    <tr><td><code>단위</code></td><td>재고단위</td></tr>
+                                    <tr><td><code>정미수량</code></td><td>제품 1개당 소요량</td></tr>
+                                    <tr><td><code>현재고</code></td><td>WMS 현재 재고</td></tr>
+                                    <tr><td><code>거래처</code></td><td>주거래처</td></tr>
+                                </tbody>
+                            </table>
+                            <div class="alert alert-secondary small py-2">
+                                <i class="bi bi-palette me-1"></i>
+                                <strong>색상 구분:</strong> 파란색=모품 헤더, 연파란색=반제품(중간조립품)
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

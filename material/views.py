@@ -5354,6 +5354,95 @@ def bom_calc_demand_export(request):
 
 
 @wms_permission_required('can_wms_bom_calc')
+def bom_group_export(request):
+    """
+    [WMS] 품목군(계정구분)별 전체 BOM 엑셀 다운로드
+    - account_type 파라미터로 필터 (미입력 시 전체)
+    - 각 제품 qty=1 기준 structured BOM 형식으로 출력
+    """
+    account_type = request.GET.get('account_type', '').strip()
+
+    products_qs = Product.objects.filter(is_active=True, is_bom_registered=True).order_by('account_type', 'part_no')
+    if account_type:
+        products_qs = products_qs.filter(account_type=account_type)
+
+    if not products_qs.exists():
+        messages.warning(request, "다운로드할 BOM이 없습니다.")
+        return redirect('material:bom_calculate')
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "품목군별BOM"
+
+    header_fill = openpyxl.styles.PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+    header_font = openpyxl.styles.Font(bold=True, color="FFFFFF")
+    semi_fill = openpyxl.styles.PatternFill(start_color="D9E2F3", end_color="D9E2F3", fill_type="solid")
+    semi_font = openpyxl.styles.Font(bold=True)
+    product_fill = openpyxl.styles.PatternFill(start_color="BDD7EE", end_color="BDD7EE", fill_type="solid")
+
+    headers = ['계정구분', '모품번', '모품명', 'LEVEL', '자품번', '자품명', '단위', '정미수량', '현재고', '거래처']
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+
+    row_idx = 2
+    for product in products_qs:
+        _, _, result, structured_items = _calculate_bom_requirements(product.part_no, 1)
+
+        # 모품 헤더 행
+        ws.cell(row=row_idx, column=1, value=product.account_type)
+        ws.cell(row=row_idx, column=2, value=product.part_no)
+        ws.cell(row=row_idx, column=3, value=product.part_name)
+        ws.cell(row=row_idx, column=4, value=0)
+        ws.cell(row=row_idx, column=5, value=product.part_no)
+        ws.cell(row=row_idx, column=6, value=product.part_name)
+        ws.cell(row=row_idx, column=7, value=product.unit)
+        ws.cell(row=row_idx, column=8, value=1)
+        for col in range(1, 11):
+            ws.cell(row=row_idx, column=col).fill = product_fill
+            ws.cell(row=row_idx, column=col).font = semi_font
+        row_idx += 1
+
+        if not structured_items:
+            ws.cell(row=row_idx, column=5, value='BOM 없음')
+            row_idx += 1
+            continue
+
+        flat_lookup = {item['child_part_no']: item for item in result}
+        for sitem in structured_items:
+            cpno = sitem['child_part_no']
+            ws.cell(row=row_idx, column=4, value=sitem.get('level', 1))
+            ws.cell(row=row_idx, column=5, value=cpno)
+            ws.cell(row=row_idx, column=6, value=sitem['child_part_name'])
+            ws.cell(row=row_idx, column=7, value=sitem.get('child_unit', ''))
+            ws.cell(row=row_idx, column=8, value=sitem.get('unit_qty', ''))
+            ws.cell(row=row_idx, column=10, value=sitem.get('vendor_name') or '-')
+
+            if sitem.get('is_semi'):
+                for col in range(1, 11):
+                    ws.cell(row=row_idx, column=col).fill = semi_fill
+                    ws.cell(row=row_idx, column=col).font = semi_font
+            else:
+                flat_item = flat_lookup.get(cpno)
+                ws.cell(row=row_idx, column=9, value=float(flat_item['stock_qty']) if flat_item else 0)
+
+            row_idx += 1
+
+    widths = [10, 18, 25, 8, 18, 25, 8, 12, 12, 18]
+    for col, width in enumerate(widths, 1):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = width
+
+    group_label = account_type if account_type else '전체'
+    filename = f"bom_group_{group_label}.xlsx"
+
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    wb.save(response)
+    return response
+
+
+@wms_permission_required('can_wms_bom_calc')
 def api_bom_calculate(request):
     """
     [API] 소요량 계산 AJAX 엔드포인트 (다단계 BOM 전개)
