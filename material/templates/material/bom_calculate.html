@@ -82,28 +82,60 @@
         <!-- 품목군별 BOM 다운로드 탭 -->
         <div class="tab-pane fade" id="group" role="tabpanel">
             <div class="row">
-                <div class="col-md-6">
+                <div class="col-md-7">
                     <div class="card mb-4">
                         <div class="card-header bg-primary text-white">
-                            <i class="bi bi-grid me-2"></i>품목군별 BOM 일괄 다운로드
+                            <i class="bi bi-grid me-2"></i>BOM 일괄 다운로드
                         </div>
                         <div class="card-body">
-                            <p class="text-muted small mb-4">
+                            <p class="text-muted small mb-3">
                                 <i class="bi bi-info-circle me-1"></i>
-                                선택한 품목군(계정구분)에 속한 <strong>모든 제품의 BOM</strong>을 한 번에 엑셀로 다운로드합니다.<br>
-                                정미수량(qty=1) 기준으로 BOM 구조가 출력됩니다.
+                                품번/품명을 검색하여 제품을 추가하거나, 계정구분으로 전체를 한 번에 추가하세요.<br>
+                                선택된 모든 제품의 BOM을 정미수량(qty=1) 기준 엑셀로 다운로드합니다.
                             </p>
-                            <form method="get" action="{% url 'material:bom_group_export' %}">
-                                <div class="mb-4">
-                                    <label class="form-label fw-bold">계정구분 선택</label>
-                                    <select name="account_type" class="form-select form-select-lg">
-                                        <option value="">전체 (제품 + 반제품)</option>
-                                        <option value="제품">제품</option>
-                                        <option value="반제품">반제품</option>
-                                    </select>
+
+                            <!-- 검색 + 계정구분 버튼 -->
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">제품 검색 추가</label>
+                                <div class="position-relative">
+                                    <input type="text" id="groupSearchInput" class="form-control"
+                                           placeholder="품번 또는 품명 입력 후 선택" autocomplete="off">
+                                    <div id="groupAutocompleteList" class="autocomplete-list"></div>
                                 </div>
+                            </div>
+
+                            <!-- 계정구분 전체 추가 버튼 -->
+                            <div class="mb-3 d-flex gap-2 flex-wrap">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="groupAddByType('')">
+                                    <i class="bi bi-plus-circle me-1"></i>전체 추가
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="groupAddByType('제품')">
+                                    <i class="bi bi-plus-circle me-1"></i>제품 전체 추가
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-warning" onclick="groupAddByType('반제품')">
+                                    <i class="bi bi-plus-circle me-1"></i>반제품 전체 추가
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-danger ms-auto" onclick="groupClearAll()">
+                                    <i class="bi bi-trash me-1"></i>전체 삭제
+                                </button>
+                            </div>
+
+                            <!-- 선택된 제품 목록 -->
+                            <div class="border rounded p-2 mb-3" style="min-height:80px; max-height:220px; overflow-y:auto;" id="groupSelectedArea">
+                                <div id="groupEmptyMsg" class="text-muted small text-center py-3">
+                                    <i class="bi bi-inbox me-1"></i>선택된 제품이 없습니다
+                                </div>
+                                <div id="groupTagContainer" class="d-flex flex-wrap gap-1"></div>
+                            </div>
+                            <div class="text-muted small mb-3">
+                                선택된 제품: <strong id="groupSelectedCount">0</strong>개
+                            </div>
+
+                            <!-- 다운로드 버튼 -->
+                            <form method="get" action="{% url 'material:bom_group_export' %}" id="groupDownloadForm">
+                                <input type="hidden" name="part_nos" id="groupPartNosInput" value="">
                                 <div class="d-grid">
-                                    <button type="submit" class="btn btn-primary btn-lg">
+                                    <button type="submit" class="btn btn-primary btn-lg" id="groupDownloadBtn" disabled>
                                         <i class="bi bi-file-earmark-arrow-down me-2"></i>BOM 엑셀 다운로드
                                     </button>
                                 </div>
@@ -111,7 +143,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-5">
                     <div class="card">
                         <div class="card-header bg-info text-white">
                             <i class="bi bi-question-circle me-2"></i>출력 파일 형식
@@ -125,7 +157,7 @@
                                     <tr><td><code>계정구분</code></td><td>제품 / 반제품</td></tr>
                                     <tr><td><code>모품번</code></td><td>제품 품번</td></tr>
                                     <tr><td><code>모품명</code></td><td>제품명</td></tr>
-                                    <tr><td><code>LEVEL</code></td><td>BOM 레벨 (0=모품, 1=직접자재, 2+=반제품하위)</td></tr>
+                                    <tr><td><code>LEVEL</code></td><td>BOM 레벨 (0=모품, 1이상=자재)</td></tr>
                                     <tr><td><code>자품번</code></td><td>자재/부품 품번</td></tr>
                                     <tr><td><code>자품명</code></td><td>자재/부품명</td></tr>
                                     <tr><td><code>단위</code></td><td>재고단위</td></tr>
@@ -134,9 +166,9 @@
                                     <tr><td><code>거래처</code></td><td>주거래처</td></tr>
                                 </tbody>
                             </table>
-                            <div class="alert alert-secondary small py-2">
+                            <div class="alert alert-secondary small py-2 mb-0">
                                 <i class="bi bi-palette me-1"></i>
-                                <strong>색상 구분:</strong> 파란색=모품 헤더, 연파란색=반제품(중간조립품)
+                                <strong>색상:</strong> 파란색=모품, 연파란색=반제품(중간조립)
                             </div>
                         </div>
                     </div>
@@ -1294,6 +1326,129 @@ function submitWithVendorFilter() {
     vendorSelectModal.hide();
     document.getElementById('demandRegisterForm').submit();
 }
+</script>
+
+<!-- 품목군별 BOM 다운로드 탭 JS -->
+<script>
+var groupSelected = {}; // { part_no: { part_no, part_name, account_type } }
+
+var groupSearchInput = document.getElementById('groupSearchInput');
+var groupAutoList = document.getElementById('groupAutocompleteList');
+var groupFocus = -1;
+
+if (groupSearchInput) {
+    groupSearchInput.addEventListener('input', function() {
+        var val = this.value.toLowerCase().trim();
+        groupCloseList();
+        if (!val) return;
+        var filtered = products.filter(function(p) {
+            return p.part_no.toLowerCase().includes(val) || p.part_name.toLowerCase().includes(val);
+        }).slice(0, 20);
+        if (filtered.length === 0) return;
+        groupAutoList.classList.add('show');
+        filtered.forEach(function(p) {
+            var item = document.createElement('div');
+            item.className = 'autocomplete-item';
+            item.innerHTML = '<div class="part-no">' + p.part_no + '</div>' +
+                             '<div class="part-name">' + p.part_name + '</div>' +
+                             '<div class="account-type">' + p.account_type + '</div>';
+            item.addEventListener('click', function() {
+                groupAddProduct(p.part_no, p.part_name, p.account_type);
+                groupSearchInput.value = '';
+                groupCloseList();
+            });
+            groupAutoList.appendChild(item);
+        });
+    });
+
+    groupSearchInput.addEventListener('keydown', function(e) {
+        var items = groupAutoList.querySelectorAll('.autocomplete-item');
+        if (e.key === 'ArrowDown') { groupFocus++; groupSetActive(items); e.preventDefault(); }
+        else if (e.key === 'ArrowUp') { groupFocus--; groupSetActive(items); e.preventDefault(); }
+        else if (e.key === 'Enter') { if (groupFocus > -1 && items[groupFocus]) { items[groupFocus].click(); e.preventDefault(); } }
+        else if (e.key === 'Escape') { groupCloseList(); }
+    });
+
+    document.addEventListener('click', function(e) {
+        if (e.target !== groupSearchInput) groupCloseList();
+    });
+}
+
+function groupSetActive(items) {
+    if (!items) return;
+    items.forEach(function(i) { i.classList.remove('active'); });
+    if (groupFocus >= items.length) groupFocus = 0;
+    if (groupFocus < 0) groupFocus = items.length - 1;
+    items[groupFocus].classList.add('active');
+    items[groupFocus].scrollIntoView({block: 'nearest'});
+}
+
+function groupCloseList() {
+    groupAutoList.innerHTML = '';
+    groupAutoList.classList.remove('show');
+    groupFocus = -1;
+}
+
+function groupAddProduct(partNo, partName, accountType) {
+    if (groupSelected[partNo]) return; // 이미 추가됨
+    groupSelected[partNo] = { part_no: partNo, part_name: partName, account_type: accountType };
+    groupRender();
+}
+
+function groupAddByType(accountType) {
+    products.forEach(function(p) {
+        if (!accountType || p.account_type === accountType) {
+            groupSelected[p.part_no] = { part_no: p.part_no, part_name: p.part_name, account_type: p.account_type };
+        }
+    });
+    groupRender();
+}
+
+function groupRemoveProduct(partNo) {
+    delete groupSelected[partNo];
+    groupRender();
+}
+
+function groupClearAll() {
+    groupSelected = {};
+    groupRender();
+}
+
+function groupRender() {
+    var container = document.getElementById('groupTagContainer');
+    var emptyMsg = document.getElementById('groupEmptyMsg');
+    var countEl = document.getElementById('groupSelectedCount');
+    var downloadBtn = document.getElementById('groupDownloadBtn');
+    var partNosInput = document.getElementById('groupPartNosInput');
+
+    var keys = Object.keys(groupSelected);
+    container.innerHTML = '';
+
+    if (keys.length === 0) {
+        emptyMsg.style.display = '';
+    } else {
+        emptyMsg.style.display = 'none';
+        keys.forEach(function(pno) {
+            var p = groupSelected[pno];
+            var badge = document.createElement('span');
+            badge.className = 'badge d-flex align-items-center gap-1 py-1 px-2 ' +
+                (p.account_type === '반제품' ? 'bg-warning text-dark' : 'bg-primary');
+            badge.style.fontSize = '0.8rem';
+            badge.innerHTML = '<span>' + pno + '</span>' +
+                '<button type="button" style="background:none;border:none;color:inherit;padding:0;font-size:0.85rem;line-height:1;cursor:pointer;" onclick="groupRemoveProduct(\'' + pno.replace(/'/g, "\\'") + '\')">&times;</button>';
+            container.appendChild(badge);
+        });
+    }
+
+    countEl.textContent = keys.length;
+    downloadBtn.disabled = (keys.length === 0);
+    partNosInput.value = keys.join(',');
+}
+
+document.getElementById('groupDownloadForm').addEventListener('submit', function(e) {
+    var keys = Object.keys(groupSelected);
+    if (keys.length === 0) { e.preventDefault(); alert('제품을 먼저 선택해주세요.'); }
+});
 </script>
 
 <!-- 반제품 접기/펼치기 -->

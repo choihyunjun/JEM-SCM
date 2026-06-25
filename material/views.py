@@ -5356,15 +5356,20 @@ def bom_calc_demand_export(request):
 @wms_permission_required('can_wms_bom_calc')
 def bom_group_export(request):
     """
-    [WMS] 품목군(계정구분)별 전체 BOM 엑셀 다운로드
-    - account_type 파라미터로 필터 (미입력 시 전체)
+    [WMS] 선택 제품 BOM 일괄 엑셀 다운로드
+    - part_nos: 콤마 구분 품번 목록
     - 각 제품 qty=1 기준 structured BOM 형식으로 출력
     """
-    account_type = request.GET.get('account_type', '').strip()
+    part_nos_raw = request.GET.get('part_nos', '').strip()
+    part_nos = [p.strip() for p in part_nos_raw.split(',') if p.strip()]
 
-    products_qs = Product.objects.filter(is_active=True, is_bom_registered=True).order_by('account_type', 'part_no')
-    if account_type:
-        products_qs = products_qs.filter(account_type=account_type)
+    if not part_nos:
+        messages.warning(request, "다운로드할 제품을 선택해주세요.")
+        return redirect('material:bom_calculate')
+
+    products_qs = Product.objects.filter(
+        part_no__in=part_nos, is_active=True
+    ).order_by('account_type', 'part_no')
 
     if not products_qs.exists():
         messages.warning(request, "다운로드할 BOM이 없습니다.")
