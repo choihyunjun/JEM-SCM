@@ -3283,8 +3283,6 @@ def part_export(request):
         parts = parts.filter(part_group=group_filter)
     if wms_only == '1':
         parts = parts.filter(vendor__isnull=True)
-    elif not search_q and not group_filter and not vendor_filter:
-        parts = parts.filter(vendor__isnull=False)
     parts = parts.order_by('part_no')
 
     wb = openpyxl.Workbook()
