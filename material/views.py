@@ -4963,6 +4963,23 @@ def bom_calculate(request):
         if child_part_nos:
             part_group_map = dict(Part.objects.filter(part_no__in=child_part_nos).values_list('part_no', 'part_group'))
 
+    # 품목군별 BOM 탭용: Part.part_group → Product 매핑
+    import json as _json
+    _product_part_nos = set(products.values_list('part_no', flat=True))
+    _pg_rows = (
+        Part.objects.filter(part_no__in=_product_part_nos)
+        .exclude(part_group='').exclude(part_group__isnull=True)
+        .values('part_no', 'part_group', 'part_name')
+        .order_by('part_group', 'part_no')
+    )
+    _pg_product_map = {}  # { part_group: [ {part_no, part_name}, ... ] }
+    for row in _pg_rows:
+        _pg_product_map.setdefault(row['part_group'], []).append(
+            {'part_no': row['part_no'], 'part_name': row['part_name']}
+        )
+    _part_groups_json = _json.dumps(sorted(_pg_product_map.keys()), ensure_ascii=False)
+    _pg_product_map_json = _json.dumps(_pg_product_map, ensure_ascii=False)
+
     context = {
         'products': products,
         'product': product,
@@ -4979,6 +4996,8 @@ def bom_calculate(request):
         'total_sufficient_count': total_sufficient_count,
         'session_key': session_key,
         'part_group_map': part_group_map,
+        'part_groups_json': _part_groups_json,
+        'part_group_product_map': _pg_product_map_json,
     }
     return render(request, 'material/bom_calculate.html', context)
 
@@ -5356,20 +5375,27 @@ def bom_calc_demand_export(request):
 @wms_permission_required('can_wms_bom_calc')
 def bom_group_export(request):
     """
-    [WMS] 선택 제품 BOM 일괄 엑셀 다운로드
-    - part_nos: 콤마 구분 품번 목록
+    [WMS] 품목군별 BOM 일괄 엑셀 다운로드
+    - part_group: 콤마 구분 품목군 목록 (Part.part_group)
     - 각 제품 qty=1 기준 structured BOM 형식으로 출력
     """
-    part_nos_raw = request.GET.get('part_nos', '').strip()
-    part_nos = [p.strip() for p in part_nos_raw.split(',') if p.strip()]
+    part_group_raw = request.GET.get('part_group', '').strip()
+    part_groups = [g.strip() for g in part_group_raw.split(',') if g.strip()]
 
-    if not part_nos:
-        messages.warning(request, "다운로드할 제품을 선택해주세요.")
+    if not part_groups:
+        messages.warning(request, "품목군을 선택해주세요.")
         return redirect('material:bom_calculate')
 
+    # 선택된 품목군에 속하는 Part의 part_no를 구함
+    part_nos_in_groups = set(
+        Part.objects.filter(part_group__in=part_groups)
+        .values_list('part_no', flat=True)
+    )
+
+    # 그 part_no가 Product(모품)로도 등록된 것만 BOM 대상
     products_qs = Product.objects.filter(
-        part_no__in=part_nos, is_active=True
-    ).order_by('account_type', 'part_no')
+        part_no__in=part_nos_in_groups, is_active=True, is_bom_registered=True
+    ).order_by('part_no')
 
     if not products_qs.exists():
         messages.warning(request, "다운로드할 BOM이 없습니다.")
@@ -5385,7 +5411,13 @@ def bom_group_export(request):
     semi_font = openpyxl.styles.Font(bold=True)
     product_fill = openpyxl.styles.PatternFill(start_color="BDD7EE", end_color="BDD7EE", fill_type="solid")
 
-    headers = ['계정구분', '모품번', '모품명', 'LEVEL', '자품번', '자품명', '단위', '정미수량', '현재고', '거래처']
+    # 품목군 조회 맵
+    _part_group_map = dict(
+        Part.objects.filter(part_no__in=[p.part_no for p in products_qs])
+        .values_list('part_no', 'part_group')
+    )
+
+    headers = ['품목군', '모품번', '모품명', 'LEVEL', '자품번', '자품명', '단위', '정미수량', '현재고', '거래처']
     for col, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col, value=header)
         cell.font = header_font
@@ -5396,7 +5428,7 @@ def bom_group_export(request):
         _, _, result, structured_items = _calculate_bom_requirements(product.part_no, 1)
 
         # 모품 헤더 행
-        ws.cell(row=row_idx, column=1, value=product.account_type)
+        ws.cell(row=row_idx, column=1, value=_part_group_map.get(product.part_no, ''))
         ws.cell(row=row_idx, column=2, value=product.part_no)
         ws.cell(row=row_idx, column=3, value=product.part_name)
         ws.cell(row=row_idx, column=4, value=0)
@@ -5438,7 +5470,7 @@ def bom_group_export(request):
     for col, width in enumerate(widths, 1):
         ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = width
 
-    group_label = account_type if account_type else '전체'
+    group_label = '_'.join(part_groups) if len(part_groups) <= 3 else f'{part_groups[0]}_외{len(part_groups)-1}개'
     filename = f"bom_group_{group_label}.xlsx"
 
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')

@@ -85,57 +85,47 @@
                 <div class="col-md-7">
                     <div class="card mb-4">
                         <div class="card-header bg-primary text-white">
-                            <i class="bi bi-grid me-2"></i>BOM 일괄 다운로드
+                            <i class="bi bi-grid me-2"></i>품목군별 BOM 일괄 다운로드
                         </div>
                         <div class="card-body">
                             <p class="text-muted small mb-3">
                                 <i class="bi bi-info-circle me-1"></i>
-                                품번/품명을 검색하여 제품을 추가하거나, 계정구분으로 전체를 한 번에 추가하세요.<br>
-                                선택된 모든 제품의 BOM을 정미수량(qty=1) 기준 엑셀로 다운로드합니다.
+                                품목군을 검색하여 추가하세요. 선택된 품목군에 속한 모든 제품의 BOM을 엑셀로 다운로드합니다.
                             </p>
 
-                            <!-- 검색 + 계정구분 버튼 -->
+                            <!-- 품목군 검색 -->
                             <div class="mb-3">
-                                <label class="form-label fw-bold">제품 검색 추가</label>
+                                <label class="form-label fw-bold">품목군 검색</label>
                                 <div class="position-relative">
-                                    <input type="text" id="groupSearchInput" class="form-control"
-                                           placeholder="품번 또는 품명 입력 후 선택" autocomplete="off">
-                                    <div id="groupAutocompleteList" class="autocomplete-list"></div>
+                                    <input type="text" id="pgSearchInput" class="form-control"
+                                           placeholder="품목군명 입력 (예: DENSO-FOB SW, HAZARD S/W ...)" autocomplete="off">
+                                    <div id="pgAutocompleteList" class="autocomplete-list"></div>
                                 </div>
                             </div>
 
-                            <!-- 계정구분 전체 추가 버튼 -->
-                            <div class="mb-3 d-flex gap-2 flex-wrap">
-                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="groupAddByType('')">
-                                    <i class="bi bi-plus-circle me-1"></i>전체 추가
-                                </button>
-                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="groupAddByType('제품')">
-                                    <i class="bi bi-plus-circle me-1"></i>제품 전체 추가
-                                </button>
-                                <button type="button" class="btn btn-sm btn-outline-warning" onclick="groupAddByType('반제품')">
-                                    <i class="bi bi-plus-circle me-1"></i>반제품 전체 추가
-                                </button>
-                                <button type="button" class="btn btn-sm btn-outline-danger ms-auto" onclick="groupClearAll()">
-                                    <i class="bi bi-trash me-1"></i>전체 삭제
-                                </button>
-                            </div>
-
-                            <!-- 선택된 제품 목록 -->
-                            <div class="border rounded p-2 mb-3" style="min-height:80px; max-height:220px; overflow-y:auto;" id="groupSelectedArea">
-                                <div id="groupEmptyMsg" class="text-muted small text-center py-3">
-                                    <i class="bi bi-inbox me-1"></i>선택된 제품이 없습니다
+                            <!-- 선택된 품목군 태그 -->
+                            <div class="border rounded p-2 mb-2" style="min-height:56px; max-height:120px; overflow-y:auto;" id="pgTagArea">
+                                <div id="pgEmptyMsg" class="text-muted small text-center py-2">
+                                    <i class="bi bi-inbox me-1"></i>선택된 품목군이 없습니다
                                 </div>
-                                <div id="groupTagContainer" class="d-flex flex-wrap gap-1"></div>
-                            </div>
-                            <div class="text-muted small mb-3">
-                                선택된 제품: <strong id="groupSelectedCount">0</strong>개
+                                <div id="pgTagContainer" class="d-flex flex-wrap gap-1"></div>
                             </div>
 
-                            <!-- 다운로드 버튼 -->
-                            <form method="get" action="{% url 'material:bom_group_export' %}" id="groupDownloadForm">
-                                <input type="hidden" name="part_nos" id="groupPartNosInput" value="">
+                            <!-- 포함 제품 미리보기 -->
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <span class="small fw-bold text-muted">포함될 제품</span>
+                                    <span class="small text-primary fw-bold" id="pgProductCount">0개</span>
+                                </div>
+                                <div class="border rounded p-2" style="min-height:48px; max-height:160px; overflow-y:auto; background:#f8f9fa;" id="pgProductPreview">
+                                    <span class="text-muted small">품목군을 선택하면 포함 제품이 표시됩니다.</span>
+                                </div>
+                            </div>
+
+                            <form method="get" action="{% url 'material:bom_group_export' %}" id="pgDownloadForm">
+                                <input type="hidden" name="part_group" id="pgGroupInput" value="">
                                 <div class="d-grid">
-                                    <button type="submit" class="btn btn-primary btn-lg" id="groupDownloadBtn" disabled>
+                                    <button type="submit" class="btn btn-primary btn-lg" id="pgDownloadBtn" disabled>
                                         <i class="bi bi-file-earmark-arrow-down me-2"></i>BOM 엑셀 다운로드
                                     </button>
                                 </div>
@@ -154,7 +144,7 @@
                                     <tr><th>컬럼</th><th>설명</th></tr>
                                 </thead>
                                 <tbody>
-                                    <tr><td><code>계정구분</code></td><td>제품 / 반제품</td></tr>
+                                    <tr><td><code>품목군</code></td><td>Part.part_group 값</td></tr>
                                     <tr><td><code>모품번</code></td><td>제품 품번</td></tr>
                                     <tr><td><code>모품명</code></td><td>제품명</td></tr>
                                     <tr><td><code>LEVEL</code></td><td>BOM 레벨 (0=모품, 1이상=자재)</td></tr>
@@ -1330,124 +1320,124 @@ function submitWithVendorFilter() {
 
 <!-- 품목군별 BOM 다운로드 탭 JS -->
 <script>
-var groupSelected = {}; // { part_no: { part_no, part_name, account_type } }
+// 서버에서 전달받은 품목군 목록
+const partGroups = {{ part_groups_json|safe }};
+// 서버에서 전달받은 품목군→제품 매핑
+const partGroupProductMap = {{ part_group_product_map|safe }};
 
-var groupSearchInput = document.getElementById('groupSearchInput');
-var groupAutoList = document.getElementById('groupAutocompleteList');
-var groupFocus = -1;
+var pgSelected = []; // 선택된 품목군 목록
+var pgFocus = -1;
+var pgSearchInput = document.getElementById('pgSearchInput');
+var pgAutoList = document.getElementById('pgAutocompleteList');
 
-if (groupSearchInput) {
-    groupSearchInput.addEventListener('input', function() {
+if (pgSearchInput) {
+    pgSearchInput.addEventListener('input', function() {
         var val = this.value.toLowerCase().trim();
-        groupCloseList();
+        pgCloseList();
         if (!val) return;
-        var filtered = products.filter(function(p) {
-            return p.part_no.toLowerCase().includes(val) || p.part_name.toLowerCase().includes(val);
+        var filtered = partGroups.filter(function(g) {
+            return g.toLowerCase().includes(val);
         }).slice(0, 20);
         if (filtered.length === 0) return;
-        groupAutoList.classList.add('show');
-        filtered.forEach(function(p) {
+        pgAutoList.classList.add('show');
+        filtered.forEach(function(g) {
+            var cnt = (partGroupProductMap[g] || []).length;
             var item = document.createElement('div');
             item.className = 'autocomplete-item';
-            item.innerHTML = '<div class="part-no">' + p.part_no + '</div>' +
-                             '<div class="part-name">' + p.part_name + '</div>' +
-                             '<div class="account-type">' + p.account_type + '</div>';
+            item.innerHTML = '<div class="part-no">' + g + '</div>' +
+                             '<div class="part-name text-muted">제품 ' + cnt + '개</div>';
             item.addEventListener('click', function() {
-                groupAddProduct(p.part_no, p.part_name, p.account_type);
-                groupSearchInput.value = '';
-                groupCloseList();
+                pgAddGroup(g);
+                pgSearchInput.value = '';
+                pgCloseList();
             });
-            groupAutoList.appendChild(item);
+            pgAutoList.appendChild(item);
         });
     });
 
-    groupSearchInput.addEventListener('keydown', function(e) {
-        var items = groupAutoList.querySelectorAll('.autocomplete-item');
-        if (e.key === 'ArrowDown') { groupFocus++; groupSetActive(items); e.preventDefault(); }
-        else if (e.key === 'ArrowUp') { groupFocus--; groupSetActive(items); e.preventDefault(); }
-        else if (e.key === 'Enter') { if (groupFocus > -1 && items[groupFocus]) { items[groupFocus].click(); e.preventDefault(); } }
-        else if (e.key === 'Escape') { groupCloseList(); }
+    pgSearchInput.addEventListener('keydown', function(e) {
+        var items = pgAutoList.querySelectorAll('.autocomplete-item');
+        if (e.key === 'ArrowDown') { pgFocus++; pgSetActive(items); e.preventDefault(); }
+        else if (e.key === 'ArrowUp') { pgFocus--; pgSetActive(items); e.preventDefault(); }
+        else if (e.key === 'Enter') { if (pgFocus > -1 && items[pgFocus]) { items[pgFocus].click(); e.preventDefault(); } }
+        else if (e.key === 'Escape') { pgCloseList(); }
     });
 
     document.addEventListener('click', function(e) {
-        if (e.target !== groupSearchInput) groupCloseList();
+        if (e.target !== pgSearchInput) pgCloseList();
     });
 }
 
-function groupSetActive(items) {
-    if (!items) return;
+function pgSetActive(items) {
     items.forEach(function(i) { i.classList.remove('active'); });
-    if (groupFocus >= items.length) groupFocus = 0;
-    if (groupFocus < 0) groupFocus = items.length - 1;
-    items[groupFocus].classList.add('active');
-    items[groupFocus].scrollIntoView({block: 'nearest'});
+    if (pgFocus >= items.length) pgFocus = 0;
+    if (pgFocus < 0) pgFocus = items.length - 1;
+    items[pgFocus].classList.add('active');
+    items[pgFocus].scrollIntoView({block: 'nearest'});
 }
 
-function groupCloseList() {
-    groupAutoList.innerHTML = '';
-    groupAutoList.classList.remove('show');
-    groupFocus = -1;
+function pgCloseList() {
+    pgAutoList.innerHTML = '';
+    pgAutoList.classList.remove('show');
+    pgFocus = -1;
 }
 
-function groupAddProduct(partNo, partName, accountType) {
-    if (groupSelected[partNo]) return; // 이미 추가됨
-    groupSelected[partNo] = { part_no: partNo, part_name: partName, account_type: accountType };
-    groupRender();
+function pgAddGroup(g) {
+    if (pgSelected.indexOf(g) !== -1) return;
+    pgSelected.push(g);
+    pgRender();
 }
 
-function groupAddByType(accountType) {
-    products.forEach(function(p) {
-        if (!accountType || p.account_type === accountType) {
-            groupSelected[p.part_no] = { part_no: p.part_no, part_name: p.part_name, account_type: p.account_type };
-        }
+function pgRemoveGroup(g) {
+    pgSelected = pgSelected.filter(function(x) { return x !== g; });
+    pgRender();
+}
+
+function pgRender() {
+    var tagContainer = document.getElementById('pgTagContainer');
+    var emptyMsg = document.getElementById('pgEmptyMsg');
+    var preview = document.getElementById('pgProductPreview');
+    var countEl = document.getElementById('pgProductCount');
+    var downloadBtn = document.getElementById('pgDownloadBtn');
+    var groupInput = document.getElementById('pgGroupInput');
+
+    tagContainer.innerHTML = '';
+    emptyMsg.style.display = pgSelected.length === 0 ? '' : 'none';
+
+    pgSelected.forEach(function(g) {
+        var span = document.createElement('span');
+        span.className = 'badge bg-primary d-inline-flex align-items-center gap-1 py-1 px-2';
+        span.style.fontSize = '0.8rem';
+        span.innerHTML = g + ' <button type="button" style="background:none;border:none;color:#fff;padding:0;font-size:1rem;line-height:1;cursor:pointer;" onclick="pgRemoveGroup(\'' + g.replace(/\\/g,'\\\\').replace(/'/g,"\\'") + '\')">&times;</button>';
+        tagContainer.appendChild(span);
     });
-    groupRender();
-}
 
-function groupRemoveProduct(partNo) {
-    delete groupSelected[partNo];
-    groupRender();
-}
-
-function groupClearAll() {
-    groupSelected = {};
-    groupRender();
-}
-
-function groupRender() {
-    var container = document.getElementById('groupTagContainer');
-    var emptyMsg = document.getElementById('groupEmptyMsg');
-    var countEl = document.getElementById('groupSelectedCount');
-    var downloadBtn = document.getElementById('groupDownloadBtn');
-    var partNosInput = document.getElementById('groupPartNosInput');
-
-    var keys = Object.keys(groupSelected);
-    container.innerHTML = '';
-
-    if (keys.length === 0) {
-        emptyMsg.style.display = '';
-    } else {
-        emptyMsg.style.display = 'none';
-        keys.forEach(function(pno) {
-            var p = groupSelected[pno];
-            var badge = document.createElement('span');
-            badge.className = 'badge d-flex align-items-center gap-1 py-1 px-2 ' +
-                (p.account_type === '반제품' ? 'bg-warning text-dark' : 'bg-primary');
-            badge.style.fontSize = '0.8rem';
-            badge.innerHTML = '<span>' + pno + '</span>' +
-                '<button type="button" style="background:none;border:none;color:inherit;padding:0;font-size:0.85rem;line-height:1;cursor:pointer;" onclick="groupRemoveProduct(\'' + pno.replace(/'/g, "\\'") + '\')">&times;</button>';
-            container.appendChild(badge);
+    // 포함 제품 계산
+    var allProds = {};
+    pgSelected.forEach(function(g) {
+        (partGroupProductMap[g] || []).forEach(function(p) {
+            allProds[p.part_no] = p;
         });
-    }
+    });
+    var prodList = Object.values(allProds);
 
-    countEl.textContent = keys.length;
-    downloadBtn.disabled = (keys.length === 0);
-    partNosInput.value = keys.join(',');
+    countEl.textContent = prodList.length + '개';
+    downloadBtn.disabled = (prodList.length === 0);
+    groupInput.value = pgSelected.join(',');
+
+    if (prodList.length === 0) {
+        preview.innerHTML = '<span class="text-muted small">품목군을 선택하면 포함 제품이 표시됩니다.</span>';
+    } else {
+        preview.innerHTML = prodList.map(function(p) {
+            return '<span class="badge bg-light text-dark border me-1 mb-1" style="font-size:0.75rem;">' +
+                   p.part_no + ' ' + p.part_name + '</span>';
+        }).join('');
+    }
 }
 
-document.getElementById('groupDownloadForm').addEventListener('submit', function(e) {
-    var keys = Object.keys(groupSelected);
-    if (keys.length === 0) { e.preventDefault(); alert('제품을 먼저 선택해주세요.'); }
+document.getElementById('pgDownloadForm').addEventListener('submit', function(e) {
+    var groupInput = document.getElementById('pgGroupInput');
+    if (!groupInput.value) { e.preventDefault(); alert('품목군을 먼저 선택해주세요.'); }
 });
 </script>
 
