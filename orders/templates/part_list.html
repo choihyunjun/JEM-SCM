@@ -108,9 +108,15 @@
             조회 결과 <strong class="text-dark">{{ parts|length }}</strong>건 <span class="text-secondary">(최대 200건)</span>
         </span>
     </div>
-    <a href="{% url 'part_upload' %}" class="btn btn-success btn-lg">
-        <i class="bi bi-upload me-1"></i>품목 일괄 업로드
-    </a>
+    <div class="d-flex gap-2">
+        <a href="{% url 'part_export' %}?q={{ search_q|urlencode }}&vendor={{ vendor_filter }}&group={{ group_filter }}&wms_only={{ wms_only }}"
+           class="btn btn-outline-success btn-lg">
+            <i class="bi bi-file-earmark-excel me-1"></i>엑셀 다운로드
+        </a>
+        <a href="{% url 'part_upload' %}" class="btn btn-success btn-lg">
+            <i class="bi bi-upload me-1"></i>품목 일괄 업로드
+        </a>
+    </div>
 </div>
 
 <!-- 검색 및 필터 -->

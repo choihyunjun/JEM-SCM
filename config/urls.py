@@ -84,6 +84,7 @@ urlpatterns = [
 
     # [품목 마스터 관리]
     path('part/list/', views.part_list, name='part_list'),
+    path('part/export/', views.part_export, name='part_export'),
     path('part/vendor-template/', views.part_vendor_template, name='part_vendor_template'),
     path('part/upload/', views.part_upload, name='part_upload'),
     path('part/upload/preview/', views.part_upload_preview, name='part_upload_preview'),

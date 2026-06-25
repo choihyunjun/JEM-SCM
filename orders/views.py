@@ -3265,6 +3265,88 @@ def part_list(request):
 
 @login_required
 @menu_permission_required('can_access_scm_admin')
+def part_export(request):
+    """품목 마스터 전체 엑셀 다운로드 (현재 필터 조건 반영)"""
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+    search_q    = request.GET.get('q', '').strip()
+    vendor_filter = request.GET.get('vendor', '')
+    group_filter  = request.GET.get('group', '')
+    wms_only      = request.GET.get('wms_only', '')
+
+    parts = Part.objects.select_related('vendor').all()
+    if search_q:
+        parts = parts.filter(Q(part_no__icontains=search_q) | Q(part_name__icontains=search_q))
+    if vendor_filter:
+        parts = parts.filter(vendor_id=vendor_filter)
+    if group_filter:
+        parts = parts.filter(part_group=group_filter)
+    if wms_only == '1':
+        parts = parts.filter(vendor__isnull=True)
+    elif not search_q and not group_filter and not vendor_filter:
+        parts = parts.filter(vendor__isnull=False)
+    parts = parts.order_by('part_no')
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "품목마스터"
+
+    header_fill   = PatternFill(start_color="2E7D32", end_color="2E7D32", fill_type="solid")
+    header_font   = Font(color="FFFFFF", bold=True)
+    center        = Alignment(horizontal='center', vertical='center')
+    thin          = Side(style='thin')
+    thin_border   = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    headers = ['품번', '품명', '품목군', '연결업체', '업체코드', '계정구분', '단위중량', '중량단위']
+    widths  = [18,     35,    15,      25,       15,       12,       12,       10]
+
+    for col, (h, w) in enumerate(zip(headers, widths), 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.fill      = header_fill
+        cell.font      = header_font
+        cell.alignment = center
+        cell.border    = thin_border
+        ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = w
+
+    ws.row_dimensions[1].height = 22
+
+    account_map = {'RAW': '원재료', 'PRODUCT': '상품', 'FINISHED': '제품'}
+
+    for row_idx, part in enumerate(parts, 2):
+        vendor_name = part.vendor.name if part.vendor else ''
+        vendor_code = part.vendor.code if part.vendor else ''
+        row_data = [
+            part.part_no,
+            part.part_name,
+            part.part_group or '',
+            vendor_name,
+            vendor_code,
+            account_map.get(part.account_type, part.account_type),
+            float(part.weight_qty) if part.weight_qty else 0,
+            part.weight_unit or '',
+        ]
+        for col, val in enumerate(row_data, 1):
+            cell = ws.cell(row=row_idx, column=col, value=val)
+            cell.border    = thin_border
+            cell.alignment = Alignment(vertical='center')
+
+    import io
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    import urllib.parse
+    filename = urllib.parse.quote('품목마스터.xlsx')
+    response = HttpResponse(
+        buf.read(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f"attachment; filename*=UTF-8''{filename}"
+    return response
+
+
+@login_required
+@menu_permission_required('can_access_scm_admin')
 def part_vendor_template(request):
     """품번-품목군-업체 연결용 엑셀 템플릿 다운로드"""
     import openpyxl
