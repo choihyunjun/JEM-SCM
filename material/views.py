@@ -8808,22 +8808,29 @@ def molding_utilization(request):
 
     show_all = request.GET.get('show_all', '0') == '1'
     machines = MoldingMachine.objects.filter(is_active=True).order_by('tonnage', 'code')
-    records = MoldingDailyRecord.objects.filter(
+    from collections import defaultdict, OrderedDict
+
+    records = list(MoldingDailyRecord.objects.filter(
         date__year=year, date__month=month
-    ).select_related('machine').prefetch_related('loss_details')
+    ).select_related('machine').prefetch_related('loss_details'))
 
     setting = MoldingWorkSetting.get_setting(year, month)
-    actual_work_days_util = len(set(r.date for r in records))
 
-    # 실적 있는 호기 ID
-    active_machine_ids = set(r.machine_id for r in records)
+    # records를 O(N) 1회 순회해 인덱스 구축 → 이후 O(1) 조회
+    machine_shift_map = defaultdict(lambda: defaultdict(list))
+    active_machine_ids = set()
+    work_dates = set()
+    for r in records:
+        machine_shift_map[r.machine_id][r.shift].append(r)
+        active_machine_ids.add(r.machine_id)
+        work_dates.add(r.date)
+    actual_work_days_util = len(work_dates)
 
     # 호기별 월간 집계 (주간/야간 행 분리, 톤수별 그룹)
-    from collections import defaultdict, OrderedDict
     tonnage_groups = OrderedDict()  # {톤수: {'rows': [...], 'summary': {...}}}
 
     for m in machines:
-        m_records = [r for r in records if r.machine_id == m.id]
+        m_shift_map = machine_shift_map[m.id]  # O(1)
 
         # 전체보기가 아니면 실적 있는 호기만
         if not show_all and m.id not in active_machine_ids:
@@ -8835,7 +8842,7 @@ def molding_utilization(request):
 
         has_shift_data = False
         for shift in ['주간', '야간']:
-            s_records = [r for r in m_records if r.shift == shift]
+            s_records = m_shift_map[shift]  # O(1)
             if not s_records and not show_all:
                 continue
             if not s_records and show_all:
@@ -8947,27 +8954,15 @@ def molding_utilization(request):
     work_per_machine = setting.work_days * (setting.day_shift_minutes + setting.night_shift_minutes)
     overall_work = total_machines_count * work_per_machine
     overall_time = (net_all / overall_work * 100) if overall_work else 0
-    # 실적 기준 시간가동률
-    actual_work_days_util = len(set(r.date for r in records))
+    # 실적 기준 시간가동률 (actual_work_days_util은 상단에서 이미 계산됨)
     work_per_machine_actual = actual_work_days_util * (setting.day_shift_minutes + setting.night_shift_minutes)
     overall_work_actual = total_machines_count * work_per_machine_actual
     overall_time_actual = (net_all / overall_work_actual * 100) if overall_work_actual else 0
 
-    # 톤수별 집계
-    tonnage_summary = {}
-    for m in machines:
-        t = m.tonnage
-        if t not in tonnage_summary:
-            tonnage_summary[t] = {'count': 0, 'util_sum': 0, 'active_count': 0}
-        tonnage_summary[t]['count'] += 1
-        m_active = [r for r in records if r.machine_id == m.id and r.status == '가동']
-        if m_active:
-            tonnage_summary[t]['util_sum'] += sum(r.utilization_rate for r in m_active) / len(m_active)
-            tonnage_summary[t]['active_count'] += 1
+    # 톤수별 집계 (tonnage_groups 기산 데이터 재사용, records 재순회 불필요)
     tonnage_list = sorted([
-        {'tonnage': t, 'count': s['count'],
-         'avg_util': s['util_sum'] / s['active_count'] if s['active_count'] else 0}
-        for t, s in tonnage_summary.items()
+        {'tonnage': t, 'count': tonnage_all_count.get(t, g['machine_count']), 'avg_util': g['avg_util']}
+        for t, g in tonnage_groups.items()
     ], key=lambda x: x['tonnage'])
 
     sync_logs = MoldingERPSyncLog.objects.filter(year=year, month=month).order_by('-synced_at')[:5]

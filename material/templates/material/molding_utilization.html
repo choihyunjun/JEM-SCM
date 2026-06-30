@@ -513,10 +513,12 @@ function syncERP() {
 var DAY_SHIFT_MIN = {{ setting.day_shift_minutes }};
 var NIGHT_SHIFT_MIN = {{ setting.night_shift_minutes }};
 var currentWorkMinutes = 0;
+var _inputModal = null;
+var _machineModal = null;
 
 function openInput(recordId) {
     currentRecordId = recordId;
-    fetch('/wms/api/molding/save-input/?record_id=' + recordId, {
+    fetch('{% url "material:api_molding_save_input" %}?record_id=' + recordId, {
         headers: {'X-Requested-With': 'XMLHttpRequest'}
     })
     .then(r => r.json())
@@ -542,7 +544,8 @@ function openInput(recordId) {
                 document.getElementById('inp_loss_total').value = r.loss_minutes;
             }
             calcRates();
-            new bootstrap.Modal(document.getElementById('inputModal')).show();
+            if (!_inputModal) { _inputModal = new bootstrap.Modal(document.getElementById('inputModal')); }
+            _inputModal.show();
         }
     });
 }
@@ -668,7 +671,8 @@ function saveSetting() {
 // ─── 성형기 관리 ───
 function openMachineModal() {
     loadMachineList();
-    new bootstrap.Modal(document.getElementById('machineModal')).show();
+    if (!_machineModal) { _machineModal = new bootstrap.Modal(document.getElementById('machineModal')); }
+    _machineModal.show();
 }
 
 function loadMachineList() {
