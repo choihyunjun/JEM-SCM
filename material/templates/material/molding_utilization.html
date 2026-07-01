@@ -197,6 +197,7 @@
                             {% for dd in ms.daily %}
                             <td style="padding:2px;{% if dd %}cursor:pointer;{% endif %}"
                                 {% if dd %}
+                                data-record-id="{{ dd.id }}"
                                 onclick="openInput({{ dd.id }})"
                                 class="{% if dd.input_completed %}{% if dd.util >= 90 %}bg-success text-white{% elif dd.util >= 70 %}bg-warning{% else %}bg-danger text-white{% endif %}{% elif dd.erp_synced %}erp-synced{% endif %}"
                                 title="{% if dd.input_completed %}가동률: {{ dd.util|floatformat:1 }}%{% elif dd.erp_synced %}ERP동기화 (클릭하여 입력){% endif %}"
@@ -515,9 +516,11 @@ var NIGHT_SHIFT_MIN = {{ setting.night_shift_minutes }};
 var currentWorkMinutes = 0;
 var _inputModal = null;
 var _machineModal = null;
+var currentCell = null;
 
 function openInput(recordId) {
     currentRecordId = recordId;
+    currentCell = document.querySelector('[data-record-id="' + recordId + '"]');
     fetch('{% url "material:api_molding_save_input" %}?record_id=' + recordId, {
         headers: {'X-Requested-With': 'XMLHttpRequest'}
     })
@@ -642,8 +645,20 @@ function saveInput() {
     .then(r => r.json())
     .then(data => {
         if (data.success) {
-            bootstrap.Modal.getInstance(document.getElementById('inputModal')).hide();
-            location.reload();
+            // 저장 성공 시 해당 셀만 즉시 업데이트 (전체 새로고침 없음)
+            if (currentCell) {
+                var rate = data.utilization_rate;
+                var cls, text;
+                if (rate >= 90) { cls = 'bg-success text-white'; }
+                else if (rate >= 70) { cls = 'bg-warning'; }
+                else { cls = 'bg-danger text-white'; }
+                currentCell.className = cls;
+                currentCell.style.cssText = 'padding:2px;cursor:pointer;';
+                currentCell.textContent = Math.round(rate);
+                currentCell.title = '가동률: ' + rate.toFixed(1) + '%';
+            }
+            _inputModal.hide();
+            btn.disabled = false;
         } else {
             alert('저장 실패: ' + data.error);
             btn.disabled = false;
