@@ -59,6 +59,7 @@
             <th>품목 요약</th>
             <th class="d-none d-md-table-cell">신청자</th>
             <th>신청일시</th>
+            <th class="d-none d-md-table-cell">승인일시</th>
             <th>상태</th>
             <th class="d-none d-md-table-cell">출고창고</th>
             <th class="d-none d-md-table-cell">이동창고</th>
@@ -97,6 +98,7 @@
             </td>
             <td class="d-none d-md-table-cell">{{ req.requested_by.get_full_name|default:req.requested_by.username }}</td>
             <td>{{ req.requested_at|date:"Y-m-d H:i" }}</td>
+            <td class="d-none d-md-table-cell">{{ req.approved_at|date:"Y-m-d H:i"|default:"-" }}</td>
             <td>
               {% if req.status == 'PENDING' %}
                 <span class="badge bg-warning text-dark">대기중</span>
