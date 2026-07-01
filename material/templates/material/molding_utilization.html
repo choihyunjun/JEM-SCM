@@ -542,10 +542,8 @@ function openInput(recordId) {
                     if (el) el.value = r.loss_details[cat];
                 }
             }
-            // ERP 기반 유실시간을 기준점으로 세팅
-            if (r.loss_minutes > 0) {
-                document.getElementById('inp_loss_total').value = r.loss_minutes;
-            }
+            // ERP 기반 유실시간을 기준점으로 세팅 (0이어도 항상 덮어씀)
+            document.getElementById('inp_loss_total').value = r.loss_minutes || 0;
             calcRates();
             if (!_inputModal) { _inputModal = new bootstrap.Modal(document.getElementById('inputModal')); }
             _inputModal.show();
