@@ -1533,9 +1533,7 @@ def incoming_history(request):
 @wms_permission_required('can_wms_stock_view')
 def process_tag_form(request):
     """현품표 발행 입력 폼"""
-    parts = Part.objects.all().order_by('part_no')
-    context = {'parts': parts}
-    return render(request, 'material/process_tag_form.html', context)
+    return render(request, 'material/process_tag_form.html', {})
 
 
 @wms_permission_required('can_wms_stock_view')
@@ -7282,7 +7280,6 @@ def raw_material_rack_manage(request):
         return redirect(f'/wms/raw-material/rack-manage/?section={section}')
 
     racks = RawMaterialRack.objects.filter(section=section).select_related('part')
-    parts = Part.objects.all().order_by('part_no')
 
     # 이미 랙에 배치된 품목 ID 목록
     assigned_parts = set(RawMaterialRack.objects.filter(part__isnull=False).values_list('part_id', flat=True))
@@ -7322,7 +7319,6 @@ def raw_material_rack_manage(request):
         'wall_a': wall_a,
         'wall_b': wall_b,
         'max_col': max_col,
-        'parts': parts,
         'assigned_parts': assigned_parts,
         'sections': RawMaterialRack.SECTION_CHOICES,
     }
