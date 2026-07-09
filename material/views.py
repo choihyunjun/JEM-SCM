@@ -8688,11 +8688,11 @@ def outgoing_history_excel(request):
 # =============================================================================
 
 @login_required
-@wms_permission_required('can_wms_outgoing_process')
+@wms_permission_required('can_wms_incoming_process')
 def api_check_open_orders(request):
     """
     품번으로 ERP 미입고 발주 직접 조회
-    - ERP API에서 최근 90일 발주 헤더 → 디테일 조회
+    - ERP API에서 최근 6개월 발주 헤더 → 디테일 조회
     - 해당 품번의 잔량(발주수량 - 입고수량) > 0 인 건만 반환
     """
     from django.http import JsonResponse
