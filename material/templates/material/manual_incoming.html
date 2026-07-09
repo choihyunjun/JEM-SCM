@@ -691,6 +691,7 @@
         fetch(url)
             .then(r => r.json())
             .then(data => {
+                console.log('[발주조회]', url, data);
                 var area = document.getElementById('orderMatchArea');
                 var sel = document.getElementById('selLinkedOrder');
 
