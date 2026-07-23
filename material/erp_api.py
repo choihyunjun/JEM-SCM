@@ -837,17 +837,22 @@ def compare_erp_stock(year=None):
 
     cache.set('erp_sync_progress', {'stage': '데이터 비교 중...', 'percent': 50}, timeout=300)
 
+    hidden_wh_codes = set(Warehouse.objects.filter(is_hidden_stock=True).values_list('code', flat=True))
+
     erp_map = {}
     erp_info = {}
     for item in (items or []):
+        wh_cd = item.get('whCd', '')
+        if wh_cd in hidden_wh_codes:
+            continue
         qty = int(item.get('invQt1', 0) or 0)
         if qty == 0:
             continue
-        key = (item.get('whCd', ''), item.get('itemCd', ''))
+        key = (wh_cd, item.get('itemCd', ''))
         erp_map[key] = qty
         erp_info[item.get('itemCd', '')] = item.get('itemNm', '')
 
-    scm_agg = MaterialStock.objects.values(
+    scm_agg = MaterialStock.objects.exclude(warehouse__is_hidden_stock=True).values(
         'warehouse__code', 'part__part_no'
     ).annotate(total=Sum('quantity'))
     scm_map = {}

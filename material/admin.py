@@ -8,7 +8,8 @@ from .models import (
 
 @admin.register(Warehouse)
 class WarehouseAdmin(admin.ModelAdmin):
-    list_display = ('code', 'name', 'is_active')
+    list_display = ('code', 'name', 'is_active', 'is_hidden_stock')
+    list_editable = ('is_hidden_stock',)
     search_fields = ('name', 'code')
 
 @admin.register(MaterialStock)

@@ -148,11 +148,11 @@ def dashboard(request):
     this_month_start = today.replace(day=1)
 
     # ========== 1. 재고 현황 통계 ==========
-    # 총 재고 품목 수 (재고가 있는 품목)
-    total_parts = MaterialStock.objects.filter(quantity__gt=0).values('part').distinct().count()
+    # 총 재고 품목 수 (재고가 있는 품목) - 재고 미표시 창고 제외
+    total_parts = MaterialStock.objects.filter(quantity__gt=0).exclude(warehouse__is_hidden_stock=True).values('part').distinct().count()
 
     # 총 재고 수량
-    total_qty = MaterialStock.objects.filter(quantity__gt=0).aggregate(total=Sum('quantity'))['total'] or 0
+    total_qty = MaterialStock.objects.filter(quantity__gt=0).exclude(warehouse__is_hidden_stock=True).aggregate(total=Sum('quantity'))['total'] or 0
 
     # 창고 수
     warehouse_count = Warehouse.objects.filter(is_active=True).count()
@@ -204,13 +204,13 @@ def dashboard(request):
         quantity__gt=0,
         lot_no__isnull=False,
         lot_no__lt=fifo_warning_date
-    ).select_related('warehouse', 'part').order_by('lot_no')[:10]
+    ).exclude(warehouse__is_hidden_stock=True).select_related('warehouse', 'part').order_by('lot_no')[:10]
 
     fifo_warning_count = MaterialStock.objects.filter(
         quantity__gt=0,
         lot_no__isnull=False,
         lot_no__lt=fifo_warning_date
-    ).count()
+    ).exclude(warehouse__is_hidden_stock=True).count()
 
     # ========== 6. 금일 입고/출고 이력 (이동·보정 제외, 최근 50건) ==========
     recent_inbound = MaterialTransaction.objects.select_related(
@@ -346,9 +346,9 @@ def dashboard_api(request):
     today = timezone.now().date()
     this_month_start = today.replace(day=1)
 
-    # KPI
-    total_parts = MaterialStock.objects.filter(quantity__gt=0).values('part').distinct().count()
-    total_qty = MaterialStock.objects.filter(quantity__gt=0).aggregate(total=Sum('quantity'))['total'] or 0
+    # KPI - 재고 미표시 창고 제외
+    total_parts = MaterialStock.objects.filter(quantity__gt=0).exclude(warehouse__is_hidden_stock=True).values('part').distinct().count()
+    total_qty = MaterialStock.objects.filter(quantity__gt=0).exclude(warehouse__is_hidden_stock=True).aggregate(total=Sum('quantity'))['total'] or 0
 
     today_in = MaterialTransaction.objects.filter(
         date__date=today, transaction_type__in=['IN_SCM', 'IN_MANUAL', 'IN_ERP', 'RCV_ERP']
@@ -366,7 +366,7 @@ def dashboard_api(request):
     fifo_warning_date = today - timedelta(days=30)
     fifo_warning_count = MaterialStock.objects.filter(
         quantity__gt=0, lot_no__isnull=False, lot_no__lt=fifo_warning_date
-    ).count()
+    ).exclude(warehouse__is_hidden_stock=True).count()
 
     # 입고 이력 (금일 최근 50건)
     inbound = list(MaterialTransaction.objects.filter(
@@ -447,8 +447,8 @@ def stock_list(request):
 
     # 2. 검색 버튼이 눌렸을 때만 DB 조회 실행
     if search_triggered == 'yes':
-        # 수량이 0이 아닌 것만 가져옴 (마이너스 재고 포함)
-        stocks = MaterialStock.objects.select_related('warehouse', 'part', 'part__vendor').exclude(quantity=0)
+        # 수량이 0이 아닌 것만 가져옴 (마이너스 재고 포함), 재고 미표시 창고 제외
+        stocks = MaterialStock.objects.select_related('warehouse', 'part', 'part__vendor').exclude(quantity=0).exclude(warehouse__is_hidden_stock=True)
 
         # 검색 및 필터 적용
         if q:
@@ -3157,7 +3157,7 @@ def stock_check_result(request):
     part_no = request.GET.get('part_no', '').strip()
     part_name = request.GET.get('part_name', '').strip()
 
-    stocks = MaterialStock.objects.select_related('warehouse', 'part').filter(quantity__gt=0)
+    stocks = MaterialStock.objects.select_related('warehouse', 'part').filter(quantity__gt=0).exclude(warehouse__is_hidden_stock=True)
 
     if warehouse_id:
         stocks = stocks.filter(warehouse_id=warehouse_id)

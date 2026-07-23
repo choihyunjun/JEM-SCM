@@ -20,6 +20,8 @@ class Warehouse(models.Model):
     is_active = models.BooleanField("사용여부", default=True)
     is_production = models.BooleanField("제조현장 여부", default=False,
                                          help_text="체크하면 재고이동 시 라벨 선택 모달이 표시됩니다.")
+    is_hidden_stock = models.BooleanField("재고 미표시", default=False,
+                                           help_text="체크하면 대시보드/재고조회/ERP 비교 등 재고 표시 화면에서 이 창고의 재고가 제외됩니다. (예: 연말 결산용 격리 창고)")
 
     def __str__(self):
         return f"[{self.code}] {self.name}"
