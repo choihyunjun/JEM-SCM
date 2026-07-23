@@ -11533,6 +11533,7 @@ def mold_repair_detail(request, pk):
         'first_article': obj.first_article,
         'ng_content': obj.ng_content,
     }
+    return JsonResponse(data)
 
 
 # =============================================================================
