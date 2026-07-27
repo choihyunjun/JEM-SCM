@@ -1,9 +1,24 @@
 {% extends 'material/production_base.html' %}
 
 {% block production_content %}
-<div class="container" style="max-width: 900px;">
+<style>
+    .tag-form .section-card { border: 1px solid #e2e5eb; border-radius: 8px; box-shadow: none; }
+    .tag-form .section-card .card-header {
+        background: #f8f9fb;
+        border-bottom: 1px solid #e2e5eb;
+        padding: .7rem 1.1rem;
+        font-size: .78rem;
+        font-weight: 700;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        color: #5b6472;
+    }
+    .tag-form .section-card .card-header i { color: #8b93a1; margin-right: .4rem; }
+    .tag-form .form-label { font-weight: 600; color: #3a3f47; font-size: .9rem; }
+</style>
+<div class="container tag-form" style="max-width: 900px;">
     <div class="py-3 text-center">
-        <h3 class="fw-bold">공정 현품표 발행</h3>
+        <h3 class="fw-bold" style="color:#2b2f36;">공정 현품표 발행</h3>
         <p class="text-muted mb-0">현품표를 출력할 품목 정보를 입력하세요</p>
     </div>
 
@@ -11,44 +26,44 @@
         {% csrf_token %}
 
         <!-- 품번 검색 -->
-        <div class="card shadow-sm mb-3">
-            <div class="card-header bg-primary text-white fw-bold">
-                <i class="bi bi-search me-2"></i>품목 정보
+        <div class="card section-card mb-3">
+            <div class="card-header">
+                <i class="bi bi-search"></i>품목 정보
             </div>
             <div class="card-body">
                 <div class="mb-3">
-                    <label class="form-label fw-bold">품번 검색 <span class="text-danger">*</span></label>
+                    <label class="form-label">품번 검색 <span class="text-danger">*</span></label>
                     <div class="input-group">
                         <input type="text" id="selectedPartNo" name="part_no" class="form-control form-control-lg" placeholder="품번을 검색하세요..." readonly required>
-                        <button type="button" class="btn btn-primary btn-lg" onclick="openPartSearchModal()">
+                        <button type="button" class="btn btn-dark" onclick="openPartSearchModal()">
                             <i class="bi bi-search"></i>
                         </button>
-                        <button type="button" class="btn btn-outline-danger btn-lg" onclick="clearPart()" title="초기화">
+                        <button type="button" class="btn btn-outline-secondary" onclick="clearPart()" title="초기화">
                             <i class="bi bi-x-lg"></i>
                         </button>
                     </div>
                 </div>
 
                 <div class="mb-0">
-                    <label class="form-label fw-bold">선택된 품명</label>
+                    <label class="form-label">선택된 품명</label>
                     <input type="text" id="selectedPartName" name="part_name" class="form-control bg-light" readonly>
                 </div>
             </div>
         </div>
 
         <!-- 수량 및 LOT -->
-        <div class="card shadow-sm mb-3">
-            <div class="card-header bg-success text-white fw-bold">
-                <i class="bi bi-123 me-2"></i>수량 및 LOT 정보
+        <div class="card section-card mb-3">
+            <div class="card-header">
+                <i class="bi bi-123"></i>수량 및 LOT 정보
             </div>
             <div class="card-body">
                 <div class="row mb-3">
                     <div class="col-6">
-                        <label class="form-label fw-bold">수량 <span class="text-danger">*</span></label>
+                        <label class="form-label">수량 <span class="text-danger">*</span></label>
                         <input type="number" name="quantity" class="form-control form-control-lg" placeholder="수량 입력" min="1" required>
                     </div>
                     <div class="col-6">
-                        <label class="form-label fw-bold">LOT 번호 <span class="text-danger">*</span></label>
+                        <label class="form-label">LOT 번호 <span class="text-danger">*</span></label>
                         <input type="text" id="lotInput" name="lot_no" class="form-control form-control-lg" placeholder="YYYYMMDD" required>
                     </div>
                 </div>
@@ -59,28 +74,28 @@
         </div>
 
         <!-- 인쇄 옵션 -->
-        <div class="card shadow-sm mb-3">
-            <div class="card-header bg-warning fw-bold">
-                <i class="bi bi-printer me-2"></i>인쇄 설정
+        <div class="card section-card mb-3">
+            <div class="card-header">
+                <i class="bi bi-printer"></i>인쇄 설정
             </div>
             <div class="card-body">
                 <div class="mb-3">
-                    <label class="form-label fw-bold">프린터 종류</label>
+                    <label class="form-label">프린터 종류</label>
                     <div class="btn-group w-100" role="group">
                         <input type="radio" class="btn-check" name="print_mode" id="modeRoll" value="roll" checked>
-                        <label class="btn btn-outline-primary" for="modeRoll">
+                        <label class="btn btn-outline-dark" for="modeRoll">
                             <i class="bi bi-printer"></i> 라벨 프린터
                         </label>
 
                         <input type="radio" class="btn-check" name="print_mode" id="modeSheet" value="sheet">
-                        <label class="btn btn-outline-primary" for="modeSheet">
+                        <label class="btn btn-outline-dark" for="modeSheet">
                             <i class="bi bi-file-earmark"></i> A4 프린터
                         </label>
                     </div>
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label fw-bold">라벨 크기</label>
+                    <label class="form-label">라벨 크기</label>
                     <select name="size_type" class="form-select">
                         <option value="small">소형 (60x70mm)</option>
                         <option value="medium" selected>표준 (100x60mm)</option>
@@ -89,7 +104,7 @@
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label fw-bold">성형 옵션</label>
+                    <label class="form-label">성형 옵션</label>
                     <div class="row g-2">
                         <div class="col-6">
                             <div class="form-check form-switch">
@@ -123,7 +138,7 @@
                 </div>
 
                 <div class="mb-0">
-                    <label class="form-label fw-bold">발행 매수</label>
+                    <label class="form-label">발행 매수</label>
                     <div class="input-group">
                         <button class="btn btn-outline-secondary" type="button" onclick="adjustCount(-1)">-</button>
                         <input type="number" id="printCount" name="print_count" class="form-control text-center fw-bold" value="1" min="1" max="50">
@@ -136,7 +151,7 @@
 
         <!-- 제출 버튼 -->
         <div class="d-grid gap-2">
-            <button type="submit" class="btn btn-primary btn-lg py-3 fw-bold">
+            <button type="submit" class="btn btn-dark btn-lg py-3 fw-bold">
                 <i class="bi bi-printer-fill me-2"></i>현품표 인쇄하기
             </button>
             <button type="reset" class="btn btn-outline-secondary" onclick="resetForm()">
@@ -150,8 +165,8 @@
 <div class="modal fade" id="partSearchModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title fw-bold"><i class="bi bi-search me-2"></i>품번 검색</h5>
+            <div class="modal-header" style="background:#2b2f36;">
+                <h5 class="modal-title fw-bold text-white"><i class="bi bi-search me-2"></i>품번 검색</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
