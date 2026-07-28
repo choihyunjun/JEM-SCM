@@ -910,8 +910,8 @@ document.querySelectorAll('.clickable-row').forEach(row => {
                 let mtLogHtml = '';
                 if (data.mt_logs && data.mt_logs.length) {
                     mtLogHtml = `<div class="d-flex justify-content-between align-items-center mt-4 mb-1">
-                        <h6 class="fw-bold mb-0">MT 이력</h6>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="recalcMtLog(${data.pk})">
+                        <h6 class="fw-bold mb-0" style="cursor:default;user-select:none;" onclick="mtLogTitleClick(this)">MT 이력</h6>
+                        <button type="button" class="btn btn-sm btn-outline-secondary d-none" id="recalcMtLogBtn" onclick="recalcMtLog(${data.pk})">
                             <i class="bi bi-arrow-repeat me-1"></i>누적숏트 보정
                         </button>
                     </div>`;
@@ -1065,6 +1065,21 @@ function fullResyncMold(pk) {
         }
     })
     .catch(err => alert('요청 실패: ' + err.message));
+}
+
+// ─── "MT 이력" 제목 3번 빠르게 클릭 -> 숨겨진 보정 버튼 노출 ───
+function mtLogTitleClick(el) {
+    const now = Date.now();
+    const last = parseInt(el.dataset.lastClick || '0', 10);
+    const count = (now - last < 600) ? (parseInt(el.dataset.clickCount || '0', 10) + 1) : 1;
+    el.dataset.lastClick = String(now);
+    el.dataset.clickCount = String(count);
+
+    if (count >= 3) {
+        const btn = document.getElementById('recalcMtLogBtn');
+        if (btn) btn.classList.remove('d-none');
+        el.dataset.clickCount = '0';
+    }
 }
 
 // ─── MT 이력 누적숏트 보정 (C/V수 등 정정 후 월별 숏트 재동기화한 다음 사용) ───
