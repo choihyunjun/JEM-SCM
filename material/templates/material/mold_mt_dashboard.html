@@ -923,7 +923,10 @@ document.querySelectorAll('.clickable-row').forEach(row => {
                 }
 
                 body.innerHTML = `
-                    <div class="d-flex justify-content-end mb-2">
+                    <div class="d-flex justify-content-end gap-2 mb-2">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="fullResyncMold(${data.pk})" title="C/V수 정정 등으로 과거 숏트 이력을 전부 다시 맞춰야 할 때, ERP 재조회부터 MT 이력 보정까지 한 번에 처리합니다.">
+                            <i class="bi bi-arrow-repeat me-1"></i>이 금형 재동기화
+                        </button>
                         <button class="btn btn-sm btn-outline-primary" id="editMoldBtn" onclick="toggleEditMode(${data.pk})">
                             <i class="bi bi-pencil me-1"></i>수정
                         </button>
@@ -1025,6 +1028,30 @@ function submitEditMold(pk) {
     var formData = new FormData(form);
 
     fetch('/wms/api/mold/mt/' + pk + '/edit/', {
+        method: 'POST',
+        body: formData,
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('오류: ' + data.error);
+        }
+    })
+    .catch(err => alert('요청 실패: ' + err.message));
+}
+
+// ─── 이 금형만 골라서 ERP 재조회 + 월별 숏트 + MT 이력 누적숏트 한 번에 재계산 ───
+function fullResyncMold(pk) {
+    if (!confirm('이 금형의 최초 숏트 이력 시점부터 지금까지 ERP 생산실적을 다시 조회해서\n월별 숏트와 MT 이력을 전부 재계산합니다. 계속할까요?')) return;
+
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const formData = new FormData();
+    formData.append('csrfmiddlewaretoken', csrfToken);
+
+    fetch('/wms/api/mold/mt/' + pk + '/full-resync/', {
         method: 'POST',
         body: formData,
     })

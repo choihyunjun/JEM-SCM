@@ -158,6 +158,7 @@ urlpatterns = [
     path('api/mold/mt/<int:pk>/', views.api_mold_mt_detail, name='api_mold_mt_detail'),
     path('api/mold/mt/<int:pk>/edit/', views.api_mold_mt_edit, name='api_mold_mt_edit'),
     path('api/mold/mt/<int:pk>/recalc-log/', views.mold_mt_log_recalc, name='mold_mt_log_recalc'),
+    path('api/mold/mt/<int:pk>/full-resync/', views.mold_mt_full_resync, name='mold_mt_full_resync'),
     path('mold/mt/erp-sync/', views.mold_mt_erp_sync, name='mold_mt_erp_sync'),
     path('api/mold/mt/from-molding-diff/', views.api_mold_from_molding_diff, name='api_mold_from_molding_diff'),
     path('api/mold/mt/bulk-add-from-molding/', views.api_mold_bulk_add_from_molding, name='api_mold_bulk_add_from_molding'),

@@ -10950,25 +10950,18 @@ def api_mold_mt_edit(request, pk):
     return JsonResponse({'success': True, 'message': f'{mold.part_no} 수정 완료'})
 
 
-@login_required
-@wms_permission_required('can_wms_stock_view')
-def mold_mt_log_recalc(request, pk):
+def _recalc_mold_mt_logs(mold):
     """MT 이력(누적숏트 스냅샷) 재보정
-    - C/V수 등이 잘못 입력되어 월별 숏트 이력을 재동기화한 뒤, 과거 MT 완료 시점에
-      찍혀 있던 누적숏트 스냅샷도 현재의 월별 이력 기준으로 다시 계산한다.
+    - 월별 숏트 이력 기준으로 각 MT 완료 시점의 누적숏트를 다시 계산해 저장한다.
     - 월 단위로만 재구성 가능하므로, 같은 달에 MT가 여러 번 있었던 경우
       해당 월들의 값은 모두 그 달 말 기준 누적값으로 동일하게 표시된다.
+    - 가장 최근 MT의 누적숏트로 mold.last_mt_shots도 함께 맞춘다 (MT 진행률 계산에 사용됨).
     """
-    from .models import MoldMaster as MoldMasterModel
-
-    if request.method != 'POST':
-        return JsonResponse({'success': False, 'error': 'POST만 허용'}, status=405)
-
-    mold = get_object_or_404(MoldMasterModel, pk=pk)
     shot_records = list(mold.shot_records.order_by('year', 'month').values('year', 'month', 'shots'))
 
     updated = 0
-    for log in mold.mt_logs.all():
+    latest_log = None
+    for log in mold.mt_logs.order_by('mt_date'):
         cumulative = mold.total_shots_prev
         for r in shot_records:
             if (r['year'], r['month']) <= (log.mt_date.year, log.mt_date.month):
@@ -10977,10 +10970,101 @@ def mold_mt_log_recalc(request, pk):
             log.accumulated_shots = cumulative
             log.save(update_fields=['accumulated_shots'])
             updated += 1
+        latest_log = log
+
+    if latest_log is not None and mold.last_mt_shots != latest_log.accumulated_shots:
+        mold.last_mt_shots = latest_log.accumulated_shots
+        mold.save(update_fields=['last_mt_shots', 'updated_at'])
+
+    return updated
+
+
+@login_required
+@wms_permission_required('can_wms_stock_view')
+def mold_mt_log_recalc(request, pk):
+    """MT 이력 누적숏트 보정 API (C/V수 정정 등으로 월별 숏트를 이미 재동기화한 뒤 사용)"""
+    from .models import MoldMaster as MoldMasterModel
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST만 허용'}, status=405)
+
+    mold = get_object_or_404(MoldMasterModel, pk=pk)
+    updated = _recalc_mold_mt_logs(mold)
 
     return JsonResponse({
         'success': True,
         'message': f'{mold.part_no} MT 이력 {updated}건 보정 완료 (월 단위 재계산이라 같은 달 내 여러 건은 동일한 값으로 표시됩니다)'
+    })
+
+
+@login_required
+@wms_permission_required('can_wms_stock_view')
+def mold_mt_full_resync(request, pk):
+    """이 금형만 골라서 최초 숏트 이력 시점부터 지금까지 ERP 생산실적을 한 번에 재조회하고,
+    월별 숏트 + MT 이력 누적숏트를 한 번의 클릭으로 전부 재계산한다.
+    (C/V수를 잘못 입력해뒀다가 정정한 경우, 매달 일일이 ERP 동기화를 돌릴 필요 없이 이걸로 한 번에 처리)
+    """
+    from .models import MoldMaster as MoldMasterModel, MoldShotRecord
+    from .erp_api import call_erp_api
+    from django.conf import settings as django_settings
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST만 허용'}, status=405)
+
+    mold = get_object_or_404(MoldMasterModel, pk=pk)
+
+    earliest = mold.shot_records.order_by('year', 'month').first()
+    if not earliest:
+        return JsonResponse({'success': False, 'error': '재동기화할 월별 숏트 이력이 없습니다. 먼저 ERP 동기화로 숏트 이력을 만들어주세요.'})
+
+    today = timezone.localtime().date()
+    date_from = f'{earliest.year}{earliest.month:02d}01'
+    date_to = today.strftime('%Y%m%d')
+
+    body = {
+        'coCd': django_settings.ERP_COMPANY_CODE,
+        'wrDtFrom': date_from,
+        'wrDtTo': date_to,
+    }
+    ok, raw, err = call_erp_api('/apiproxy/api20A03S00901', body)
+    if not ok:
+        return JsonResponse({'success': False, 'error': f'ERP 조회 실패: {err}'})
+
+    data = (raw.get('resultData', []) or []) if raw else []
+
+    monthly_agg = {}
+    for r in data:
+        item_cd = (r.get('itemCd') or '').strip()
+        if item_cd != mold.part_no:
+            continue
+        wr_dt = (r.get('wrDt') or '').strip()
+        if len(wr_dt) < 6:
+            continue
+        year, month = int(wr_dt[:4]), int(wr_dt[4:6])
+        work_qt = int(float(r.get('workQt', 0) or 0))
+        monthly_agg[(year, month)] = monthly_agg.get((year, month), 0) + work_qt
+
+    cv = mold.cv_count if mold.cv_count > 0 else 1
+    synced = 0
+    try:
+        with transaction.atomic():
+            for (year, month), total_qty in monthly_agg.items():
+                shots = total_qty // cv
+                if shots > 0:
+                    MoldShotRecord.objects.update_or_create(
+                        mold=mold, year=year, month=month,
+                        defaults={'shots': shots, 'source': 'ERP'}
+                    )
+                    synced += 1
+
+            log_updated = _recalc_mold_mt_logs(mold)
+    except Exception as e:
+        logger.exception('금형 개별 재동기화 오류')
+        return JsonResponse({'success': False, 'error': str(e)})
+
+    return JsonResponse({
+        'success': True,
+        'message': f'{mold.part_no} 재동기화 완료: 월별 숏트 {synced}건 갱신, MT 이력 {log_updated}건 보정 (C/V수 {cv} 기준, {earliest.year}-{earliest.month:02d}~{today:%Y-%m} 재조회)'
     })
 
 
