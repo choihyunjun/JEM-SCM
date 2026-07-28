@@ -10884,7 +10884,7 @@ def api_mold_mt_detail(request, pk):
 
     # MT 이력
     mt_logs = list(mold.mt_logs.order_by('-mt_date').values(
-        'mt_date', 'accumulated_shots', 'description', 'performed_by', 'created_at'
+        'id', 'mt_date', 'accumulated_shots', 'description', 'performed_by', 'created_at'
     ))
 
     data = {
@@ -10995,6 +10995,27 @@ def mold_mt_log_recalc(request, pk):
         'success': True,
         'message': f'{mold.part_no} MT 이력 {updated}건 보정 완료 (월 단위 재계산이라 같은 달 내 여러 건은 동일한 값으로 표시됩니다)'
     })
+
+
+@login_required
+@wms_permission_required('can_wms_stock_view')
+def mold_mt_log_delete(request, log_id):
+    """MT 이력 개별 삭제 (월 단위 재계산으로 값이 겹치는 중복 항목 정리용)"""
+    from .models import MoldMTLog
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST만 허용'}, status=405)
+
+    log = get_object_or_404(MoldMTLog, pk=log_id)
+    mold = log.mold
+    log.delete()
+
+    latest = mold.mt_logs.order_by('-mt_date').first()
+    if latest and mold.last_mt_shots != latest.accumulated_shots:
+        mold.last_mt_shots = latest.accumulated_shots
+        mold.save(update_fields=['last_mt_shots', 'updated_at'])
+
+    return JsonResponse({'success': True, 'message': 'MT 이력이 삭제되었습니다.'})
 
 
 @login_required

@@ -915,9 +915,10 @@ document.querySelectorAll('.clickable-row').forEach(row => {
                             <i class="bi bi-arrow-repeat me-1"></i>누적숏트 보정
                         </button>
                     </div>`;
-                    mtLogHtml += '<table class="table table-sm table-bordered"><thead class="table-light"><tr><th>일자</th><th>누적숏트</th><th>담당자</th><th>작업내용</th></tr></thead><tbody>';
+                    mtLogHtml += '<table class="table table-sm table-bordered"><thead class="table-light"><tr><th>일자</th><th>누적숏트</th><th>담당자</th><th>작업내용</th><th class="d-none mt-log-delete-col" style="width:40px;"></th></tr></thead><tbody>';
                     data.mt_logs.forEach(r => {
-                        mtLogHtml += `<tr><td>${r.mt_date}</td><td>${r.accumulated_shots.toLocaleString()}</td><td>${r.performed_by || '-'}</td><td>${r.description || '-'}</td></tr>`;
+                        mtLogHtml += `<tr><td>${r.mt_date}</td><td>${r.accumulated_shots.toLocaleString()}</td><td>${r.performed_by || '-'}</td><td>${r.description || '-'}</td>` +
+                            `<td class="d-none mt-log-delete-col text-center p-0"><button type="button" class="btn btn-sm btn-outline-danger border-0 py-0" onclick="deleteMtLog(${r.id}, ${data.pk})" title="이 MT 이력 삭제"><i class="bi bi-x-lg"></i></button></td></tr>`;
                     });
                     mtLogHtml += '</tbody></table>';
                 }
@@ -1078,8 +1079,33 @@ function mtLogTitleClick(el) {
     if (count >= 3) {
         const btn = document.getElementById('recalcMtLogBtn');
         if (btn) btn.classList.remove('d-none');
+        document.querySelectorAll('.mt-log-delete-col').forEach(c => c.classList.remove('d-none'));
         el.dataset.clickCount = '0';
     }
+}
+
+// ─── MT 이력 개별 삭제 (중복/불필요한 항목 정리용, 3번 클릭으로 노출된 X버튼) ───
+function deleteMtLog(logId, moldPk) {
+    if (!confirm('이 MT 이력을 삭제하시겠습니까?\n삭제하면 되돌릴 수 없습니다.')) return;
+
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const formData = new FormData();
+    formData.append('csrfmiddlewaretoken', csrfToken);
+
+    fetch('/wms/api/mold/mt/log/' + logId + '/delete/', {
+        method: 'POST',
+        body: formData,
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('오류: ' + data.error);
+        }
+    })
+    .catch(err => alert('요청 실패: ' + err.message));
 }
 
 // ─── MT 이력 누적숏트 보정 (C/V수 등 정정 후 월별 숏트 재동기화한 다음 사용) ───
