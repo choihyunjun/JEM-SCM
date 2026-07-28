@@ -909,7 +909,13 @@ document.querySelectorAll('.clickable-row').forEach(row => {
 
                 let mtLogHtml = '';
                 if (data.mt_logs && data.mt_logs.length) {
-                    mtLogHtml = '<h6 class="mt-4 fw-bold">MT 이력</h6><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>일자</th><th>누적숏트</th><th>담당자</th><th>작업내용</th></tr></thead><tbody>';
+                    mtLogHtml = `<div class="d-flex justify-content-between align-items-center mt-4 mb-1">
+                        <h6 class="fw-bold mb-0">MT 이력</h6>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="recalcMtLog(${data.pk})">
+                            <i class="bi bi-arrow-repeat me-1"></i>누적숏트 보정
+                        </button>
+                    </div>`;
+                    mtLogHtml += '<table class="table table-sm table-bordered"><thead class="table-light"><tr><th>일자</th><th>누적숏트</th><th>담당자</th><th>작업내용</th></tr></thead><tbody>';
                     data.mt_logs.forEach(r => {
                         mtLogHtml += `<tr><td>${r.mt_date}</td><td>${r.accumulated_shots.toLocaleString()}</td><td>${r.performed_by || '-'}</td><td>${r.description || '-'}</td></tr>`;
                     });
@@ -1019,6 +1025,30 @@ function submitEditMold(pk) {
     var formData = new FormData(form);
 
     fetch('/wms/api/mold/mt/' + pk + '/edit/', {
+        method: 'POST',
+        body: formData,
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('오류: ' + data.error);
+        }
+    })
+    .catch(err => alert('요청 실패: ' + err.message));
+}
+
+// ─── MT 이력 누적숏트 보정 (C/V수 등 정정 후 월별 숏트 재동기화한 다음 사용) ───
+function recalcMtLog(pk) {
+    if (!confirm('현재 월별 숏트 이력 기준으로 MT 이력의 누적숏트를 다시 계산합니다.\n(같은 달에 여러 건이 있으면 동일한 값으로 표시됩니다) 계속할까요?')) return;
+
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const formData = new FormData();
+    formData.append('csrfmiddlewaretoken', csrfToken);
+
+    fetch('/wms/api/mold/mt/' + pk + '/recalc-log/', {
         method: 'POST',
         body: formData,
     })

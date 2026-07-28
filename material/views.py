@@ -10952,6 +10952,40 @@ def api_mold_mt_edit(request, pk):
 
 @login_required
 @wms_permission_required('can_wms_stock_view')
+def mold_mt_log_recalc(request, pk):
+    """MT 이력(누적숏트 스냅샷) 재보정
+    - C/V수 등이 잘못 입력되어 월별 숏트 이력을 재동기화한 뒤, 과거 MT 완료 시점에
+      찍혀 있던 누적숏트 스냅샷도 현재의 월별 이력 기준으로 다시 계산한다.
+    - 월 단위로만 재구성 가능하므로, 같은 달에 MT가 여러 번 있었던 경우
+      해당 월들의 값은 모두 그 달 말 기준 누적값으로 동일하게 표시된다.
+    """
+    from .models import MoldMaster as MoldMasterModel
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST만 허용'}, status=405)
+
+    mold = get_object_or_404(MoldMasterModel, pk=pk)
+    shot_records = list(mold.shot_records.order_by('year', 'month').values('year', 'month', 'shots'))
+
+    updated = 0
+    for log in mold.mt_logs.all():
+        cumulative = mold.total_shots_prev
+        for r in shot_records:
+            if (r['year'], r['month']) <= (log.mt_date.year, log.mt_date.month):
+                cumulative += r['shots']
+        if log.accumulated_shots != cumulative:
+            log.accumulated_shots = cumulative
+            log.save(update_fields=['accumulated_shots'])
+            updated += 1
+
+    return JsonResponse({
+        'success': True,
+        'message': f'{mold.part_no} MT 이력 {updated}건 보정 완료 (월 단위 재계산이라 같은 달 내 여러 건은 동일한 값으로 표시됩니다)'
+    })
+
+
+@login_required
+@wms_permission_required('can_wms_stock_view')
 def mold_mt_erp_sync(request):
     """ERP 생산실적 데이터로 금형 숏트수 동기화 (양품+불량 포함)"""
     from .models import MoldMaster as MoldMasterModel, MoldShotRecord
