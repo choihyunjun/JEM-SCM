@@ -270,24 +270,43 @@
             <form id="bulkShortageForm" method="post" action="{% url 'bulk_shortage_order' %}">
                 {% csrf_token %}
                 <div class="modal-body">
-                    <!-- 업체 필터 영역 (선택사항) -->
-                    <div class="mb-3">
-                        <div class="d-flex align-items-center gap-2">
-                            <label class="form-label fw-bold mb-0"><i class="bi bi-funnel me-1"></i>업체 필터</label>
-                            <span class="text-muted small">(선택사항)</span>
-                        </div>
-                        <div class="d-flex gap-2 mt-2">
-                            <div class="position-relative flex-grow-1">
-                                <input type="text" id="vendorSearchInput" class="form-control form-control-sm"
-                                       placeholder="협력사명 검색..." autocomplete="off">
-                                <div id="vendorSearchResults" class="list-group position-absolute w-100 shadow"
-                                     style="z-index: 1050; max-height: 250px; overflow-y: auto; display: none;"></div>
+                    <div class="row g-3 mb-3">
+                        <!-- 업체 필터 영역 (선택사항) -->
+                        <div class="col-md-7">
+                            <div class="d-flex align-items-center gap-2">
+                                <label class="form-label fw-bold mb-0"><i class="bi bi-funnel me-1"></i>업체 필터</label>
+                                <span class="text-muted small">(선택사항)</span>
                             </div>
-                            <div id="selectedVendorDisplay" style="display: none;">
-                                <span class="badge bg-primary px-3 py-2">
-                                    <span id="selectedVendorName"></span>
-                                    <button type="button" class="btn-close btn-close-white ms-2" style="font-size: 0.5rem;" onclick="clearSelectedVendor()"></button>
+                            <div class="d-flex gap-2 mt-2">
+                                <div class="position-relative flex-grow-1">
+                                    <input type="text" id="vendorSearchInput" class="form-control form-control-sm"
+                                           placeholder="협력사명 검색..." autocomplete="off">
+                                    <div id="vendorSearchResults" class="list-group position-absolute w-100 shadow"
+                                         style="z-index: 1050; max-height: 250px; overflow-y: auto; display: none;"></div>
+                                </div>
+                                <div id="selectedVendorDisplay" style="display: none;">
+                                    <span class="badge bg-primary px-3 py-2">
+                                        <span id="selectedVendorName"></span>
+                                        <button type="button" class="btn-close btn-close-white ms-2" style="font-size: 0.5rem;" onclick="clearSelectedVendor()"></button>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 발주 기준 기간 (해당 기간 내 최대 부족수량으로 발주) -->
+                        <div class="col-md-5">
+                            <div class="d-flex align-items-center gap-2">
+                                <label class="form-label fw-bold mb-0"><i class="bi bi-calendar-range me-1"></i>발주 기준 기간</label>
+                                <span class="text-muted small" title="선택한 기간 안에서 가장 큰 부족수량을 발주수량으로 잡습니다.">
+                                    <i class="bi bi-question-circle"></i>
                                 </span>
+                            </div>
+                            <div class="d-flex gap-2 mt-2 align-items-center">
+                                <input type="date" id="shortagePeriodStart" class="form-control form-control-sm"
+                                       value="{{ date_range.0|date:'Y-m-d' }}" min="{{ date_range.0|date:'Y-m-d' }}" max="{{ date_range|last|date:'Y-m-d' }}">
+                                <span class="text-muted small">~</span>
+                                <input type="date" id="shortagePeriodEnd" class="form-control form-control-sm"
+                                       value="{{ date_range|last|date:'Y-m-d' }}" min="{{ date_range.0|date:'Y-m-d' }}" max="{{ date_range|last|date:'Y-m-d' }}">
                             </div>
                         </div>
                     </div>
@@ -305,8 +324,8 @@
                                         <th style="width: 40px;"><input type="checkbox" id="checkAll" checked></th>
                                         <th style="width: 120px;">업체</th>
                                         <th style="width: 150px;">품번</th>
-                                        <th style="width: 90px;">부족일</th>
-                                        <th style="width: 90px;">부족수량</th>
+                                        <th style="width: 90px;">최초 부족일</th>
+                                        <th style="width: 90px;">기간내 최대부족</th>
                                         <th style="width: 120px;">납기요청일</th>
                                         <th style="width: 100px;">발주수량</th>
                                     </tr>
@@ -377,19 +396,42 @@ const shortageData = [];
     {% endfor %}
 {% endfor %}
 
-// 품번+업체 기준으로 중복 제거 (첫 번째 부족일만 사용)
-const uniqueShortages = [];
-const seenKeys = new Set();
-shortageData.forEach(item => {
-    const key = item.partNo + '_' + item.vendor;
-    if (!seenKeys.has(key)) {
-        seenKeys.add(key);
-        uniqueShortages.push(item);
-    }
-});
+// 품번+업체 기준으로 그룹화: 선택한 기간 내에서 가장 큰(가장 마이너스인) 부족수량을 발주 기준으로 사용.
+// 납기요청일은 그 기간 내 최초 부족일 기준(그 전에 입고돼야 첫 부족 시점부터 안 막힘).
+function groupShortages(periodStart, periodEnd, vendorFilter) {
+    const filtered = shortageData.filter(item => {
+        if (periodStart && item.shortageDate < periodStart) return false;
+        if (periodEnd && item.shortageDate > periodEnd) return false;
+        if (vendorFilter && item.vendor !== vendorFilter) return false;
+        return true;
+    });
 
-// 부족품이 있는 업체 목록 추출
-const vendorsWithShortage = [...new Set(uniqueShortages.map(item => item.vendor))].sort();
+    const groups = {};
+    filtered.forEach(item => {
+        const key = item.partNo + '_' + item.vendor;
+        if (!groups[key]) {
+            groups[key] = {
+                vendor: item.vendor, partNo: item.partNo, partName: item.partName,
+                worstQty: item.shortageQty, earliestDate: item.shortageDate,
+            };
+        } else {
+            if (item.shortageQty < groups[key].worstQty) groups[key].worstQty = item.shortageQty;
+            if (item.shortageDate < groups[key].earliestDate) groups[key].earliestDate = item.shortageDate;
+        }
+    });
+
+    return Object.values(groups).map(g => ({
+        vendor: g.vendor, partNo: g.partNo, partName: g.partName,
+        shortageDate: g.earliestDate, shortageQty: g.worstQty, dueDate: g.earliestDate,
+    }));
+}
+
+function currentPeriod() {
+    return {
+        start: document.getElementById('shortagePeriodStart').value,
+        end: document.getElementById('shortagePeriodEnd').value,
+    };
+}
 
 // 이미 등록된 미확인 발주 목록 (품번_납기일 형태) - 정확히 일치하는 경우
 const pendingOrderKeys = new Set([
@@ -415,6 +457,11 @@ function openBulkShortageModal() {
 
     new bootstrap.Modal(document.getElementById('bulkShortageModal')).show();
 }
+
+// 발주 기준 기간 변경 시 현재 업체 필터를 유지한 채로 재계산
+['shortagePeriodStart', 'shortagePeriodEnd'].forEach(id => {
+    document.getElementById(id).addEventListener('change', () => showShortages(selectedVendorForBulk));
+});
 
 // 업체 검색 기능
 let vendorSearchTimeout = null;
@@ -444,13 +491,16 @@ vendorSearchInput.addEventListener('input', function() {
 
     vendorSearchTimeout = setTimeout(() => {
         vendorSearchResults.innerHTML = '';
+        const period = currentPeriod();
+        const currentGroups = groupShortages(period.start, period.end, null);
+        const vendorsWithShortage = [...new Set(currentGroups.map(g => g.vendor))].sort();
         const filtered = vendorsWithShortage.filter(v => v.toLowerCase().includes(query));
 
         if (filtered.length === 0) {
             vendorSearchResults.innerHTML = '<div class="list-group-item text-muted">부족품이 있는 협력사가 없습니다</div>';
         } else {
             filtered.forEach(vendor => {
-                const count = uniqueShortages.filter(s => s.vendor === vendor).length;
+                const count = currentGroups.filter(s => s.vendor === vendor).length;
                 const item = document.createElement('button');
                 item.type = 'button';
                 item.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center';
@@ -500,10 +550,9 @@ function showShortages(vendorFilter) {
     const container = document.getElementById('shortageTableContainer');
     tbody.innerHTML = '';
 
-    // vendorFilter가 null이면 전체, 있으면 해당 업체만
-    const shortages = vendorFilter
-        ? uniqueShortages.filter(item => item.vendor === vendorFilter)
-        : uniqueShortages;
+    // 선택한 기간(+업체) 기준으로 재그룹화: 기간 내 최대 부족수량을 발주 기준으로 사용
+    const period = currentPeriod();
+    const shortages = groupShortages(period.start, period.end, vendorFilter);
 
     if (shortages.length === 0) {
         container.style.display = 'none';
@@ -527,9 +576,10 @@ function showShortages(vendorFilter) {
             }
         });
 
+        const vendorCountInPeriod = new Set(shortages.map(s => s.vendor)).size;
         let infoHtml = vendorFilter
             ? `<strong>${vendorFilter}</strong> 부족 품목 <strong>${shortages.length}</strong>건`
-            : `전체 부족 품목 <strong>${shortages.length}</strong>건 (${vendorsWithShortage.length}개 업체)`;
+            : `전체 부족 품목 <strong>${shortages.length}</strong>건 (${vendorCountInPeriod}개 업체)`;
 
         if (exactMatchCount > 0) {
             infoHtml += ` <span class="text-info">| 발주중 ${exactMatchCount}건</span>`;
