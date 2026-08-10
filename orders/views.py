@@ -1955,8 +1955,17 @@ def incoming_cancel(request):
         elif mode == 'all':
             Incoming.objects.filter(delivery_order_no=do_no).delete()
             if do:
-                do.is_received = False
-                do.save()
+                # 같은 납품서에 연결된 다른 입고 건(수입검사 등)이 남아있으면 상태를 건드리지 않음
+                other_items_exist = False
+                if MaterialTransaction is not None:
+                    other_items_exist = MaterialTransaction.objects.filter(
+                        ref_delivery_order=do_no,
+                        transaction_type__in=['IN_MANUAL', 'IN_SCM', 'IN_ERP']
+                    ).exists()
+
+                if not other_items_exist:
+                    do.is_received = False
+                    do.save()
 
             messages.success(request, f"납품서 {do_no} 입고 취소 완료. (품목 데이터는 보존됩니다)")
 

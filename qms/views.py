@@ -1504,9 +1504,21 @@ def import_inspection_detail(request, pk):
                     if target_do:
                         if qty_good > 0:
                             target_do.status = "APPROVED"
-                        elif qty_bad == total_input and target_do.status != "APPROVED":
-                            target_do.status = "REJECTED"
-                        target_do.save()
+                            target_do.save()
+                        elif qty_bad == total_input:
+                            # 전수불량 - 같은 납품서에 다른 품목(입고 건)이 남아있는지 확인
+                            other_items_exist = MaterialTransaction.objects.filter(
+                                ref_delivery_order=ref_do_no,
+                                transaction_type__in=['IN_MANUAL', 'IN_SCM', 'IN_ERP']
+                            ).exclude(pk=origin_trx.pk).exists()
+
+                            if not other_items_exist:
+                                # 이 납품서의 유일한 품목이 전량 불량 -> 사실상 취소와 같으므로 재처리 가능 상태로 리셋
+                                target_do.status = 'PENDING'
+                                target_do.is_received = False
+                            elif target_do.status != "APPROVED":
+                                target_do.status = "REJECTED"
+                            target_do.save()
 
                     if qty_bad > 0:
                         ReturnLog.objects.create(
