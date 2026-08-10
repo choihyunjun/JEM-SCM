@@ -267,6 +267,12 @@ def order_list(request):
     if (user.is_superuser or not user_vendor) and selected_vendor:
         orders = orders.filter(vendor_id=selected_vendor)
 
+    selected_vendor_name = ''
+    if selected_vendor:
+        selected_vendor_obj = next((v for v in vendor_list if str(v.id) == str(selected_vendor)), None)
+        if selected_vendor_obj:
+            selected_vendor_name = selected_vendor_obj.name
+
     status_filter = request.GET.get('status')
     if status_filter:
         if status_filter == 'unapproved':
@@ -428,6 +434,7 @@ def order_list(request):
     return render(request, 'order_list.html', {
         'orders': orders, 'user_name': user.username, 'vendor_name': vendor_name,
         'q': q, 'vendor_list': vendor_list, 'selected_vendor': selected_vendor,
+        'selected_vendor_name': selected_vendor_name,
         'status_filter': status_filter, 'start_date': start_date, 'end_date': end_date,
         'active_menu': 'list', 'current_sort': sort_by,
         'overdue_orders': overdue_list,
