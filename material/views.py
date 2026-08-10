@@ -908,6 +908,15 @@ def cancel_manual_incoming(request, trx_id):
             part = trx.part
             lot_no = trx.lot_no
 
+            # 같은 납품서에 연결된 다른 입고 건이 남아있는지 확인 (전부 취소된 경우에만 납품서를 재처리 가능 상태로 되돌림)
+            ref_do_no = trx.ref_delivery_order
+            other_items_exist = False
+            if ref_do_no:
+                other_items_exist = MaterialTransaction.objects.filter(
+                    ref_delivery_order=ref_do_no,
+                    transaction_type__in=['IN_MANUAL', 'IN_SCM', 'IN_ERP']
+                ).exclude(pk=trx.pk).exists()
+
             # 수입검사 판정 완료 상태면 → 목표/부적합 창고 재고도 원복
             inspection = None
             if ImportInspection:
@@ -1002,7 +1011,21 @@ def cancel_manual_incoming(request, trx_id):
             # 트랜잭션 삭제
             trx.delete()
 
-        messages.success(request, f"입고 건 [{trx_no}] 삭제 완료 (재고 {trx_qty}개 차감)")
+            # 납품서에 남은 입고 건이 없으면 재처리 가능하도록 납품서 상태 리셋
+            do_reset = False
+            if ref_do_no and not other_items_exist:
+                from orders.models import DeliveryOrder
+                do = DeliveryOrder.objects.filter(order_no=ref_do_no).first()
+                if do:
+                    do.is_received = False
+                    do.status = 'PENDING'
+                    do.save()
+                    do_reset = True
+
+        if do_reset:
+            messages.success(request, f"입고 건 [{trx_no}] 삭제 완료 (재고 {trx_qty}개 차감). 납품서 [{ref_do_no}]가 재처리 가능 상태로 초기화되었습니다.")
+        else:
+            messages.success(request, f"입고 건 [{trx_no}] 삭제 완료 (재고 {trx_qty}개 차감)")
 
     except Exception as e:
         messages.error(request, f"취소 처리 중 오류 발생: {str(e)}")
