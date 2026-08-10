@@ -1246,13 +1246,17 @@ def sync_erp_vendors():
     """
     ERP 거래처 → SCM Vendor 동기화
     - ERP trCd 기준으로 매칭 (erp_code 또는 code)
-    - 없으면 신규 생성, 있으면 업데이트
-    Returns: dict with created, updated, skipped, errors, total
+    - 없으면 신규 생성, 있으면 업데이트 (실제 값이 달라진 경우만 "갱신"으로 집계)
+    Returns: dict with created, updated, unchanged, skipped, errors, total,
+             created_list, updated_list (신규/갱신 상세 내역)
     """
     from orders.models import Vendor
     from django.core.cache import cache
 
-    result = {'created': 0, 'updated': 0, 'skipped': 0, 'errors': [], 'total': 0}
+    result = {
+        'created': 0, 'updated': 0, 'unchanged': 0, 'skipped': 0, 'errors': [], 'total': 0,
+        'created_list': [], 'updated_list': [],
+    }
 
     cache.set('erp_sync_progress', {'stage': 'ERP 거래처 조회 중...', 'percent': 5}, timeout=300)
 
@@ -1291,7 +1295,16 @@ def sync_erp_vendors():
                 vendor = Vendor.objects.filter(code=tr_cd).first()
 
             if vendor:
-                # 업데이트
+                # 업데이트 (변경 전 값 저장 후 실제 변경 여부 비교)
+                before = {
+                    'name': vendor.name,
+                    'biz_registration_number': vendor.biz_registration_number,
+                    'representative': vendor.representative,
+                    'biz_type': vendor.biz_type,
+                    'biz_item': vendor.biz_item,
+                    'address': vendor.address,
+                }
+
                 vendor.name = display_name
                 vendor.erp_code = tr_cd
                 vendor.biz_registration_number = (item.get('regNb') or '').strip() or vendor.biz_registration_number
@@ -1302,8 +1315,27 @@ def sync_erp_vendors():
                 addr2 = (item.get('addr2') or '').strip()
                 if addr1:
                     vendor.address = f'{addr1} {addr2}'.strip()
-                vendor.save()
-                result['updated'] += 1
+
+                field_labels = [
+                    ('name', '거래처명'), ('biz_registration_number', '사업자번호'),
+                    ('representative', '대표자'), ('biz_type', '업태'),
+                    ('biz_item', '종목'), ('address', '주소'),
+                ]
+                changes = []
+                for field, label in field_labels:
+                    old_val = before[field] or ''
+                    new_val = getattr(vendor, field) or ''
+                    if old_val != new_val:
+                        changes.append(f'{label}: {old_val or "-"} → {new_val or "-"}')
+
+                if changes:
+                    vendor.save()
+                    result['updated'] += 1
+                    result['updated_list'].append({
+                        'code': tr_cd, 'name': vendor.name, 'changes': changes,
+                    })
+                else:
+                    result['unchanged'] += 1
             else:
                 # 신규 생성
                 Vendor.objects.create(
@@ -1317,6 +1349,7 @@ def sync_erp_vendors():
                     address=f"{(item.get('divAddr1') or '').strip()} {(item.get('addr2') or '').strip()}".strip(),
                 )
                 result['created'] += 1
+                result['created_list'].append({'code': tr_cd, 'name': display_name})
 
         except Exception as e:
             result['errors'].append(f'{tr_cd} {tr_nm}: {str(e)}')
@@ -1362,10 +1395,11 @@ def sync_erp_items():
     """
     ERP 품목 → SCM Part 동기화
     - itemCd(품번) 기준으로 매칭
-    - 없으면 신규 생성, 있으면 업데이트
+    - 없으면 신규 생성, 있으면 업데이트 (실제 값이 달라진 경우만 "갱신"으로 집계)
     - acctFg → account_type 매핑
     - trmainCd → vendor FK 매핑 (erp_code 기준)
-    Returns: dict with created, updated, skipped, errors, total
+    Returns: dict with created, updated, unchanged, skipped, errors, total,
+             created_list, updated_list (신규/갱신 상세 내역)
     """
     from orders.models import Part, Vendor
     from django.core.cache import cache
@@ -1379,7 +1413,10 @@ def sync_erp_items():
         '6': 'RAW',       # 저장품 → 원재료
     }
 
-    result = {'created': 0, 'updated': 0, 'skipped': 0, 'errors': [], 'total': 0}
+    result = {
+        'created': 0, 'updated': 0, 'unchanged': 0, 'skipped': 0, 'errors': [], 'total': 0,
+        'created_list': [], 'updated_list': [],
+    }
 
     cache.set('erp_sync_progress', {'stage': 'ERP 품목 조회 중...', 'percent': 5}, timeout=300)
 
@@ -1392,10 +1429,12 @@ def sync_erp_items():
     result['total'] = len(items)
     cache.set('erp_sync_progress', {'stage': f'품목 {len(items)}건 처리 중...', 'percent': 10}, timeout=300)
 
-    # 거래처 캐시 (erp_code → Vendor)
+    # 거래처 캐시 (erp_code → Vendor, id → 거래처명)
     vendor_cache = {}
+    vendor_name_by_id = {}
     for v in Vendor.objects.filter(erp_code__isnull=False).exclude(erp_code=''):
         vendor_cache[v.erp_code] = v
+        vendor_name_by_id[v.id] = v.name
 
     for idx, item in enumerate(items):
         item_cd = (item.get('itemCd') or '').strip()
@@ -1421,7 +1460,16 @@ def sync_erp_items():
             part = Part.objects.filter(part_no=item_cd).first()
 
             if part:
-                # 업데이트
+                # 업데이트 (변경 전 값 저장 후 실제 변경 여부 비교)
+                before = {
+                    'part_name': part.part_name,
+                    'account_type': part.account_type,
+                    'part_group': part.part_group,
+                    'weight_qty': part.weight_qty,
+                    'weight_unit': part.weight_unit,
+                    'vendor_id': part.vendor_id,
+                }
+
                 part.part_name = item_nm or part.part_name
                 part.account_type = account_type
                 part.part_group = part_group
@@ -1429,8 +1477,30 @@ def sync_erp_items():
                 part.weight_unit = weight_unit
                 if vendor:
                     part.vendor = vendor
-                part.save()
-                result['updated'] += 1
+
+                changes = []
+                if before['part_name'] != part.part_name:
+                    changes.append(f'품명: {before["part_name"]} → {part.part_name}')
+                if before['account_type'] != part.account_type:
+                    changes.append(f'계정구분: {before["account_type"]} → {part.account_type}')
+                if before['part_group'] != part.part_group:
+                    changes.append(f'품목군: {before["part_group"]} → {part.part_group}')
+                if before['weight_qty'] != part.weight_qty:
+                    changes.append(f'단위중량: {before["weight_qty"]} → {part.weight_qty}')
+                if before['weight_unit'] != part.weight_unit:
+                    changes.append(f'중량단위: {before["weight_unit"]} → {part.weight_unit}')
+                if before['vendor_id'] != part.vendor_id:
+                    old_vendor_name = vendor_name_by_id.get(before['vendor_id'], '미연결') if before['vendor_id'] else '미연결'
+                    changes.append(f'업체: {old_vendor_name} → {part.vendor.name}')
+
+                if changes:
+                    part.save()
+                    result['updated'] += 1
+                    result['updated_list'].append({
+                        'part_no': item_cd, 'part_name': part.part_name, 'changes': changes,
+                    })
+                else:
+                    result['unchanged'] += 1
             else:
                 # 신규 생성
                 Part.objects.create(
@@ -1443,6 +1513,7 @@ def sync_erp_items():
                     weight_unit=weight_unit,
                 )
                 result['created'] += 1
+                result['created_list'].append({'part_no': item_cd, 'part_name': item_nm or item_cd})
 
         except Exception as e:
             result['errors'].append(f'{item_cd} {item_nm}: {str(e)}')

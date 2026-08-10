@@ -83,8 +83,21 @@
                     <div class="mt-3">
                         <div class="d-flex gap-2 flex-wrap">
                             <span class="badge bg-secondary">전체 {{ vendor_result.total }}건</span>
-                            <span class="badge bg-success">신규 {{ vendor_result.created }}건</span>
-                            <span class="badge bg-info">갱신 {{ vendor_result.updated }}건</span>
+                            {% if vendor_result.created > 0 %}
+                            <span class="badge bg-success" role="button" data-bs-toggle="modal" data-bs-target="#vendorCreatedModal" style="cursor:pointer;">
+                                신규 {{ vendor_result.created }}건 <i class="bi bi-box-arrow-up-right"></i>
+                            </span>
+                            {% else %}
+                            <span class="badge bg-success">신규 0건</span>
+                            {% endif %}
+                            {% if vendor_result.updated > 0 %}
+                            <span class="badge bg-info" role="button" data-bs-toggle="modal" data-bs-target="#vendorUpdatedModal" style="cursor:pointer;">
+                                갱신 {{ vendor_result.updated }}건 <i class="bi bi-box-arrow-up-right"></i>
+                            </span>
+                            {% else %}
+                            <span class="badge bg-info">갱신 0건</span>
+                            {% endif %}
+                            <span class="badge bg-light text-muted border">동일 {{ vendor_result.unchanged }}건</span>
                             {% if vendor_result.skipped > 0 %}
                             <span class="badge bg-warning text-dark">건너뜀 {{ vendor_result.skipped }}건</span>
                             {% endif %}
@@ -134,8 +147,21 @@
                     <div class="mt-3">
                         <div class="d-flex gap-2 flex-wrap">
                             <span class="badge bg-secondary">전체 {{ item_result.total }}건</span>
-                            <span class="badge bg-success">신규 {{ item_result.created }}건</span>
-                            <span class="badge bg-info">갱신 {{ item_result.updated }}건</span>
+                            {% if item_result.created > 0 %}
+                            <span class="badge bg-success" role="button" data-bs-toggle="modal" data-bs-target="#itemCreatedModal" style="cursor:pointer;">
+                                신규 {{ item_result.created }}건 <i class="bi bi-box-arrow-up-right"></i>
+                            </span>
+                            {% else %}
+                            <span class="badge bg-success">신규 0건</span>
+                            {% endif %}
+                            {% if item_result.updated > 0 %}
+                            <span class="badge bg-info" role="button" data-bs-toggle="modal" data-bs-target="#itemUpdatedModal" style="cursor:pointer;">
+                                갱신 {{ item_result.updated }}건 <i class="bi bi-box-arrow-up-right"></i>
+                            </span>
+                            {% else %}
+                            <span class="badge bg-info">갱신 0건</span>
+                            {% endif %}
+                            <span class="badge bg-light text-muted border">동일 {{ item_result.unchanged }}건</span>
                             {% if item_result.skipped > 0 %}
                             <span class="badge bg-warning text-dark">건너뜀 {{ item_result.skipped }}건</span>
                             {% endif %}
@@ -227,6 +253,128 @@
         </div>
     </div>
 </div>
+
+<!-- 거래처 신규 모달 -->
+{% if vendor_result and vendor_result.created_list %}
+<div class="modal fade" id="vendorCreatedModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white py-2">
+                <h6 class="modal-title"><i class="bi bi-plus-circle me-1"></i>거래처 신규 등록 ({{ vendor_result.created }}건)</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light sticky-top">
+                        <tr><th>거래처코드</th><th>거래처명</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for item in vendor_result.created_list %}
+                        <tr>
+                            <td class="small text-muted">{{ item.code }}</td>
+                            <td class="small fw-bold">{{ item.name }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- 거래처 갱신 모달 -->
+{% if vendor_result and vendor_result.updated_list %}
+<div class="modal fade" id="vendorUpdatedModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white py-2">
+                <h6 class="modal-title"><i class="bi bi-arrow-repeat me-1"></i>거래처 정보 갱신 ({{ vendor_result.updated }}건)</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light sticky-top">
+                        <tr><th style="width:120px;">거래처코드</th><th style="width:180px;">거래처명</th><th>변경 내용</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for item in vendor_result.updated_list %}
+                        <tr>
+                            <td class="small text-muted">{{ item.code }}</td>
+                            <td class="small fw-bold">{{ item.name }}</td>
+                            <td class="small">
+                                {% for c in item.changes %}{{ c }}<br>{% endfor %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- 품목 신규 모달 -->
+{% if item_result and item_result.created_list %}
+<div class="modal fade" id="itemCreatedModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white py-2">
+                <h6 class="modal-title"><i class="bi bi-plus-circle me-1"></i>품목 신규 등록 ({{ item_result.created }}건)</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light sticky-top">
+                        <tr><th>품번</th><th>품명</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for item in item_result.created_list %}
+                        <tr>
+                            <td class="small text-muted">{{ item.part_no }}</td>
+                            <td class="small fw-bold">{{ item.part_name }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- 품목 갱신 모달 -->
+{% if item_result and item_result.updated_list %}
+<div class="modal fade" id="itemUpdatedModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white py-2">
+                <h6 class="modal-title"><i class="bi bi-arrow-repeat me-1"></i>품목 정보 갱신 ({{ item_result.updated }}건)</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light sticky-top">
+                        <tr><th style="width:120px;">품번</th><th style="width:180px;">품명</th><th>변경 내용</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for item in item_result.updated_list %}
+                        <tr>
+                            <td class="small text-muted">{{ item.part_no }}</td>
+                            <td class="small fw-bold">{{ item.part_name }}</td>
+                            <td class="small">
+                                {% for c in item.changes %}{{ c }}<br>{% endfor %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- 연결 성공 모달 -->
 {% if link_result and link_result.updated_list %}
