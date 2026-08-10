@@ -317,6 +317,15 @@
                             <i class="bi bi-info-circle me-1"></i>
                             <span id="vendorShortageInfo"></span>
                         </div>
+
+                        <!-- 발주수량 일괄 설정 (배수/MOQ 등으로 개별 조정하고 싶을 때, 또는 그냥 넉넉하게 한 번에 채우고 싶을 때) -->
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <label class="form-label fw-bold mb-0 small">발주수량 일괄 설정</label>
+                            <input type="number" id="bulkQtyValue" class="form-control form-control-sm" style="width: 130px;" placeholder="예: 10000" min="1">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="applyBulkQty()">체크된 항목에 적용</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetBulkQty()">부족수량대로 초기화</button>
+                        </div>
+
                         <div class="table-responsive" style="max-height: 400px;">
                             <table class="table table-bordered table-sm align-middle mb-0" style="font-size: 0.85rem;">
                                 <thead class="table-light text-center sticky-top">
@@ -629,7 +638,7 @@ function showShortages(vendorFilter) {
                     <input type="date" name="due_date_${idx}" value="${dueDate}" class="form-control form-control-sm">
                 </td>
                 <td>
-                    <input type="number" name="qty_${idx}" value="${absQty}" min="1"
+                    <input type="number" name="qty_${idx}" value="${absQty}" min="1" data-shortage-qty="${absQty}"
                            class="form-control form-control-sm text-end" style="width: 100px;">
                 </td>
                 <input type="hidden" name="vendor_${idx}" value="${item.vendor}">
@@ -641,6 +650,29 @@ function showShortages(vendorFilter) {
         document.getElementById('checkAll').checked = true;
         updateSelectedCount();
     }
+}
+
+// 발주수량 일괄 설정: 체크된 항목의 발주수량을 입력한 값으로 한 번에 채움 (배수/MOQ 조정, 편의상 넉넉히 채우기 등)
+function applyBulkQty() {
+    const val = parseInt(document.getElementById('bulkQtyValue').value, 10);
+    if (!val || val <= 0) {
+        alert('적용할 수량을 입력하세요.');
+        return;
+    }
+    document.querySelectorAll('.shortage-check:checked').forEach(cb => {
+        const idx = cb.dataset.idx;
+        const input = document.querySelector(`input[name="qty_${idx}"]`);
+        if (input) input.value = val;
+    });
+}
+
+// 발주수량을 원래 계산된 부족수량으로 되돌림
+function resetBulkQty() {
+    document.querySelectorAll('.shortage-check:checked').forEach(cb => {
+        const idx = cb.dataset.idx;
+        const input = document.querySelector(`input[name="qty_${idx}"]`);
+        if (input) input.value = input.dataset.shortageQty;
+    });
 }
 
 function updateSelectedCount() {
