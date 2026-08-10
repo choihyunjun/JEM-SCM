@@ -1409,7 +1409,6 @@ def import_inspection_detail(request, pk):
                     erp_po_no, erp_po_seq = '', ''
                     if origin_trx.ref_delivery_order:
                         try:
-                            from orders.models import DeliveryOrderItem
                             doi = DeliveryOrderItem.objects.filter(
                                 delivery_order__order_no=origin_trx.ref_delivery_order,
                                 part_no=part.part_no
