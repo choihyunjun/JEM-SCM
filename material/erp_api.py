@@ -650,6 +650,7 @@ def sync_erp_incoming(date_from=None, date_to=None):
                 rcv_date = tz.now()
 
             # 4) 각 디테일(품목)별로 트랜잭션 생성
+            detail_synced = False
             for detail in details:
                 item_cd = detail.get('itemCd', '')
                 if not item_cd:
@@ -716,8 +717,10 @@ def sync_erp_incoming(date_from=None, date_to=None):
                     erp_sync_message=f'ERP 동기화 ({rcv_nb})',
                 )
                 existing_rcv_nbs.add(trx_key)
+                detail_synced = True
 
-            synced += 1
+            if detail_synced:
+                synced += 1
 
         except Exception as e:
             errors += 1
@@ -994,184 +997,74 @@ def _sync_stock_from_erp_inner(result, _cache):
         # target_null: 음수 허용 → 음수이면 LOT 재고가 ERP를 초과하는 케이스
         target_null = erp_qty - lot_qty
 
-        if target_null >= 0:
-            # ── Case 1: ERP >= LOT → NULL 버킷 조정 (기존 로직) ──
-            diff = target_null - current_null
-            if diff == 0:
-                continue
+        # NULL 버킷(ERP 관리 버킷)만 조정 — LOT 레코드(수기 입고/WMS 관리분)는 절대 건드리지 않음.
+        # target_null이 음수(LOT재고 > ERP재고)이더라도 LOT을 깎지 않고 NULL 버킷을 음수로 반영만 한다.
+        diff = target_null - current_null
+        if diff == 0:
+            continue
 
-            part = part_map.get(item_cd)
-            if not part:
-                result['skipped_no_part'] += 1
-                continue
-            warehouse = wh_map.get(wh_cd)
-            if not warehouse:
-                result['skipped_no_wh'] += 1
-                continue
+        part = part_map.get(item_cd)
+        if not part:
+            result['skipped_no_part'] += 1
+            continue
+        warehouse = wh_map.get(wh_cd)
+        if not warehouse:
+            result['skipped_no_wh'] += 1
+            continue
 
-            null_stock = MaterialStock.objects.filter(
-                warehouse=warehouse, part=part, lot_no=None
-            ).first()
+        null_stock = MaterialStock.objects.filter(
+            warehouse=warehouse, part=part, lot_no=None
+        ).first()
 
-            if diff > 0:
-                # SCM 부족 → NULL 증가
-                if null_stock:
-                    MaterialStock.objects.filter(pk=null_stock.pk).update(
-                        quantity=F('quantity') + diff
-                    )
-                else:
-                    MaterialStock.objects.create(
-                        warehouse=warehouse, part=part, lot_no=None, quantity=diff
-                    )
-                    result['created'] += 1
-                result['increased'] += 1
-                _create_trx(
-                    transaction_type='ADJ_ERP_IN',
-                    part=part,
-                    warehouse_to=warehouse,
-                    quantity=abs(diff),
-                    lot_no=None,
-                    date=now,
-                    remark=f'ERP 재고동기화 (ERP={erp_qty}, LOT={lot_qty}, NULL:{current_null}→{target_null}, diff={diff:+d})',
+        if diff > 0:
+            # SCM 부족 → NULL 증가
+            if null_stock:
+                MaterialStock.objects.filter(pk=null_stock.pk).update(
+                    quantity=F('quantity') + diff
                 )
             else:
-                # SCM 초과 → NULL 감소
-                to_deduct = abs(diff)
-                if null_stock:
-                    MaterialStock.objects.filter(pk=null_stock.pk).update(
-                        quantity=F('quantity') - to_deduct
-                    )
-                else:
-                    MaterialStock.objects.create(
-                        warehouse=warehouse, part=part, lot_no=None, quantity=-to_deduct
-                    )
-                    result['created'] += 1
-                result['decreased'] += 1
-                _create_trx(
-                    transaction_type='ADJ_ERP_OUT',
-                    part=part,
-                    warehouse_from=warehouse,
-                    quantity=abs(diff),
-                    lot_no=None,
-                    date=now,
-                    remark=f'ERP 재고동기화 (ERP={erp_qty}, LOT={lot_qty}, NULL:{current_null}→{target_null}, diff={diff:+d})',
+                MaterialStock.objects.create(
+                    warehouse=warehouse, part=part, lot_no=None, quantity=diff
                 )
-                # 스캔 태그 반영 완료 처리 (bulk_update로 원자적 처리)
-                from .models import ProcessTag
-                unreflected = list(ProcessTag.objects.filter(
-                    part_no=part.part_no, status='USED', stock_reflected=False
-                ).order_by('used_at'))
-                consume_remaining = abs(diff)
-                to_mark = []
-                for tag in unreflected:
-                    if consume_remaining <= 0:
-                        break
-                    tag.stock_reflected = True
-                    to_mark.append(tag)
-                    consume_remaining -= tag.quantity
-                if to_mark:
-                    ProcessTag.objects.bulk_update(to_mark, ['stock_reflected'])
-
+                result['created'] += 1
+            result['increased'] += 1
+            _create_trx(
+                transaction_type='ADJ_ERP_IN',
+                part=part,
+                warehouse_to=warehouse,
+                quantity=abs(diff),
+                lot_no=None,
+                date=now,
+                remark=f'ERP 재고동기화 (ERP={erp_qty}, LOT={lot_qty}, NULL:{current_null}→{target_null}, diff={diff:+d})',
+            )
         else:
-            # ── Case 2: LOT > ERP → NULL=0 초기화 후 FIFO LOT 차감 ──
-            # (ERP 출고가 LOT에 미반영되어 누적된 차이를 FIFO로 해소)
-            excess = lot_qty - erp_qty  # LOT가 ERP보다 많은 초과량
-
-            part = part_map.get(item_cd)
-            if not part:
-                result['skipped_no_part'] += 1
-                continue
-            warehouse = wh_map.get(wh_cd)
-            if not warehouse:
-                result['skipped_no_wh'] += 1
-                continue
-
-            null_stock = MaterialStock.objects.filter(
-                warehouse=warehouse, part=part, lot_no=None
-            ).first()
-
-            # Step 1: NULL 버킷을 0으로 초기화
-            if null_stock and null_stock.quantity != 0:
-                old_null = null_stock.quantity
-                MaterialStock.objects.filter(pk=null_stock.pk).update(quantity=0)
-                if old_null > 0:
-                    _create_trx(
-                        transaction_type='ADJ_ERP_OUT',
-                        part=part,
-                        warehouse_from=warehouse,
-                        quantity=old_null,
-                        lot_no=None,
-                        date=now,
-                        remark=f'ERP 재고동기화 NULL초기화 (ERP={erp_qty}, LOT={lot_qty})',
-                    )
-                else:
-                    _create_trx(
-                        transaction_type='ADJ_ERP_IN',
-                        part=part,
-                        warehouse_to=warehouse,
-                        quantity=abs(old_null),
-                        lot_no=None,
-                        date=now,
-                        remark=f'ERP 재고동기화 NULL보정 (ERP={erp_qty}, LOT={lot_qty})',
-                    )
-
-            # Step 2: LOT 재고 FIFO 차감 (lot_no 오름차순 = 가장 오래된 것 먼저)
-            remaining = excess
-            lot_stocks = MaterialStock.objects.filter(
-                warehouse=warehouse, part=part, lot_no__isnull=False
-            ).order_by('lot_no')
-
-            for lot_stock in lot_stocks:
-                if remaining <= 0:
-                    break
-                deduct = min(int(lot_stock.quantity), remaining)
-                if deduct <= 0:
-                    continue
-                MaterialStock.objects.filter(pk=lot_stock.pk).update(
-                    quantity=F('quantity') - deduct
+            # SCM 초과 → NULL 감소 (LOT 재고는 건드리지 않음)
+            to_deduct = abs(diff)
+            if null_stock:
+                MaterialStock.objects.filter(pk=null_stock.pk).update(
+                    quantity=F('quantity') - to_deduct
                 )
-                _create_trx(
-                    transaction_type='ADJ_ERP_OUT',
-                    part=part,
-                    warehouse_from=warehouse,
-                    quantity=deduct,
-                    lot_no=lot_stock.lot_no,
-                    date=now,
-                    remark=f'ERP 재고동기화 FIFO차감 (ERP={erp_qty}, LOT초과={excess})',
+            else:
+                MaterialStock.objects.create(
+                    warehouse=warehouse, part=part, lot_no=None, quantity=-to_deduct
                 )
-                remaining -= deduct
-
-            # LOT 차감 후에도 남은 잔여분 → NULL 버킷에 음수로 반영 (ERP 음수재고 표시)
-            if remaining > 0:
-                final_null = erp_qty  # ERP 기준값 그대로
-                null_stock = MaterialStock.objects.filter(
-                    warehouse=warehouse, part=part, lot_no=None
-                ).first()
-                if null_stock:
-                    old_qty = null_stock.quantity
-                    MaterialStock.objects.filter(pk=null_stock.pk).update(quantity=final_null)
-                else:
-                    MaterialStock.objects.create(
-                        warehouse=warehouse, part=part, lot_no=None, quantity=final_null
-                    )
-                    old_qty = 0
-                _create_trx(
-                    transaction_type='ADJ_ERP_OUT' if final_null < old_qty else 'ADJ_ERP_IN',
-                    part=part,
-                    warehouse_from=warehouse if final_null < old_qty else None,
-                    warehouse_to=None if final_null < old_qty else warehouse,
-                    quantity=abs(final_null - old_qty),
-                    lot_no=None,
-                    date=now,
-                    remark=f'ERP 재고동기화 음수반영 (ERP={erp_qty}, NULL:{old_qty}→{final_null})',
-                )
-
+                result['created'] += 1
+            result['decreased'] += 1
+            _create_trx(
+                transaction_type='ADJ_ERP_OUT',
+                part=part,
+                warehouse_from=warehouse,
+                quantity=abs(diff),
+                lot_no=None,
+                date=now,
+                remark=f'ERP 재고동기화 (ERP={erp_qty}, LOT={lot_qty}, NULL:{current_null}→{target_null}, diff={diff:+d})',
+            )
             # 스캔 태그 반영 완료 처리 (bulk_update로 원자적 처리)
             from .models import ProcessTag
             unreflected = list(ProcessTag.objects.filter(
                 part_no=part.part_no, status='USED', stock_reflected=False
             ).order_by('used_at'))
-            consume_remaining = excess
+            consume_remaining = abs(diff)
             to_mark = []
             for tag in unreflected:
                 if consume_remaining <= 0:
@@ -1181,8 +1074,6 @@ def _sync_stock_from_erp_inner(result, _cache):
                 consume_remaining -= tag.quantity
             if to_mark:
                 ProcessTag.objects.bulk_update(to_mark, ['stock_reflected'])
-
-            result['decreased'] += 1
 
         result['adjusted'] += 1
 

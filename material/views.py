@@ -827,6 +827,18 @@ def cancel_manual_incoming(request, trx_id):
                 if inspection.status == 'APPROVED' or inspection.status == 'REJECTED':
                     # 판정 완료 상태 → 목표 창고/부적합 창고 재고 원복 + 검사대기 복원
 
+                    # 재고 충분한지 먼저 검증 (ERP 삭제 등 외부 부작용 실행 전에 확인해야
+                    # 실패 시 ERP는 안 건드린 채로 깨끗하게 취소 실패 처리됨)
+                    good_stock = None
+                    if inspection.qty_good > 0:
+                        target_code = inspection.target_warehouse_code or '2000'
+                        wh_good = Warehouse.objects.filter(code=target_code).first()
+                        good_stock = MaterialStock.objects.filter(
+                            warehouse=wh_good, part=part, lot_no=lot_no
+                        ).first() if wh_good else None
+                        if not (good_stock and good_stock.quantity >= inspection.qty_good):
+                            raise Exception(f"목표 창고({target_code}) 양품 재고가 부족하여 취소할 수 없습니다.")
+
                     # ERP 입고 삭제 (이동 트랜잭션 삭제 전에 처리)
                     from material.erp_api import delete_erp_incoming as del_erp_cancel
                     for erp_trx in MaterialTransaction.objects.filter(
@@ -842,19 +854,10 @@ def cancel_manual_incoming(request, trx_id):
                         else:
                             raise Exception(f'ERP 입고 삭제 실패: {erp_err} (ERP번호: {erp_trx.erp_incoming_no})')
 
-                    if inspection.qty_good > 0:
-                        target_code = inspection.target_warehouse_code or '2000'
-                        wh_good = Warehouse.objects.filter(code=target_code).first()
-                        if wh_good:
-                            good_stock = MaterialStock.objects.filter(
-                                warehouse=wh_good, part=part, lot_no=lot_no
-                            ).first()
-                            if good_stock and good_stock.quantity >= inspection.qty_good:
-                                MaterialStock.objects.filter(pk=good_stock.pk).update(
-                                    quantity=F('quantity') - inspection.qty_good
-                                )
-                            else:
-                                raise Exception(f"목표 창고({target_code}) 양품 재고가 부족하여 취소할 수 없습니다.")
+                    if good_stock:
+                        MaterialStock.objects.filter(pk=good_stock.pk).update(
+                            quantity=F('quantity') - inspection.qty_good
+                        )
 
                     if inspection.qty_bad > 0:
                         wh_bad = Warehouse.objects.filter(code='8200').first()

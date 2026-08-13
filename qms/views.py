@@ -1366,10 +1366,15 @@ def import_inspection_detail(request, pk):
                     part=part,
                     lot_no=lot_no
                 ).first()
-                if src_stock:
-                    src_stock.quantity = F("quantity") - total_input
-                    src_stock.save()
-                    src_stock.refresh_from_db()
+                if not src_stock or src_stock.quantity < total_input:
+                    have = src_stock.quantity if src_stock else 0
+                    raise Exception(
+                        f"검사대기창고({from_wh}) 재고가 부족하여 판정할 수 없습니다. "
+                        f"(보유: {have}, 필요: {total_input}) 재고 이력을 먼저 확인해주세요."
+                    )
+                src_stock.quantity = F("quantity") - total_input
+                src_stock.save()
+                src_stock.refresh_from_db()
 
                 # (B) 양품 -> 목표 창고 (inspection.target_warehouse_code 사용)
                 if qty_good > 0:
@@ -1410,7 +1415,7 @@ def import_inspection_detail(request, pk):
                     if origin_trx.ref_delivery_order:
                         try:
                             doi = DeliveryOrderItem.objects.filter(
-                                delivery_order__order_no=origin_trx.ref_delivery_order,
+                                order__order_no=origin_trx.ref_delivery_order,
                                 part_no=part.part_no
                             ).first()
                             if doi:
@@ -1506,14 +1511,25 @@ def import_inspection_detail(request, pk):
                             target_do.status = "APPROVED"
                             target_do.save()
                         elif qty_bad == total_input:
-                            # 전수불량 - 같은 납품서에 다른 품목(입고 건)이 남아있는지 확인
-                            other_items_exist = MaterialTransaction.objects.filter(
+                            # 전수불량 - 같은 납품서의 다른 품목(입고 건)들이 전부 판정 완료 & 전부 불량인지 확인
+                            other_trx_qs = MaterialTransaction.objects.filter(
                                 ref_delivery_order=ref_do_no,
                                 transaction_type__in=['IN_MANUAL', 'IN_SCM', 'IN_ERP']
-                            ).exclude(pk=origin_trx.pk).exists()
+                            ).exclude(pk=origin_trx.pk)
 
-                            if not other_items_exist:
-                                # 이 납품서의 유일한 품목이 전량 불량 -> 사실상 취소와 같으므로 재처리 가능 상태로 리셋
+                            all_others_all_bad = True
+                            for ot in other_trx_qs:
+                                try:
+                                    ot_insp = ot.inspection
+                                except Exception:
+                                    ot_insp = None
+                                if ot_insp is None or ot_insp.status == 'PENDING' or ot_insp.qty_good > 0:
+                                    all_others_all_bad = False
+                                    break
+
+                            if all_others_all_bad:
+                                # 이 납품서의 모든 품목이 전량 불량(또는 유일 품목이 전량 불량)
+                                # -> 사실상 취소와 같으므로 재처리 가능 상태로 리셋
                                 target_do.status = 'PENDING'
                                 target_do.is_received = False
                             elif target_do.status != "APPROVED":
