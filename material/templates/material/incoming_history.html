@@ -216,6 +216,7 @@
                 <input type="hidden" id="detailId">
                 <input type="hidden" id="detailCanEdit">
                 <input type="hidden" id="detailCanDelete">
+                <input type="hidden" id="detailCanReregister">
 
                 <table class="table table-borderless mb-0">
                     <tr><th class="text-muted" width="30%">구분</th><td><span id="detailType" class="badge"></span></td></tr>
@@ -244,11 +245,21 @@
                     </td></tr>
                     <tr><th class="text-muted">라벨 발행</th><td id="detailLabelStatus"></td></tr>
                     <tr><th class="text-muted">첨부파일</th><td id="detailAttachment"></td></tr>
+                    <tr id="detailManualPriceRow" class="d-none">
+                        <th class="text-muted">단가 직접입력</th>
+                        <td>
+                            <input type="number" id="detailManualPrice" class="form-control form-control-sm" style="width:160px; display:inline-block;" min="0" step="1" placeholder="비우면 자동조회">
+                            <div class="form-text">입력 후 [단가 재반영]을 누르면 이 값 그대로 ERP에 등록됩니다. 비우면 기존처럼 ERP에서 자동조회합니다.</div>
+                        </td>
+                    </tr>
                 </table>
             </div>
             <div class="modal-footer border-top" id="detailFooter">
                 <!-- 보기 모드 -->
                 <div id="viewActions">
+                    <button class="btn btn-outline-warning btn-sm" id="btnReregister" onclick="reregisterFromModal()">
+                        <i class="fas fa-sync-alt me-1"></i>단가 재반영
+                    </button>
                     <button class="btn btn-outline-primary btn-sm" id="btnEdit" onclick="toggleEditMode(true)">
                         <i class="fas fa-edit me-1"></i>수정
                     </button>
@@ -439,12 +450,62 @@ function batchReregister() {
     });
 }
 
+// ─── 상세 모달에서 단일 건 단가 재반영 (직접입력 단가 지원) ───
+function reregisterFromModal() {
+    const id = document.getElementById('detailId').value;
+    const trxNo = document.getElementById('detailTrxNo').textContent;
+    const manualPrice = document.getElementById('detailManualPrice').value.trim();
+
+    const confirmMsg = manualPrice
+        ? `[${trxNo}] 단가를 직접 입력한 값(${Number(manualPrice).toLocaleString()}원)으로 재반영하시겠습니까?\n(ERP 입고 삭제 후 재등록됩니다)`
+        : `[${trxNo}] ERP에서 최신 단가를 자동조회해서 재반영하시겠습니까?\n(ERP 입고 삭제 후 재등록됩니다)`;
+    if (!confirm(confirmMsg)) return;
+
+    const body = {};
+    if (manualPrice) {
+        body.unit_price = manualPrice;
+    } else {
+        body.use_integrated_only = document.getElementById('useIntegratedOnly') ? document.getElementById('useIntegratedOnly').checked : true;
+    }
+
+    const btn = document.getElementById('btnReregister');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>처리 중...';
+
+    fetch(`/wms/inbound/history/reregister/${id}/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('실패: ' + data.error);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-sync-alt me-1"></i>단가 재반영';
+        }
+    })
+    .catch(err => {
+        alert('오류: ' + err);
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-sync-alt me-1"></i>단가 재반영';
+    });
+}
+
 // ─── 상세 모달 ───
 function openDetail(row) {
     const d = row.dataset;
     document.getElementById('detailId').value = d.id;
     document.getElementById('detailCanEdit').value = d.canEdit;
     document.getElementById('detailCanDelete').value = d.canDelete;
+    document.getElementById('detailCanReregister').value = d.canReregister;
+    document.getElementById('detailManualPrice').value = '';
 
     const typeEl = document.getElementById('detailType');
     typeEl.textContent = d.type;
@@ -483,6 +544,8 @@ function openDetail(row) {
     // 버튼 표시/숨김
     document.getElementById('btnEdit').classList.toggle('d-none', d.canEdit !== '1');
     document.getElementById('btnDelete').classList.toggle('d-none', d.canDelete !== '1' || d.hasLabel === '1');
+    document.getElementById('btnReregister').classList.toggle('d-none', d.canReregister !== '1');
+    document.getElementById('detailManualPriceRow').classList.toggle('d-none', d.canReregister !== '1');
 
     toggleEditMode(false);
     new bootstrap.Modal(document.getElementById('detailModal')).show();

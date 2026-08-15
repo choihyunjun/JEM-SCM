@@ -1302,6 +1302,16 @@ def reregister_erp_price(request, trx_id):
         body_data = {}
     use_integrated_only = body_data.get('use_integrated_only', False)
 
+    manual_unit_price = None
+    raw_price = body_data.get('unit_price')
+    if raw_price not in (None, ''):
+        try:
+            manual_unit_price = float(raw_price)
+        except (TypeError, ValueError):
+            return JsonResponse({'success': False, 'error': '단가는 숫자로 입력해주세요.'})
+        if manual_unit_price <= 0:
+            return JsonResponse({'success': False, 'error': '단가는 0보다 커야 합니다.'})
+
     try:
         from material.erp_api import delete_erp_incoming, register_erp_incoming
 
@@ -1354,12 +1364,13 @@ def reregister_erp_price(request, trx_id):
             trx.save(update_fields=['erp_incoming_no', 'erp_sync_status'])
 
         # 2) 최신 단가로 (재)등록
-        price_mode = '통합단가전용' if use_integrated_only else '일반(fallback)'
+        price_mode = f'수동입력({manual_unit_price})' if manual_unit_price is not None else ('통합단가전용' if use_integrated_only else '일반(fallback)')
         print(f'[단가재반영] trx={trx.id}, part={trx.part.part_no}, qty={trx.quantity}, wh={warehouse_code}, vendor={trx.vendor.erp_code if trx.vendor else None}, 단가모드={price_mode}', flush=True)
         reg_ok, reg_no, reg_err = register_erp_incoming(
             trx, trx.quantity, warehouse_code,
             erp_order_no=erp_order_no, erp_order_seq=erp_order_seq,
             use_integrated_only=use_integrated_only,
+            manual_unit_price=manual_unit_price,
         )
         print(f'[단가재반영] 결과: ok={reg_ok}, no={reg_no}, err={reg_err}', flush=True)
 
