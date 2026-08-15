@@ -274,7 +274,6 @@
                             <th style="width:5%;">시스템</th>
                             <th style="width:6%;">발주연동</th>
                             <th style="width:4%;">라벨발행</th>
-                            <th style="width:6%;">관리</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -311,23 +310,10 @@
                                     <i class="bi bi-check-circle-fill text-success" title="라벨발행"></i>
                                 {% endif %}
                             </td>
-                            <td>
-                                {% if item.transaction_type == 'IN_ERP' %}
-                                    <span class="text-muted small">-</span>
-                                {% elif item.can_cancel %}
-                                <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1"
-                                        onclick="event.stopPropagation(); openCancelModal({{ item.id }}, '{{ item.transaction_no }}', '{{ item.part.part_no }}', {{ item.quantity }}, '{{ item.inspection_status|default_if_none:"" }}')"
-                                        title="입고 삭제">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                                {% else %}
-                                    <span class="text-muted small">-</span>
-                                {% endif %}
-                            </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="12" class="text-muted py-4">입고처리 내역이 없습니다.</td>
+                            <td colspan="11" class="text-muted py-4">입고처리 내역이 없습니다.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -337,11 +323,11 @@
             <!-- 일괄 처리 바 -->
             <div class="d-flex justify-content-between align-items-center mt-2 p-2 border rounded bg-light">
                 <span class="small text-muted"><strong id="bulkSelectedCount">0</strong>건 선택됨</span>
-                <div>
-                    <button type="button" class="btn btn-sm btn-outline-warning me-2" id="bulkCancelIncomingBtn" disabled onclick="submitBulkCancel('cancel_incoming_only')">
+                <div id="bulkActionButtons" style="display:none;">
+                    <button type="button" class="btn btn-sm btn-outline-warning me-2" id="bulkCancelIncomingBtn" onclick="submitBulkCancel('cancel_incoming_only')">
                         <i class="bi bi-arrow-counterclockwise me-1"></i>입고만 취소
                     </button>
-                    <button type="button" class="btn btn-sm btn-outline-danger" id="bulkDeleteAllBtn" disabled onclick="submitBulkCancel('delete_all')">
+                    <button type="button" class="btn btn-sm btn-outline-danger" id="bulkDeleteAllBtn" onclick="submitBulkCancel('delete_all')">
                         <i class="bi bi-trash me-1"></i>전체삭제
                     </button>
                 </div>
@@ -1119,10 +1105,8 @@
         var count = checked.length;
         var countEl = document.getElementById('bulkSelectedCount');
         if (countEl) countEl.textContent = count;
-        var incBtn = document.getElementById('bulkCancelIncomingBtn');
-        var delBtn = document.getElementById('bulkDeleteAllBtn');
-        if (incBtn) incBtn.disabled = (count === 0);
-        if (delBtn) delBtn.disabled = (count === 0);
+        var actionsEl = document.getElementById('bulkActionButtons');
+        if (actionsEl) actionsEl.style.display = (count === 0) ? 'none' : '';
 
         var selectAllCb = document.getElementById('selectAllHistory');
         if (selectAllCb) {
