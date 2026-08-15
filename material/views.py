@@ -722,6 +722,10 @@ def manual_incoming(request):
     if history_wh:
         history_qs = history_qs.filter(warehouse_to_id=history_wh)
 
+    history_src = (request.GET.get('hsrc') or '').strip()
+    if history_src in ('IN_ERP', 'IN_SCM', 'IN_MANUAL'):
+        history_qs = history_qs.filter(transaction_type=history_src)
+
     history_start = (request.GET.get('hstart') or '').strip()
     history_end = (request.GET.get('hend') or '').strip()
     if history_start and history_start not in ('None', 'null'):
@@ -763,6 +767,7 @@ def manual_incoming(request):
         'history_page': history_page,
         'history_q': history_q,
         'history_wh': history_wh,
+        'history_src': history_src,
         'history_start': history_start,
         'history_end': history_end,
         'erp_sync_result': erp_sync_result,

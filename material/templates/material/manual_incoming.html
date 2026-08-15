@@ -234,7 +234,16 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">출처</label>
+                    <select name="hsrc" class="form-select form-select-sm">
+                        <option value="" {% if not history_src %}selected{% endif %}>전체</option>
+                        <option value="IN_ERP" {% if history_src == 'IN_ERP' %}selected{% endif %}>ERP</option>
+                        <option value="IN_SCM" {% if history_src == 'IN_SCM' %}selected{% endif %}>SCM</option>
+                        <option value="IN_MANUAL" {% if history_src == 'IN_MANUAL' %}selected{% endif %}>수기</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
                     <label class="form-label small mb-1">검색 (품번/품명/수불번호)</label>
                     <input type="text" name="hq" class="form-control form-control-sm" placeholder="검색어 입력" value="{{ history_q|default:'' }}">
                 </div>
@@ -322,7 +331,7 @@
                 <ul class="pagination pagination-sm justify-content-center mb-0">
                     {% if history_page.has_previous %}
                     <li class="page-item">
-                        <a class="page-link" href="?hpage={{ history_page.previous_page_number }}&hq={{ history_q }}&hwh={{ history_wh }}&hstart={{ history_start }}&hend={{ history_end }}">이전</a>
+                        <a class="page-link" href="?hpage={{ history_page.previous_page_number }}&hq={{ history_q }}&hwh={{ history_wh }}&hsrc={{ history_src }}&hstart={{ history_start }}&hend={{ history_end }}">이전</a>
                     </li>
                     {% endif %}
                     <li class="page-item disabled">
@@ -330,7 +339,7 @@
                     </li>
                     {% if history_page.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="?hpage={{ history_page.next_page_number }}&hq={{ history_q }}&hwh={{ history_wh }}&hstart={{ history_start }}&hend={{ history_end }}">다음</a>
+                        <a class="page-link" href="?hpage={{ history_page.next_page_number }}&hq={{ history_q }}&hwh={{ history_wh }}&hsrc={{ history_src }}&hstart={{ history_start }}&hend={{ history_end }}">다음</a>
                     </li>
                     {% endif %}
                 </ul>
