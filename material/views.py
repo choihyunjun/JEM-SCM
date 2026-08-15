@@ -790,39 +790,28 @@ def manual_incoming(request):
     return render(request, 'material/manual_incoming.html', context)
 
 
-@wms_permission_required('can_wms_incoming_process')
-def cancel_manual_incoming(request, trx_id):
-    """[WMS] 수기 입고 삭제 / 입고만 취소 (수입검사 판정 초기화)"""
-    # 리다이렉트 대상 결정 (입고 내역 조회에서 호출 시)
-    redirect_to = request.POST.get('redirect_to', 'material:manual_incoming')
-    if redirect_to not in ('material:manual_incoming', 'material:incoming_history'):
-        redirect_to = 'material:manual_incoming'
-
-    if request.method != 'POST':
-        return redirect(redirect_to)
-
-    trx = get_object_or_404(MaterialTransaction, pk=trx_id, transaction_type__in=['IN_MANUAL', 'IN_SCM', 'IN_ERP'])
+def _do_cancel_incoming(trx, cancel_action):
+    """[WMS] 입고 건 취소/삭제 공용 처리 (단건/일괄 공용)
+    Returns: (success: bool, message: str)
+    """
+    from .models import RawMaterialLabel
 
     if trx.transaction_type == 'IN_ERP':
-        messages.error(request, "ERP에서 동기화된 입고 건은 WMS에서 삭제할 수 없습니다. ERP(아마란스)에서 삭제해주세요.")
-        return redirect(redirect_to)
+        return False, "ERP에서 동기화된 입고 건은 WMS에서 삭제할 수 없습니다. ERP(아마란스)에서 삭제해주세요."
 
-    from .models import RawMaterialLabel
     label_count = RawMaterialLabel.objects.filter(incoming_transaction=trx).exclude(status='CANCELLED').count()
     if label_count > 0:
-        messages.error(request, f"라벨이 {label_count}장 발행된 입고 건은 삭제할 수 없습니다. 라벨을 먼저 취소하세요.")
-        return redirect(redirect_to)
+        return False, f"라벨이 {label_count}장 발행된 입고 건은 삭제할 수 없습니다. 라벨을 먼저 취소하세요."
 
     is_closed, warning_msg, _ = check_closing_date(
         trx.date.date() if hasattr(trx.date, 'date') and callable(trx.date.date) else trx.date
     )
     if is_closed:
-        messages.error(request, f"마감된 기간의 입고 건은 삭제할 수 없습니다. ({warning_msg})")
-        return redirect(redirect_to)
+        return False, f"마감된 기간의 입고 건은 삭제할 수 없습니다. ({warning_msg})"
 
-    cancel_action = request.POST.get('cancel_action', 'delete_all')
     trx_no = trx.transaction_no
     trx_qty = trx.quantity
+    erp_notices = []
 
     # ── 입고만 취소 (수입검사 판정 초기화) ──
     if cancel_action == 'cancel_incoming_only':
@@ -834,8 +823,7 @@ def cancel_manual_incoming(request, trx_id):
                 pass
 
         if not inspection:
-            messages.error(request, "수입검사 데이터가 없습니다. '전체 삭제'를 사용하세요.")
-            return redirect(redirect_to)
+            return False, f"[{trx_no}] 수입검사 데이터가 없습니다. '전체 삭제'를 사용하세요."
 
         try:
             with transaction.atomic():
@@ -868,7 +856,7 @@ def cancel_manual_incoming(request, trx_id):
                     ).exclude(erp_incoming_no=''):
                         erp_ok, erp_err = del_erp_cancel(erp_trx.erp_incoming_no)
                         if erp_ok:
-                            messages.info(request, f'ERP 입고 삭제 완료: {erp_trx.erp_incoming_no}')
+                            erp_notices.append(f'ERP 입고 삭제 완료: {erp_trx.erp_incoming_no}')
                         else:
                             raise Exception(f'ERP 입고 삭제 실패: {erp_err} (ERP번호: {erp_trx.erp_incoming_no})')
 
@@ -916,12 +904,13 @@ def cancel_manual_incoming(request, trx_id):
                 inspection.remark = ''
                 inspection.save()
 
-            messages.success(request, f"[{trx_no}] 입고만 취소 완료 — 수입검사가 대기 상태로 초기화되었습니다. 품질팀에서 다시 판정해주세요.")
+            msg = f"[{trx_no}] 입고만 취소 완료 — 수입검사가 대기 상태로 초기화되었습니다."
+            if erp_notices:
+                msg += " (" + "; ".join(erp_notices) + ")"
+            return True, msg
 
         except Exception as e:
-            messages.error(request, f"입고 취소 중 오류 발생: {str(e)}")
-
-        return redirect(redirect_to)
+            return False, f"[{trx_no}] 입고 취소 중 오류 발생: {str(e)}"
 
     # ── 전체 삭제 ──
     try:
@@ -983,7 +972,7 @@ def cancel_manual_incoming(request, trx_id):
                 ).exclude(erp_incoming_no=''):
                     ok, err = del_erp_insp(erp_trx.erp_incoming_no)
                     if ok:
-                        messages.info(request, f'ERP 입고 삭제 완료: {erp_trx.erp_incoming_no}')
+                        erp_notices.append(f'ERP 입고 삭제 완료: {erp_trx.erp_incoming_no}')
 
                 # 양품/불량 이동 트랜잭션 삭제
                 MaterialTransaction.objects.filter(
@@ -1001,12 +990,10 @@ def cancel_manual_incoming(request, trx_id):
                 ).first()
 
                 if not stock:
-                    messages.error(request, "해당 재고를 찾을 수 없습니다.")
-                    return redirect(redirect_to)
+                    raise Exception("해당 재고를 찾을 수 없습니다.")
 
                 if stock.quantity < trx.quantity:
-                    messages.error(request, f"현재 재고({stock.quantity})가 입고 수량({trx.quantity})보다 적어 삭제할 수 없습니다.")
-                    return redirect(redirect_to)
+                    raise Exception(f"현재 재고({stock.quantity})가 입고 수량({trx.quantity})보다 적어 삭제할 수 없습니다.")
 
                 MaterialStock.objects.filter(pk=stock.pk).update(
                     quantity=F('quantity') - trx.quantity
@@ -1018,7 +1005,7 @@ def cancel_manual_incoming(request, trx_id):
                 from material.erp_api import delete_erp_incoming
                 erp_ok, erp_err = delete_erp_incoming(erp_no)
                 if erp_ok:
-                    messages.info(request, f'ERP 입고 삭제 완료: {erp_no}')
+                    erp_notices.append(f'ERP 입고 삭제 완료: {erp_no}')
                 else:
                     raise Exception(f'ERP 입고 삭제 실패: {erp_err} (ERP번호: {erp_no})')
 
@@ -1044,12 +1031,86 @@ def cancel_manual_incoming(request, trx_id):
                     do_reset = True
 
         if do_reset:
-            messages.success(request, f"입고 건 [{trx_no}] 삭제 완료 (재고 {trx_qty}개 차감). 납품서 [{ref_do_no}]가 재처리 가능 상태로 초기화되었습니다.")
+            msg = f"입고 건 [{trx_no}] 삭제 완료 (재고 {trx_qty}개 차감). 납품서 [{ref_do_no}]가 재처리 가능 상태로 초기화되었습니다."
         else:
-            messages.success(request, f"입고 건 [{trx_no}] 삭제 완료 (재고 {trx_qty}개 차감)")
+            msg = f"입고 건 [{trx_no}] 삭제 완료 (재고 {trx_qty}개 차감)"
+        if erp_notices:
+            msg += " / " + "; ".join(erp_notices)
+        return True, msg
 
     except Exception as e:
-        messages.error(request, f"취소 처리 중 오류 발생: {str(e)}")
+        return False, f"[{trx_no}] 취소 처리 중 오류 발생: {str(e)}"
+
+
+@wms_permission_required('can_wms_incoming_process')
+def cancel_manual_incoming(request, trx_id):
+    """[WMS] 수기 입고 삭제 / 입고만 취소 (수입검사 판정 초기화)"""
+    # 리다이렉트 대상 결정 (입고 내역 조회에서 호출 시)
+    redirect_to = request.POST.get('redirect_to', 'material:manual_incoming')
+    if redirect_to not in ('material:manual_incoming', 'material:incoming_history'):
+        redirect_to = 'material:manual_incoming'
+
+    if request.method != 'POST':
+        return redirect(redirect_to)
+
+    trx = get_object_or_404(MaterialTransaction, pk=trx_id, transaction_type__in=['IN_MANUAL', 'IN_SCM', 'IN_ERP'])
+    cancel_action = request.POST.get('cancel_action', 'delete_all')
+
+    success, message = _do_cancel_incoming(trx, cancel_action)
+    if success:
+        messages.success(request, message)
+    else:
+        messages.error(request, message)
+
+    return redirect(redirect_to)
+
+
+@wms_permission_required('can_wms_incoming_process')
+def bulk_cancel_manual_incoming(request):
+    """[WMS] 수기 입고 건 일괄 취소/삭제 (체크박스로 여러 건 선택)"""
+    redirect_to = request.POST.get('redirect_to', 'material:manual_incoming')
+    if redirect_to not in ('material:manual_incoming', 'material:incoming_history'):
+        redirect_to = 'material:manual_incoming'
+
+    if request.method != 'POST':
+        return redirect(redirect_to)
+
+    trx_ids = request.POST.getlist('trx_ids[]')
+    cancel_action = request.POST.get('cancel_action', 'delete_all')
+
+    if not trx_ids:
+        messages.warning(request, "선택된 입고 건이 없습니다.")
+        return redirect(redirect_to)
+
+    action_label = "입고만 취소" if cancel_action == 'cancel_incoming_only' else "전체삭제"
+    success_count = 0
+    fail_details = []
+
+    # 한 건씩 독립된 트랜잭션으로 순차 처리 (한 건의 실패가 다른 건에 영향 안 주도록)
+    for trx_id in trx_ids:
+        trx = MaterialTransaction.objects.filter(
+            pk=trx_id, transaction_type__in=['IN_MANUAL', 'IN_SCM', 'IN_ERP']
+        ).first()
+        if not trx:
+            fail_details.append(f"#{trx_id}: 해당 건을 찾을 수 없음")
+            continue
+
+        trx_label = trx.transaction_no
+        success, message = _do_cancel_incoming(trx, cancel_action)
+        if success:
+            success_count += 1
+        else:
+            fail_details.append(f"{trx_label}: {message}")
+
+    if fail_details:
+        fail_preview = " / ".join(fail_details[:5])
+        more = f" 외 {len(fail_details) - 5}건" if len(fail_details) > 5 else ""
+        messages.warning(
+            request,
+            f"[일괄 {action_label}] 성공 {success_count}건, 실패 {len(fail_details)}건 — {fail_preview}{more}"
+        )
+    else:
+        messages.success(request, f"[일괄 {action_label}] {success_count}건 모두 완료되었습니다.")
 
     return redirect(redirect_to)
 

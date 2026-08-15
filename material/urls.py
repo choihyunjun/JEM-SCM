@@ -17,6 +17,7 @@ urlpatterns = [
     # 2. 입고 관리
     path('inbound/manual/', views.manual_incoming, name='manual_incoming'),
     path('inbound/manual/cancel/<int:trx_id>/', views.cancel_manual_incoming, name='cancel_manual_incoming'),
+    path('inbound/manual/cancel-bulk/', views.bulk_cancel_manual_incoming, name='bulk_cancel_manual_incoming'),
     path('inbound/manual/edit/<int:trx_id>/', views.edit_manual_incoming, name='edit_manual_incoming'),
     path('inbound/erp-sync/', views.erp_incoming_sync, name='erp_incoming_sync'),
     path('api/check-open-orders/', views.api_check_open_orders, name='api_check_open_orders'),

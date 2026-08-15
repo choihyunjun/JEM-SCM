@@ -262,6 +262,9 @@
                 <table class="table table-hover table-sm mb-0 align-middle text-center">
                     <thead class="table-light">
                         <tr>
+                            <th style="width:3%;">
+                                <input type="checkbox" class="form-check-input" id="selectAllHistory" title="전체 선택">
+                            </th>
                             <th style="width:10%;">일시</th>
                             <th style="width:13%;">수불번호</th>
                             <th style="width:9%;">품번</th>
@@ -279,6 +282,11 @@
                         <tr style="cursor:pointer;"
                             onclick="openHistoryDetail({{ item.id }}, '{{ item.transaction_no }}', '{{ item.date|date:"Y-m-d H:i" }}', '{{ item.part.part_no }}', '{{ item.part.part_name|escapejs }}', {{ item.display_qty }}, '{{ item.lot_no|date:"Y-m-d"|default:"-" }}', '{{ item.display_warehouse|default:"-"|escapejs }}', '{{ item.vendor.name|default:"-"|escapejs }}', '{{ item.actor.username|default:"-" }}', '{{ item.remark|default:""|escapejs }}', {{ item.label_count }}, '{{ item.inspection_status|default:"" }}', {{ item.can_cancel|yesno:"true,false" }}, {{ item.can_edit|yesno:"true,false" }})"
                             class="">
+                            <td onclick="event.stopPropagation();">
+                                {% if item.transaction_type != 'IN_ERP' %}
+                                <input type="checkbox" class="form-check-input bulk-select-cb" value="{{ item.id }}">
+                                {% endif %}
+                            </td>
                             <td class="small text-nowrap">{{ item.date|date:"Y-m-d H:i" }}</td>
                             <td class="small fw-bold text-primary text-nowrap">{{ item.transaction_no }}</td>
                             <td class="small">{{ item.part.part_no }}</td>
@@ -318,12 +326,29 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="10" class="text-muted py-4">입고처리 내역이 없습니다.</td>
+                            <td colspan="11" class="text-muted py-4">입고처리 내역이 없습니다.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
+
+            <!-- 일괄 처리 바 -->
+            <div class="d-flex justify-content-between align-items-center mt-2 p-2 border rounded bg-light">
+                <span class="small text-muted"><strong id="bulkSelectedCount">0</strong>건 선택됨</span>
+                <div>
+                    <button type="button" class="btn btn-sm btn-outline-warning me-2" id="bulkCancelIncomingBtn" disabled onclick="submitBulkCancel('cancel_incoming_only')">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>입고만 취소
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-danger" id="bulkDeleteAllBtn" disabled onclick="submitBulkCancel('delete_all')">
+                        <i class="bi bi-trash me-1"></i>전체삭제
+                    </button>
+                </div>
+            </div>
+            <form method="post" id="bulkCancelForm" action="{% url 'material:bulk_cancel_manual_incoming' %}" style="display:none;">
+                {% csrf_token %}
+                <input type="hidden" name="cancel_action" id="bulkCancelAction" value="delete_all">
+            </form>
 
             <!-- 페이지네이션 -->
             {% if history_page.has_other_pages %}
@@ -1086,6 +1111,60 @@
 
         if (cancelConfirmModal) cancelConfirmModal.show();
     }
+
+    // === 입고처리 내역: 체크박스 일괄 취소/삭제 ===
+    function updateBulkBar() {
+        var checked = document.querySelectorAll('.bulk-select-cb:checked');
+        var count = checked.length;
+        var countEl = document.getElementById('bulkSelectedCount');
+        if (countEl) countEl.textContent = count;
+        var incBtn = document.getElementById('bulkCancelIncomingBtn');
+        var delBtn = document.getElementById('bulkDeleteAllBtn');
+        if (incBtn) incBtn.disabled = (count === 0);
+        if (delBtn) delBtn.disabled = (count === 0);
+
+        var selectAllCb = document.getElementById('selectAllHistory');
+        if (selectAllCb) {
+            var all = document.querySelectorAll('.bulk-select-cb');
+            selectAllCb.checked = all.length > 0 && count === all.length;
+        }
+    }
+
+    function submitBulkCancel(actionType) {
+        var checked = document.querySelectorAll('.bulk-select-cb:checked');
+        if (checked.length === 0) return;
+        var actionLabel = actionType === 'cancel_incoming_only' ? '입고만 취소' : '전체삭제';
+        if (!confirm(checked.length + '건을 [' + actionLabel + '] 처리하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) {
+            return;
+        }
+        var form = document.getElementById('bulkCancelForm');
+        form.querySelectorAll('input[name="trx_ids[]"]').forEach(function(el) { el.remove(); });
+        checked.forEach(function(cb) {
+            var input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'trx_ids[]';
+            input.value = cb.value;
+            form.appendChild(input);
+        });
+        document.getElementById('bulkCancelAction').value = actionType;
+        form.submit();
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var selectAllCb = document.getElementById('selectAllHistory');
+        if (selectAllCb) {
+            selectAllCb.addEventListener('change', function() {
+                document.querySelectorAll('.bulk-select-cb').forEach(function(cb) {
+                    cb.checked = selectAllCb.checked;
+                });
+                updateBulkBar();
+            });
+        }
+        document.querySelectorAll('.bulk-select-cb').forEach(function(cb) {
+            cb.addEventListener('change', updateBulkBar);
+        });
+        updateBulkBar();
+    });
 
     // ERP 입고 동기화 버튼
     document.getElementById('erpSyncForm')?.addEventListener('submit', function(e) {
