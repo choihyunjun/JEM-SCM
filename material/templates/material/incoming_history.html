@@ -62,6 +62,14 @@
                         {% endif %}
                     </div>
                 </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">시스템</label>
+                    <select name="q_sys" class="form-select form-select-sm">
+                        <option value="" {% if not q_sys %}selected{% endif %}>전체</option>
+                        <option value="ERP" {% if q_sys == 'ERP' %}selected{% endif %}>ERP</option>
+                        <option value="SCM" {% if q_sys == 'SCM' %}selected{% endif %}>SCM</option>
+                    </select>
+                </div>
                 <div class="col-md-1">
                     <button type="submit" class="btn btn-outline-secondary btn-sm w-100">
                         <i class="bi bi-search"></i> 조회
@@ -106,6 +114,7 @@
                             <th style="width:32px;" class="text-center px-1"></th>
                             <th style="width:10%;">일자</th>
                             <th style="width:6%;">구분</th>
+                            <th style="width:5%;">시스템</th>
                             <th style="width:10%;">입고처</th>
                             <th style="width:10%;">품번</th>
                             <th class="text-start">품명</th>
@@ -153,6 +162,13 @@
                                 <span class="badge border border-danger text-danger bg-transparent">{{ item.display_type }}</span>
                                 {% endif %}
                             </td>
+                            <td>
+                                {% if item.transaction_type == 'IN_ERP' or item.transaction_type == 'RCV_ERP' %}
+                                    <span class="badge bg-warning text-dark">ERP</span>
+                                {% else %}
+                                    <span class="badge bg-info text-dark">SCM</span>
+                                {% endif %}
+                            </td>
                             <td class="small">{{ item.vendor.name|default:"-" }}</td>
                             <td class="small fw-bold">{{ item.part.part_no }}</td>
                             <td class="text-start small text-truncate" style="max-width:200px;">{{ item.part.part_name }}</td>
@@ -172,7 +188,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="11" class="text-center py-4">조회된 입고 내역이 없습니다.</td>
+                            <td colspan="12" class="text-center py-4">조회된 입고 내역이 없습니다.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -184,7 +200,7 @@
                 <ul class="pagination pagination-sm justify-content-center">
                     {% if page_obj.has_previous %}
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ q }}&q_group={{ q_group }}&q_vendor={{ q_vendor }}&start_date={{ start_date }}&end_date={{ end_date }}">이전</a>
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ q }}&q_group={{ q_group }}&q_vendor={{ q_vendor }}&q_sys={{ q_sys }}&start_date={{ start_date }}&end_date={{ end_date }}">이전</a>
                     </li>
                     {% endif %}
                     <li class="page-item disabled">
@@ -192,7 +208,7 @@
                     </li>
                     {% if page_obj.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ q }}&q_group={{ q_group }}&q_vendor={{ q_vendor }}&start_date={{ start_date }}&end_date={{ end_date }}">다음</a>
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ q }}&q_group={{ q_group }}&q_vendor={{ q_vendor }}&q_sys={{ q_sys }}&start_date={{ start_date }}&end_date={{ end_date }}">다음</a>
                     </li>
                     {% endif %}
                 </ul>

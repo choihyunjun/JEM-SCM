@@ -1512,6 +1512,13 @@ def incoming_history(request):
     if q_vendor:
         qs = qs.filter(vendor__name__icontains=q_vendor)
 
+    # 시스템: ERP(ERP에서 동기화) vs SCM(SCM 화면에서 입력 — 검사입고 TRANSFER 포함)
+    q_sys = (request.GET.get('q_sys') or '').strip()
+    if q_sys == 'ERP':
+        qs = qs.filter(transaction_type='IN_ERP')
+    elif q_sys == 'SCM':
+        qs = qs.filter(transaction_type__in=['IN_MANUAL', 'IN_SCM', 'TRANSFER'])
+
     # 3) 날짜 필터 ('None' 방어)
     start_date = (request.GET.get('start_date') or '').strip()
     end_date = (request.GET.get('end_date') or '').strip()
@@ -1634,6 +1641,7 @@ def incoming_history(request):
         'q': q,
         'q_group': q_group,
         'q_vendor': q_vendor,
+        'q_sys': q_sys,
         'start_date': start_date,
         'end_date': end_date,
         'part_groups': part_groups,
