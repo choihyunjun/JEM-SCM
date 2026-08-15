@@ -273,7 +273,7 @@
                             <th style="width:9%;">창고</th>
                             <th style="width:5%;">출처</th>
                             <th style="width:6%;">발주연동</th>
-                            <th style="width:6%;">상태</th>
+                            <th style="width:4%;">라벨발행</th>
                             <th style="width:6%;">관리</th>
                         </tr>
                     </thead>
@@ -310,9 +310,9 @@
                             </td>
                             <td>
                                 {% if item.label_count > 0 %}
-                                    <span class="badge bg-success">라벨발행</span>
+                                    <i class="bi bi-check-circle-fill text-success" title="라벨발행"></i>
                                 {% else %}
-                                    <span class="badge bg-secondary">대기</span>
+                                    <i class="bi bi-circle text-muted" title="미발행"></i>
                                 {% endif %}
                             </td>
                             <td>
