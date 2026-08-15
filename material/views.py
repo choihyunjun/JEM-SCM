@@ -736,23 +736,36 @@ def manual_incoming(request):
     history_paginator = Paginator(history_qs, 15)
     history_page = history_paginator.get_page(request.GET.get('hpage'))
 
+    warehouses_qs = Warehouse.objects.filter(is_active=True).order_by('code')
+    wh_name_by_code = {w.code: w.name for w in warehouses_qs}
+
     from .models import RawMaterialLabel
     for item in history_page:
         item.label_count = RawMaterialLabel.objects.filter(
             incoming_transaction=item, label_type='PACKAGE'
         ).exclude(status='CANCELLED').count()
+
+        # 창고/수량 표시: 검사 합격 완료된 건은 최종 배정 창고 + 합격 수량으로 보여줌
+        # (검사대기/불합격/무검사 건은 원본 입고 창고·수량 그대로 표시)
+        item.display_warehouse = item.warehouse_to.name if item.warehouse_to else '-'
+        item.display_qty = item.quantity
         try:
-            item.inspection_status = item.inspection.status
+            insp = item.inspection
+            item.inspection_status = insp.status
+            if insp.status == 'APPROVED' and insp.qty_good > 0:
+                item.display_qty = insp.qty_good
+                item.display_warehouse = wh_name_by_code.get(
+                    insp.target_warehouse_code, item.display_warehouse
+                )
         except Exception:
             item.inspection_status = None
+
         item.can_cancel = (item.label_count == 0)
         item.can_edit = (
             item.transaction_type in ('IN_MANUAL', 'IN_SCM')
             and item.label_count == 0
             and item.inspection_status in (None, 'PENDING')
         )
-
-    warehouses_qs = Warehouse.objects.filter(is_active=True).order_by('code')
 
     # ERP 자동동기화 결과
     from django.core.cache import cache
