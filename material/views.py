@@ -1447,7 +1447,6 @@ def incoming_history(request):
     qs = MaterialTransaction.objects.filter(
         Q(transaction_type='IN_MANUAL')
         | Q(transaction_type='IN_ERP')
-        | Q(transaction_type='RCV_ERP')
         | Q(transaction_type='IN_SCM')
         |
         (
@@ -1473,7 +1472,6 @@ def incoming_history(request):
         qs = qs.filter(
             Q(transaction_type='IN_MANUAL') |
             Q(transaction_type='IN_ERP') |
-            Q(transaction_type='RCV_ERP') |
             Q(transaction_type='IN_SCM') |
             transfer_q
         )
@@ -1537,10 +1535,6 @@ def incoming_history(request):
             item.display_remark = remark.strip()
         elif item.transaction_type == 'IN_ERP':
             item.display_type = "ERP입고"
-            item.badge_color = "info"
-            item.display_remark = ""
-        elif item.transaction_type == 'RCV_ERP':
-            item.display_type = "ERP생산입고"
             item.badge_color = "info"
             item.display_remark = ""
         elif item.transaction_type == 'TRANSFER':
