@@ -238,9 +238,8 @@
                     <label class="form-label small mb-1">출처</label>
                     <select name="hsrc" class="form-select form-select-sm">
                         <option value="" {% if not history_src %}selected{% endif %}>전체</option>
-                        <option value="IN_ERP" {% if history_src == 'IN_ERP' %}selected{% endif %}>ERP</option>
-                        <option value="IN_SCM" {% if history_src == 'IN_SCM' %}selected{% endif %}>SCM</option>
-                        <option value="IN_MANUAL" {% if history_src == 'IN_MANUAL' %}selected{% endif %}>수기</option>
+                        <option value="ERP" {% if history_src == 'ERP' %}selected{% endif %}>ERP</option>
+                        <option value="SCM" {% if history_src == 'SCM' %}selected{% endif %}>SCM</option>
                     </select>
                 </div>
                 <div class="col-md-2">
@@ -273,6 +272,7 @@
                             <th style="width:8%;">LOT</th>
                             <th style="width:9%;">창고</th>
                             <th style="width:5%;">출처</th>
+                            <th style="width:6%;">발주연동</th>
                             <th style="width:6%;">상태</th>
                             <th style="width:6%;">관리</th>
                         </tr>
@@ -297,10 +297,15 @@
                             <td>
                                 {% if item.transaction_type == 'IN_ERP' %}
                                     <span class="badge bg-warning text-dark">ERP</span>
-                                {% elif item.transaction_type == 'IN_SCM' %}
-                                    <span class="badge bg-info text-dark">SCM</span>
                                 {% else %}
-                                    <span class="badge bg-primary">수기</span>
+                                    <span class="badge bg-info text-dark">SCM</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.transaction_type == 'IN_SCM' %}
+                                    <span class="badge bg-primary">발주</span>
+                                {% else %}
+                                    <span class="text-muted small">-</span>
                                 {% endif %}
                             </td>
                             <td>
@@ -326,7 +331,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="11" class="text-muted py-4">입고처리 내역이 없습니다.</td>
+                            <td colspan="12" class="text-muted py-4">입고처리 내역이 없습니다.</td>
                         </tr>
                         {% endfor %}
                     </tbody>

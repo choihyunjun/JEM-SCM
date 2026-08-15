@@ -722,9 +722,12 @@ def manual_incoming(request):
     if history_wh:
         history_qs = history_qs.filter(warehouse_to_id=history_wh)
 
+    # 출처: ERP(ERP에서 동기화) vs SCM(SCM 화면에서 입력 — 발주매칭/예외입고 모두 포함)
     history_src = (request.GET.get('hsrc') or '').strip()
-    if history_src in ('IN_ERP', 'IN_SCM', 'IN_MANUAL'):
-        history_qs = history_qs.filter(transaction_type=history_src)
+    if history_src == 'ERP':
+        history_qs = history_qs.filter(transaction_type='IN_ERP')
+    elif history_src == 'SCM':
+        history_qs = history_qs.filter(transaction_type__in=['IN_MANUAL', 'IN_SCM'])
 
     history_start = (request.GET.get('hstart') or '').strip()
     history_end = (request.GET.get('hend') or '').strip()
