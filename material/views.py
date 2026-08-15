@@ -704,8 +704,12 @@ def manual_incoming(request):
             return redirect('material:manual_incoming')
 
     # === 입고처리 내역 (History) ===
+    # 전량불합격(검사 결과 양품 0개) 건은 실제로 입고된 게 없으므로 목록에서 제외
+    # (일부만 불합격인 건은 합격분만큼 실제 입고됐으므로 그대로 표시)
     history_qs = MaterialTransaction.objects.filter(
         transaction_type__in=['IN_MANUAL', 'IN_SCM', 'IN_ERP']
+    ).exclude(
+        inspection__status='REJECTED'
     ).select_related(
         'part', 'warehouse_to', 'vendor', 'actor'
     ).order_by('-date', '-id')
