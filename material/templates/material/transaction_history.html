@@ -49,15 +49,15 @@
 <div class="container-fluid">
 
     <div class="d-flex justify-content-between align-items-center mb-3 pt-3">
-        <h4 class="fw-bold text-secondary">
-            <i class="bi bi-clock-history me-2"></i>품번별 수불 이력
-        </h4>
+        <span class="dtl-title">
+            <i class="bi bi-clock-history me-2" style="color:#9ca3af;"></i>품번별 수불 이력
+        </span>
         <span class="text-muted small">품번을 선택하면 해당 품목의 전체 이동 흐름을 확인할 수 있습니다.</span>
     </div>
 
     <!-- 검색 필터 -->
-    <div class="card shadow-sm border-0 mb-3 bg-light">
-        <div class="card-body py-3">
+    <div class="dtl-toolbar mb-3">
+        <div>
             <form method="get" class="row g-2 align-items-end">
 
                 <div class="col-auto">
@@ -126,16 +126,16 @@
 
     {% if selected_part %}
     <!-- 선택된 품번 정보 -->
-    <div class="card shadow-sm border-0 mb-3 border-start border-4 border-primary">
+    <div class="dtl-card mb-3" style="border-left: 4px solid #4338ca;">
         <div class="card-body py-2">
             <div class="row align-items-center">
                 <div class="col-md-6">
-                    <h5 class="mb-1 fw-bold text-primary">
+                    <h5 class="mb-1 fw-bold" style="color:#4338ca;">
                         <i class="bi bi-box-seam me-2"></i>{{ selected_part.part_no }}
                     </h5>
                     <span class="text-muted">{{ selected_part.part_name }}</span>
                     {% if selected_part.part_group %}
-                        <span class="badge bg-secondary ms-2">{{ selected_part.part_group }}</span>
+                        <span class="dtl-pill slate ms-2">{{ selected_part.part_group }}</span>
                     {% endif %}
                 </div>
                 <div class="col-md-6 text-end">
@@ -168,17 +168,15 @@
     </div>
 
     <!-- 결과 테이블 -->
-    <div class="card shadow-sm border-0">
-        <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
-            <span class="fw-bold text-dark">
-                <i class="bi bi-list-ul me-1"></i> 수불 이력
-            </span>
+    <div class="dtl-card mb-0">
+        <div class="dtl-card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-list-ul"></i> 수불 이력</span>
             <div>
                 <a href="{% url 'material:transaction_history_excel' %}?start_date={{ start_date }}&end_date={{ end_date }}&part_no={{ part_no }}&lot_no={{ lot_no }}"
-                   class="btn btn-success btn-sm me-2">
+                   class="dtl-btn-outline btn-sm me-2">
                     <i class="bi bi-file-earmark-excel me-1"></i> Excel 다운로드
                 </a>
-                <span class="badge bg-secondary">총 {{ result_count|intcomma }}건</span>
+                <span class="dtl-pill slate">총 {{ result_count|intcomma }}건</span>
             </div>
         </div>
         <div class="card-body p-0">
@@ -204,13 +202,13 @@
                             <td class="small">{{ trx.date|date:"Y-m-d H:i" }}</td>
                             <td>
                                 {% if trx.warehouse_to and not trx.warehouse_from %}
-                                    <span class="badge bg-success trx-badge">입고</span>
+                                    <span class="dtl-pill green">입고</span>
                                 {% elif trx.warehouse_from and not trx.warehouse_to %}
-                                    <span class="badge bg-danger trx-badge">출고</span>
+                                    <span class="dtl-pill red">출고</span>
                                 {% elif trx.warehouse_from and trx.warehouse_to %}
-                                    <span class="badge bg-primary trx-badge">이동</span>
+                                    <span class="dtl-pill blue">이동</span>
                                 {% else %}
-                                    <span class="badge bg-secondary trx-badge">기타</span>
+                                    <span class="dtl-pill slate">기타</span>
                                 {% endif %}
                             </td>
                             <td class="small text-info fw-bold">
@@ -247,7 +245,7 @@
                             <td class="small text-muted">
                                 {% if trx.actor %}{{ trx.actor.username }}{% endif %}
                                 {% if trx.transaction_type %}
-                                    <br><span class="badge bg-light text-dark">{{ trx.transaction_type }}</span>
+                                    <br><span class="dtl-pill slate">{{ trx.transaction_type }}</span>
                                 {% endif %}
                             </td>
                         </tr>
@@ -304,7 +302,7 @@
 
     {% else %}
     <!-- 품번 미선택 시 안내 -->
-    <div class="card shadow-sm border-0">
+    <div class="dtl-card mb-0">
         <div class="card-body text-center py-5">
             <i class="bi bi-search fs-1 text-muted d-block mb-3"></i>
             <h5 class="text-muted">품번을 선택해주세요</h5>

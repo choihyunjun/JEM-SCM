@@ -8,17 +8,15 @@
     <!-- 헤더 -->
     <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
-            <h4 class="fw-bold mb-0 text-success">
-                <i class="bi bi-table me-2"></i>재고조사 통합 집계본
-            </h4>
+            <span class="dtl-title d-block"><i class="bi bi-table me-2" style="color:#9ca3af;"></i>재고조사 통합 집계본</span>
             <small class="text-muted">Ver. 2 [{% now "y.m.d" %}]</small>
         </div>
         <div class="d-flex gap-2">
             <a href="{% url 'material:inventory_summary_excel' %}?part_no={{ part_no_q }}&part_name={{ part_name_q }}&category={{ category_q }}"
-               class="btn btn-success">
+               class="dtl-btn-dark">
                 <i class="bi bi-file-earmark-excel me-1"></i>엑셀 다운로드
             </a>
-            <a href="{% url 'material:inventory_check_list' %}" class="btn btn-outline-secondary">
+            <a href="{% url 'material:inventory_check_list' %}" class="dtl-btn-outline">
                 <i class="bi bi-arrow-left me-1"></i>재고조사 목록
             </a>
         </div>
@@ -53,8 +51,8 @@
     </div>
 
     <!-- 필터 -->
-    <div class="card shadow-sm mb-3">
-        <div class="card-body py-2">
+    <div class="dtl-toolbar mb-3" style="padding: 0.6rem 1rem;">
+        <div>
             <form method="get" class="row g-2 align-items-end">
                 <div class="col-auto">
                     <input type="text" name="part_no" class="form-control form-control-sm"
@@ -83,7 +81,7 @@
     </div>
 
     <!-- 데이터 테이블 -->
-    <div class="card shadow-sm">
+    <div class="dtl-card mb-0">
         <div class="card-body p-0">
             <div class="table-responsive" style="max-height: 70vh;">
                 <table class="table table-sm table-hover table-bordered mb-0" style="font-size: 0.85rem;">

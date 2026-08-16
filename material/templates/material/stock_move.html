@@ -11,9 +11,9 @@
     <form method="post" id="transferForm">
         {% csrf_token %}
 
-        <div class="card shadow-sm border-success mb-4">
-            <div class="card-header bg-success text-white fw-bold">
-                <i class="bi bi-plus-circle me-1"></i> 이동 대상 추가
+        <div class="dtl-card mb-4">
+            <div class="dtl-card-header">
+                <i class="bi bi-plus-circle"></i> 이동 대상 추가
             </div>
             <div class="card-body bg-light">
                 <!-- 이동 처리일 + QR 스캔 입력란 -->
@@ -101,10 +101,10 @@
             </div>
         </div>
 
-        <div class="card shadow-sm mb-4">
-            <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-list-check me-1"></i> 이동 목록</span>
-                <span class="badge bg-secondary rounded-pill" id="itemCount">0건</span>
+        <div class="dtl-card mb-4">
+            <div class="dtl-card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-list-check"></i> 이동 목록</span>
+                <span class="dtl-pill slate" id="itemCount">0건</span>
             </div>
             <div class="card-body p-0">
                 <table class="table table-bordered table-hover mb-0 text-center align-middle" id="transferTable">
@@ -138,10 +138,10 @@
     <!-- ============================================ -->
     <!-- 이동 처리 내역 -->
     <!-- ============================================ -->
-    <div class="card shadow-sm mb-4">
-        <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-clock-history me-1"></i> 이동 처리 내역</span>
-            <span class="badge bg-success rounded-pill">{{ history_count }}건</span>
+    <div class="dtl-card mb-4">
+        <div class="dtl-card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-clock-history"></i> 이동 처리 내역</span>
+            <span class="dtl-pill green">{{ history_count }}건</span>
         </div>
         <div class="card-body pb-2">
             <form method="get" class="row g-2 align-items-end mb-3">
@@ -201,9 +201,9 @@
                         <td class="small">{{ trx.date|date:"Y-m-d H:i" }}</td>
                         <td>
                             {% if trx.transaction_type == 'TRF_ERP' %}
-                            <span class="badge bg-info">ERP</span>
+                            <span class="dtl-pill cyan">ERP</span>
                             {% else %}
-                            <span class="badge bg-success">SCM</span>
+                            <span class="dtl-pill green">SCM</span>
                             {% endif %}
                         </td>
                         <td>
@@ -218,7 +218,7 @@
                         <td class="small">{{ trx.warehouse_to.name|default:"-"|truncatechars:12 }}</td>
                         <td>
                             {% if trx.label_count > 0 %}
-                            <span class="badge bg-warning text-dark"><i class="bi bi-tags"></i> {{ trx.label_count }}</span>
+                            <span class="dtl-pill amber"><i class="bi bi-tags"></i> {{ trx.label_count }}</span>
                             {% else %}
                             <span class="text-muted">-</span>
                             {% endif %}
@@ -277,7 +277,7 @@
 <div class="modal fade" id="labelSelectModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header bg-warning text-dark">
+            <div class="modal-header">
                 <h5 class="modal-title fw-bold">
                     <i class="bi bi-tags me-2"></i>투입 라벨 선택
                 </h5>
@@ -332,11 +332,11 @@
 <div class="modal fade" id="transferDetailModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header bg-success text-white">
+            <div class="modal-header">
                 <h5 class="modal-title fw-bold">
                     <i class="bi bi-arrow-left-right me-2"></i>이동 내역 상세
                 </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <table class="table table-sm table-bordered mb-3">
@@ -391,8 +391,8 @@
                 <!-- 연결된 라벨 -->
                 <div id="detailLabelsSection" class="d-none">
                     <h6 class="fw-bold mb-2">
-                        <i class="bi bi-tags text-warning me-1"></i>투입된 라벨
-                        <span class="badge bg-warning text-dark ms-1" id="detailLabelCount">0</span>
+                        <i class="bi bi-tags me-1" style="color:#b45309;"></i>투입된 라벨
+                        <span class="dtl-pill amber ms-1" id="detailLabelCount">0</span>
                     </h6>
                     <table class="table table-sm table-bordered mb-0 align-middle text-center">
                         <thead class="table-light">
@@ -422,9 +422,9 @@
 <div class="modal fade" id="cameraModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header bg-success text-white">
+            <div class="modal-header">
                 <h5 class="modal-title fw-bold"><i class="bi bi-qr-code-scan me-2"></i>현품표 QR 스캔</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-0">
                 <div id="qr-reader" style="width: 100%;"></div>
@@ -785,8 +785,8 @@
                         lb.d_day === 0 ? 'D-Day' : `D-${lb.d_day}`;
 
                     const typeBadge = lb.label_type === 'TAG'
-                        ? '<span class="badge bg-info text-white me-1">TAG</span>'
-                        : '<span class="badge bg-success text-white me-1">RM</span>';
+                        ? '<span class="dtl-pill cyan me-1">TAG</span>'
+                        : '<span class="dtl-pill green me-1">RM</span>';
 
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
@@ -867,14 +867,14 @@
         const parsedLabels = JSON.parse(labelIdsJson);
         const labelCount = parsedLabels.length;
 
-        const fifoBadge = fifoReason ? `<span class="badge bg-danger ms-1" title="FIFO 위반: ${fifoReason}"><i class="bi bi-exclamation-triangle"></i> FIFO</span>` : '';
+        const fifoBadge = fifoReason ? `<span class="dtl-pill red ms-1" title="FIFO 위반: ${fifoReason}"><i class="bi bi-exclamation-triangle"></i> FIFO</span>` : '';
 
         // 라벨 뱃지: RM/TAG 구분 표시
         const rmCount = parsedLabels.filter(x => (x.type || 'RM') === 'RM').length;
         const tagCount = parsedLabels.filter(x => x.type === 'TAG').length;
         let labelBadgeDetail = '';
-        if (rmCount > 0) labelBadgeDetail += `<span class="badge bg-success text-white ms-1">RM ${rmCount}</span>`;
-        if (tagCount > 0) labelBadgeDetail += `<span class="badge bg-info text-white ms-1">TAG ${tagCount}</span>`;
+        if (rmCount > 0) labelBadgeDetail += `<span class="dtl-pill green ms-1">RM ${rmCount}</span>`;
+        if (tagCount > 0) labelBadgeDetail += `<span class="dtl-pill cyan ms-1">TAG ${tagCount}</span>`;
 
         if (qrRawData) tr.dataset.qrData = qrRawData;
 
@@ -976,11 +976,11 @@
             // ERP 연동 상태
             const erpEl = document.getElementById('detailErp');
             if (t.erp_status === 'SUCCESS') {
-                erpEl.innerHTML = `<span class="badge bg-success">연동완료</span> <small class="text-muted">${t.erp_no}</small>`;
+                erpEl.innerHTML = `<span class="dtl-pill green">연동완료</span> <small class="text-muted">${t.erp_no}</small>`;
             } else if (t.erp_status === 'FAILED') {
-                erpEl.innerHTML = `<span class="badge bg-danger">실패</span> <small class="text-muted">${t.erp_message}</small>`;
+                erpEl.innerHTML = `<span class="dtl-pill red">실패</span> <small class="text-muted">${t.erp_message}</small>`;
             } else {
-                erpEl.innerHTML = `<span class="badge bg-secondary">미연동</span>`;
+                erpEl.innerHTML = `<span class="dtl-pill slate">미연동</span>`;
             }
 
             // ERP에서 동기화된 건은 취소 불가
@@ -1010,8 +1010,8 @@
                         lb.used_d_day <= 90 ? 'text-primary fw-bold' : 'text-success fw-bold';
 
                     const typeBadge = lb.label_type === 'TAG'
-                        ? '<span class="badge bg-info me-1">TAG</span>'
-                        : '<span class="badge bg-success me-1">RM</span>';
+                        ? '<span class="dtl-pill cyan me-1">TAG</span>'
+                        : '<span class="dtl-pill green me-1">RM</span>';
 
                     const tr = document.createElement('tr');
                     tr.innerHTML = `

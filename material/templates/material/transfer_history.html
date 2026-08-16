@@ -18,15 +18,15 @@
 <div class="container-fluid">
 
     <div class="d-flex justify-content-between align-items-center mb-3 pt-3">
-        <h4 class="fw-bold text-secondary">
-            <i class="bi bi-arrow-left-right me-2"></i>재고 이동 현황
-        </h4>
+        <span class="dtl-title">
+            <i class="bi bi-arrow-left-right me-2" style="color:#9ca3af;"></i>재고 이동 현황
+        </span>
         <span class="text-muted small">창고 간 재고 이동 이력을 조회합니다.</span>
     </div>
 
     <!-- 검색 필터 -->
-    <div class="card shadow-sm border-0 mb-3 bg-light">
-        <div class="card-body py-3">
+    <div class="dtl-toolbar mb-3">
+        <div>
             <form method="get" class="row g-2 align-items-end">
 
                 <div class="col-auto">
@@ -94,12 +94,10 @@
     </div>
 
     <!-- 결과 테이블 -->
-    <div class="card shadow-sm border-0">
-        <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
-            <span class="fw-bold text-dark">
-                <i class="bi bi-list-ul me-1"></i> 이동 이력
-            </span>
-            <span class="badge bg-secondary">총 {{ page_obj.paginator.count|intcomma }}건</span>
+    <div class="dtl-card mb-0">
+        <div class="dtl-card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-list-ul"></i> 이동 이력</span>
+            <span class="dtl-pill slate">총 {{ page_obj.paginator.count|intcomma }}건</span>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -129,7 +127,7 @@
                             <td class="text-start small">{{ trx.part.part_name|truncatechars:25 }}</td>
                             <td class="small">
                                 {% if trx.lot_no %}
-                                    <span class="badge bg-info text-dark">{{ trx.lot_no|date:"Y-m-d" }}</span>
+                                    <span class="dtl-pill cyan">{{ trx.lot_no|date:"Y-m-d" }}</span>
                                 {% else %}
                                     <span class="text-muted">-</span>
                                 {% endif %}

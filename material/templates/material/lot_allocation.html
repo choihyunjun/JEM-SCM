@@ -34,10 +34,8 @@
 
     <!-- 배분 결과 + 현품표 출력 -->
     {% if alloc_result %}
-    <div class="card shadow-sm border-success mb-4">
-        <div class="card-header fw-bold text-white" style="background-color: #198754; border-bottom: none;">
-            <i class="bi bi-check-circle me-2"></i>LOT 배분 완료 — 현품표 출력
-        </div>
+    <div class="dtl-card mb-4">
+        <div class="dtl-card-header"><i class="bi bi-check-circle" style="color:#047857;"></i>LOT 배분 완료 — 현품표 출력</div>
         <div class="card-body">
             <table class="table table-sm table-bordered mb-3 text-center" style="font-size: 0.85rem;">
                 <thead class="table-light">
@@ -48,7 +46,7 @@
                     <tr>
                         <td class="fw-bold text-primary">{{ item.part_no }}</td>
                         <td class="text-start">{{ item.part_name }}</td>
-                        <td><span class="badge bg-info text-dark">{{ item.lot_no }}</span></td>
+                        <td><span class="dtl-pill cyan">{{ item.lot_no }}</span></td>
                         <td class="fw-bold">{{ item.quantity }}{{ item.weight_unit|default:"EA" }}</td>
                         <td>
                             <input type="number" class="form-control form-control-sm text-center snp-input"
@@ -149,10 +147,8 @@
     {% endif %}
 
     <!-- 카드1: 대상 선택 -->
-    <div class="card shadow-sm mb-4">
-        <div class="card-header bg-light fw-bold text-primary">
-            <i class="bi bi-search me-1"></i> 대상 선택
-        </div>
+    <div class="dtl-card mb-4">
+        <div class="dtl-card-header"><i class="bi bi-search"></i> 대상 선택</div>
         <div class="card-body">
             <div class="row g-3 align-items-start">
                 <div class="col-md-3">
@@ -226,9 +222,9 @@
     <div class="modal fade" id="reprintModal" tabindex="-1">
         <div class="modal-dialog modal-sm modal-dialog-centered">
             <div class="modal-content">
-                <div class="modal-header bg-secondary text-white py-2">
+                <div class="modal-header py-2">
                     <h6 class="modal-title fw-bold"><i class="bi bi-printer me-1"></i>현품표 재발행</h6>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="mb-2">
@@ -284,10 +280,8 @@
     </div>
 
     <!-- 카드3: 최근 배분 이력 -->
-    <div class="card shadow-sm mb-4">
-        <div class="card-header bg-light fw-bold text-secondary">
-            <i class="bi bi-clock-history me-1"></i> 최근 배분/수정 이력
-        </div>
+    <div class="dtl-card mb-4">
+        <div class="dtl-card-header"><i class="bi bi-clock-history"></i> 최근 배분/수정 이력</div>
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-sm table-hover mb-0">
@@ -309,9 +303,9 @@
                             <td class="small">{{ trx.date|date:"m/d H:i" }}</td>
                             <td>
                                 {% if trx.transaction_type == 'LOT_CORRECT' %}
-                                    <span class="badge bg-warning text-dark" style="font-size:0.7rem;">수정</span>
+                                    <span class="dtl-pill amber" style="font-size:0.7rem;">수정</span>
                                 {% else %}
-                                    <span class="badge bg-primary" style="font-size:0.7rem;">배분</span>
+                                    <span class="dtl-pill blue" style="font-size:0.7rem;">배분</span>
                                 {% endif %}
                             </td>
                             <td><small class="text-muted">{{ trx.part.part_no }}</small></td>

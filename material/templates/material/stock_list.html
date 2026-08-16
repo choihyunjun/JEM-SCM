@@ -2,17 +2,27 @@
 {% load humanize %}
 
 {% block content %}
+<style>
+    /* stock_list 전용 — material_base.html의 dtl-* 시스템을 로컬로 재사용 (사이드바 없는 화면) */
+    .dtl-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; margin-bottom: 1.25rem; overflow: hidden; }
+    .dtl-toolbar { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1.25rem; }
+    .dtl-pill { display: inline-flex; align-items: center; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.03em; padding: 0.2rem 0.6rem; border-radius: 999px; text-transform: uppercase; }
+    .dtl-pill.slate { background: #f3f4f6; color: #4b5563; }
+    .dtl-btn-dark { background: #1f2937; border: none; color: #fff; font-weight: 600; font-size: 0.85rem; padding: 0.5rem 1.4rem; border-radius: 8px; transition: background 0.15s ease; }
+    .dtl-btn-dark:hover { background: #111827; color: #fff; }
+    .dtl-title { font-size: 1.35rem; font-weight: 700; color: #1f2937; letter-spacing: -0.01em; }
+</style>
 <div class="container-fluid">
-    
+
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h4 class="fw-bold text-secondary"><i class="bi bi-boxes me-2"></i>자재 재고 현황</h4>
-        <a href="{% url 'material:inventory_summary' %}" class="btn btn-success">
+        <span class="dtl-title"><i class="bi bi-boxes me-2" style="color:#9ca3af;"></i>자재 재고 현황</span>
+        <a href="{% url 'material:inventory_summary' %}" class="dtl-btn-dark">
             <i class="bi bi-table me-1"></i>종합 집계표
         </a>
     </div>
 
-    <div class="card shadow-sm border-0 mb-3 bg-light">
-        <div class="card-body py-3">
+    <div class="dtl-toolbar">
+        <div>
             <form method="get" class="row g-2 align-items-center">
                 <input type="hidden" name="search_triggered" value="yes">
                 
@@ -77,7 +87,7 @@
     </div>
 
     {% if search_triggered == 'yes' %}
-        <div class="card shadow-sm border-0">
+        <div class="dtl-card mb-0">
             <div class="card-body p-0">
                 <div class="table-responsive">
                     <table class="table table-sm table-hover mb-0 text-center align-middle table-bordered" style="font-size: 0.85rem;">
@@ -86,7 +96,7 @@
                                 {% if view_mode == 'detail' %}
                                     <th style="width: 18%;">창고위치</th>
                                 {% else %}
-                                    <th style="width: 18%;" class="bg-primary-subtle text-primary">구분</th>
+                                    <th style="width: 18%; background:#eef2ff; color:#4338ca;">구분</th>
                                 {% endif %}
                                 
                                 <th style="width: 10%;">품목군</th>
@@ -105,7 +115,7 @@
                             <tr>
                                 {% if view_mode == 'detail' %}
                                     <td class="text-start ps-3 text-truncate" style="max-width: 200px;">
-                                        <span class="badge bg-secondary me-1" style="font-size: 0.75rem;">{{ item.warehouse__code }}</span>
+                                        <span class="dtl-pill slate me-1" style="font-size: 0.75rem;">{{ item.warehouse__code }}</span>
                                         {{ item.warehouse__name }}
                                     </td>
                                     <td>{{ item.part__part_group }}</td>
@@ -173,9 +183,9 @@
 <div class="modal fade" id="lotDetailModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
+            <div class="modal-header">
                 <h5 class="modal-title"><i class="bi bi-box-seam me-2"></i>LOT별 재고 상세</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div id="lotDetailContent">
