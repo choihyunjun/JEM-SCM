@@ -4,25 +4,25 @@
 {% block title %}QMS 대시보드{% endblock %}
 
 {% block qms_content %}
-<div class="container-fluid p-0">
+<div class="dtl-wrap" style="max-width:1400px;">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="fw-bold">QMS 대시보드</h3>
-        <span class="text-muted">품질관리시스템</span>
+        <span class="dtl-title">QMS 대시보드</span>
+        <span class="text-muted small">품질관리시스템</span>
     </div>
 
     <!-- 주요 지표 카드 -->
-    <div class="row g-3 mb-4">
+    <div class="row g-3 mb-3">
         <!-- 수입검사 -->
         <div class="col-md-3 col-sm-6">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-body">
+            <div class="dtl-card h-100 mb-0">
+                <div class="dtl-card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">수입검사 대기</div>
-                            <div class="h3 fw-bold mb-0 text-primary">{{ import_stats.pending }}</div>
+                            <div class="h3 fw-bold mb-0" style="color:#4338ca;">{{ import_stats.pending }}</div>
                         </div>
-                        <div class="bg-primary bg-opacity-10 p-3 rounded">
-                            <i class="bi bi-clipboard-check text-primary fs-4"></i>
+                        <div class="p-3 rounded" style="background:#eef2ff;">
+                            <i class="bi bi-clipboard-check fs-4" style="color:#4338ca;"></i>
                         </div>
                     </div>
                     <div class="small text-muted mt-2">오늘 요청: {{ import_stats.today }}건</div>
@@ -32,15 +32,15 @@
 
         <!-- 출하검사 -->
         <div class="col-md-3 col-sm-6">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-body">
+            <div class="dtl-card h-100 mb-0">
+                <div class="dtl-card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">출하검사 대기</div>
-                            <div class="h3 fw-bold mb-0 text-info">{{ outgoing_stats.pending }}</div>
+                            <div class="h3 fw-bold mb-0" style="color:#0e7490;">{{ outgoing_stats.pending }}</div>
                         </div>
-                        <div class="bg-info bg-opacity-10 p-3 rounded">
-                            <i class="bi bi-truck text-info fs-4"></i>
+                        <div class="p-3 rounded" style="background:#ecfeff;">
+                            <i class="bi bi-truck fs-4" style="color:#0e7490;"></i>
                         </div>
                     </div>
                     <div class="small text-muted mt-2">오늘 예정: {{ outgoing_stats.today }}건</div>
@@ -50,15 +50,15 @@
 
         <!-- 부적합품 -->
         <div class="col-md-3 col-sm-6">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-body">
+            <div class="dtl-card h-100 mb-0">
+                <div class="dtl-card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">미처리 부적합</div>
-                            <div class="h3 fw-bold mb-0 text-danger">{{ nc_stats.open }}</div>
+                            <div class="h3 fw-bold mb-0" style="color:#b91c1c;">{{ nc_stats.open }}</div>
                         </div>
-                        <div class="bg-danger bg-opacity-10 p-3 rounded">
-                            <i class="bi bi-exclamation-triangle text-danger fs-4"></i>
+                        <div class="p-3 rounded" style="background:#fef2f2;">
+                            <i class="bi bi-exclamation-triangle fs-4" style="color:#b91c1c;"></i>
                         </div>
                     </div>
                     <div class="small text-muted mt-2">이번달: {{ nc_stats.this_month }}건</div>
@@ -68,20 +68,20 @@
 
         <!-- CAPA -->
         <div class="col-md-3 col-sm-6">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-body">
+            <div class="dtl-card h-100 mb-0">
+                <div class="dtl-card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">CAPA 요청</div>
-                            <div class="h3 fw-bold mb-0 text-warning">{{ capa_stats.requested }}</div>
+                            <div class="h3 fw-bold mb-0" style="color:#b45309;">{{ capa_stats.requested }}</div>
                         </div>
-                        <div class="bg-warning bg-opacity-10 p-3 rounded">
-                            <i class="bi bi-tools text-warning fs-4"></i>
+                        <div class="p-3 rounded" style="background:#fffbeb;">
+                            <i class="bi bi-tools fs-4" style="color:#b45309;"></i>
                         </div>
                     </div>
                     <div class="small text-muted mt-2">
                         {% if capa_stats.overdue > 0 %}
-                        <span class="text-danger"><i class="bi bi-exclamation-circle"></i> 기한초과 {{ capa_stats.overdue }}건</span>
+                        <span style="color:#b91c1c;"><i class="bi bi-exclamation-circle"></i> 기한초과 {{ capa_stats.overdue }}건</span>
                         {% else %}
                         기한 초과 없음
                         {% endif %}
@@ -92,17 +92,17 @@
     </div>
 
     <!-- 2행: 클레임, 4M 변경, ISIR -->
-    <div class="row g-3 mb-4">
+    <div class="row g-3 mb-3">
         <div class="col-md-3">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-body">
+            <div class="dtl-card h-100 mb-0">
+                <div class="dtl-card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">클레임 처리중</div>
-                            <div class="h3 fw-bold mb-0 text-secondary">{{ claim_stats.processing }}</div>
+                            <div class="h3 fw-bold mb-0" style="color:#4b5563;">{{ claim_stats.processing }}</div>
                         </div>
-                        <div class="bg-secondary bg-opacity-10 p-3 rounded">
-                            <i class="bi bi-file-earmark-x text-secondary fs-4"></i>
+                        <div class="p-3 rounded" style="background:#f3f4f6;">
+                            <i class="bi bi-file-earmark-x fs-4" style="color:#4b5563;"></i>
                         </div>
                     </div>
                     <div class="small text-muted mt-2">이번달: {{ claim_stats.this_month }}건</div>
@@ -111,15 +111,15 @@
         </div>
 
         <div class="col-md-3">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-body">
+            <div class="dtl-card h-100 mb-0">
+                <div class="dtl-card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">4M 검토중</div>
-                            <div class="h3 fw-bold mb-0 text-purple">{{ change_stats.review }}</div>
+                            <div class="h3 fw-bold mb-0" style="color:#6d28d9;">{{ change_stats.review }}</div>
                         </div>
-                        <div class="bg-purple bg-opacity-10 p-3 rounded" style="background: rgba(128,0,128,0.1);">
-                            <i class="bi bi-arrow-repeat fs-4" style="color: purple;"></i>
+                        <div class="p-3 rounded" style="background:#f5f3ff;">
+                            <i class="bi bi-arrow-repeat fs-4" style="color:#6d28d9;"></i>
                         </div>
                     </div>
                     <div class="small text-muted mt-2">정식 진행중: {{ change_stats.formal }}건</div>
@@ -128,15 +128,15 @@
         </div>
 
         <div class="col-md-3">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-body">
+            <div class="dtl-card h-100 mb-0">
+                <div class="dtl-card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">ISIR 승인대기</div>
-                            <div class="h3 fw-bold mb-0" style="color: teal;">{{ isir_stats.pending_approval }}</div>
+                            <div class="h3 fw-bold mb-0" style="color:#0e7490;">{{ isir_stats.pending_approval }}</div>
                         </div>
-                        <div class="p-3 rounded" style="background: rgba(0,128,128,0.1);">
-                            <i class="bi bi-file-earmark-check fs-4" style="color: teal;"></i>
+                        <div class="p-3 rounded" style="background:#ecfeff;">
+                            <i class="bi bi-file-earmark-check fs-4" style="color:#0e7490;"></i>
                         </div>
                     </div>
                     <div class="small text-muted mt-2">검토중: {{ isir_stats.reviewing }}건</div>
@@ -145,15 +145,15 @@
         </div>
 
         <div class="col-md-3">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-body">
+            <div class="dtl-card h-100 mb-0">
+                <div class="dtl-card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">조치중 부적합</div>
-                            <div class="h3 fw-bold mb-0 text-success">{{ nc_stats.action }}</div>
+                            <div class="h3 fw-bold mb-0" style="color:#047857;">{{ nc_stats.action }}</div>
                         </div>
-                        <div class="bg-success bg-opacity-10 p-3 rounded">
-                            <i class="bi bi-gear text-success fs-4"></i>
+                        <div class="p-3 rounded" style="background:#ecfdf5;">
+                            <i class="bi bi-gear fs-4" style="color:#047857;"></i>
                         </div>
                     </div>
                     <div class="small text-muted mt-2">원인분석/조치 진행중</div>
@@ -164,15 +164,15 @@
 
     <div class="row">
         <!-- 최근 부적합 현황 -->
-        <div class="col-md-6 mb-4">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-white fw-bold py-3 border-bottom d-flex justify-content-between align-items-center">
-                    <span><i class="bi bi-exclamation-triangle me-2 text-danger"></i>최근 부적합 현황</span>
-                    <a href="{% url 'qms:nc_list' %}" class="btn btn-sm btn-outline-secondary">전체보기</a>
+        <div class="col-md-6 mb-3">
+            <div class="dtl-card h-100 mb-0">
+                <div class="dtl-card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-exclamation-triangle"></i>최근 부적합 현황</span>
+                    <a href="{% url 'qms:nc_list' %}" class="dtl-btn-outline btn-sm">전체보기</a>
                 </div>
-                <div class="card-body p-0">
-                    <table class="table table-hover m-0" style="font-size: 0.85rem;">
-                        <thead class="table-light">
+                <div class="table-responsive">
+                    <table class="table table-hover m-0 dtl-table">
+                        <thead>
                             <tr>
                                 <th>부적합번호</th>
                                 <th>발생일</th>
@@ -189,13 +189,13 @@
                                 <td>{{ nc.part_no }}</td>
                                 <td>{{ nc.vendor.name|default:'-' }}</td>
                                 <td>
-                                    <span class="badge bg-{% if nc.status == 'OPEN' %}danger{% elif nc.status == 'CLOSED' %}success{% else %}warning{% endif %}">
+                                    <span class="dtl-pill {% if nc.status == 'OPEN' %}red{% elif nc.status == 'CLOSED' %}green{% else %}amber{% endif %}">
                                         {{ nc.get_status_display }}
                                     </span>
                                 </td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="5" class="text-center py-4">최근 부적합 내역이 없습니다.</td></tr>
+                            <tr><td colspan="5" class="text-center py-4 text-muted">최근 부적합 내역이 없습니다.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -204,15 +204,15 @@
         </div>
 
         <!-- 기한 초과 CAPA -->
-        <div class="col-md-6 mb-4">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-white fw-bold py-3 border-bottom d-flex justify-content-between align-items-center">
-                    <span><i class="bi bi-alarm me-2 text-warning"></i>기한 초과 CAPA</span>
-                    <a href="{% url 'qms:capa_list' %}?overdue=yes" class="btn btn-sm btn-outline-warning">전체보기</a>
+        <div class="col-md-6 mb-3">
+            <div class="dtl-card h-100 mb-0">
+                <div class="dtl-card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-alarm"></i>기한 초과 CAPA</span>
+                    <a href="{% url 'qms:capa_list' %}?overdue=yes" class="dtl-btn-outline btn-sm">전체보기</a>
                 </div>
-                <div class="card-body p-0">
-                    <table class="table table-hover m-0" style="font-size: 0.85rem;">
-                        <thead class="table-light">
+                <div class="table-responsive">
+                    <table class="table table-hover m-0 dtl-table">
+                        <thead>
                             <tr>
                                 <th>CAPA번호</th>
                                 <th>협력사</th>
@@ -223,17 +223,17 @@
                         </thead>
                         <tbody>
                             {% for capa in overdue_capas %}
-                            <tr class="table-danger">
+                            <tr style="background:#fef2f2;">
                                 <td><a href="{% url 'qms:capa_detail' pk=capa.pk %}">{{ capa.capa_no }}</a></td>
                                 <td>{{ capa.vendor.name }}</td>
                                 <td class="text-truncate" style="max-width: 150px;">{{ capa.issue_title }}</td>
                                 <td>{{ capa.due_date }}</td>
-                                <td class="text-danger fw-bold">
+                                <td class="fw-bold" style="color:#b91c1c;">
                                     D+{{ capa.due_date|timesince }}
                                 </td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="5" class="text-center py-4 text-success"><i class="bi bi-check-circle me-2"></i>기한 초과 CAPA가 없습니다.</td></tr>
+                            <tr><td colspan="5" class="text-center py-4" style="color:#047857;"><i class="bi bi-check-circle me-2"></i>기한 초과 CAPA가 없습니다.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -245,50 +245,48 @@
     <!-- 빠른 바로가기 -->
     <div class="row">
         <div class="col-12">
-            <div class="card border-0 shadow-sm">
-                <div class="card-header bg-white fw-bold py-3 border-bottom">
-                    <i class="bi bi-grid me-2 text-primary"></i>빠른 바로가기
-                </div>
-                <div class="card-body">
+            <div class="dtl-card mb-0">
+                <div class="dtl-card-header"><i class="bi bi-grid"></i>빠른 바로가기</div>
+                <div class="dtl-card-body">
                     <div class="row g-3">
                         <div class="col-md-2 col-sm-4 col-6">
-                            <a href="{% url 'qms:import_inspection_list' %}" class="btn btn-outline-primary w-100 py-3">
+                            <a href="{% url 'qms:import_inspection_list' %}" class="dtl-btn-outline w-100 py-3 d-block text-center">
                                 <i class="bi bi-clipboard-check d-block fs-4 mb-1"></i>
                                 <small>수입검사</small>
                             </a>
                         </div>
                         <div class="col-md-2 col-sm-4 col-6">
-                            <a href="{% url 'qms:outgoing_list' %}" class="btn btn-outline-info w-100 py-3">
+                            <a href="{% url 'qms:outgoing_list' %}" class="dtl-btn-outline w-100 py-3 d-block text-center">
                                 <i class="bi bi-truck d-block fs-4 mb-1"></i>
                                 <small>출하검사</small>
                             </a>
                         </div>
                         <div class="col-md-2 col-sm-4 col-6">
-                            <a href="{% url 'qms:nc_create' %}" class="btn btn-outline-danger w-100 py-3">
+                            <a href="{% url 'qms:nc_create' %}" class="dtl-btn-outline w-100 py-3 d-block text-center">
                                 <i class="bi bi-plus-circle d-block fs-4 mb-1"></i>
                                 <small>부적합 등록</small>
                             </a>
                         </div>
                         <div class="col-md-2 col-sm-4 col-6">
-                            <a href="{% url 'qms:capa_create' %}" class="btn btn-outline-warning w-100 py-3">
+                            <a href="{% url 'qms:capa_create' %}" class="dtl-btn-outline w-100 py-3 d-block text-center">
                                 <i class="bi bi-tools d-block fs-4 mb-1"></i>
                                 <small>CAPA 요청</small>
                             </a>
                         </div>
                         <div class="col-md-2 col-sm-4 col-6">
-                            <a href="{% url 'qms:claim_list' %}" class="btn btn-outline-secondary w-100 py-3">
+                            <a href="{% url 'qms:claim_list' %}" class="dtl-btn-outline w-100 py-3 d-block text-center">
                                 <i class="bi bi-file-earmark-x d-block fs-4 mb-1"></i>
                                 <small>클레임 관리</small>
                             </a>
                         </div>
                         <div class="col-md-2 col-sm-4 col-6">
-                            <a href="{% url 'qms:rating_list' %}" class="btn btn-outline-success w-100 py-3">
+                            <a href="{% url 'qms:rating_list' %}" class="dtl-btn-outline w-100 py-3 d-block text-center">
                                 <i class="bi bi-star d-block fs-4 mb-1"></i>
                                 <small>협력사 평가</small>
                             </a>
                         </div>
                         <div class="col-md-2 col-sm-4 col-6">
-                            <a href="{% url 'qms:isir_list' %}" class="btn w-100 py-3" style="border-color: teal; color: teal;">
+                            <a href="{% url 'qms:isir_list' %}" class="dtl-btn-outline w-100 py-3 d-block text-center">
                                 <i class="bi bi-file-earmark-check d-block fs-4 mb-1"></i>
                                 <small>ISIR 관리</small>
                             </a>
