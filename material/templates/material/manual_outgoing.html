@@ -29,16 +29,16 @@
         <!-- 출고 공통 정보 -->
         <div class="dtl-card mb-4">
             <div class="dtl-card-header"><i class="bi bi-info-circle"></i> 출고 공통 정보 (Header)</div>
-            <div class="card-body bg-white">
+            <div class="dtl-card-body">
                 <div class="row g-3 align-items-center">
                     <div class="col-6 col-lg-2">
-                        <label class="form-label small">출고 일자</label>
-                        <input type="date" name="date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
+                        <label class="dtl-form-label">출고 일자</label>
+                        <input type="date" name="date" class="form-control dtl-form-control" value="{{ today|date:'Y-m-d' }}" required>
                     </div>
 
                     <div class="col-6 col-lg-3">
-                        <label class="form-label small">출고 창고 (From)</label>
-                        <select name="warehouse_id" id="selWarehouse" class="form-select" required>
+                        <label class="dtl-form-label">출고 창고 (From)</label>
+                        <select name="warehouse_id" id="selWarehouse" class="form-select dtl-form-control" required>
                             <option value="">== 창고 선택 ==</option>
                             {% for w in warehouses %}
                                 <option value="{{ w.id }}" data-code="{{ w.code }}">({{ w.code }}) {{ w.name }}</option>
@@ -47,9 +47,9 @@
                     </div>
 
                     <div class="col-12 col-lg">
-                        <label class="form-label small">거래처 (선택)</label>
+                        <label class="dtl-form-label">거래처 (선택)</label>
                         <div class="input-group">
-                            <input type="text" class="form-control bg-light" id="displayVendor" placeholder="거래처 선택 (선택사항)" readonly onclick="openVendorModal()" style="cursor: pointer;">
+                            <input type="text" class="form-control dtl-form-control bg-light" id="displayVendor" placeholder="거래처 선택 (선택사항)" readonly onclick="openVendorModal()" style="cursor: pointer;">
                             <button class="btn btn-outline-secondary" type="button" onclick="openVendorModal()">
                                 <i class="bi bi-search"></i>
                             </button>
@@ -65,12 +65,12 @@
 
         <!-- 품목 입력 (QR 스캔 포함) -->
         <div class="dtl-card mb-4">
-            <div class="card-body bg-light-red">
-                <div class="row g-2 align-items-end">
+            <div class="card-body" style="background:#fff5f5;">
+                <div class="row g-3 align-items-end">
                     <div class="col-12 col-lg-3">
-                        <label class="small fw-bold mb-1 text-danger">출고 품목 검색</label>
+                        <label class="dtl-form-label" style="color:#b91c1c;">출고 품목 검색</label>
                         <div class="input-group">
-                            <input class="form-control" list="partOptions" id="inputPart" placeholder="품번 또는 품명 검색..." autocomplete="off">
+                            <input class="form-control dtl-form-control" list="partOptions" id="inputPart" placeholder="품번 또는 품명 검색..." autocomplete="off">
                             <button class="btn btn-outline-dark" type="button" onclick="openQrScanner()" title="QR 스캔">
                                 <i class="bi bi-qr-code-scan"></i>
                             </button>
@@ -86,27 +86,27 @@
                         <input type="hidden" id="selectedPartName">
                     </div>
                     <div class="col-6 col-lg-2">
-                        <label class="small fw-bold mb-1 text-danger">LOT 선택</label>
-                        <select id="selLot" class="form-select" disabled>
+                        <label class="dtl-form-label" style="color:#b91c1c;">LOT 선택</label>
+                        <select id="selLot" class="form-select dtl-form-control" disabled>
                             <option value="">:: 창고/품목 선택 후 표시 ::</option>
                         </select>
                     </div>
                     <div class="col-6 col-lg-1">
-                        <label class="small fw-bold mb-1 text-danger">수량</label>
-                        <input type="number" id="inputQty" class="form-control text-end fw-bold" placeholder="0" min="1">
+                        <label class="dtl-form-label" style="color:#b91c1c;">수량</label>
+                        <input type="number" id="inputQty" class="form-control dtl-form-control text-end fw-bold" placeholder="0" min="1">
                     </div>
                     <div class="col-12 col-lg-4">
-                        <label class="small fw-bold mb-1">비고 (선택)</label>
-                        <input type="text" id="inputRemark" class="form-control" placeholder="출고 사유 입력">
+                        <label class="dtl-form-label">비고 (선택)</label>
+                        <input type="text" id="inputRemark" class="form-control dtl-form-control" placeholder="출고 사유 입력">
                     </div>
                     <div class="col-12 col-lg-2">
-                        <button type="button" class="btn btn-danger w-100 fw-bold" onclick="addItem()">
+                        <button type="button" class="dtl-btn-dark w-100" style="background:#b91c1c;" onclick="addItem()">
                             <i class="bi bi-plus-lg"></i> 추가
                         </button>
                     </div>
                 </div>
-                <div class="d-flex gap-3 mt-2 ms-1 align-items-center">
-                    <span class="form-text text-danger fw-bold mb-0" id="partNameDisplay" style="min-height: 20px;"></span>
+                <div class="d-flex gap-3 mt-2 align-items-center">
+                    <span class="form-text fw-bold mb-0" style="color:#b91c1c; min-height: 20px;" id="partNameDisplay"></span>
                     <small id="lotInfo" style="font-size:0.75rem;"></small>
                 </div>
             </div>
@@ -142,8 +142,8 @@
                 </div>
             </div>
             <div class="card-footer bg-white text-end py-3">
-                <button type="button" class="btn btn-light me-2 px-4" onclick="location.reload()">초기화</button>
-                <button type="submit" class="btn btn-danger btn-lg px-5 fw-bold shadow-sm" onclick="return validateForm()">
+                <button type="button" class="dtl-btn-outline me-2" onclick="location.reload()">초기화</button>
+                <button type="submit" class="dtl-btn-dark px-4" style="background:#b91c1c;" onclick="return validateForm()">
                     <i class="bi bi-box-arrow-up me-2"></i> 출고 처리
                 </button>
             </div>
@@ -162,16 +162,16 @@
             <!-- 필터 -->
             <form method="get" class="row g-2 mb-3 align-items-end">
                 <div class="col-md-2">
-                    <label class="form-label small mb-1">시작일</label>
-                    <input type="date" name="hstart" class="form-control form-control-sm" value="{{ history_start|default:'' }}">
+                    <label class="dtl-form-label">시작일</label>
+                    <input type="date" name="hstart" class="form-control form-control-sm dtl-form-control" value="{{ history_start|default:'' }}">
                 </div>
                 <div class="col-md-2">
-                    <label class="form-label small mb-1">종료일</label>
-                    <input type="date" name="hend" class="form-control form-control-sm" value="{{ history_end|default:'' }}">
+                    <label class="dtl-form-label">종료일</label>
+                    <input type="date" name="hend" class="form-control form-control-sm dtl-form-control" value="{{ history_end|default:'' }}">
                 </div>
                 <div class="col-md-2">
-                    <label class="form-label small mb-1">창고</label>
-                    <select name="hwh" class="form-select form-select-sm">
+                    <label class="dtl-form-label">창고</label>
+                    <select name="hwh" class="form-select form-select-sm dtl-form-control">
                         <option value="">전체</option>
                         {% for w in warehouses %}
                         <option value="{{ w.id }}" {% if history_wh == w.id|stringformat:"d" %}selected{% endif %}>{{ w.name }}</option>
@@ -179,16 +179,16 @@
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label small mb-1">검색 (품번/품명/수불번호)</label>
-                    <input type="text" name="hq" class="form-control form-control-sm" placeholder="검색어 입력" value="{{ history_q|default:'' }}">
+                    <label class="dtl-form-label">검색 (품번/품명/수불번호)</label>
+                    <input type="text" name="hq" class="form-control form-control-sm dtl-form-control" placeholder="검색어 입력" value="{{ history_q|default:'' }}">
                 </div>
                 <div class="col-md-1">
-                    <button type="submit" class="btn btn-outline-secondary btn-sm w-100">
+                    <button type="submit" class="dtl-btn-outline btn-sm w-100">
                         <i class="bi bi-search"></i> 조회
                     </button>
                 </div>
                 <div class="col-md-1">
-                    <a href="{% url 'material:manual_outgoing' %}" class="btn btn-outline-light btn-sm w-100 text-muted">초기화</a>
+                    <a href="{% url 'material:manual_outgoing' %}" class="dtl-btn-outline btn-sm w-100">초기화</a>
                 </div>
             </form>
 
