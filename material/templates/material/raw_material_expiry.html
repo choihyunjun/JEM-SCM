@@ -58,10 +58,10 @@
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h3 class="fw-bold">유효기간 관리</h3>
+        <span class="dtl-title d-block">유효기간 관리</span>
         <span class="text-muted small">유효기간 임박/경과 품목을 모니터링합니다</span>
     </div>
-    <a href="{% url 'material:raw_material_layout' %}" class="btn btn-outline-secondary btn-sm">
+    <a href="{% url 'material:raw_material_layout' %}" class="dtl-btn-outline btn-sm">
         <i class="bi bi-grid-3x3-gap me-1"></i>창고 레이아웃
     </a>
 </div>
@@ -71,13 +71,13 @@
     <li class="nav-item">
         <a class="nav-link {% if active_tab == 'stock' %}active{% endif %}" href="?tab=stock">
             <i class="bi bi-box-seam me-1"></i>재고 유효기간
-            <span class="badge bg-secondary ms-1">{{ count_total }}</span>
+            <span class="dtl-pill slate ms-1">{{ count_total }}</span>
         </a>
     </li>
     <li class="nav-item">
         <a class="nav-link {% if active_tab == 'used' %}active{% endif %}" href="?tab=used">
             <i class="bi bi-clock-history me-1"></i>현장 투입 이력
-            <span class="badge bg-warning text-dark ms-1">{{ used_count }}</span>
+            <span class="dtl-pill amber ms-1">{{ used_count }}</span>
         </a>
     </li>
 </ul>
@@ -114,8 +114,7 @@
 </div>
 
 <!-- 검색 -->
-<div class="card shadow-sm mb-3">
-    <div class="card-body py-2">
+<div class="dtl-toolbar mb-3" style="padding:0.6rem 1rem;">
         <form method="get" class="row g-2 align-items-end">
             <input type="hidden" name="tab" value="stock">
             {% if filter_status and filter_status != 'all' %}
@@ -137,7 +136,6 @@
                 </a>
             </div>
         </form>
-    </div>
 </div>
 
 <!-- 필터 표시 -->
@@ -152,7 +150,7 @@
         {% elif filter_status == 'safe' %}
             <span class="badge badge-safe fs-6 px-3 py-2"><i class="bi bi-check-circle me-1"></i>안전 품목</span>
         {% else %}
-            <span class="badge bg-dark fs-6 px-3 py-2"><i class="bi bi-list me-1"></i>전체 ({{ count_total }}건)</span>
+            <span class="dtl-pill slate" style="font-size:0.85rem; padding:0.4rem 0.9rem;"><i class="bi bi-list me-1"></i>전체 ({{ count_total }}건)</span>
         {% endif %}
     </div>
     {% if filter_status != 'all' %}
@@ -163,7 +161,7 @@
 </div>
 
 <!-- 테이블 -->
-<div class="card shadow-sm">
+<div class="dtl-card mb-0">
     <div class="card-body p-0">
         {% if labels %}
         <div class="table-responsive">
@@ -231,8 +229,7 @@
 <!-- ============ 탭2: 현장 투입 이력 ============ -->
 
 <!-- 필터 -->
-<div class="card shadow-sm mb-3">
-    <div class="card-body py-2">
+<div class="dtl-toolbar mb-3" style="padding:0.6rem 1rem;">
         <form method="get" class="row g-2 align-items-end">
             <input type="hidden" name="tab" value="used">
             <div class="col-md-3">
@@ -259,14 +256,13 @@
                 </a>
             </div>
         </form>
-    </div>
 </div>
 
 <!-- 투입 이력 테이블 -->
-<div class="card shadow-sm">
-    <div class="card-header bg-white d-flex justify-content-between align-items-center">
-        <span class="fw-bold"><i class="bi bi-clock-history me-1"></i>현장 투입 이력</span>
-        <span class="badge bg-warning text-dark">{{ used_count }}건</span>
+<div class="dtl-card mb-0">
+    <div class="dtl-card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-clock-history"></i>현장 투입 이력</span>
+        <span class="dtl-pill amber">{{ used_count }}건</span>
     </div>
     <div class="card-body p-0">
         {% if used_labels %}

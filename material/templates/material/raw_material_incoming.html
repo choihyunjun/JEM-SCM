@@ -31,11 +31,11 @@
 <div class="container-fluid p-0">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h3 class="fw-bold">입고라벨 발행</h3>
+            <span class="dtl-title d-block">입고라벨 발행</span>
             <span class="text-muted small">수입검사 합격 판정 후 라벨을 발행합니다. 각 라벨은 고유하며 중복 발행되지 않습니다.</span>
         </div>
         <div>
-            <a href="{% url 'material:raw_material_layout' %}" class="btn btn-outline-secondary btn-sm">
+            <a href="{% url 'material:raw_material_layout' %}" class="dtl-btn-outline btn-sm">
                 <i class="bi bi-grid-3x3-gap me-1"></i>창고 레이아웃
             </a>
         </div>
@@ -44,12 +44,12 @@
     <div class="row">
         <!-- 좌측: 수입검사 합격 대기 목록 -->
         <div class="col-lg-8">
-            <div class="card shadow-sm mb-4">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <strong class="text-success">
+            <div class="dtl-card mb-4">
+                <div class="dtl-card-header d-flex justify-content-between align-items-center" style="text-transform:none;">
+                    <span style="color:#047857;">
                         <i class="bi bi-check-circle me-1"></i>수입검사 합격 - 라벨 발행 대기
-                    </strong>
-                    <span class="badge bg-success rounded-pill">{{ approved_inspections|length }}건</span>
+                    </span>
+                    <span class="dtl-pill green">{{ approved_inspections|length }}건</span>
                 </div>
                 <div class="card-body p-0">
                     {% if approved_inspections %}
@@ -173,12 +173,12 @@
             </div>
 
             <!-- 수입검사 대기중 목록 -->
-            <div class="card shadow-sm">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <strong class="text-warning">
+            <div class="dtl-card mb-0">
+                <div class="dtl-card-header d-flex justify-content-between align-items-center" style="text-transform:none;">
+                    <span style="color:#b45309;">
                         <i class="bi bi-hourglass-split me-1"></i>수입검사 대기중
-                    </strong>
-                    <span class="badge bg-warning text-dark rounded-pill">{{ pending_inspections|length }}건</span>
+                    </span>
+                    <span class="dtl-pill amber">{{ pending_inspections|length }}건</span>
                 </div>
                 <div class="card-body p-0">
                     {% if pending_inspections %}
@@ -225,34 +225,32 @@
         <!-- 우측: 안내 및 최근 발행 라벨 -->
         <div class="col-lg-4">
             <!-- 입고 프로세스 안내 -->
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-light">
-                    <strong><i class="bi bi-info-circle me-1"></i>입고 프로세스</strong>
-                </div>
-                <div class="card-body">
+            <div class="dtl-card mb-4">
+                <div class="dtl-card-header"><i class="bi bi-info-circle"></i>입고 프로세스</div>
+                <div class="dtl-card-body">
                     <div class="d-flex align-items-start mb-3">
-                        <span class="badge bg-primary rounded-pill me-2">1</span>
+                        <span class="dtl-section-num me-2">1</span>
                         <div>
                             <strong>입고처리</strong>
                             <p class="text-muted small mb-0">자재 입고 시 수입검사 대상으로 등록</p>
                         </div>
                     </div>
                     <div class="d-flex align-items-start mb-3">
-                        <span class="badge bg-warning text-dark rounded-pill me-2">2</span>
+                        <span class="dtl-section-num me-2">2</span>
                         <div>
                             <strong>수입검사</strong>
                             <p class="text-muted small mb-0">QMS에서 검사 진행 후 합격 판정</p>
                         </div>
                     </div>
                     <div class="d-flex align-items-start mb-3">
-                        <span class="badge bg-success rounded-pill me-2">3</span>
+                        <span class="dtl-section-num me-2">3</span>
                         <div>
                             <strong>라벨 발행</strong>
                             <p class="text-muted small mb-0">포장 단위/수량 입력 후 라벨 발행</p>
                         </div>
                     </div>
                     <div class="d-flex align-items-start">
-                        <span class="badge bg-secondary rounded-pill me-2">4</span>
+                        <span class="dtl-section-num me-2">4</span>
                         <div>
                             <strong>창고 입고</strong>
                             <p class="text-muted small mb-0">라벨 부착 후 원재료 창고로 이동</p>
@@ -262,10 +260,10 @@
             </div>
 
             <!-- 최근 발행 라벨 -->
-            <div class="card shadow-sm">
-                <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                    <strong><i class="bi bi-qr-code me-1"></i>최근 발행 라벨</strong>
-                    <span class="badge bg-info rounded-pill">{{ recent_labels|length }}건</span>
+            <div class="dtl-card mb-0">
+                <div class="dtl-card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-qr-code"></i>최근 발행 라벨</span>
+                    <span class="dtl-pill cyan">{{ recent_labels|length }}건</span>
                 </div>
                 <div class="card-body p-0" style="max-height: 350px; overflow-y: auto;">
                     {% if recent_labels %}
@@ -298,9 +296,9 @@
 <div class="modal fade" id="labelModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header bg-success text-white">
+            <div class="modal-header">
                 <h5 class="modal-title"><i class="bi bi-qr-code me-2"></i>라벨 발행</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="post" id="labelForm">
                 {% csrf_token %}
@@ -427,9 +425,9 @@
 <div class="modal fade" id="palletReprintModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
+            <div class="modal-header">
                 <h5 class="modal-title"><i class="bi bi-box-seam me-2"></i>파렛트 라벨 재출력</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="bg-light rounded p-3 mb-3">
@@ -447,7 +445,7 @@
                         <input class="form-check-input" type="checkbox" id="palletReprintSelectAll" onchange="togglePalletReprintAll()" checked>
                         <label class="form-check-label fw-bold" for="palletReprintSelectAll">전체 선택</label>
                     </div>
-                    <span class="badge bg-primary" id="palletReprintSelectedCount">0장 선택</span>
+                    <span class="dtl-pill blue" id="palletReprintSelectedCount">0장 선택</span>
                 </div>
                 <div id="palletReprintLabelList" style="max-height: 350px; overflow-y: auto;">
                     <div class="text-center py-4">
@@ -470,9 +468,9 @@
 <div class="modal fade" id="reprintModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
-            <div class="modal-header bg-secondary text-white">
+            <div class="modal-header">
                 <h5 class="modal-title"><i class="bi bi-printer me-2"></i>라벨 재출력</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <!-- 품목 정보 -->
@@ -493,7 +491,7 @@
                         <input class="form-check-input" type="checkbox" id="reprintSelectAll" onchange="toggleReprintAll()" checked>
                         <label class="form-check-label fw-bold" for="reprintSelectAll">전체 선택</label>
                     </div>
-                    <span class="badge bg-info" id="reprintSelectedCount">0장 선택</span>
+                    <span class="dtl-pill cyan" id="reprintSelectedCount">0장 선택</span>
                 </div>
 
                 <!-- 라벨 목록 -->
@@ -747,7 +745,7 @@ function renderReprintLabels() {
             <div class="flex-grow-1">
                 <div class="d-flex justify-content-between align-items-center">
                     <span class="fw-bold text-primary small">${label.label_id}</span>
-                    <span class="badge bg-light text-dark">${label.quantity}${label.unit}</span>
+                    <span class="dtl-pill slate">${label.quantity}${label.unit}</span>
                 </div>
                 <div class="d-flex gap-3 text-muted" style="font-size:0.75rem;">
                     <span>LOT: ${label.lot_no}</span>
@@ -837,7 +835,7 @@ function renderPalletReprintLabels() {
             <div class="flex-grow-1">
                 <div class="d-flex justify-content-between align-items-center">
                     <span class="fw-bold text-primary small">${label.label_id}</span>
-                    <span class="badge bg-light text-dark">${label.quantity}${label.unit}</span>
+                    <span class="dtl-pill slate">${label.quantity}${label.unit}</span>
                 </div>
                 <div class="d-flex gap-3 text-muted" style="font-size:0.75rem;">
                     <span>LOT: ${label.lot_no}</span>
