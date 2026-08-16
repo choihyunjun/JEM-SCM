@@ -4,25 +4,26 @@
 {% block title %}ISIR 상세 - {{ isir.isir_no }}{% endblock %}
 
 {% block qms_content %}
-<div class="container-fluid p-0" style="max-width: 1600px;">
+<div class="dtl-wrap" style="max-width:1600px;">
     <!-- 헤더 -->
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="fw-bold">{{ isir.isir_no }}
-            <span class="badge bg-info ms-2">{{ isir.get_isir_type_display }}</span>
-            <span class="badge bg-{% if isir.status == 'APPROVED' %}success{% elif isir.status == 'REJECTED' %}danger{% elif isir.status == 'CONDITIONAL' %}warning{% elif isir.status == 'REVIEWING' %}primary{% elif isir.status == 'SUBMITTED' %}info{% else %}secondary{% endif %}">
+        <div class="d-flex align-items-center gap-2">
+            <span class="dtl-title">{{ isir.isir_no }}</span>
+            <span class="dtl-pill cyan">{{ isir.get_isir_type_display }}</span>
+            <span class="dtl-pill {% if isir.status == 'APPROVED' %}green{% elif isir.status == 'REJECTED' %}red{% elif isir.status == 'CONDITIONAL' %}amber{% elif isir.status == 'REVIEWING' %}blue{% elif isir.status == 'SUBMITTED' %}cyan{% else %}slate{% endif %}">
                 {{ isir.get_status_display }}
             </span>
-        </h3>
-        <div>
+        </div>
+        <div class="dtl-actions">
             <!-- PDF 출력 -->
-            <a href="{% url 'qms:isir_pdf' isir.pk %}" class="btn btn-outline-danger me-2" target="_blank">
+            <a href="{% url 'qms:isir_pdf' isir.pk %}" class="btn btn-outline-danger btn-sm me-2" target="_blank">
                 <i class="bi bi-file-pdf me-1"></i>PDF 출력
             </a>
             {% if isir.status == 'DRAFT' %}
             <form method="post" class="d-inline">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="submit">
-                <button type="submit" class="btn btn-info me-2" onclick="return confirm('검토 제출하시겠습니까?');">
+                <button type="submit" class="dtl-btn-dark btn-sm me-2" onclick="return confirm('검토 제출하시겠습니까?');">
                     <i class="bi bi-send me-1"></i>검토 제출
                 </button>
             </form>
@@ -31,18 +32,18 @@
             <form method="post" class="d-inline">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="start_review">
-                <button type="submit" class="btn btn-primary me-2">
+                <button type="submit" class="dtl-btn-dark btn-sm me-2">
                     <i class="bi bi-clipboard-check me-1"></i>검토 시작
                 </button>
             </form>
             {% endif %}
-            <a href="{% url 'qms:isir_edit' pk=isir.pk %}" class="btn btn-outline-primary">
+            <a href="{% url 'qms:isir_edit' pk=isir.pk %}" class="btn btn-outline-secondary btn-sm">
                 <i class="bi bi-pencil me-1"></i>수정
             </a>
-            <button type="button" class="btn btn-outline-danger" onclick="if(confirm('정말 삭제하시겠습니까?')) document.getElementById('deleteForm').submit();">
+            <button type="button" class="btn btn-outline-danger btn-sm" onclick="if(confirm('정말 삭제하시겠습니까?')) document.getElementById('deleteForm').submit();">
                 <i class="bi bi-trash me-1"></i>삭제
             </button>
-            <a href="{% url 'qms:isir_list' %}" class="btn btn-outline-secondary">
+            <a href="{% url 'qms:isir_list' %}" class="btn btn-outline-secondary btn-sm">
                 <i class="bi bi-arrow-left me-1"></i>목록
             </a>
         </div>
@@ -55,33 +56,29 @@
             <!-- 기본 정보 + 품목 정보 -->
             <div class="row">
                 <div class="col-md-6 mb-4">
-                    <div class="card shadow-sm h-100">
-                        <div class="card-header bg-white py-2">
-                            <i class="bi bi-info-circle me-2"></i>기본 정보
-                        </div>
-                        <div class="card-body">
-                            <table class="table table-sm table-borderless mb-0">
-                                <tr><th class="text-muted" style="width:90px;">ISIR번호</th><td class="fw-bold text-primary">{{ isir.isir_no }}</td></tr>
-                                <tr><th class="text-muted">유형</th><td>{{ isir.get_isir_type_display }}</td></tr>
-                                <tr><th class="text-muted">협력사</th><td>{{ isir.vendor.name }}</td></tr>
-                                <tr><th class="text-muted">등록자</th><td>{{ isir.created_by.username }}</td></tr>
-                                <tr><th class="text-muted">등록일</th><td>{{ isir.created_at|date:"Y-m-d" }}</td></tr>
+                    <div class="dtl-card h-100 mb-0">
+                        <div class="dtl-card-header"><i class="bi bi-info-circle"></i>기본 정보</div>
+                        <div class="dtl-card-body">
+                            <table class="table table-sm table-borderless mb-0 dtl-info-table">
+                                <tr><th>ISIR번호</th><td style="color:#4338ca;">{{ isir.isir_no }}</td></tr>
+                                <tr><th>유형</th><td>{{ isir.get_isir_type_display }}</td></tr>
+                                <tr><th>협력사</th><td>{{ isir.vendor.name }}</td></tr>
+                                <tr><th>등록자</th><td>{{ isir.created_by.username }}</td></tr>
+                                <tr><th>등록일</th><td>{{ isir.created_at|date:"Y-m-d" }}</td></tr>
                             </table>
                         </div>
                     </div>
                 </div>
                 <div class="col-md-6 mb-4">
-                    <div class="card shadow-sm h-100">
-                        <div class="card-header bg-primary text-white py-2">
-                            <i class="bi bi-box-seam me-2"></i>품목 정보
-                        </div>
-                        <div class="card-body">
-                            <table class="table table-sm table-borderless mb-0">
-                                <tr><th class="text-muted" style="width:90px;">품번</th><td><code class="fs-6">{{ isir.part_no }}</code></td></tr>
-                                <tr><th class="text-muted">품명</th><td class="fw-bold">{{ isir.part_name }}</td></tr>
-                                <tr><th class="text-muted">도면REV</th><td>{{ isir.part_rev|default:'-' }}</td></tr>
-                                <tr><th class="text-muted">도면번호</th><td>{{ isir.drawing_no|default:'-' }}</td></tr>
-                                <tr><th class="text-muted">샘플수량</th><td>{{ isir.sample_qty }}개 (LOT: {{ isir.sample_lot|default:'-' }})</td></tr>
+                    <div class="dtl-card h-100 mb-0">
+                        <div class="dtl-card-header"><i class="bi bi-box-seam"></i>품목 정보</div>
+                        <div class="dtl-card-body">
+                            <table class="table table-sm table-borderless mb-0 dtl-info-table">
+                                <tr><th>품번</th><td><code class="fs-6">{{ isir.part_no }}</code></td></tr>
+                                <tr><th>품명</th><td>{{ isir.part_name }}</td></tr>
+                                <tr><th>도면REV</th><td>{{ isir.part_rev|default:'-' }}</td></tr>
+                                <tr><th>도면번호</th><td>{{ isir.drawing_no|default:'-' }}</td></tr>
+                                <tr><th>샘플수량</th><td>{{ isir.sample_qty }}개 (LOT: {{ isir.sample_lot|default:'-' }})</td></tr>
                             </table>
                         </div>
                     </div>
@@ -89,51 +86,51 @@
             </div>
 
             <!-- 공정능력 (Cpk/Ppk) -->
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-success text-white py-2 d-flex justify-content-between align-items-center">
-                    <span><i class="bi bi-graph-up me-2"></i>공정능력 분석 (SPC)</span>
+            <div class="dtl-card">
+                <div class="dtl-card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-graph-up"></i>공정능력 분석 (SPC)</span>
                     {% if isir.status == 'REVIEWING' %}
-                    <button class="btn btn-sm btn-light" data-bs-toggle="modal" data-bs-target="#spcModal">
+                    <button class="dtl-btn-outline btn-sm" data-bs-toggle="modal" data-bs-target="#spcModal">
                         <i class="bi bi-pencil me-1"></i>수정
                     </button>
                     {% endif %}
                 </div>
-                <div class="card-body">
+                <div class="dtl-card-body">
                     <div class="row text-center">
                         <div class="col-md-3">
-                            <div class="border rounded p-3 h-100">
-                                <div class="small text-muted mb-1">Cpk (공정능력지수)</div>
-                                <div class="h2 mb-0 {% if isir.cpk_value >= 1.33 %}text-success{% elif isir.cpk_value >= 1.0 %}text-warning{% elif isir.cpk_value %}text-danger{% else %}text-muted{% endif %}">
+                            <div class="dtl-qty-tile neutral h-100">
+                                <span class="dtl-qty-caption">Cpk (공정능력지수)</span>
+                                <div class="h2 mb-0" style="color:{% if isir.cpk_value >= 1.33 %}#047857{% elif isir.cpk_value >= 1.0 %}#b45309{% elif isir.cpk_value %}#b91c1c{% else %}#9ca3af{% endif %};">
                                     {{ isir.cpk_value|default:"-" }}
                                 </div>
                                 <small class="text-muted">기준: ≥1.33</small>
                             </div>
                         </div>
                         <div class="col-md-3">
-                            <div class="border rounded p-3 h-100">
-                                <div class="small text-muted mb-1">Ppk (공정성능지수)</div>
-                                <div class="h2 mb-0 {% if isir.ppk_value >= 1.67 %}text-success{% elif isir.ppk_value >= 1.33 %}text-warning{% elif isir.ppk_value %}text-danger{% else %}text-muted{% endif %}">
+                            <div class="dtl-qty-tile neutral h-100">
+                                <span class="dtl-qty-caption">Ppk (공정성능지수)</span>
+                                <div class="h2 mb-0" style="color:{% if isir.ppk_value >= 1.67 %}#047857{% elif isir.ppk_value >= 1.33 %}#b45309{% elif isir.ppk_value %}#b91c1c{% else %}#9ca3af{% endif %};">
                                     {{ isir.ppk_value|default:"-" }}
                                 </div>
                                 <small class="text-muted">기준: ≥1.67</small>
                             </div>
                         </div>
                         <div class="col-md-3">
-                            <div class="border rounded p-3 h-100">
-                                <div class="small text-muted mb-1">샘플 수</div>
-                                <div class="h2 mb-0">{{ isir.spc_sample_size|default:"-" }}</div>
+                            <div class="dtl-qty-tile neutral h-100">
+                                <span class="dtl-qty-caption">샘플 수</span>
+                                <div class="h2 mb-0" style="color:#1f2937;">{{ isir.spc_sample_size|default:"-" }}</div>
                                 <small class="text-muted">권장: ≥30</small>
                             </div>
                         </div>
                         <div class="col-md-3">
-                            <div class="border rounded p-3 h-100">
-                                <div class="small text-muted mb-1">측정 특성</div>
+                            <div class="dtl-qty-tile neutral h-100">
+                                <span class="dtl-qty-caption">측정 특성</span>
                                 <div class="fw-bold">{{ isir.cpk_characteristic|default:"-" }}</div>
                             </div>
                         </div>
                     </div>
                     {% if isir.process_mean or isir.usl or isir.lsl %}
-                    <hr>
+                    <hr style="border-color:#eef0f2;">
                     <div class="row small">
                         <div class="col-md-3"><span class="text-muted">공정평균:</span> {{ isir.process_mean|default:"-" }}</div>
                         <div class="col-md-3"><span class="text-muted">표준편차:</span> {{ isir.process_std|default:"-" }}</div>
@@ -145,46 +142,46 @@
             </div>
 
             <!-- MSA (측정시스템분석) -->
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-info text-white py-2 d-flex justify-content-between align-items-center">
-                    <span><i class="bi bi-rulers me-2"></i>측정시스템분석 (MSA/Gage R&R)</span>
+            <div class="dtl-card">
+                <div class="dtl-card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-rulers"></i>측정시스템분석 (MSA/Gage R&R)</span>
                     {% if isir.status == 'REVIEWING' %}
-                    <button class="btn btn-sm btn-light" data-bs-toggle="modal" data-bs-target="#msaModal">
+                    <button class="dtl-btn-outline btn-sm" data-bs-toggle="modal" data-bs-target="#msaModal">
                         <i class="bi bi-pencil me-1"></i>수정
                     </button>
                     {% endif %}
                 </div>
-                <div class="card-body">
+                <div class="dtl-card-body">
                     <div class="row text-center">
                         <div class="col-md-4">
-                            <div class="border rounded p-3">
-                                <div class="small text-muted mb-1">Gage R&R (%)</div>
-                                <div class="h2 mb-0 {% if isir.msa_grr_percent <= 10 %}text-success{% elif isir.msa_grr_percent <= 30 %}text-warning{% elif isir.msa_grr_percent %}text-danger{% else %}text-muted{% endif %}">
+                            <div class="dtl-qty-tile neutral">
+                                <span class="dtl-qty-caption">Gage R&R (%)</span>
+                                <div class="h2 mb-0" style="color:{% if isir.msa_grr_percent <= 10 %}#047857{% elif isir.msa_grr_percent <= 30 %}#b45309{% elif isir.msa_grr_percent %}#b91c1c{% else %}#9ca3af{% endif %};">
                                     {{ isir.msa_grr_percent|default:"-" }}{% if isir.msa_grr_percent %}%{% endif %}
                                 </div>
                                 <small class="text-muted">≤10%: 적합, 10~30%: 조건부</small>
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="border rounded p-3">
-                                <div class="small text-muted mb-1">NDC (구별범주수)</div>
-                                <div class="h2 mb-0 {% if isir.msa_ndc >= 5 %}text-success{% elif isir.msa_ndc %}text-danger{% else %}text-muted{% endif %}">
+                            <div class="dtl-qty-tile neutral">
+                                <span class="dtl-qty-caption">NDC (구별범주수)</span>
+                                <div class="h2 mb-0" style="color:{% if isir.msa_ndc >= 5 %}#047857{% elif isir.msa_ndc %}#b91c1c{% else %}#9ca3af{% endif %};">
                                     {{ isir.msa_ndc|default:"-" }}
                                 </div>
                                 <small class="text-muted">권장: ≥5</small>
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="border rounded p-3">
-                                <div class="small text-muted mb-1">MSA 판정</div>
+                            <div class="dtl-qty-tile neutral">
+                                <span class="dtl-qty-caption">MSA 판정</span>
                                 {% if isir.msa_result == 'PASS' %}
-                                <div class="h4"><span class="badge bg-success fs-5">적합</span></div>
+                                <div class="h4 mb-0"><span class="dtl-pill green" style="font-size:0.85rem;">적합</span></div>
                                 {% elif isir.msa_result == 'CONDITIONAL' %}
-                                <div class="h4"><span class="badge bg-warning text-dark fs-5">조건부</span></div>
+                                <div class="h4 mb-0"><span class="dtl-pill amber" style="font-size:0.85rem;">조건부</span></div>
                                 {% elif isir.msa_result == 'FAIL' %}
-                                <div class="h4"><span class="badge bg-danger fs-5">부적합</span></div>
+                                <div class="h4 mb-0"><span class="dtl-pill red" style="font-size:0.85rem;">부적합</span></div>
                                 {% else %}
-                                <div class="h4 text-muted">-</div>
+                                <div class="h4 text-muted mb-0">-</div>
                                 {% endif %}
                             </div>
                         </div>
@@ -193,18 +190,16 @@
             </div>
 
             <!-- 검사 결과 -->
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-warning py-2">
-                    <i class="bi bi-clipboard-check me-2"></i>검사 결과
-                </div>
-                <div class="card-body">
+            <div class="dtl-card">
+                <div class="dtl-card-header"><i class="bi bi-clipboard-check"></i>검사 결과</div>
+                <div class="dtl-card-body">
                     <form method="post">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="update_inspection">
                         <div class="row g-3 mb-3">
                             <div class="col-md-3">
-                                <label class="form-label small fw-bold">치수검사</label>
-                                <select name="dimension_result" class="form-select form-select-sm" {% if isir.status != 'REVIEWING' %}disabled{% endif %}>
+                                <label class="dtl-form-label">치수검사</label>
+                                <select name="dimension_result" class="form-select form-select-sm dtl-form-control" {% if isir.status != 'REVIEWING' %}disabled{% endif %}>
                                     <option value="">미검사</option>
                                     {% for value, label in result_choices %}
                                     <option value="{{ value }}" {% if isir.dimension_result == value %}selected{% endif %}>{{ label }}</option>
@@ -212,8 +207,8 @@
                                 </select>
                             </div>
                             <div class="col-md-3">
-                                <label class="form-label small fw-bold">외관검사</label>
-                                <select name="appearance_result" class="form-select form-select-sm" {% if isir.status != 'REVIEWING' %}disabled{% endif %}>
+                                <label class="dtl-form-label">외관검사</label>
+                                <select name="appearance_result" class="form-select form-select-sm dtl-form-control" {% if isir.status != 'REVIEWING' %}disabled{% endif %}>
                                     <option value="">미검사</option>
                                     {% for value, label in result_choices %}
                                     <option value="{{ value }}" {% if isir.appearance_result == value %}selected{% endif %}>{{ label }}</option>
@@ -221,8 +216,8 @@
                                 </select>
                             </div>
                             <div class="col-md-3">
-                                <label class="form-label small fw-bold">기능검사</label>
-                                <select name="function_result" class="form-select form-select-sm" {% if isir.status != 'REVIEWING' %}disabled{% endif %}>
+                                <label class="dtl-form-label">기능검사</label>
+                                <select name="function_result" class="form-select form-select-sm dtl-form-control" {% if isir.status != 'REVIEWING' %}disabled{% endif %}>
                                     <option value="">미검사</option>
                                     {% for value, label in result_choices %}
                                     <option value="{{ value }}" {% if isir.function_result == value %}selected{% endif %}>{{ label }}</option>
@@ -230,8 +225,8 @@
                                 </select>
                             </div>
                             <div class="col-md-3">
-                                <label class="form-label small fw-bold">재질검사</label>
-                                <select name="material_result" class="form-select form-select-sm" {% if isir.status != 'REVIEWING' %}disabled{% endif %}>
+                                <label class="dtl-form-label">재질검사</label>
+                                <select name="material_result" class="form-select form-select-sm dtl-form-control" {% if isir.status != 'REVIEWING' %}disabled{% endif %}>
                                     <option value="">미검사</option>
                                     {% for value, label in result_choices %}
                                     <option value="{{ value }}" {% if isir.material_result == value %}selected{% endif %}>{{ label }}</option>
@@ -241,21 +236,21 @@
                         </div>
                         <div class="row g-3">
                             <div class="col-md-4">
-                                <label class="form-label small fw-bold">검사 상세</label>
-                                <textarea name="inspection_detail" class="form-control form-control-sm" rows="2" {% if isir.status != 'REVIEWING' %}readonly{% endif %}>{{ isir.inspection_detail }}</textarea>
+                                <label class="dtl-form-label">검사 상세</label>
+                                <textarea name="inspection_detail" class="form-control form-control-sm dtl-form-control" rows="2" {% if isir.status != 'REVIEWING' %}readonly{% endif %}>{{ isir.inspection_detail }}</textarea>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label small fw-bold">발견 문제점</label>
-                                <textarea name="issue_found" class="form-control form-control-sm" rows="2" {% if isir.status != 'REVIEWING' %}readonly{% endif %}>{{ isir.issue_found }}</textarea>
+                                <label class="dtl-form-label">발견 문제점</label>
+                                <textarea name="issue_found" class="form-control form-control-sm dtl-form-control" rows="2" {% if isir.status != 'REVIEWING' %}readonly{% endif %}>{{ isir.issue_found }}</textarea>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label small fw-bold">시정조치 요구</label>
-                                <textarea name="corrective_action" class="form-control form-control-sm" rows="2" {% if isir.status != 'REVIEWING' %}readonly{% endif %}>{{ isir.corrective_action }}</textarea>
+                                <label class="dtl-form-label">시정조치 요구</label>
+                                <textarea name="corrective_action" class="form-control form-control-sm dtl-form-control" rows="2" {% if isir.status != 'REVIEWING' %}readonly{% endif %}>{{ isir.corrective_action }}</textarea>
                             </div>
                         </div>
                         {% if isir.status == 'REVIEWING' %}
                         <div class="text-end mt-3">
-                            <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-check-lg me-1"></i>검사결과 저장</button>
+                            <button type="submit" class="dtl-btn-dark btn-sm"><i class="bi bi-check-lg me-1"></i>검사결과 저장</button>
                         </div>
                         {% endif %}
                     </form>
@@ -263,73 +258,71 @@
             </div>
 
             <!-- 검사 항목 테이블 -->
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
-                    <span><i class="bi bi-list-check me-2"></i>검사 항목 측정 데이터 ({{ items|length }}개)</span>
+            <div class="dtl-card mb-0">
+                <div class="dtl-card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-list-check"></i>검사 항목 측정 데이터 ({{ items|length }}개)</span>
                     {% if isir.status == 'REVIEWING' %}
-                    <button type="button" class="btn btn-sm btn-light" data-bs-toggle="modal" data-bs-target="#addItemModal">
+                    <button type="button" class="dtl-btn-outline btn-sm" data-bs-toggle="modal" data-bs-target="#addItemModal">
                         <i class="bi bi-plus-lg me-1"></i>항목 추가
                     </button>
                     {% endif %}
                 </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover table-sm mb-0">
-                            <thead class="table-secondary">
-                                <tr>
-                                    <th style="width:40px;">No</th>
-                                    <th>검사항목</th>
-                                    <th>규격</th>
-                                    <th>공차</th>
-                                    <th class="text-center">측정1</th>
-                                    <th class="text-center">측정2</th>
-                                    <th class="text-center">측정3</th>
-                                    <th class="text-center">측정4</th>
-                                    <th class="text-center">측정5</th>
-                                    <th class="text-center">판정</th>
-                                    {% if isir.status == 'REVIEWING' %}<th></th>{% endif %}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for item in items %}
-                                <tr>
-                                    <td>{{ item.item_no }}</td>
-                                    <td class="fw-bold">{{ item.item_name }}</td>
-                                    <td class="small">{{ item.specification }}</td>
-                                    <td class="small">{{ item.tolerance|default:'-' }}</td>
-                                    <td class="text-center small">{{ item.measured_1|default:'-' }}</td>
-                                    <td class="text-center small">{{ item.measured_2|default:'-' }}</td>
-                                    <td class="text-center small">{{ item.measured_3|default:'-' }}</td>
-                                    <td class="text-center small">{{ item.measured_4|default:'-' }}</td>
-                                    <td class="text-center small">{{ item.measured_5|default:'-' }}</td>
-                                    <td class="text-center">
-                                        <span class="badge bg-{% if item.result == 'PASS' %}success{% else %}danger{% endif %}">
-                                            {{ item.get_result_display }}
-                                        </span>
-                                    </td>
-                                    {% if isir.status == 'REVIEWING' %}
-                                    <td>
-                                        <form method="post" class="d-inline">
-                                            {% csrf_token %}
-                                            <input type="hidden" name="action" value="delete_item">
-                                            <input type="hidden" name="item_id" value="{{ item.pk }}">
-                                            <button type="submit" class="btn btn-sm btn-outline-danger py-0" onclick="return confirm('삭제?');">
-                                                <i class="bi bi-x"></i>
-                                            </button>
-                                        </form>
-                                    </td>
-                                    {% endif %}
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="{% if isir.status == 'REVIEWING' %}11{% else %}10{% endif %}" class="text-center py-4 text-muted">
-                                        검사 항목이 없습니다.
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm mb-0 dtl-table">
+                        <thead>
+                            <tr>
+                                <th style="width:40px;">No</th>
+                                <th>검사항목</th>
+                                <th>규격</th>
+                                <th>공차</th>
+                                <th class="text-center">측정1</th>
+                                <th class="text-center">측정2</th>
+                                <th class="text-center">측정3</th>
+                                <th class="text-center">측정4</th>
+                                <th class="text-center">측정5</th>
+                                <th class="text-center">판정</th>
+                                {% if isir.status == 'REVIEWING' %}<th></th>{% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in items %}
+                            <tr>
+                                <td>{{ item.item_no }}</td>
+                                <td class="fw-bold">{{ item.item_name }}</td>
+                                <td class="small">{{ item.specification }}</td>
+                                <td class="small">{{ item.tolerance|default:'-' }}</td>
+                                <td class="text-center small">{{ item.measured_1|default:'-' }}</td>
+                                <td class="text-center small">{{ item.measured_2|default:'-' }}</td>
+                                <td class="text-center small">{{ item.measured_3|default:'-' }}</td>
+                                <td class="text-center small">{{ item.measured_4|default:'-' }}</td>
+                                <td class="text-center small">{{ item.measured_5|default:'-' }}</td>
+                                <td class="text-center">
+                                    <span class="dtl-pill {% if item.result == 'PASS' %}green{% else %}red{% endif %}">
+                                        {{ item.get_result_display }}
+                                    </span>
+                                </td>
+                                {% if isir.status == 'REVIEWING' %}
+                                <td>
+                                    <form method="post" class="d-inline">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="delete_item">
+                                        <input type="hidden" name="item_id" value="{{ item.pk }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger py-0" onclick="return confirm('삭제?');">
+                                            <i class="bi bi-x"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                                {% endif %}
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="{% if isir.status == 'REVIEWING' %}11{% else %}10{% endif %}" class="text-center py-4 text-muted">
+                                    검사 항목이 없습니다.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -337,29 +330,29 @@
         <!-- 우측 컬럼 -->
         <div class="col-lg-4">
             <!-- PPAP 체크리스트 -->
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-secondary text-white py-2 d-flex justify-content-between align-items-center">
-                    <span><i class="bi bi-check2-square me-2"></i>PPAP 체크리스트</span>
+            <div class="dtl-card">
+                <div class="dtl-card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-check2-square"></i>PPAP 체크리스트</span>
                     {% if isir.status in 'DRAFT,SUBMITTED,REVIEWING' %}
-                    <button class="btn btn-sm btn-light" data-bs-toggle="modal" data-bs-target="#checklistModal">
+                    <button class="dtl-btn-outline btn-sm" data-bs-toggle="modal" data-bs-target="#checklistModal">
                         <i class="bi bi-pencil me-1"></i>수정
                     </button>
                     {% endif %}
                 </div>
                 <div class="card-body p-0">
                     {% if checklist %}
-                    <div class="p-3 bg-light border-bottom">
+                    <div class="p-3 border-bottom" style="background:#fafafa;">
                         <div class="d-flex justify-content-between align-items-center">
-                            <span class="fw-bold">완료율</span>
-                            <span class="badge bg-{% if checklist.get_completion_rate >= 80 %}success{% elif checklist.get_completion_rate >= 50 %}warning{% else %}secondary{% endif %} fs-6">
+                            <span class="fw-bold small">완료율</span>
+                            <span class="dtl-pill {% if checklist.get_completion_rate >= 80 %}green{% elif checklist.get_completion_rate >= 50 %}amber{% else %}slate{% endif %}" style="font-size:0.85rem;">
                                 {{ checklist.get_completion_rate }}%
                             </span>
                         </div>
-                        <div class="progress mt-2" style="height: 8px;">
-                            <div class="progress-bar bg-success" style="width: {{ checklist.get_completion_rate }}%"></div>
+                        <div class="progress mt-2" style="height: 6px;">
+                            <div class="progress-bar" style="width: {{ checklist.get_completion_rate }}%; background:#4338ca;"></div>
                         </div>
                     </div>
-                    <table class="table table-sm mb-0">
+                    <table class="table table-sm mb-0 dtl-table">
                         <tbody>
                             {% for elem in ppap_elements %}
                             <tr>
@@ -368,13 +361,13 @@
                                 <td class="text-end" style="width: 70px;">
                                     {% with status=checklist|getattribute:elem.4 %}
                                     {% if status == 'SUBMITTED' %}
-                                    <span class="badge bg-success">제출</span>
+                                    <span class="dtl-pill green">제출</span>
                                     {% elif status == 'NOT_REQUIRED' %}
-                                    <span class="badge bg-secondary">N/A</span>
+                                    <span class="dtl-pill slate">N/A</span>
                                     {% elif status == 'PENDING' %}
-                                    <span class="badge bg-warning text-dark">보류</span>
+                                    <span class="dtl-pill amber">보류</span>
                                     {% else %}
-                                    <span class="badge bg-danger">미제출</span>
+                                    <span class="dtl-pill red">미제출</span>
                                     {% endif %}
                                     {% endwith %}
                                 </td>
@@ -387,7 +380,7 @@
                         <i class="bi bi-clipboard-x fs-1 d-block mb-2"></i>
                         체크리스트가 없습니다.
                         {% if isir.status in 'DRAFT,SUBMITTED,REVIEWING' %}
-                        <br><button class="btn btn-sm btn-outline-primary mt-2" data-bs-toggle="modal" data-bs-target="#checklistModal">
+                        <br><button class="dtl-btn-outline btn-sm mt-2" data-bs-toggle="modal" data-bs-target="#checklistModal">
                             <i class="bi bi-plus-lg me-1"></i>생성
                         </button>
                         {% endif %}
@@ -397,11 +390,11 @@
             </div>
 
             <!-- 첨부파일 -->
-            <div class="card shadow-sm mb-4">
-                <div class="card-header py-2 d-flex justify-content-between align-items-center">
-                    <span><i class="bi bi-paperclip me-2"></i>첨부파일 ({{ attachments|length }})</span>
+            <div class="dtl-card">
+                <div class="dtl-card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-paperclip"></i>첨부파일 ({{ attachments|length }})</span>
                     {% if isir.status in 'DRAFT,SUBMITTED,REVIEWING' %}
-                    <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">
+                    <button class="dtl-btn-outline btn-sm" data-bs-toggle="modal" data-bs-target="#uploadModal">
                         <i class="bi bi-upload me-1"></i>업로드
                     </button>
                     {% endif %}
@@ -412,7 +405,7 @@
                         {% for att in attachments %}
                         <li class="list-group-item d-flex justify-content-between align-items-center py-2">
                             <div>
-                                <span class="badge bg-{% if att.file_type == 'DRAWING' %}primary{% elif att.file_type == 'REPORT' %}success{% elif att.file_type == 'SPC' %}info{% elif att.file_type == 'MSA' %}warning{% else %}secondary{% endif %} me-2">
+                                <span class="dtl-pill {% if att.file_type == 'DRAWING' %}blue{% elif att.file_type == 'REPORT' %}green{% elif att.file_type == 'SPC' %}cyan{% elif att.file_type == 'MSA' %}amber{% else %}slate{% endif %} me-2">
                                     {{ att.get_file_type_display }}
                                 </span>
                                 <a href="{{ att.file.url }}" target="_blank" class="text-decoration-none small">
@@ -440,20 +433,20 @@
 
                     <!-- 기존 첨부파일 (호환성) -->
                     {% if isir.report_file or isir.photo1 or isir.photo2 %}
-                    <div class="p-2 bg-light border-top">
+                    <div class="p-2 border-top" style="background:#fafafa;">
                         <small class="text-muted d-block mb-1">기존 파일:</small>
                         {% if isir.report_file %}
-                        <a href="{{ isir.report_file.url }}" class="btn btn-sm btn-outline-primary me-1 mb-1" target="_blank">
+                        <a href="{{ isir.report_file.url }}" class="btn btn-sm btn-outline-secondary me-1 mb-1" target="_blank">
                             <i class="bi bi-file-text me-1"></i>성적서
                         </a>
                         {% endif %}
                         {% if isir.photo1 %}
-                        <a href="{{ isir.photo1.url }}" class="btn btn-sm btn-outline-success me-1 mb-1" target="_blank">
+                        <a href="{{ isir.photo1.url }}" class="btn btn-sm btn-outline-secondary me-1 mb-1" target="_blank">
                             <i class="bi bi-image me-1"></i>사진1
                         </a>
                         {% endif %}
                         {% if isir.photo2 %}
-                        <a href="{{ isir.photo2.url }}" class="btn btn-sm btn-outline-success mb-1" target="_blank">
+                        <a href="{{ isir.photo2.url }}" class="btn btn-sm btn-outline-secondary mb-1" target="_blank">
                             <i class="bi bi-image me-1"></i>사진2
                         </a>
                         {% endif %}
@@ -464,17 +457,15 @@
 
             <!-- 승인 처리 -->
             {% if isir.status == 'REVIEWING' %}
-            <div class="card shadow-sm mb-4 border-success">
-                <div class="card-header bg-success text-white py-2">
-                    <i class="bi bi-check-circle me-2"></i>승인 처리
-                </div>
-                <div class="card-body">
+            <div class="dtl-card">
+                <div class="dtl-card-header"><i class="bi bi-check-circle"></i>승인 처리</div>
+                <div class="dtl-card-body">
                     <form method="post">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="approve">
                         <div class="mb-3">
-                            <label class="form-label small fw-bold">종합 판정 <span class="text-danger">*</span></label>
-                            <select name="overall_result" class="form-select" required>
+                            <label class="dtl-form-label">종합 판정 <span class="text-danger">*</span></label>
+                            <select name="overall_result" class="form-select dtl-form-control" required>
                                 <option value="">선택</option>
                                 {% for value, label in overall_choices %}
                                 <option value="{{ value }}">{{ label }}</option>
@@ -482,10 +473,10 @@
                             </select>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label small fw-bold">승인 비고</label>
-                            <textarea name="approval_remark" class="form-control" rows="2" placeholder="승인/반려 사유"></textarea>
+                            <label class="dtl-form-label">승인 비고</label>
+                            <textarea name="approval_remark" class="form-control dtl-form-control" rows="2" placeholder="승인/반려 사유"></textarea>
                         </div>
-                        <button type="submit" class="btn btn-success w-100">
+                        <button type="submit" class="dtl-btn-dark w-100">
                             <i class="bi bi-check-lg me-1"></i>승인 처리
                         </button>
                     </form>
@@ -495,34 +486,34 @@
 
             <!-- 승인 결과 (승인 후) -->
             {% if isir.approved_by %}
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-{% if isir.status == 'APPROVED' %}success{% elif isir.status == 'REJECTED' %}danger{% else %}warning{% endif %} text-white py-2">
-                    <i class="bi bi-award me-2"></i>승인 결과
-                </div>
-                <div class="card-body">
+            <div class="dtl-card mb-0">
+                <div class="dtl-card-header"><i class="bi bi-award"></i>승인 결과</div>
+                <div class="dtl-card-body">
                     <div class="text-center mb-3">
                         {% if isir.overall_result == 'PASS' %}
-                        <span class="badge bg-success fs-4 px-4 py-2">합격</span>
+                        <span class="dtl-pill green" style="font-size:1.1rem; padding:0.5rem 1.5rem;">합격</span>
                         {% elif isir.overall_result == 'FAIL' %}
-                        <span class="badge bg-danger fs-4 px-4 py-2">불합격</span>
+                        <span class="dtl-pill red" style="font-size:1.1rem; padding:0.5rem 1.5rem;">불합격</span>
                         {% else %}
-                        <span class="badge bg-warning text-dark fs-4 px-4 py-2">조건부</span>
+                        <span class="dtl-pill amber" style="font-size:1.1rem; padding:0.5rem 1.5rem;">조건부</span>
                         {% endif %}
                     </div>
-                    <table class="table table-sm table-borderless mb-0">
-                        <tr><th class="text-muted small" style="width:70px;">승인자</th><td>{{ isir.approved_by.username }}</td></tr>
-                        <tr><th class="text-muted small">승인일</th><td>{{ isir.approved_date }}</td></tr>
+                    <table class="table table-sm table-borderless mb-0 dtl-info-table">
+                        <tr><th>승인자</th><td>{{ isir.approved_by.username }}</td></tr>
+                        <tr><th>승인일</th><td>{{ isir.approved_date }}</td></tr>
                         {% if isir.approval_remark %}
-                        <tr><th class="text-muted small">비고</th><td class="small">{{ isir.approval_remark }}</td></tr>
+                        <tr><th>비고</th><td class="small">{{ isir.approval_remark }}</td></tr>
                         {% endif %}
                     </table>
                     {% if isir.condition_detail %}
-                    <div class="alert alert-warning mt-3 mb-0 small">
-                        <strong>조건부 승인 조건:</strong><br>
-                        {{ isir.condition_detail }}
-                        {% if isir.condition_due_date %}
-                        <br><strong>이행기한:</strong> {{ isir.condition_due_date }}
-                        {% endif %}
+                    <div class="dtl-alert-warn mt-3 mb-0" style="margin-bottom:0 !important;">
+                        <div>
+                            <strong>조건부 승인 조건:</strong><br>
+                            {{ isir.condition_detail }}
+                            {% if isir.condition_due_date %}
+                            <br><strong>이행기한:</strong> {{ isir.condition_due_date }}
+                            {% endif %}
+                        </div>
                     </div>
                     {% endif %}
                 </div>
