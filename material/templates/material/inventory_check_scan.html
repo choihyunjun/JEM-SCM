@@ -4,17 +4,17 @@
 {% block title %}재고조사 스캔 - {{ check.check_no }}{% endblock %}
 
 {% block material_content %}
-<div class="container-fluid">
+<div class="dtl-wrap" style="max-width:1100px;">
     <!-- 헤더 -->
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h4 class="fw-bold mb-0">
-            <i class="bi bi-qr-code-scan me-2"></i>{{ check.check_no }}
+        <span class="dtl-title">
+            <i class="bi bi-qr-code-scan me-2" style="color:#9ca3af;"></i>{{ check.check_no }}
             <small class="text-muted ms-2">{{ check.warehouse.name }}</small>
-        </h4>
+        </span>
         <div>
             <form method="post" action="{% url 'material:inventory_check_complete' check.pk %}" class="d-inline">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-success" onclick="return confirm('조사를 완료하시겠습니까?')">
+                <button type="submit" class="dtl-btn-dark" onclick="return confirm('조사를 완료하시겠습니까?')">
                     <i class="bi bi-check-lg me-1"></i>조사 완료
                 </button>
             </form>
@@ -24,27 +24,27 @@
     <!-- 요약 카드 -->
     <div class="row g-3 mb-4">
         <div class="col-12">
-            <div class="card border-0 bg-primary text-white text-center py-3">
-                <div class="small">스캔한 태그</div>
-                <div class="h2 fw-bold mb-0" id="totalScanned">{{ check.total_scanned }}</div>
-                <div class="small mt-1">품목별 비교는 조사 완료 후 결과에서 확인</div>
+            <div class="dtl-qty-tile neutral">
+                <span class="dtl-qty-caption">스캔한 태그</span>
+                <div class="dtl-qty-value" id="totalScanned">{{ check.total_scanned }}</div>
+                <div class="small text-muted mt-1">품목별 비교는 조사 완료 후 결과에서 확인</div>
             </div>
         </div>
     </div>
 
     <!-- 스캔 입력 -->
-    <div class="card shadow-sm mb-4">
-        <div class="card-body">
+    <div class="dtl-card mb-4">
+        <div class="dtl-card-body">
             <div class="input-group input-group-lg">
-                <span class="input-group-text bg-dark text-white">
+                <span class="input-group-text" style="background:#1f2937; color:#fff;">
                     <i class="bi bi-qr-code"></i>
                 </span>
-                <input type="text" id="tagInput" class="form-control"
+                <input type="text" id="tagInput" class="form-control dtl-form-control"
                        placeholder="TAG-YYYYMMDD-XXXX" autofocus
                        style="ime-mode: disabled; text-transform: uppercase;"
                        pattern="[A-Za-z0-9\-]+"
                        autocomplete="off">
-                <button type="button" id="scanBtn" class="btn btn-primary">
+                <button type="button" id="scanBtn" class="dtl-btn-dark">
                     <i class="bi bi-search"></i>
                 </button>
             </div>
@@ -53,54 +53,52 @@
     </div>
 
     <!-- 스캔 내역 -->
-    <div class="card shadow-sm">
-        <div class="card-header bg-white d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-list-check me-2"></i>스캔 내역</span>
-            <span class="badge bg-light text-dark" id="itemCount">{{ items|length }}건</span>
+    <div class="dtl-card mb-0">
+        <div class="dtl-card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-list-check"></i>스캔 내역</span>
+            <span class="dtl-pill slate" id="itemCount">{{ items|length }}건</span>
         </div>
-        <div class="card-body p-0">
-            <div class="table-responsive" style="max-height: 50vh; overflow-y: auto;">
-                <table class="table table-hover table-sm mb-0">
-                    <thead class="table-light sticky-top">
-                        <tr>
-                            <th style="width:40px;"></th>
-                            <th>태그ID</th>
-                            <th>품번</th>
-                            <th>품명</th>
-                            <th>LOT</th>
-                            <th class="text-end">수량</th>
-                        </tr>
-                    </thead>
-                    <tbody id="itemsTable">
-                        {% for item in items %}
-                        <tr>
-                            <td class="text-center">
-                                <i class="bi bi-check-circle-fill text-success"></i>
-                            </td>
-                            <td class="small text-primary">{{ item.tag_id }}</td>
-                            <td class="fw-bold">{{ item.part_no }}</td>
-                            <td class="small">{{ item.part_name|truncatechars:20 }}</td>
-                            <td class="small">{{ item.lot_no|date:"Y-m-d"|default:"-" }}</td>
-                            <td class="text-end fw-bold">{{ item.scanned_qty|intcomma }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr id="emptyRow">
-                            <td colspan="6" class="text-center text-muted py-4">
-                                <i class="bi bi-qr-code fs-1 d-block mb-2"></i>
-                                현품표 QR을 스캔하세요
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+        <div class="table-responsive" style="max-height: 50vh; overflow-y: auto;">
+            <table class="table table-hover table-sm mb-0 dtl-table">
+                <thead>
+                    <tr>
+                        <th style="width:40px;"></th>
+                        <th>태그ID</th>
+                        <th>품번</th>
+                        <th>품명</th>
+                        <th>LOT</th>
+                        <th class="text-end">수량</th>
+                    </tr>
+                </thead>
+                <tbody id="itemsTable">
+                    {% for item in items %}
+                    <tr>
+                        <td class="text-center">
+                            <i class="bi bi-check-circle-fill" style="color:#047857;"></i>
+                        </td>
+                        <td class="small text-primary">{{ item.tag_id }}</td>
+                        <td class="fw-bold">{{ item.part_no }}</td>
+                        <td class="small">{{ item.part_name|truncatechars:20 }}</td>
+                        <td class="small">{{ item.lot_no|date:"Y-m-d"|default:"-" }}</td>
+                        <td class="text-end fw-bold">{{ item.scanned_qty|intcomma }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr id="emptyRow">
+                        <td colspan="6" class="text-center text-muted py-4">
+                            <i class="bi bi-qr-code fs-1 d-block mb-2"></i>
+                            현품표 QR을 스캔하세요
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
 
 <!-- 알림음 -->
 <audio id="successSound" preload="auto">
-    <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2LkY2KhYB8d3Fta2loaWxwdXuAhYqOkJKTlJWWlpeYmJiYmJiXl5aWlZSTkY+MiYaDgH15dnRycXBwcHFzdXh7foGEh4qMjY+QkZGSkpKSkpKSkpKSkZGQj46Ni4mHhYOBf316eHZ1dHNzc3R1dnh6fX+ChIaIiouMjY2Ojo6Ojo6Ojo6NjYyMi4qJiIaFg4GAf316eXh3d3d4eXp7fX+Bg4WGh4iJiYqKioqKioqKioqJiYmIh4aFhIOCgYB/fnx7enl5eXl5ent8fX5/gIGCg4SEhYWFhYWFhYWFhYWEhISEg4ODgoKBgYCAf39+fn5+fn5+f3+AgIGBgoKDg4OEhISEhISEhIODg4KCgYGAgH9/fn5+fn5+fn5/f4CAgYGCgoKDg4OEhISEhISEg4ODgoKBgYCAf39+fn5+fn5+fn5/f4CAgYGCgoKDg4OEhA==" type="audio/wav">
+    <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2LkY2KhYB8d3Fta2loaWxwdXuAhYqOkJKTlJWWlpeYmJiYmJiXl5aWlZSTkY+MiYaDgH15dnRycXBwcHFzdXh7foGEh4qMjY+QkZGSkpKSkpKSkpKSkZGQj46Ni4mHhYOBf316eHZ1dHNzc3R1dnh6fX+ChIaIiouMjY2Ojo6Ojo6Ojo6NjYyMi4qJiIaFg4GAf316eXh3d3d4eXp7fX+Bg4WGh4iJiYqKioqKioqKioqJiYmIh4aFhIOCgYB/fnx7enl5eXl5ent8fX5/gIGCg4SEhYWFhYWFhYWFhYWEhISEg4ODgoKBgYCAf39+fn5+fn5+f3+AgIGBgoKDg4OEhISEhISEhIODg4KCgYGAgH9/fn5+fn5+fn5/f4CAgYGCgoKDg4OEhA==" type="audio/wav">
 </audio>
 <audio id="errorSound" preload="auto">
     <source src="data:audio/wav;base64,UklGRl9vAAAXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YTtvAACAgICAgICAgICAgICAgICAgICAgICAgIB4eHh4eHh4eHh4eHh4eHh4eHh4eHhwcHBwcHBwcHBwcHBwcHBwcHBwcGhoaGhoaGhoaGhoaGhoaGhoaGhoYGBgYGBgYGBgYGBgYGBgYGBgYGBYWFhYWFhYWFhYWFhYWFhYWFhYUFBQUFBQUFBQUFBQUFBQUFBQUFA==" type="audio/wav">
@@ -189,7 +187,7 @@ function addItemRow(item) {
     const partName = item.part_name ? String(item.part_name).substring(0, 20) : '';
 
     tr.innerHTML = `
-        <td class="text-center"><i class="bi bi-check-circle-fill text-success"></i></td>
+        <td class="text-center"><i class="bi bi-check-circle-fill" style="color:#047857;"></i></td>
         <td class="small text-primary">${escapeHtml(item.tag_id)}</td>
         <td class="fw-bold">${escapeHtml(item.part_no)}</td>
         <td class="small">${escapeHtml(partName)}</td>

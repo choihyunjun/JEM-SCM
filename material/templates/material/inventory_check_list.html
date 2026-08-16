@@ -4,51 +4,49 @@
 {% block title %}재고조사 (QR){% endblock %}
 
 {% block material_content %}
-<div class="container-fluid">
+<div class="dtl-wrap" style="max-width:1300px;">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="fw-bold">재고조사 (QR)</h3>
+        <span class="dtl-title">재고조사 (QR)</span>
         <div class="d-flex gap-2">
-            <a href="{% url 'material:inventory_summary' %}" class="btn btn-success">
+            <a href="{% url 'material:inventory_summary' %}" class="dtl-btn-outline btn-sm">
                 <i class="bi bi-table me-1"></i>종합 집계표
             </a>
-            <a href="{% url 'material:inventory_check_create' %}" class="btn btn-primary">
+            <a href="{% url 'material:inventory_check_create' %}" class="dtl-btn-dark btn-sm">
                 <i class="bi bi-plus-lg me-1"></i>새 조사 시작
             </a>
         </div>
     </div>
 
     <!-- 필터 -->
-    <div class="card shadow-sm mb-4">
-        <div class="card-body py-2">
-            <form method="get" class="row g-2 align-items-end">
-                <div class="col-auto">
-                    <select name="warehouse" class="form-select form-select-sm">
-                        <option value="">전체 창고</option>
-                        {% for wh in warehouses %}
-                        <option value="{{ wh.id }}" {% if request.GET.warehouse == wh.id|stringformat:'i' %}selected{% endif %}>{{ wh.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-auto">
-                    <select name="status" class="form-select form-select-sm">
-                        <option value="">전체 상태</option>
-                        {% for value, label in status_choices %}
-                        <option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-auto">
-                    <button type="submit" class="btn btn-sm btn-dark"><i class="bi bi-search"></i></button>
-                </div>
-            </form>
-        </div>
+    <div class="dtl-toolbar">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-auto">
+                <select name="warehouse" class="form-select form-select-sm">
+                    <option value="">전체 창고</option>
+                    {% for wh in warehouses %}
+                    <option value="{{ wh.id }}" {% if request.GET.warehouse == wh.id|stringformat:'i' %}selected{% endif %}>{{ wh.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">전체 상태</option>
+                    {% for value, label in status_choices %}
+                    <option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="dtl-btn-outline btn-sm"><i class="bi bi-search"></i></button>
+            </div>
+        </form>
     </div>
 
     <!-- 목록 -->
-    <div class="card shadow-sm">
-        <div class="card-body p-0">
-            <table class="table table-hover mb-0">
-                <thead class="table-dark">
+    <div class="dtl-card mb-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 dtl-table">
+                <thead>
                     <tr>
                         <th>조사번호</th>
                         <th>창고</th>
@@ -68,7 +66,7 @@
                         <td>{{ check.warehouse.name }}</td>
                         <td>{{ check.check_date|date:"Y-m-d" }}</td>
                         <td class="text-center">
-                            <span class="badge bg-{% if check.status == 'COMPLETED' %}success{% elif check.status == 'IN_PROGRESS' %}primary{% elif check.status == 'CANCELLED' %}secondary{% else %}warning{% endif %}">
+                            <span class="dtl-pill {% if check.status == 'COMPLETED' %}green{% elif check.status == 'IN_PROGRESS' %}blue{% elif check.status == 'CANCELLED' %}slate{% else %}amber{% endif %}">
                                 {{ check.get_status_display }}
                             </span>
                         </td>
@@ -78,11 +76,11 @@
                         <td>{{ check.created_by.username|default:"-" }}</td>
                         <td class="text-center">
                             {% if check.status == 'IN_PROGRESS' %}
-                            <a href="{% url 'material:inventory_check_scan' check.pk %}" class="btn btn-sm btn-primary">
+                            <a href="{% url 'material:inventory_check_scan' check.pk %}" class="dtl-btn-dark btn-sm">
                                 <i class="bi bi-qr-code-scan"></i> 스캔
                             </a>
                             {% else %}
-                            <a href="{% url 'material:inventory_check_result' check.pk %}" class="btn btn-sm btn-outline-secondary">
+                            <a href="{% url 'material:inventory_check_result' check.pk %}" class="dtl-btn-outline btn-sm">
                                 <i class="bi bi-eye"></i> 결과
                             </a>
                             {% endif %}
