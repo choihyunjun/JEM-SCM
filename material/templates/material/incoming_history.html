@@ -12,20 +12,18 @@
 
     <div class="d-flex justify-content-between align-items-center mb-4 pt-3">
         <div>
-            <h3 class="fw-bold">입고 내역 조회</h3>
+            <span class="dtl-title d-block">입고 내역 조회</span>
             <span class="text-muted small">입고 처리된 내역을 조회하고 단가를 재반영할 수 있습니다.</span>
         </div>
         <div>
-            <a href="{% url 'material:manual_incoming' %}" class="btn btn-white border shadow-sm btn-sm hover-shadow">
+            <a href="{% url 'material:manual_incoming' %}" class="dtl-btn-outline btn-sm">
                 <i class="bi bi-box-arrow-in-down me-1"></i> 입고처리
             </a>
         </div>
     </div>
 
-    <div class="card shadow-sm mb-4">
-        <div class="card-header bg-white fw-bold">
-            <i class="bi bi-search me-1 text-secondary"></i> 검색 조건
-        </div>
+    <div class="dtl-card mb-4">
+        <div class="dtl-card-header"><i class="bi bi-search"></i> 검색 조건</div>
         <div class="card-body">
             <form method="get" class="row g-2 align-items-end">
                 <div class="col-md-2">
@@ -83,7 +81,7 @@
     </div>
 
     <!-- 단가 재반영 액션 바 -->
-    <div class="card shadow-sm mb-3 border-warning" id="actionBar">
+    <div class="dtl-card mb-3" id="actionBar" style="border-color:#fde68a;">
         <div class="card-body py-2 d-flex justify-content-between align-items-center" style="background:#fffbeb;">
             <div>
                 <input type="checkbox" id="checkAll" onclick="toggleCheckAll(this)" class="form-check-input me-2" style="cursor:pointer;">
@@ -101,10 +99,10 @@
         </div>
     </div>
 
-    <div class="card shadow-sm mb-4">
-        <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-clock-history me-1 text-secondary"></i> 입고 내역</span>
-            <span class="badge bg-secondary rounded-pill">{{ page_obj.paginator.count }}건</span>
+    <div class="dtl-card mb-4">
+        <div class="dtl-card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-clock-history"></i> 입고 내역</span>
+            <span class="dtl-pill slate">{{ page_obj.paginator.count }}건</span>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -157,16 +155,16 @@
                             <td class="small text-nowrap">{{ item.date|date:"Y-m-d" }}</td>
                             <td>
                                 {% if item.transaction_type == 'IN_ERP' or item.transaction_type == 'RCV_ERP' %}
-                                <span class="badge border border-dark text-dark bg-transparent">{{ item.display_type }}</span>
+                                <span class="dtl-pill slate">{{ item.display_type }}</span>
                                 {% else %}
-                                <span class="badge border border-danger text-danger bg-transparent">{{ item.display_type }}</span>
+                                <span class="dtl-pill red">{{ item.display_type }}</span>
                                 {% endif %}
                             </td>
                             <td>
                                 {% if item.transaction_type == 'IN_ERP' or item.transaction_type == 'RCV_ERP' %}
-                                    <span class="badge bg-warning text-dark">ERP</span>
+                                    <span class="dtl-pill amber">ERP</span>
                                 {% else %}
-                                    <span class="badge bg-info text-dark">SCM</span>
+                                    <span class="dtl-pill cyan">SCM</span>
                                 {% endif %}
                             </td>
                             <td class="small">{{ item.vendor.name|default:"-" }}</td>
@@ -525,11 +523,11 @@ function openDetail(row) {
 
     const typeEl = document.getElementById('detailType');
     typeEl.textContent = d.type;
-    typeEl.className = 'badge bg-' + (
-        d.type === '수기입고' ? 'success' :
-        d.type === '발주입고' ? 'primary' :
-        d.type === 'ERP입고' || d.type === 'ERP생산입고' ? 'info' :
-        d.type === '검사입고' ? 'warning' : 'secondary'
+    typeEl.className = 'dtl-pill ' + (
+        d.type === '수기입고' ? 'green' :
+        d.type === '발주입고' ? 'blue' :
+        d.type === 'ERP입고' || d.type === 'ERP생산입고' ? 'cyan' :
+        d.type === '검사입고' ? 'amber' : 'slate'
     );
 
     document.getElementById('detailTrxNo').textContent = d.trxNo;
@@ -544,7 +542,7 @@ function openDetail(row) {
     document.getElementById('detailLotInput').value = d.lot || '';
     document.getElementById('detailWarehouse').textContent = d.warehouse || '-';
     document.getElementById('detailErpNo').innerHTML = d.erpNo
-        ? `<span class="badge bg-success">${d.erpNo}</span>`
+        ? `<span class="dtl-pill green">${d.erpNo}</span>`
         : '<span class="text-muted">-</span>';
     document.getElementById('detailActor').textContent = d.actor || '-';
     document.getElementById('detailRemarkText').textContent = d.remark || '-';

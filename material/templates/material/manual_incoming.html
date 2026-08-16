@@ -23,11 +23,11 @@
     
     <div class="d-flex justify-content-between align-items-center mb-4 pt-3">
         <div>
-            <h3 class="fw-bold">입고처리</h3>
+            <span class="dtl-title d-block">입고처리</span>
             <span class="text-muted small">여러 품목을 리스트에 담아 한 번에 입고 처리합니다.</span>
         </div>
         <div>
-            <a href="{% url 'material:incoming_history' %}" class="btn btn-white border shadow-sm btn-sm hover-shadow">
+            <a href="{% url 'material:incoming_history' %}" class="dtl-btn-outline btn-sm">
                 <i class="bi bi-clock-history me-1"></i> 입고 이력
             </a>
         </div>
@@ -35,11 +35,9 @@
 
     <form method="post" id="incomingForm">
         {% csrf_token %}
-        
-        <div class="card shadow-sm mb-4">
-            <div class="card-header bg-light fw-bold text-primary">
-                <i class="bi bi-info-circle me-1"></i> 입고 공통 정보 (Header)
-            </div>
+
+        <div class="dtl-card mb-4">
+            <div class="dtl-card-header"><i class="bi bi-info-circle"></i> 입고 공통 정보 (Header)</div>
             <div class="card-body bg-white">
                 <div class="row g-3 align-items-center">
                     <div class="col-6 col-lg-2">
@@ -81,7 +79,7 @@
             </div>
         </div>
 
-        <div class="card shadow-sm border-primary mb-4">
+        <div class="dtl-card mb-4">
             <div class="card-body bg-light-blue">
                 <div class="row g-2 align-items-end">
                     <div class="col-12 col-lg-2" id="vendorCol">
@@ -149,10 +147,10 @@
             </div>
         </div>
 
-        <div class="card shadow-sm mb-4">
-            <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-list-check me-1"></i> 입고 대기 목록</span>
-                <span class="badge bg-primary rounded-pill" id="itemCount">0건</span>
+        <div class="dtl-card mb-4">
+            <div class="dtl-card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-list-check"></i> 입고 대기 목록</span>
+                <span class="dtl-pill blue" id="itemCount">0건</span>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -190,28 +188,28 @@
     <!-- ======================================= -->
     <!-- 입고처리 내역 -->
     <!-- ======================================= -->
-    <div class="card shadow-sm mt-4 mb-4">
-        <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-clock-history me-1 text-secondary"></i> 입고처리 내역</span>
+    <div class="dtl-card mt-4 mb-4">
+        <div class="dtl-card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-clock-history"></i> 입고처리 내역</span>
             <div class="d-flex align-items-center gap-2">
                 {% if erp_auto_sync_enabled %}
-                <span class="badge bg-success-subtle text-success border border-success-subtle" title="서버 시작 시 자동으로 ERP 입고 동기화가 실행됩니다">
+                <span class="dtl-pill green" title="서버 시작 시 자동으로 ERP 입고 동기화가 실행됩니다">
                     <i class="bi bi-arrow-repeat me-1"></i>자동 동기화 {{ erp_auto_sync_interval }}분
                 </span>
                 {% endif %}
                 {% if erp_sync_result %}
-                <span class="badge {% if erp_sync_result.errors > 0 %}bg-warning-subtle text-warning{% else %}bg-light text-muted{% endif %} border" title="동기화 결과: 신규 {{ erp_sync_result.synced }}건, 건너뜀 {{ erp_sync_result.skipped }}건{% if erp_sync_result.errors > 0 %}, 오류 {{ erp_sync_result.errors }}건{% endif %}">
+                <span class="dtl-pill {% if erp_sync_result.errors > 0 %}amber{% else %}slate{% endif %}" title="동기화 결과: 신규 {{ erp_sync_result.synced }}건, 건너뜀 {{ erp_sync_result.skipped }}건{% if erp_sync_result.errors > 0 %}, 오류 {{ erp_sync_result.errors }}건{% endif %}">
                     마지막 동기화: {{ erp_sync_result.finished_at }}
                     {% if erp_sync_result.synced > 0 %}(+{{ erp_sync_result.synced }}){% endif %}
                 </span>
                 {% endif %}
                 <form method="post" action="{% url 'material:erp_incoming_sync' %}" class="d-inline" id="erpSyncForm">
                     {% csrf_token %}
-                    <button type="submit" class="btn btn-outline-warning btn-sm" id="erpSyncBtn">
+                    <button type="submit" class="dtl-btn-outline btn-sm" id="erpSyncBtn">
                         <i class="bi bi-arrow-repeat me-1"></i>즉시 동기화
                     </button>
                 </form>
-                <span class="badge bg-secondary rounded-pill">{{ history_page.paginator.count }}건</span>
+                <span class="dtl-pill slate">{{ history_page.paginator.count }}건</span>
             </div>
         </div>
         <div class="card-body pb-2">
@@ -295,9 +293,9 @@
                             <td class="small">{{ item.display_warehouse|default:"-" }}</td>
                             <td>
                                 {% if item.transaction_type == 'IN_ERP' %}
-                                    <span class="badge bg-warning text-dark">ERP</span>
+                                    <span class="dtl-pill amber">ERP</span>
                                 {% else %}
-                                    <span class="badge bg-info text-dark">SCM</span>
+                                    <span class="dtl-pill cyan">SCM</span>
                                 {% endif %}
                             </td>
                             <td>
@@ -364,7 +362,7 @@
     <div class="modal fade" id="historyDetailModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
-                <div class="modal-header bg-light">
+                <div class="modal-header">
                     <h5 class="modal-title fw-bold">
                         <i class="bi bi-info-circle me-2"></i>
                         <span id="detailModalTitle">입고 상세 정보</span>
@@ -484,7 +482,7 @@
 <div class="modal fade" id="vendorSearchModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
-            <div class="modal-header bg-light">
+            <div class="modal-header">
                 <h5 class="modal-title fw-bold"><i class="bi bi-building me-2"></i>협력사 검색</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
@@ -718,7 +716,7 @@
 
                 if (data.orders && data.orders.length > 0) {
                     // 발주 있음 - 배지 + 선택 영역 표시
-                    badge.innerHTML = `<span class="badge bg-warning text-dark"><i class="bi bi-bell-fill me-1"></i>발주 ${data.orders.length}건</span>`;
+                    badge.innerHTML = `<span class="dtl-pill amber"><i class="bi bi-bell-fill me-1"></i>발주 ${data.orders.length}건</span>`;
                     badge.style.display = 'inline';
 
                     sel.innerHTML = '<option value="">선택 안 함 → 예외입고 처리</option>';
@@ -756,7 +754,7 @@
                     } catch(e) {}
                 } else {
                     // 발주 없음
-                    badge.innerHTML = `<span class="badge bg-secondary"><i class="bi bi-dash-circle me-1"></i>발주 없음 (예외입고)</span>`;
+                    badge.innerHTML = `<span class="dtl-pill slate"><i class="bi bi-dash-circle me-1"></i>발주 없음 (예외입고)</span>`;
                     badge.style.display = 'inline';
                     area.style.display = 'none';
                 }
@@ -809,8 +807,8 @@
 
         // 구분 표시
         var typeBadge = erpNo
-            ? `<span class="badge bg-info text-dark">발주입고</span><div class="small text-muted mt-1" style="font-size:0.7rem;">${orderText}</div>`
-            : `<span class="badge bg-secondary">예외입고</span>`;
+            ? `<span class="dtl-pill cyan">발주입고</span><div class="small text-muted mt-1" style="font-size:0.7rem;">${orderText}</div>`
+            : `<span class="dtl-pill slate">예외입고</span>`;
 
         var html = `
             <td class="fw-bold text-primary">
@@ -980,7 +978,7 @@
         document.getElementById('detailActor').textContent = actor;
         document.getElementById('detailRemark').textContent = remark;
         document.getElementById('detailLabel').innerHTML = labelCount > 0
-            ? '<span class="badge bg-success">' + labelCount + '장 발행</span>'
+            ? '<span class="dtl-pill green">' + labelCount + '장 발행</span>'
             : '<span class="text-muted">미발행</span>';
 
         var inspText = {'PENDING': '검사대기', 'APPROVED': '합격', 'REJECTED': '불합격'};
