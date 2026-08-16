@@ -5,14 +5,14 @@
 <div class="container-fluid py-3">
 
   <div class="d-flex justify-content-between align-items-center mb-3">
-    <h4 class="mb-0"><i class="bi bi-arrow-left-right me-2"></i>재료 이동 요청</h4>
+    <span class="dtl-title"><i class="bi bi-arrow-left-right me-2" style="color:#9ca3af;"></i>재료 이동 요청</span>
     <div class="d-flex gap-2">
       {% if request.user.is_superuser %}
-      <a href="{% url 'material:transfer_request_approver_manage' %}" class="btn btn-outline-secondary btn-sm">
+      <a href="{% url 'material:transfer_request_approver_manage' %}" class="dtl-btn-outline btn-sm">
         <i class="bi bi-shield-check me-1"></i>승인권한 관리
       </a>
       {% endif %}
-      <a href="{% url 'material:transfer_request_create' %}" class="btn btn-primary btn-sm">
+      <a href="{% url 'material:transfer_request_create' %}" class="dtl-btn-dark btn-sm">
         <i class="bi bi-plus-lg me-1"></i>이동 요청 등록
       </a>
     </div>
@@ -24,7 +24,7 @@
     </li>
     <li class="nav-item">
       <a class="nav-link {% if status_filter == 'PENDING' %}active{% endif %}" href="?status=PENDING">
-        대기중 <span class="badge bg-warning text-dark ms-1">●</span>
+        대기중 <span class="dtl-pill amber ms-1">●</span>
       </a>
     </li>
     <li class="nav-item">
@@ -49,11 +49,11 @@
 
   <p class="text-muted small mb-2"><i class="bi bi-hand-index me-1"></i>행을 더블클릭하면 품목 세부내역을 볼 수 있습니다.</p>
 
-  <div class="card shadow-sm">
+  <div class="dtl-card mb-0">
     <div class="card-body p-0">
       <div class="table-responsive">
-      <table class="table table-sm table-hover mb-0">
-        <thead class="table-dark">
+      <table class="table table-sm table-hover mb-0 dtl-table">
+        <thead>
           <tr>
             <th>요청번호</th>
             <th>품목 요약</th>
@@ -83,12 +83,12 @@
               {% with cnt=lines|length %}
                 {% if cnt == 1 %}
                   {% for line in lines %}
-                    <span class="badge bg-secondary me-2 text-center" style="display:inline-block; width:70px;">{{ line.part.part_no }}</span><small class="text-muted">{{ line.part.part_name|truncatechars:30 }}</small>
+                    <span class="dtl-pill slate me-2 text-center" style="display:inline-block; width:70px;">{{ line.part.part_no }}</span><small class="text-muted">{{ line.part.part_name|truncatechars:30 }}</small>
                   {% endfor %}
                 {% else %}
                   {% for line in lines %}
                     {% if forloop.counter <= 2 %}
-                      <span class="badge bg-secondary me-1 text-center" style="display:inline-block; width:70px;">{{ line.part.part_no }}</span><small class="text-muted me-2">{{ line.part.part_name|truncatechars:15 }}</small>
+                      <span class="dtl-pill slate me-1 text-center" style="display:inline-block; width:70px;">{{ line.part.part_no }}</span><small class="text-muted me-2">{{ line.part.part_name|truncatechars:15 }}</small>
                     {% endif %}
                   {% endfor %}
                   {% if cnt > 2 %}<span class="text-muted small">외 {{ cnt|add:"-2" }}건 </span>{% endif %}
@@ -101,15 +101,15 @@
             <td class="d-none d-md-table-cell">{{ req.approved_at|date:"Y-m-d H:i"|default:"-" }}</td>
             <td>
               {% if req.status == 'PENDING' %}
-                <span class="badge bg-warning text-dark">대기중</span>
+                <span class="dtl-pill amber">대기중</span>
               {% elif req.status == 'PARTIAL' %}
-                <span class="badge bg-warning text-dark">대기중</span>
+                <span class="dtl-pill amber">대기중</span>
               {% elif req.status == 'APPROVED' %}
-                <span class="badge bg-success">승인완료</span>
+                <span class="dtl-pill green">승인완료</span>
               {% elif req.status == 'REJECTED' %}
-                <span class="badge bg-danger">반려</span>
+                <span class="dtl-pill red">반려</span>
               {% elif req.status == 'CANCELLED' %}
-                <span class="badge bg-secondary">취소</span>
+                <span class="dtl-pill slate">취소</span>
               {% endif %}
             </td>
             <td class="d-none d-md-table-cell">{{ req.warehouse_from.name|default:"-" }}</td>
@@ -262,7 +262,7 @@
 <div class="modal fade" id="revokeModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
-      <div class="modal-header bg-warning text-dark">
+      <div class="modal-header" style="background:#fffbeb;">
         <h5 class="modal-title"><i class="bi bi-arrow-counterclockwise me-2"></i>승인 취소</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
@@ -388,8 +388,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const isApproved = line.approved_qty !== null;
         const rowCls = isApproved ? 'table-success' : 'table-warning';
         const statusBadge = isApproved
-          ? `<span class="badge bg-success">승인</span>`
-          : `<span class="badge bg-secondary">미처리</span>`;
+          ? `<span class="dtl-pill green">승인</span>`
+          : `<span class="dtl-pill slate">미처리</span>`;
         const lot = line.lot_no || '<span class="text-muted">-</span>';
         const approvedQty = isApproved
           ? `<strong>${line.approved_qty.toLocaleString()}</strong>`
