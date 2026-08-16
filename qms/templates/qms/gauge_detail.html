@@ -4,23 +4,23 @@
 {% block title %}계측기 상세 - {{ gauge.gauge_no }}{% endblock %}
 
 {% block qms_content %}
-<div class="container-fluid p-0" style="max-width: 1400px;">
+<div class="dtl-wrap" style="max-width:1400px;">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h3 class="fw-bold">{{ gauge.gauge_no }}</h3>
-            <small class="text-muted">{{ gauge.gauge_name }} | {{ gauge.get_gauge_type_display }}</small>
+            <span class="dtl-title">{{ gauge.gauge_no }}</span>
+            <div class="dtl-subtitle mb-0 mt-1">{{ gauge.gauge_name }} | {{ gauge.get_gauge_type_display }}</div>
         </div>
-        <div>
+        <div class="d-flex align-items-center gap-2">
             {% if gauge.status == 'ACTIVE' %}
-            <span class="badge bg-success fs-6">사용중</span>
+            <span class="dtl-pill green">사용중</span>
             {% elif gauge.status == 'CALIBRATING' %}
-            <span class="badge bg-info fs-6">교정중</span>
+            <span class="dtl-pill cyan">교정중</span>
             {% elif gauge.status == 'REPAIR' %}
-            <span class="badge bg-warning text-dark fs-6">수리중</span>
+            <span class="dtl-pill amber">수리중</span>
             {% else %}
-            <span class="badge bg-secondary fs-6">{{ gauge.get_status_display }}</span>
+            <span class="dtl-pill slate">{{ gauge.get_status_display }}</span>
             {% endif %}
-            <a href="{% url 'qms:gauge_edit' pk=gauge.pk %}" class="btn btn-outline-primary btn-sm ms-2">
+            <a href="{% url 'qms:gauge_edit' pk=gauge.pk %}" class="btn btn-outline-secondary btn-sm">
                 <i class="bi bi-pencil me-1"></i>수정
             </a>
             <button type="button" class="btn btn-outline-danger btn-sm" onclick="if(confirm('정말 삭제하시겠습니까?')) document.getElementById('deleteForm').submit();">
@@ -34,71 +34,69 @@
         <!-- 좌측: 기본 정보 -->
         <div class="col-lg-8">
             <!-- 기본 정보 -->
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-white d-flex justify-content-between">
-                    <span><i class="bi bi-info-circle me-1"></i>기본 정보</span>
-                </div>
-                <div class="card-body">
+            <div class="dtl-card">
+                <div class="dtl-card-header"><i class="bi bi-info-circle"></i>기본 정보</div>
+                <div class="dtl-card-body">
                     <div class="row g-3">
                         <div class="col-md-4">
-                            <label class="form-label small text-muted">관리번호</label>
-                            <div class="fw-bold text-primary">{{ gauge.gauge_no }}</div>
+                            <span class="dtl-field-label">관리번호</span>
+                            <div class="dtl-field-value" style="color:#4338ca;">{{ gauge.gauge_no }}</div>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label small text-muted">계측기명</label>
-                            <div class="fw-bold">{{ gauge.gauge_name }}</div>
+                            <span class="dtl-field-label">계측기명</span>
+                            <div class="dtl-field-value">{{ gauge.gauge_name }}</div>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label small text-muted">유형</label>
+                            <span class="dtl-field-label">유형</span>
                             <div>{{ gauge.get_gauge_type_display }}</div>
                         </div>
                     </div>
-                    <hr>
+                    <hr style="border-color:#eef0f2;">
                     <div class="row g-3">
                         <div class="col-md-4">
-                            <label class="form-label small text-muted">제조사</label>
+                            <span class="dtl-field-label">제조사</span>
                             <div>{{ gauge.manufacturer|default:"-" }}</div>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label small text-muted">모델번호</label>
+                            <span class="dtl-field-label">모델번호</span>
                             <div>{{ gauge.model_no|default:"-" }}</div>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label small text-muted">시리얼번호</label>
+                            <span class="dtl-field-label">시리얼번호</span>
                             <div>{{ gauge.serial_no|default:"-" }}</div>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label small text-muted">측정범위</label>
+                            <span class="dtl-field-label">측정범위</span>
                             <div>{{ gauge.measurement_range|default:"-" }}</div>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label small text-muted">분해능</label>
+                            <span class="dtl-field-label">분해능</span>
                             <div>{{ gauge.resolution|default:"-" }}</div>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label small text-muted">정밀도</label>
+                            <span class="dtl-field-label">정밀도</span>
                             <div>{{ gauge.accuracy|default:"-" }}</div>
                         </div>
                     </div>
-                    <hr>
+                    <hr style="border-color:#eef0f2;">
                     <div class="row g-3">
                         <div class="col-md-4">
-                            <label class="form-label small text-muted">설치장소</label>
+                            <span class="dtl-field-label">설치장소</span>
                             <div>{{ gauge.location|default:"-" }}</div>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label small text-muted">관리부서</label>
+                            <span class="dtl-field-label">관리부서</span>
                             <div>{{ gauge.department|default:"-" }}</div>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label small text-muted">관리담당자</label>
+                            <span class="dtl-field-label">관리담당자</span>
                             <div>{{ gauge.manager.username|default:"-" }}</div>
                         </div>
                     </div>
                     {% if gauge.usage %}
-                    <hr>
+                    <hr style="border-color:#eef0f2;">
                     <div>
-                        <label class="form-label small text-muted">용도</label>
+                        <span class="dtl-field-label">용도</span>
                         <div>{{ gauge.usage }}</div>
                     </div>
                     {% endif %}
@@ -106,16 +104,16 @@
             </div>
 
             <!-- 교정 이력 -->
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
-                    <span><i class="bi bi-calendar-check me-1"></i>교정 이력</span>
-                    <button class="btn btn-sm btn-dark" data-bs-toggle="modal" data-bs-target="#addCalibrationModal">
+            <div class="dtl-card mb-0">
+                <div class="dtl-card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-calendar-check"></i>교정 이력</span>
+                    <button class="dtl-btn-dark btn-sm" data-bs-toggle="modal" data-bs-target="#addCalibrationModal">
                         <i class="bi bi-plus-lg me-1"></i>교정 등록
                     </button>
                 </div>
-                <div class="card-body p-0">
-                    <table class="table table-hover mb-0">
-                        <thead class="table-light">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 dtl-table">
+                        <thead>
                             <tr>
                                 <th>교정일</th>
                                 <th>교정유형</th>
@@ -134,18 +132,18 @@
                                 <td class="small">{{ cal.calibration_agency|default:"-" }}</td>
                                 <td class="text-center">
                                     {% if cal.result == 'PASS' %}
-                                    <span class="badge bg-success">합격</span>
+                                    <span class="dtl-pill green">합격</span>
                                     {% elif cal.result == 'ADJUSTED' %}
-                                    <span class="badge bg-info">조정후합격</span>
+                                    <span class="dtl-pill cyan">조정후합격</span>
                                     {% else %}
-                                    <span class="badge bg-danger">불합격</span>
+                                    <span class="dtl-pill red">불합격</span>
                                     {% endif %}
                                 </td>
                                 <td class="small">{{ cal.certificate_no|default:"-" }}</td>
                                 <td>{{ cal.next_date|default:"-" }}</td>
                                 <td>
                                     {% if cal.certificate_file %}
-                                    <a href="{{ cal.certificate_file.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                    <a href="{{ cal.certificate_file.url }}" target="_blank" class="btn btn-sm btn-outline-secondary">
                                         <i class="bi bi-file-earmark-text"></i>
                                     </a>
                                     {% else %}-{% endif %}
@@ -165,16 +163,14 @@
         <!-- 우측: 상태/교정 정보 -->
         <div class="col-lg-4">
             <!-- 교정 상태 -->
-            <div class="card shadow-sm mb-4 {% if gauge.is_calibration_due %}border-danger{% endif %}">
-                <div class="card-header {% if gauge.is_calibration_due %}bg-danger text-white{% else %}bg-success text-white{% endif %}">
-                    <i class="bi bi-calendar-event me-1"></i>교정 상태
-                </div>
-                <div class="card-body text-center">
+            <div class="dtl-card">
+                <div class="dtl-card-header"><i class="bi bi-calendar-event"></i>교정 상태</div>
+                <div class="dtl-card-body text-center">
                     {% if gauge.next_calibration_date %}
-                    <div class="h2 mb-2 {% if gauge.is_calibration_due %}text-danger{% else %}text-success{% endif %}">
+                    <div class="h2 mb-2" style="color:{% if gauge.is_calibration_due %}#b91c1c{% else %}#047857{% endif %};">
                         {{ gauge.calibration_status_text }}
                     </div>
-                    <div class="small text-muted">차기 교정일: {{ gauge.next_calibration_date }}</div>
+                    <div class="text-muted small">차기 교정일: {{ gauge.next_calibration_date }}</div>
                     {% else %}
                     <div class="h4 text-muted">교정일 미설정</div>
                     {% endif %}
@@ -182,31 +178,29 @@
             </div>
 
             <!-- 교정 정보 -->
-            <div class="card shadow-sm mb-4">
-                <div class="card-header">
-                    <i class="bi bi-sliders me-1"></i>교정 설정
-                </div>
-                <div class="card-body">
+            <div class="dtl-card">
+                <div class="dtl-card-header"><i class="bi bi-sliders"></i>교정 설정</div>
+                <div class="dtl-card-body">
                     <form method="post">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="update">
                         <div class="mb-3">
-                            <label class="form-label small">교정주기 (월)</label>
-                            <input type="number" name="calibration_cycle" class="form-control" value="{{ gauge.calibration_cycle }}" min="1">
+                            <label class="dtl-form-label">교정주기 (월)</label>
+                            <input type="number" name="calibration_cycle" class="form-control dtl-form-control" value="{{ gauge.calibration_cycle }}" min="1">
                         </div>
                         <div class="mb-3">
-                            <label class="form-label small">교정기관</label>
-                            <input type="text" name="calibration_agency" class="form-control" value="{{ gauge.calibration_agency }}">
+                            <label class="dtl-form-label">교정기관</label>
+                            <input type="text" name="calibration_agency" class="form-control dtl-form-control" value="{{ gauge.calibration_agency }}">
                         </div>
                         <div class="mb-3">
-                            <label class="form-label small">상태</label>
-                            <select name="status" class="form-select">
+                            <label class="dtl-form-label">상태</label>
+                            <select name="status" class="form-select dtl-form-control">
                                 {% for value, label in status_choices %}
                                 <option value="{{ value }}" {% if gauge.status == value %}selected{% endif %}>{{ label }}</option>
                                 {% endfor %}
                             </select>
                         </div>
-                        <button type="submit" class="btn btn-primary w-100">
+                        <button type="submit" class="dtl-btn-dark w-100">
                             <i class="bi bi-save me-1"></i>저장
                         </button>
                     </form>
@@ -214,13 +208,11 @@
             </div>
 
             <!-- 첨부파일 -->
-            <div class="card shadow-sm mb-4">
-                <div class="card-header">
-                    <i class="bi bi-paperclip me-1"></i>첨부파일
-                </div>
-                <div class="card-body">
+            <div class="dtl-card">
+                <div class="dtl-card-header"><i class="bi bi-paperclip"></i>첨부파일</div>
+                <div class="dtl-card-body">
                     {% if gauge.photo %}
-                    <a href="{{ gauge.photo.url }}" target="_blank" class="btn btn-outline-primary btn-sm mb-2 w-100">
+                    <a href="{{ gauge.photo.url }}" target="_blank" class="btn btn-outline-secondary btn-sm mb-2 w-100">
                         <i class="bi bi-image me-1"></i>사진 보기
                     </a>
                     {% endif %}
@@ -236,11 +228,9 @@
             </div>
 
             <!-- 메타 정보 -->
-            <div class="card shadow-sm">
-                <div class="card-header">
-                    <i class="bi bi-clock-history me-1"></i>등록 정보
-                </div>
-                <div class="card-body small">
+            <div class="dtl-card mb-0">
+                <div class="dtl-card-header"><i class="bi bi-clock-history"></i>등록 정보</div>
+                <div class="dtl-card-body small">
                     {% if gauge.purchase_date %}
                     <div class="d-flex justify-content-between mb-1">
                         <span class="text-muted">구입일</span>
@@ -263,7 +253,7 @@
     </div>
 
     <div class="mt-4">
-        <a href="{% url 'qms:gauge_list' %}" class="btn btn-outline-secondary">
+        <a href="{% url 'qms:gauge_list' %}" class="dtl-back-link">
             <i class="bi bi-arrow-left me-1"></i>목록으로
         </a>
     </div>

@@ -4,21 +4,22 @@
 {% block title %}출하검사 상세 - {{ oi.inspection_no }}{% endblock %}
 
 {% block qms_content %}
-<div class="container-fluid p-0" style="max-width: 1200px;">
+<div class="dtl-wrap">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="fw-bold">{{ oi.inspection_no }}
-            <span class="badge bg-{% if oi.status == 'PASS' %}success{% elif oi.status == 'FAIL' %}danger{% elif oi.status == 'PENDING' %}warning{% elif oi.status == 'CONDITIONAL' %}info{% else %}secondary{% endif %} ms-2">
+        <div class="d-flex align-items-center gap-2">
+            <span class="dtl-title">{{ oi.inspection_no }}</span>
+            <span class="dtl-pill {% if oi.status == 'PASS' %}green{% elif oi.status == 'FAIL' %}red{% elif oi.status == 'PENDING' %}amber{% elif oi.status == 'CONDITIONAL' %}cyan{% else %}slate{% endif %}">
                 {{ oi.get_status_display }}
             </span>
-        </h3>
-        <div class="d-flex gap-2">
-            <a href="{% url 'qms:outgoing_edit' pk=oi.pk %}" class="btn btn-outline-primary">
+        </div>
+        <div class="d-flex gap-2 dtl-actions">
+            <a href="{% url 'qms:outgoing_edit' pk=oi.pk %}" class="btn btn-outline-secondary btn-sm">
                 <i class="bi bi-pencil me-1"></i>수정
             </a>
-            <button type="button" class="btn btn-outline-danger" onclick="if(confirm('정말 삭제하시겠습니까?')) document.getElementById('deleteForm').submit();">
+            <button type="button" class="btn btn-outline-danger btn-sm" onclick="if(confirm('정말 삭제하시겠습니까?')) document.getElementById('deleteForm').submit();">
                 <i class="bi bi-trash me-1"></i>삭제
             </button>
-            <a href="{% url 'qms:outgoing_list' %}" class="btn btn-outline-secondary">
+            <a href="{% url 'qms:outgoing_list' %}" class="btn btn-outline-secondary btn-sm">
                 <i class="bi bi-arrow-left me-1"></i>목록으로
             </a>
         </div>
@@ -28,44 +29,18 @@
     <div class="row">
         <!-- 기본 정보 -->
         <div class="col-md-6 mb-4">
-            <div class="card shadow-sm h-100">
-                <div class="card-header bg-white">
-                    <i class="bi bi-info-circle me-2"></i>기본 정보
-                </div>
-                <div class="card-body">
-                    <table class="table table-borderless mb-0">
-                        <tr>
-                            <th class="text-muted" style="width: 120px;">검사번호</th>
-                            <td class="fw-bold">{{ oi.inspection_no }}</td>
-                        </tr>
-                        <tr>
-                            <th class="text-muted">검사일</th>
-                            <td>{{ oi.inspection_date }}</td>
-                        </tr>
-                        <tr>
-                            <th class="text-muted">품번</th>
-                            <td>{{ oi.part_no }}</td>
-                        </tr>
-                        <tr>
-                            <th class="text-muted">품명</th>
-                            <td>{{ oi.part_name }}</td>
-                        </tr>
-                        <tr>
-                            <th class="text-muted">LOT번호</th>
-                            <td>{{ oi.lot_no|default:'-' }}</td>
-                        </tr>
-                        <tr>
-                            <th class="text-muted">고객사</th>
-                            <td>{{ oi.customer_name|default:'-' }}</td>
-                        </tr>
-                        <tr>
-                            <th class="text-muted">납품예정일</th>
-                            <td>{{ oi.delivery_date|default:'-' }}</td>
-                        </tr>
-                        <tr>
-                            <th class="text-muted">검사자</th>
-                            <td>{{ oi.inspector.username|default:'-' }}</td>
-                        </tr>
+            <div class="dtl-card h-100 mb-0">
+                <div class="dtl-card-header"><i class="bi bi-info-circle"></i>기본 정보</div>
+                <div class="dtl-card-body">
+                    <table class="table table-borderless mb-0 dtl-info-table">
+                        <tr><th>검사번호</th><td>{{ oi.inspection_no }}</td></tr>
+                        <tr><th>검사일</th><td>{{ oi.inspection_date }}</td></tr>
+                        <tr><th>품번</th><td>{{ oi.part_no }}</td></tr>
+                        <tr><th>품명</th><td>{{ oi.part_name }}</td></tr>
+                        <tr><th>LOT번호</th><td>{{ oi.lot_no|default:'-' }}</td></tr>
+                        <tr><th>고객사</th><td>{{ oi.customer_name|default:'-' }}</td></tr>
+                        <tr><th>납품예정일</th><td>{{ oi.delivery_date|default:'-' }}</td></tr>
+                        <tr><th>검사자</th><td>{{ oi.inspector.username|default:'-' }}</td></tr>
                     </table>
                 </div>
             </div>
@@ -73,33 +48,31 @@
 
         <!-- 수량 정보 -->
         <div class="col-md-6 mb-4">
-            <div class="card shadow-sm h-100">
-                <div class="card-header bg-primary text-white">
-                    <i class="bi bi-box-seam me-2"></i>수량 정보
-                </div>
-                <div class="card-body">
-                    <div class="row text-center mb-4">
+            <div class="dtl-card h-100 mb-0">
+                <div class="dtl-card-header"><i class="bi bi-box-seam"></i>수량 정보</div>
+                <div class="dtl-card-body">
+                    <div class="row g-2 text-center mb-4">
                         <div class="col-4">
-                            <div class="p-3 bg-light rounded">
-                                <div class="small text-muted">검사수량</div>
-                                <div class="h4 fw-bold">{{ oi.total_qty|intcomma }}</div>
+                            <div class="dtl-qty-tile neutral">
+                                <span class="dtl-qty-caption">검사수량</span>
+                                <div class="dtl-qty-value">{{ oi.total_qty|intcomma }}</div>
                             </div>
                         </div>
                         <div class="col-4">
-                            <div class="p-3 bg-success bg-opacity-10 rounded">
-                                <div class="small text-muted">합격</div>
-                                <div class="h4 fw-bold text-success">{{ oi.pass_qty|intcomma }}</div>
+                            <div class="dtl-qty-tile good">
+                                <span class="dtl-qty-caption">합격</span>
+                                <div class="dtl-qty-value">{{ oi.pass_qty|intcomma }}</div>
                             </div>
                         </div>
                         <div class="col-4">
-                            <div class="p-3 bg-danger bg-opacity-10 rounded">
-                                <div class="small text-muted">불합격</div>
-                                <div class="h4 fw-bold text-danger">{{ oi.fail_qty|intcomma }}</div>
+                            <div class="dtl-qty-tile bad">
+                                <span class="dtl-qty-caption">불합격</span>
+                                <div class="dtl-qty-value">{{ oi.fail_qty|intcomma }}</div>
                             </div>
                         </div>
                     </div>
                     <div class="text-center">
-                        <div class="small text-muted">샘플수량: {{ oi.sample_qty|intcomma }}개</div>
+                        <span class="text-muted small">샘플수량: {{ oi.sample_qty|intcomma }}개</span>
                     </div>
                 </div>
             </div>
@@ -107,11 +80,9 @@
     </div>
 
     <!-- 검사 결과 입력 -->
-    <div class="card shadow-sm">
-        <div class="card-header bg-info text-white">
-            <i class="bi bi-clipboard-check me-2"></i>검사 결과 입력
-        </div>
-        <div class="card-body">
+    <div class="dtl-card mb-0">
+        <div class="dtl-card-header"><i class="bi bi-clipboard-check"></i>검사 결과 입력</div>
+        <div class="dtl-card-body">
             <form method="post" enctype="multipart/form-data">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="update_result">
@@ -119,8 +90,8 @@
                 <!-- 검사 항목 체크 -->
                 <div class="row g-3 mb-4">
                     <div class="col-12">
-                        <label class="form-label fw-bold">검사 항목</label>
-                        <div class="d-flex flex-wrap gap-3">
+                        <label class="dtl-form-label">검사 항목</label>
+                        <div class="dtl-check-row">
                             <div class="form-check">
                                 <input type="checkbox" class="form-check-input" name="check_visual" id="check_visual" {% if oi.check_visual %}checked{% endif %}>
                                 <label class="form-check-label" for="check_visual">외관검사</label>
@@ -147,16 +118,16 @@
 
                 <div class="row g-3 mb-4">
                     <div class="col-md-4">
-                        <label class="form-label fw-bold">합격수량</label>
-                        <input type="number" name="pass_qty" class="form-control" value="{{ oi.pass_qty }}" min="0">
+                        <label class="dtl-form-label">합격수량</label>
+                        <input type="number" name="pass_qty" class="form-control dtl-form-control" value="{{ oi.pass_qty }}" min="0">
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label fw-bold">불합격수량</label>
-                        <input type="number" name="fail_qty" class="form-control" value="{{ oi.fail_qty }}" min="0">
+                        <label class="dtl-form-label">불합격수량</label>
+                        <input type="number" name="fail_qty" class="form-control dtl-form-control" value="{{ oi.fail_qty }}" min="0">
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label fw-bold">검사상태</label>
-                        <select name="status" class="form-select">
+                        <label class="dtl-form-label">검사상태</label>
+                        <select name="status" class="form-select dtl-form-control">
                             {% for value, label in status_choices %}
                             <option value="{{ value }}" {% if oi.status == value %}selected{% endif %}>{{ label }}</option>
                             {% endfor %}
@@ -166,14 +137,14 @@
 
                 <div class="row g-3 mb-4">
                     <div class="col-md-8">
-                        <label class="form-label fw-bold">검사 의견</label>
-                        <textarea name="remark" class="form-control" rows="3" placeholder="검사 결과에 대한 의견을 입력하세요">{{ oi.remark }}</textarea>
+                        <label class="dtl-form-label">검사 의견</label>
+                        <textarea name="remark" class="form-control dtl-form-control" rows="3" placeholder="검사 결과에 대한 의견을 입력하세요">{{ oi.remark }}</textarea>
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label fw-bold">검사성적서</label>
+                        <label class="dtl-form-label">검사성적서</label>
                         {% if oi.attachment %}
                         <div class="mb-2">
-                            <a href="{{ oi.attachment.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                            <a href="{{ oi.attachment.url }}" target="_blank" class="btn btn-sm btn-outline-secondary">
                                 <i class="bi bi-file-earmark me-1"></i>첨부파일 보기
                             </a>
                         </div>
@@ -183,7 +154,7 @@
                 </div>
 
                 <div class="d-flex justify-content-end gap-2">
-                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>저장</button>
+                    <button type="submit" class="dtl-btn-dark"><i class="bi bi-check-lg me-1"></i>저장</button>
                 </div>
             </form>
         </div>
