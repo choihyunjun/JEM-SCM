@@ -4,16 +4,29 @@
 {% block title %}발주요청 현황{% endblock %}
 
 {% block content %}
+<style>
+    /* purchase_request_status 전용 — material_base.html의 dtl-* 시스템을 로컬로 재사용 (사이드바 없는 화면) */
+    .dtl-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; margin-bottom: 1.25rem; overflow: hidden; }
+    .dtl-toolbar { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1.25rem; }
+    .dtl-pill { display: inline-flex; align-items: center; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.03em; padding: 0.2rem 0.6rem; border-radius: 999px; text-transform: uppercase; }
+    .dtl-pill.blue { background: #eef2ff; color: #4338ca; }
+    .dtl-pill.slate { background: #f3f4f6; color: #4b5563; }
+    .dtl-pill.green { background: #ecfdf5; color: #047857; }
+    .dtl-pill.amber { background: #fffbeb; color: #b45309; }
+    .dtl-pill.red { background: #fef2f2; color: #b91c1c; }
+    .dtl-pill.cyan { background: #ecfeff; color: #0e7490; }
+    .dtl-title { font-size: 1.35rem; font-weight: 700; color: #1f2937; letter-spacing: -0.01em; }
+</style>
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h4 class="fw-bold mb-0"><i class="bi bi-cart-check me-2 text-danger"></i>발주요청 현황</h4>
+    <span class="dtl-title"><i class="bi bi-cart-check me-2" style="color:#9ca3af;"></i>발주요청 현황</span>
     {% if pending_count > 0 and can_approve %}
-    <span class="badge bg-danger" style="font-size:0.95rem;">대기 {{ pending_count }}건</span>
+    <span class="dtl-pill red" style="font-size:0.8rem;">대기 {{ pending_count }}건</span>
     {% endif %}
 </div>
 
 <!-- 필터 -->
-<div class="card shadow-sm mb-3">
-    <div class="card-body py-2">
+<div class="dtl-toolbar">
+    <div>
         <form method="get" class="row g-2 align-items-end">
             <div class="col-md-3">
                 <input type="text" name="q" class="form-control form-control-sm"
@@ -36,7 +49,7 @@
 </div>
 
 <!-- 목록 -->
-<div class="card shadow-sm">
+<div class="dtl-card mb-0">
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-hover table-sm mb-0 align-middle" style="font-size:0.85rem;">
@@ -75,15 +88,15 @@
                         <td><small>{{ por.requested_at|date:"m/d H:i" }}</small></td>
                         <td>
                             {% if por.status == 'PENDING' %}
-                            <span class="badge bg-warning text-dark">{{ por.get_status_display }}</span>
+                            <span class="dtl-pill amber">{{ por.get_status_display }}</span>
                             {% elif por.status == 'APPROVED' %}
-                            <span class="badge bg-primary">{{ por.get_status_display }}</span>
+                            <span class="dtl-pill blue">{{ por.get_status_display }}</span>
                             {% elif por.status == 'IN_PROGRESS' %}
-                            <span class="badge bg-info text-dark">{{ por.get_status_display }}</span>
+                            <span class="dtl-pill cyan">{{ por.get_status_display }}</span>
                             {% elif por.status == 'COMPLETED' %}
-                            <span class="badge bg-success">{{ por.get_status_display }}</span>
+                            <span class="dtl-pill green">{{ por.get_status_display }}</span>
                             {% else %}
-                            <span class="badge bg-secondary">{{ por.get_status_display }}</span>
+                            <span class="dtl-pill slate">{{ por.get_status_display }}</span>
                             {% endif %}
                         </td>
                         <td><small>{{ por.updated_by.get_full_name|default:por.updated_by.username|default:"-" }}</small></td>
