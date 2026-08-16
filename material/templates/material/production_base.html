@@ -114,6 +114,10 @@
         }
         .dtl-card-header i { color: #9ca3af; font-size: 0.95rem; }
         .dtl-card-body { padding: 1.25rem; }
+        /* 테마(SB Admin) 기본 카드 여백이 좁아서, dtl-card 안의 일반 bootstrap
+           card-body/card-footer에도 넉넉한 여백을 강제. p-0/py-*/pb-* 같은
+           bootstrap 유틸리티(!important)는 그대로 우선 적용됨. */
+        .dtl-card > .card-body, .dtl-card > .card-footer { padding: 1.25rem; }
 
         .dtl-field-label {
             font-size: 0.7rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;
