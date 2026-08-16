@@ -80,7 +80,7 @@
         </div>
 
         <div class="dtl-card mb-4">
-            <div class="card-body" style="background:#f0f7ff;">
+            <div class="dtl-card-body" style="background:#f0f7ff;">
                 <div class="row g-3 align-items-end">
                     <div class="col-12 col-lg-2" id="vendorCol">
                         <label class="dtl-form-label" style="color:#4338ca;">공급처</label>
@@ -176,7 +176,7 @@
                     </table>
                 </div>
             </div>
-            <div class="card-footer bg-white text-end py-3">
+            <div class="card-footer bg-white text-end" style="padding: 1rem 1.25rem;">
                 <button type="button" class="dtl-btn-outline me-2" onclick="location.reload()">초기화</button>
                 <button type="submit" class="dtl-btn-dark px-4" onclick="return validateForm()">
                     <i class="bi bi-save me-2"></i> 입고 처리
@@ -212,7 +212,7 @@
                 <span class="dtl-pill slate">{{ history_page.paginator.count }}건</span>
             </div>
         </div>
-        <div class="card-body pb-2">
+        <div class="card-body" style="padding: 1.25rem 1.25rem 0.5rem;">
             <!-- 필터 -->
             <form method="get" class="row g-2 mb-3 align-items-end">
                 <div class="col-md-2">
