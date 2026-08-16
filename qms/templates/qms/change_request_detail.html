@@ -78,16 +78,16 @@
 
     <!-- 내 결재 대기 -->
     {% if my_pending_step %}
-    <div class="card border-warning mb-3">
-        <div class="card-header bg-warning text-dark fw-bold py-2">
-            <i class="bi bi-bell-fill me-2"></i>결재 대기중 - {{ my_pending_step.step_name }}
+    <div class="dtl-card">
+        <div class="dtl-card-header" style="background:#fffbeb; color:#92400e;">
+            <i class="bi bi-bell-fill"></i>결재 대기중 - {{ my_pending_step.step_name }}
         </div>
-        <div class="card-body">
+        <div class="dtl-card-body">
             <form method="post" action="{% url 'qms:approval_step_process' my_pending_step.pk %}">
                 {% csrf_token %}
                 <div class="mb-3">
-                    <label class="form-label fw-bold">의견</label>
-                    <textarea name="comment" class="form-control" rows="2" placeholder="의견을 입력하세요 (반려 시 필수)"></textarea>
+                    <label class="dtl-form-label">의견</label>
+                    <textarea name="comment" class="form-control dtl-form-control" rows="2" placeholder="의견을 입력하세요 (반려 시 필수)"></textarea>
                 </div>
                 <div class="d-flex gap-2">
                     <button type="submit" name="action" value="approve" class="btn btn-success">
@@ -113,7 +113,7 @@
             <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-approval">
                 <i class="bi bi-check2-square me-1"></i>결재 현황
                 {% if approval_steps %}
-                <span class="badge bg-secondary">{{ approval_steps.count }}</span>
+                <span class="dtl-pill slate">{{ approval_steps.count }}</span>
                 {% endif %}
             </button>
         </li>
@@ -121,7 +121,7 @@
             <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-vendor">
                 <i class="bi bi-building me-1"></i>협력사 회신
                 {% if vendor_responses %}
-                <span class="badge bg-secondary">{{ vendor_responses.count }}</span>
+                <span class="dtl-pill slate">{{ vendor_responses.count }}</span>
                 {% endif %}
             </button>
         </li>
@@ -130,7 +130,7 @@
             <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-docs">
                 <i class="bi bi-file-earmark-text me-1"></i>제출 서류
                 {% if documents %}
-                <span class="badge bg-secondary">{{ documents.count }}</span>
+                <span class="dtl-pill slate">{{ documents.count }}</span>
                 {% endif %}
             </button>
         </li>
@@ -156,7 +156,7 @@
             <div class="row g-3">
                 <div class="col-md-6">
                     <div class="card border-0 shadow-sm h-100">
-                        <div class="card-header bg-light fw-bold py-2">변경 정보</div>
+                        <div class="dtl-card-header">변경 정보</div>
                         <div class="card-body">
                             <table class="table table-sm mb-0">
                                 <tr><th style="width: 120px;">4M 유형</th><td>{{ cr.get_change_type_display }}</td></tr>
@@ -171,7 +171,7 @@
                 </div>
                 <div class="col-md-6">
                     <div class="card border-0 shadow-sm h-100">
-                        <div class="card-header bg-light fw-bold py-2">일정</div>
+                        <div class="dtl-card-header">일정</div>
                         <div class="card-body">
                             <table class="table table-sm mb-0">
                                 <tr><th style="width: 120px;">신청자</th><td>{{ cr.created_by.username }}</td></tr>
@@ -186,7 +186,7 @@
                 </div>
                 <div class="col-12">
                     <div class="card border-0 shadow-sm">
-                        <div class="card-header bg-light fw-bold py-2">변경 내용</div>
+                        <div class="dtl-card-header">변경 내용</div>
                         <div class="card-body">
                             <div class="mb-3">
                                 <label class="form-label fw-bold text-muted small">변경 사유</label>
@@ -291,7 +291,7 @@
         <!-- 협력사 회신 탭 -->
         <div class="tab-pane fade" id="tab-vendor">
             <div class="card border-0 shadow-sm">
-                <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
+                <div class="dtl-card-header d-flex justify-content-between align-items-center">
                     <span class="fw-bold">협력사 회신</span>
                     {% if not is_vendor %}
                     <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#vendorRequestModal">
@@ -393,7 +393,7 @@
                             <tr>
                                 <td class="fw-bold">{{ doc.doc_name }}</td>
                                 <td class="text-center">
-                                    {% if doc.is_required %}<span class="badge bg-danger">필수</span>{% else %}-{% endif %}
+                                    {% if doc.is_required %}<span class="dtl-pill red">필수</span>{% else %}-{% endif %}
                                 </td>
                                 <td>
                                     {% if doc.file %}
@@ -519,7 +519,7 @@
                             {% for h in history %}
                             <tr>
                                 <td class="small">{{ h.created_at|date:"Y-m-d H:i" }}</td>
-                                <td><span class="badge bg-secondary">{{ h.get_action_display }}</span></td>
+                                <td><span class="dtl-pill slate">{{ h.get_action_display }}</span></td>
                                 <td class="small">{{ h.description }}</td>
                                 <td class="small">{{ h.actor.username|default:"-" }}</td>
                             </tr>
