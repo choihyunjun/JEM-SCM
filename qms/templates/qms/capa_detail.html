@@ -4,61 +4,6 @@
 {% block title %}시정조치 상세 - {{ capa.capa_no }}{% endblock %}
 
 {% block qms_content %}
-<style>
-    .dtl-wrap { max-width: 1100px; margin: 0 auto; }
-    .dtl-title { font-size: 1.35rem; font-weight: 700; color: #1f2937; letter-spacing: -0.01em; }
-    .dtl-actions .btn { font-size: 0.85rem; }
-
-    .dtl-pill {
-        display: inline-flex; align-items: center; font-size: 0.7rem; font-weight: 600;
-        letter-spacing: 0.03em; padding: 0.2rem 0.6rem; border-radius: 999px; text-transform: uppercase;
-    }
-    .dtl-pill.blue { background: #eef2ff; color: #4338ca; }
-    .dtl-pill.slate { background: #f3f4f6; color: #4b5563; }
-    .dtl-pill.green { background: #ecfdf5; color: #047857; }
-    .dtl-pill.amber { background: #fffbeb; color: #b45309; }
-    .dtl-pill.red { background: #fef2f2; color: #b91c1c; }
-
-    .dtl-alert-overdue {
-        display: flex; align-items: center; gap: 0.6rem;
-        background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;
-        border-radius: 8px; padding: 0.85rem 1.1rem; font-size: 0.88rem; margin-bottom: 1.25rem;
-    }
-    .dtl-alert-overdue i { font-size: 1.1rem; flex-shrink: 0; }
-
-    .dtl-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; margin-bottom: 1.25rem; overflow: hidden; }
-    .dtl-card-header {
-        display: flex; align-items: center; gap: 0.5rem;
-        padding: 0.85rem 1.25rem; border-bottom: 1px solid #eef0f2;
-        font-size: 0.8rem; font-weight: 600; letter-spacing: 0.02em;
-        color: #6b7280; text-transform: uppercase;
-    }
-    .dtl-card-header i { color: #9ca3af; font-size: 0.95rem; }
-    .dtl-card-body { padding: 1.25rem; }
-
-    .dtl-field-label {
-        font-size: 0.7rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;
-        color: #9ca3af; margin-bottom: 0.15rem; display: block;
-    }
-    .dtl-info-table td, .dtl-info-table th { border: none; padding: 0.45rem 0; font-size: 0.9rem; }
-    .dtl-info-table th { color: #9ca3af; font-weight: 500; width: 90px; }
-    .dtl-info-table td { color: #1f2937; font-weight: 600; }
-
-    .dtl-issue-title { font-size: 1.05rem; font-weight: 700; color: #1f2937; }
-    .dtl-issue-detail { background: #fafafa; border: 1px solid #eef0f2; border-radius: 8px; padding: 0.85rem 1rem; font-size: 0.9rem; color: #374151; }
-
-    .dtl-form-label { font-size: 0.82rem; font-weight: 700; color: #374151; margin-bottom: 0.35rem; }
-    .dtl-form-control { border: 1px solid #e5e7eb; border-radius: 8px; font-size: 0.9rem; }
-    .dtl-form-control:focus { border-color: #c7d2fe; box-shadow: 0 0 0 3px rgba(79,70,229,0.08); }
-    .dtl-readonly-box { border: 1px solid #eef0f2; background: #fafafa; border-radius: 8px; padding: 0.45rem 0.75rem; font-size: 0.9rem; color: #6b7280; }
-
-    .dtl-btn-dark {
-        background: #1f2937; border: none; color: #fff; font-weight: 600; font-size: 0.85rem;
-        padding: 0.5rem 1.4rem; border-radius: 8px; transition: background 0.15s ease;
-    }
-    .dtl-btn-dark:hover { background: #111827; color: #fff; }
-</style>
-
 <div class="dtl-wrap">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div class="d-flex align-items-center gap-2">

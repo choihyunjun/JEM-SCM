@@ -106,6 +106,136 @@
 {% endblock %}
 
 {% block content %}
+    <style>
+        /* ==========================================================
+           QMS 공통 디자인 시스템 (중성 톤 카드 + subtle 배지)
+           모든 QMS 화면이 이 클래스를 공유합니다. 개별 화면에서
+           동일한 스타일을 다시 정의하지 마세요.
+           ========================================================== */
+        .dtl-wrap { max-width: 1100px; margin: 0 auto; }
+        .dtl-title { font-size: 1.35rem; font-weight: 700; color: #1f2937; letter-spacing: -0.01em; }
+        .dtl-subtitle { font-size: 0.85rem; color: #9ca3af; margin-bottom: 1.5rem; }
+        .dtl-actions .btn { font-size: 0.85rem; }
+
+        .dtl-pill {
+            display: inline-flex; align-items: center; font-size: 0.7rem; font-weight: 600;
+            letter-spacing: 0.03em; padding: 0.2rem 0.6rem; border-radius: 999px; text-transform: uppercase;
+        }
+        .dtl-pill.blue { background: #eef2ff; color: #4338ca; }
+        .dtl-pill.slate { background: #f3f4f6; color: #4b5563; }
+        .dtl-pill.green { background: #ecfdf5; color: #047857; }
+        .dtl-pill.amber { background: #fffbeb; color: #b45309; }
+        .dtl-pill.red { background: #fef2f2; color: #b91c1c; }
+        .dtl-pill.cyan { background: #ecfeff; color: #0e7490; }
+
+        .dtl-alert-overdue, .dtl-alert-warn {
+            display: flex; align-items: center; gap: 0.6rem;
+            background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;
+            border-radius: 8px; padding: 0.85rem 1.1rem; font-size: 0.88rem; margin-bottom: 1.25rem;
+        }
+        .dtl-alert-warn { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+        .dtl-alert-overdue i, .dtl-alert-warn i { font-size: 1.1rem; flex-shrink: 0; }
+
+        .dtl-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; margin-bottom: 1.25rem; overflow: hidden; }
+        .dtl-card-header {
+            display: flex; align-items: center; gap: 0.5rem;
+            padding: 0.85rem 1.25rem; border-bottom: 1px solid #eef0f2;
+            font-size: 0.8rem; font-weight: 600; letter-spacing: 0.02em;
+            color: #6b7280; text-transform: uppercase;
+        }
+        .dtl-card-header i { color: #9ca3af; font-size: 0.95rem; }
+        .dtl-card-body { padding: 1.25rem; }
+
+        .dtl-field-label {
+            font-size: 0.7rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;
+            color: #9ca3af; margin-bottom: 0.15rem; display: block;
+        }
+        .dtl-field-value { font-size: 0.95rem; font-weight: 600; color: #1f2937; }
+        .dtl-info-table td, .dtl-info-table th { border: none; padding: 0.45rem 0; font-size: 0.9rem; }
+        .dtl-info-table th { color: #9ca3af; font-weight: 500; width: 90px; }
+        .dtl-info-table td { color: #1f2937; font-weight: 600; }
+
+        .dtl-issue-title { font-size: 1.05rem; font-weight: 700; color: #1f2937; }
+        .dtl-issue-detail { background: #fafafa; border: 1px solid #eef0f2; border-radius: 8px; padding: 0.85rem 1rem; font-size: 0.9rem; color: #374151; }
+
+        .dtl-section-label {
+            display: flex; align-items: center; gap: 0.55rem;
+            font-size: 0.85rem; font-weight: 700; color: #374151;
+            margin-bottom: 0.65rem;
+        }
+        .dtl-section-num {
+            width: 1.35rem; height: 1.35rem; border-radius: 50%;
+            background: #eef2ff; color: #4f46e5; font-size: 0.72rem; font-weight: 700;
+            display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+
+        .dtl-form-label { font-size: 0.82rem; font-weight: 700; color: #374151; margin-bottom: 0.35rem; }
+        .dtl-form-control { border: 1px solid #e5e7eb; border-radius: 8px; font-size: 0.9rem; }
+        .dtl-form-control:focus { border-color: #c7d2fe; box-shadow: 0 0 0 3px rgba(79,70,229,0.08); }
+        .dtl-readonly-box { border: 1px solid #eef0f2; background: #fafafa; border-radius: 8px; padding: 0.45rem 0.75rem; font-size: 0.9rem; color: #6b7280; }
+
+        .dtl-btn-dark {
+            background: #1f2937; border: none; color: #fff; font-weight: 600; font-size: 0.85rem;
+            padding: 0.5rem 1.4rem; border-radius: 8px; transition: background 0.15s ease;
+        }
+        .dtl-btn-dark:hover { background: #111827; color: #fff; }
+        .dtl-btn-outline {
+            background: #fff; border: 1px solid #d1d5db; color: #374151; font-weight: 600; font-size: 0.85rem;
+            padding: 0.5rem 1.4rem; border-radius: 8px; transition: all 0.15s ease;
+        }
+        .dtl-btn-outline:hover { background: #f9fafb; color: #111827; }
+
+        /* 판정/처리완료 상태 박스 */
+        .dtl-status-box { border-radius: 8px; padding: 0.9rem 1rem; text-align: center; font-weight: 600; font-size: 0.92rem; }
+        .dtl-status-box.pass { background: #f0fdf4; color: #166534; }
+        .dtl-status-box.fail { background: #fef2f2; color: #991b1b; }
+        .dtl-status-box.neutral { background: #f9fafb; color: #4b5563; }
+        .dtl-status-box .dtl-status-time { font-size: 0.78rem; font-weight: 400; color: #6b7280; margin-top: 0.2rem; }
+
+        /* 수량/집계 강조 타일 (합격/불량 등) */
+        .dtl-qty-tile { border-radius: 8px; padding: 0.9rem 0.75rem; text-align: center; }
+        .dtl-qty-tile.neutral { background: #fff; border: 1px solid #e5e7eb; }
+        .dtl-qty-tile.good { background: #f0fdf4; border: 1px solid #bbf7d0; }
+        .dtl-qty-tile.bad { background: #fef2f2; border: 1px solid #fecaca; }
+        .dtl-qty-caption { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 0.4rem; display: block; }
+        .dtl-qty-tile.neutral .dtl-qty-caption { color: #9ca3af; }
+        .dtl-qty-tile.good .dtl-qty-caption { color: #16a34a; }
+        .dtl-qty-tile.bad .dtl-qty-caption { color: #dc2626; }
+        .dtl-qty-value { font-size: 1.5rem; font-weight: 700; }
+        .dtl-qty-tile.neutral .dtl-qty-value { color: #1f2937; }
+        .dtl-qty-tile.good .dtl-qty-value { color: #15803d; }
+        .dtl-qty-tile.bad .dtl-qty-value { color: #b91c1c; }
+        .dtl-qty-input {
+            border: none; background: transparent; text-align: center;
+            font-size: 1.5rem; font-weight: 700; width: 100%; padding: 0;
+        }
+        .dtl-qty-input:focus { outline: none; box-shadow: none; }
+        .dtl-qty-input::-webkit-outer-spin-button, .dtl-qty-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .dtl-qty-input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+        .dtl-qty-tile.neutral .dtl-qty-input { color: #1f2937; }
+        .dtl-qty-tile.good .dtl-qty-input { color: #15803d; }
+        .dtl-qty-tile.bad .dtl-qty-input { color: #b91c1c; }
+        .dtl-qty-arrow { color: #d1d5db; font-size: 1.1rem; }
+
+        .dtl-check-row { display: flex; flex-wrap: wrap; gap: 2rem; padding: 0.9rem 1.1rem; border: 1px solid #eef0f2; border-radius: 8px; background: #fafafa; }
+        .dtl-check-row .form-check-label { font-size: 0.88rem; color: #374151; }
+
+        .dtl-back-link { font-size: 0.85rem; color: #6b7280; text-decoration: none; font-weight: 500; }
+        .dtl-back-link:hover { color: #374151; }
+
+        /* 목록(list) 화면용 */
+        .dtl-toolbar { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1.25rem; }
+        .dtl-table thead th {
+            background: #fafafa; color: #6b7280; font-size: 0.72rem; font-weight: 600;
+            letter-spacing: 0.03em; text-transform: uppercase; border-bottom: 1px solid #eef0f2; white-space: nowrap;
+        }
+        .dtl-table tbody td { font-size: 0.88rem; color: #374151; vertical-align: middle; }
+        .dtl-table tbody tr:hover { background: #fafbfc; }
+        .dtl-count-pill {
+            display: inline-flex; align-items: center; background: #f3f4f6; color: #4b5563;
+            font-size: 0.78rem; font-weight: 600; padding: 0.2rem 0.7rem; border-radius: 999px;
+        }
+    </style>
     <div class="main-wrapper">
         {% block qms_content %}{% endblock %}
     </div>

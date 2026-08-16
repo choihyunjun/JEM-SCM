@@ -3,162 +3,78 @@
 
 {% block qms_content %}
 <style>
-    .insp-wrap { max-width: 900px; margin: 0 auto; }
-    .insp-title { font-size: 1.35rem; font-weight: 700; color: #1f2937; letter-spacing: -0.01em; margin-bottom: 0.25rem; }
-    .insp-subtitle { font-size: 0.85rem; color: #9ca3af; margin-bottom: 1.5rem; }
-
-    .insp-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; margin-bottom: 1.25rem; overflow: hidden; }
-    .insp-card-header {
-        display: flex; align-items: center; gap: 0.5rem;
-        padding: 0.85rem 1.25rem; border-bottom: 1px solid #eef0f2;
-        font-size: 0.8rem; font-weight: 600; letter-spacing: 0.02em;
-        color: #6b7280; text-transform: uppercase;
+    /* 이 화면 전용 (공용 dtl-* 클래스는 qms_base.html 참고) */
+    .ref-pill {
+        display: inline-flex; align-items: center; font-size: 0.7rem; font-weight: 600;
+        letter-spacing: 0.03em; padding: 0.2rem 0.6rem; border-radius: 999px; text-transform: uppercase;
     }
-    .insp-card-header i { color: #9ca3af; font-size: 0.95rem; }
-    .insp-card-body { padding: 1.25rem 1.25rem 1.4rem; }
-
-    .insp-ref-pill {
-        display: inline-flex; align-items: center; gap: 0.5rem;
-        font-size: 0.7rem; font-weight: 600; letter-spacing: 0.03em;
-        padding: 0.2rem 0.6rem; border-radius: 999px; text-transform: uppercase;
-    }
-    .insp-ref-pill.scm { background: #ecfdf5; color: #047857; }
-    .insp-ref-pill.manual { background: #f3f4f6; color: #4b5563; }
-    .insp-ref-no { font-size: 1.05rem; font-weight: 700; color: #111827; margin-left: 0.6rem; }
-
-    .insp-field-label {
-        font-size: 0.7rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;
-        color: #9ca3af; margin-bottom: 0.2rem; display: block;
-    }
-    .insp-field-value { font-size: 0.95rem; font-weight: 600; color: #1f2937; }
-
-    .insp-section-label {
-        display: flex; align-items: center; gap: 0.55rem;
-        font-size: 0.85rem; font-weight: 700; color: #374151;
-        margin-bottom: 0.65rem;
-    }
-    .insp-section-num {
-        width: 1.35rem; height: 1.35rem; border-radius: 50%;
-        background: #eef2ff; color: #4f46e5; font-size: 0.72rem; font-weight: 700;
-        display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
-    }
-
-    .insp-check-row {
-        display: flex; gap: 2rem; padding: 0.9rem 1.1rem;
-        border: 1px solid #eef0f2; border-radius: 8px; background: #fafafa;
-    }
-    .insp-check-row .form-check-label { font-size: 0.88rem; color: #374151; }
-
-    .insp-qty-box { border: 1px solid #eef0f2; border-radius: 8px; padding: 1.1rem; background: #fafafa; }
-    .insp-qty-tile { border-radius: 8px; padding: 0.9rem 0.75rem; text-align: center; }
-    .insp-qty-tile.neutral { background: #fff; border: 1px solid #e5e7eb; }
-    .insp-qty-tile.good { background: #f0fdf4; border: 1px solid #bbf7d0; }
-    .insp-qty-tile.bad { background: #fef2f2; border: 1px solid #fecaca; }
-    .insp-qty-caption {
-        font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
-        margin-bottom: 0.4rem; display: block;
-    }
-    .insp-qty-tile.neutral .insp-qty-caption { color: #9ca3af; }
-    .insp-qty-tile.good .insp-qty-caption { color: #16a34a; }
-    .insp-qty-tile.bad .insp-qty-caption { color: #dc2626; }
-    .insp-qty-input {
-        border: none; background: transparent; text-align: center;
-        font-size: 1.5rem; font-weight: 700; width: 100%; padding: 0;
-    }
-    .insp-qty-input:focus { outline: none; box-shadow: none; }
-    .insp-qty-input::-webkit-outer-spin-button,
-    .insp-qty-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-    .insp-qty-input[type=number] { -moz-appearance: textfield; appearance: textfield; }
-    .insp-qty-tile.neutral .insp-qty-input { color: #1f2937; }
-    .insp-qty-tile.good .insp-qty-input { color: #15803d; }
-    .insp-qty-tile.bad .insp-qty-input { color: #b91c1c; }
-    .insp-qty-arrow { color: #d1d5db; font-size: 1.1rem; }
-
-    .insp-remark { border: 1px solid #e5e7eb; border-radius: 8px; font-size: 0.9rem; }
-    .insp-remark:focus { border-color: #c7d2fe; box-shadow: 0 0 0 3px rgba(79,70,229,0.08); }
-
-    .insp-submit-btn {
-        background: #1f2937; border: none; color: #fff;
-        font-weight: 600; font-size: 0.92rem; padding: 0.65rem 2.75rem; border-radius: 8px;
-        transition: background 0.15s ease;
-    }
-    .insp-submit-btn:hover { background: #111827; color: #fff; }
-
-    .insp-status-box {
-        border-radius: 8px; padding: 0.9rem 1rem; text-align: center;
-        font-weight: 600; font-size: 0.92rem;
-    }
-    .insp-status-box.pass { background: #f0fdf4; color: #166534; }
-    .insp-status-box.fail { background: #fef2f2; color: #991b1b; }
-    .insp-status-box .insp-status-time { font-size: 0.78rem; font-weight: 400; color: #6b7280; margin-top: 0.2rem; }
-
-    .insp-back-link {
-        font-size: 0.85rem; color: #6b7280; text-decoration: none; font-weight: 500;
-    }
-    .insp-back-link:hover { color: #374151; }
+    .ref-pill.scm { background: #ecfdf5; color: #047857; }
+    .ref-pill.manual { background: #f3f4f6; color: #4b5563; }
+    .ref-no { font-size: 1.05rem; font-weight: 700; color: #111827; margin-left: 0.6rem; }
+    .qty-wrap { border: 1px solid #eef0f2; border-radius: 8px; padding: 1.1rem; background: #fafafa; }
 </style>
 
-<div class="insp-wrap">
-    <div class="insp-title">수입검사 상세 및 판정</div>
-    <div class="insp-subtitle">입고된 자재의 수입검사 결과를 확인하고 합격/불합격을 판정합니다.</div>
+<div class="dtl-wrap">
+    <div class="dtl-title">수입검사 상세 및 판정</div>
+    <div class="dtl-subtitle">입고된 자재의 수입검사 결과를 확인하고 합격/불합격을 판정합니다.</div>
 
-    <div class="insp-card">
-        <div class="insp-card-header"><i class="bi bi-box-seam"></i>입고 정보 (WMS/SCM 연동)</div>
-        <div class="insp-card-body">
+    <div class="dtl-card">
+        <div class="dtl-card-header"><i class="bi bi-box-seam"></i>입고 정보 (WMS/SCM 연동)</div>
+        <div class="dtl-card-body">
             <div class="pb-3 mb-3" style="border-bottom:1px solid #eef0f2;">
-                <span class="insp-field-label mb-2">참조 번호</span>
+                <span class="dtl-field-label mb-2">참조 번호</span>
                 {% if is_scm_linked %}
-                    <span class="insp-ref-pill scm">SCM 납품서</span>
+                    <span class="ref-pill scm">SCM 납품서</span>
                 {% else %}
-                    <span class="insp-ref-pill manual">수기 입고</span>
+                    <span class="ref-pill manual">수기 입고</span>
                 {% endif %}
-                <span class="insp-ref-no">{{ display_ref_no }}</span>
+                <span class="ref-no">{{ display_ref_no }}</span>
             </div>
 
             <div class="row g-3 mb-1">
                 <div class="col-md-4">
-                    <span class="insp-field-label">품번</span>
-                    <div class="insp-field-value">{{ inspection.inbound_transaction.part.part_no }}</div>
+                    <span class="dtl-field-label">품번</span>
+                    <div class="dtl-field-value">{{ inspection.inbound_transaction.part.part_no }}</div>
                 </div>
                 <div class="col-md-4">
-                    <span class="insp-field-label">품명</span>
-                    <div class="insp-field-value" style="font-weight:500;">{{ inspection.inbound_transaction.part.part_name }}</div>
+                    <span class="dtl-field-label">품명</span>
+                    <div class="dtl-field-value" style="font-weight:500;">{{ inspection.inbound_transaction.part.part_name }}</div>
                 </div>
                 <div class="col-md-4">
-                    <span class="insp-field-label">공급처</span>
-                    <div class="insp-field-value" style="font-weight:500;">{{ inspection.inbound_transaction.vendor.name }}</div>
+                    <span class="dtl-field-label">공급처</span>
+                    <div class="dtl-field-value" style="font-weight:500;">{{ inspection.inbound_transaction.vendor.name }}</div>
                 </div>
             </div>
             <div class="row g-3 mt-1">
                 <div class="col-md-3">
-                    <span class="insp-field-label">입고일자</span>
-                    <div class="insp-field-value" style="font-weight:500;">{{ inspection.inbound_transaction.date|date:"Y-m-d" }}</div>
+                    <span class="dtl-field-label">입고일자</span>
+                    <div class="dtl-field-value" style="font-weight:500;">{{ inspection.inbound_transaction.date|date:"Y-m-d" }}</div>
                 </div>
                 <div class="col-md-3">
-                    <span class="insp-field-label">LOT 번호</span>
-                    <div class="insp-field-value" style="color:#4f46e5;">{{ inspection.inbound_transaction.lot_no|date:"Y-m-d"|default:"-" }}</div>
+                    <span class="dtl-field-label">LOT 번호</span>
+                    <div class="dtl-field-value" style="color:#4f46e5;">{{ inspection.inbound_transaction.lot_no|date:"Y-m-d"|default:"-" }}</div>
                 </div>
                 <div class="col-md-3">
-                    <span class="insp-field-label">입고수량</span>
-                    <div class="insp-field-value">{{ inspection.inbound_transaction.quantity|intcomma }} {{ inspection.inbound_transaction.part.weight_unit|default:"EA" }}</div>
+                    <span class="dtl-field-label">입고수량</span>
+                    <div class="dtl-field-value">{{ inspection.inbound_transaction.quantity|intcomma }} {{ inspection.inbound_transaction.part.weight_unit|default:"EA" }}</div>
                 </div>
                 <div class="col-md-3">
-                    <span class="insp-field-label">현재위치</span>
-                    <div class="insp-field-value" style="font-weight:500;">{{ inspection.inbound_transaction.warehouse_to.name }}</div>
+                    <span class="dtl-field-label">현재위치</span>
+                    <div class="dtl-field-value" style="font-weight:500;">{{ inspection.inbound_transaction.warehouse_to.name }}</div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="insp-card">
-        <div class="insp-card-header"><i class="bi bi-clipboard-check"></i>검사 결과 및 판정</div>
-        <div class="insp-card-body">
+    <div class="dtl-card">
+        <div class="dtl-card-header"><i class="bi bi-clipboard-check"></i>검사 결과 및 판정</div>
+        <div class="dtl-card-body">
             <form method="post" enctype="multipart/form-data">
                 {% csrf_token %}
 
                 <div class="mb-4">
-                    <div class="insp-section-label"><span class="insp-section-num">1</span>검사 항목 확인</div>
-                    <div class="insp-check-row">
+                    <div class="dtl-section-label"><span class="dtl-section-num">1</span>검사 항목 확인</div>
+                    <div class="dtl-check-row">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" name="check_report" id="chk1" {% if inspection.check_report %}checked{% endif %} {% if inspection.status != 'PENDING' %}disabled{% endif %}>
                             <label class="form-check-label" for="chk1">성적서 확인</label>
@@ -175,28 +91,28 @@
                 </div>
 
                 <div class="mb-4">
-                    <div class="insp-section-label"><span class="insp-section-num">2</span>양품수량 입력 (불량 반출)</div>
-                    <div class="insp-qty-box">
+                    <div class="dtl-section-label"><span class="dtl-section-num">2</span>양품수량 입력 (불량 반출)</div>
+                    <div class="qty-wrap">
                         <div class="row g-3 align-items-center">
                             <div class="col-md-4">
-                                <div class="insp-qty-tile neutral">
-                                    <span class="insp-qty-caption">총 입고 수량</span>
-                                    <input type="number" class="insp-qty-input" value="{{ inspection.inbound_transaction.quantity }}" readonly id="totalQty">
+                                <div class="dtl-qty-tile neutral">
+                                    <span class="dtl-qty-caption">총 입고 수량</span>
+                                    <input type="number" class="dtl-qty-input" value="{{ inspection.inbound_transaction.quantity }}" readonly id="totalQty">
                                 </div>
                             </div>
-                            <div class="col-md-1 text-center insp-qty-arrow"><i class="bi bi-arrow-right"></i></div>
+                            <div class="col-md-1 text-center dtl-qty-arrow"><i class="bi bi-arrow-right"></i></div>
                             <div class="col-md-3">
-                                <div class="insp-qty-tile good">
-                                    <span class="insp-qty-caption">양품 (합격)</span>
-                                    <input type="number" name="qty_good" id="qtyGood" class="insp-qty-input"
+                                <div class="dtl-qty-tile good">
+                                    <span class="dtl-qty-caption">양품 (합격)</span>
+                                    <input type="number" name="qty_good" id="qtyGood" class="dtl-qty-input"
                                            value="{% if inspection.status != 'PENDING' %}{{ inspection.qty_good }}{% else %}{{ inspection.inbound_transaction.quantity }}{% endif %}" required min="0"
                                            {% if inspection.status != 'PENDING' %}disabled{% endif %} oninput="calcBadQty()">
                                 </div>
                             </div>
                             <div class="col-md-3">
-                                <div class="insp-qty-tile bad">
-                                    <span class="insp-qty-caption">불량 (부적합)</span>
-                                    <input type="number" name="qty_bad" id="qtyBad" class="insp-qty-input"
+                                <div class="dtl-qty-tile bad">
+                                    <span class="dtl-qty-caption">불량 (부적합)</span>
+                                    <input type="number" name="qty_bad" id="qtyBad" class="dtl-qty-input"
                                            value="{% if inspection.status != 'PENDING' %}{{ inspection.qty_bad }}{% else %}0{% endif %}" required min="0" readonly>
                                 </div>
                             </div>
@@ -211,11 +127,11 @@
 
                 <div class="row g-3 mb-4">
                     <div class="col-md-12">
-                        <div class="insp-section-label"><span class="insp-section-num">3</span>종합 의견 / 불량 사유</div>
-                        <textarea name="remark" class="form-control insp-remark" rows="2" placeholder="특이사항이나 불량 사유를 입력하세요." {% if inspection.status != 'PENDING' %}readonly{% endif %}>{{ inspection.remark|default:'' }}</textarea>
+                        <div class="dtl-section-label"><span class="dtl-section-num">3</span>종합 의견 / 불량 사유</div>
+                        <textarea name="remark" class="form-control dtl-form-control" rows="2" placeholder="특이사항이나 불량 사유를 입력하세요." {% if inspection.status != 'PENDING' %}readonly{% endif %}>{{ inspection.remark|default:'' }}</textarea>
                     </div>
                     <div class="col-md-12">
-                        <span class="insp-field-label">증빙 파일</span>
+                        <span class="dtl-field-label">증빙 파일</span>
                         {% if inspection.attachment %}
                             <div class="mb-2"><a href="{{ inspection.attachment.url }}" target="_blank" class="btn btn-sm btn-outline-secondary"><i class="bi bi-file-earmark-text"></i> {{ inspection.attachment.name }}</a></div>
                         {% endif %}
@@ -229,18 +145,18 @@
 
                 {% if inspection.status == 'PENDING' %}
                 <div class="d-flex justify-content-center pt-1">
-                    <button type="submit" name="decision" value="COMPLETE" class="insp-submit-btn" onclick="return confirm('판정을 완료하시겠습니까?\n(양품은 자재창고로, 불량은 부적합창고로 이동됩니다)')">
+                    <button type="submit" name="decision" value="COMPLETE" class="dtl-btn-dark" onclick="return confirm('판정을 완료하시겠습니까?\n(양품은 자재창고로, 불량은 부적합창고로 이동됩니다)')">
                         <i class="bi bi-check-lg me-2"></i>판정 확정
                     </button>
                 </div>
                 {% else %}
-                <div class="insp-status-box {% if inspection.status == 'APPROVED' %}pass{% else %}fail{% endif %}">
+                <div class="dtl-status-box {% if inspection.status == 'APPROVED' %}pass{% else %}fail{% endif %}">
                     {% if inspection.status == 'APPROVED' %}
                         <i class="bi bi-check-circle-fill me-2"></i>판정 완료 (합격 포함)
                     {% else %}
                         <i class="bi bi-x-circle-fill me-2"></i>전량 불량 판정
                     {% endif %}
-                    <div class="insp-status-time">{{ inspection.inspected_at|date:"Y-m-d H:i" }} 처리됨</div>
+                    <div class="dtl-status-time">{{ inspection.inspected_at|date:"Y-m-d H:i" }} 처리됨</div>
                 </div>
                 {% endif %}
 
@@ -249,7 +165,7 @@
     </div>
 
     <div class="text-center mt-4">
-        <a href="{% url 'qms:import_inspection_list' %}" class="insp-back-link"><i class="bi bi-arrow-left me-1"></i>목록으로 돌아가기</a>
+        <a href="{% url 'qms:import_inspection_list' %}" class="dtl-back-link"><i class="bi bi-arrow-left me-1"></i>목록으로 돌아가기</a>
     </div>
 </div>
 
