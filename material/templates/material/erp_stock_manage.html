@@ -4,8 +4,21 @@
 {% block title %}ERP 재고 관리{% endblock %}
 
 {% block content %}
+<style>
+    /* erp_stock_manage 전용 — material_base.html의 dtl-* 시스템을 로컬로 재사용 (사이드바 없는 화면) */
+    .dtl-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; margin-bottom: 1.25rem; overflow: hidden; }
+    .dtl-card-header { display: flex; align-items: center; gap: 0.5rem; padding: 0.85rem 1.25rem; border-bottom: 1px solid #eef0f2; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.02em; color: #6b7280; text-transform: uppercase; }
+    .dtl-pill { display: inline-flex; align-items: center; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.03em; padding: 0.2rem 0.6rem; border-radius: 999px; text-transform: uppercase; }
+    .dtl-pill.blue { background: #eef2ff; color: #4338ca; }
+    .dtl-pill.slate { background: #f3f4f6; color: #4b5563; }
+    .dtl-pill.green { background: #ecfdf5; color: #047857; }
+    .dtl-pill.amber { background: #fffbeb; color: #b45309; }
+    .dtl-pill.red { background: #fef2f2; color: #b91c1c; }
+    .dtl-pill.cyan { background: #ecfeff; color: #0e7490; }
+    .dtl-title { font-size: 1.35rem; font-weight: 700; color: #1f2937; letter-spacing: -0.01em; }
+</style>
 <div class="container-fluid px-4 py-3">
-    <h3 class="fw-bold">ERP 재고 관리</h3>
+    <span class="dtl-title d-block mb-3">ERP 재고 관리</span>
 
     {% if not erp_enabled %}
     <div class="alert alert-warning">ERP 연동이 비활성화 상태입니다. (settings.py: ERP_ENABLED = False)</div>
@@ -25,10 +38,8 @@
     <div class="row g-3 mb-4">
         <!-- ERP vs SCM 비교 카드 -->
         <div class="col-md-6">
-            <div class="card shadow-sm h-100">
-                <div class="card-header bg-white fw-bold">
-                    <i class="bi bi-arrow-left-right me-1 text-info"></i> ERP vs SCM 비교
-                </div>
+            <div class="dtl-card h-100 mb-0">
+                <div class="dtl-card-header"><i class="bi bi-arrow-left-right"></i> ERP vs SCM 비교</div>
                 <div class="card-body">
                     <p class="text-muted small mb-2">
                         ERP 현재고와 SCM 재고를 비교합니다.
@@ -64,10 +75,8 @@
 
         <!-- 재고 동기화 카드 -->
         <div class="col-md-3">
-            <div class="card shadow-sm h-100">
-                <div class="card-header bg-white fw-bold">
-                    <i class="bi bi-arrow-repeat me-1 text-success"></i> 재고 동기화
-                </div>
+            <div class="dtl-card h-100 mb-0">
+                <div class="dtl-card-header"><i class="bi bi-arrow-repeat"></i> 재고 동기화</div>
                 <div class="card-body">
                     <p class="text-muted small mb-2">
                         ERP 현재고 기준으로 SCM 재고를 조정합니다.<br>
@@ -102,10 +111,8 @@
 
         <!-- 수불 동기화 카드 -->
         <div class="col-md-3">
-            <div class="card shadow-sm h-100">
-                <div class="card-header bg-white fw-bold">
-                    <i class="bi bi-list-check me-1 text-warning"></i> 수불 동기화
-                </div>
+            <div class="dtl-card h-100 mb-0">
+                <div class="dtl-card-header"><i class="bi bi-list-check"></i> 수불 동기화</div>
                 <div class="card-body">
                     <p class="text-muted small mb-2">
                         ERP 수불 이력(입고/출고/생산)을 SCM에 기록합니다.
@@ -141,16 +148,16 @@
 
     <!-- 비교 결과 -->
     {% if summary %}
-    <div class="card shadow-sm mb-4">
-        <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-clipboard-data me-1"></i> 비교 결과</span>
+    <div class="dtl-card mb-4">
+        <div class="dtl-card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-clipboard-data"></i> 비교 결과</span>
             <div class="d-flex gap-2">
-                <span class="badge bg-secondary">전체 {{ summary.total }}건</span>
-                <span class="badge bg-success">일치 {{ summary.match }}건</span>
-                {% if summary.over > 0 %}<span class="badge bg-primary">SCM 초과 {{ summary.over }}건</span>{% endif %}
-                {% if summary.under > 0 %}<span class="badge bg-danger">SCM 부족 {{ summary.under }}건</span>{% endif %}
-                {% if summary.erp_only > 0 %}<span class="badge bg-warning text-dark">ERP만 {{ summary.erp_only }}건</span>{% endif %}
-                {% if summary.scm_only > 0 %}<span class="badge bg-info">SCM만 {{ summary.scm_only }}건</span>{% endif %}
+                <span class="dtl-pill slate">전체 {{ summary.total }}건</span>
+                <span class="dtl-pill green">일치 {{ summary.match }}건</span>
+                {% if summary.over > 0 %}<span class="dtl-pill blue">SCM 초과 {{ summary.over }}건</span>{% endif %}
+                {% if summary.under > 0 %}<span class="dtl-pill red">SCM 부족 {{ summary.under }}건</span>{% endif %}
+                {% if summary.erp_only > 0 %}<span class="dtl-pill amber">ERP만 {{ summary.erp_only }}건</span>{% endif %}
+                {% if summary.scm_only > 0 %}<span class="dtl-pill cyan">SCM만 {{ summary.scm_only }}건</span>{% endif %}
             </div>
         </div>
         <div class="card-body p-0">

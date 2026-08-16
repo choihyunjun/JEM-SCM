@@ -6,25 +6,27 @@
 {% block material_content %}
 <div class="container-fluid p-0">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="fw-bold">ERP 엑셀 변환</h3>
+        <span class="dtl-title">ERP 엑셀 변환</span>
     </div>
 
     <!-- 안내 카드 -->
-    <div class="alert alert-info border-0 shadow-sm mb-4">
-        <div class="d-flex align-items-center">
-            <i class="bi bi-info-circle-fill me-3 fs-4"></i>
-            <div>
-                <strong>ERP 동기화 지원</strong><br>
-                <small class="text-muted">
-                    WMS에서 처리된 입고/출고/이동 내역을 ERP 업로드용 엑셀 양식으로 변환합니다.<br>
-                    변환된 엑셀을 더존 iCUBE ERP에 업로드하여 재고를 동기화하세요.
-                </small>
+    <div class="dtl-card mb-4">
+        <div class="dtl-card-body" style="background:#eef2ff;">
+            <div class="d-flex align-items-center" style="color:#4338ca;">
+                <i class="bi bi-info-circle-fill me-3 fs-4"></i>
+                <div>
+                    <strong>ERP 동기화 지원</strong><br>
+                    <small>
+                        WMS에서 처리된 입고/출고/이동 내역을 ERP 업로드용 엑셀 양식으로 변환합니다.<br>
+                        변환된 엑셀을 더존 iCUBE ERP에 업로드하여 재고를 동기화하세요.
+                    </small>
+                </div>
             </div>
         </div>
     </div>
 
     <!-- 처리 유형 탭 -->
-    <div class="card shadow-sm border-0 mb-4">
+    <div class="dtl-card mb-4">
         <div class="card-header bg-white py-0">
             <ul class="nav nav-tabs card-header-tabs" id="syncTypeTabs">
                 <li class="nav-item">
@@ -81,13 +83,13 @@
             <!-- 결과 요약 -->
             <div class="d-flex justify-content-between align-items-center border-bottom pb-3 mb-3">
                 <div>
-                    <span class="badge bg-secondary fs-6">
+                    <span class="dtl-pill slate" style="font-size:0.85rem;">
                         {{ title }} | 총 <strong>{{ transaction_count|intcomma }}</strong>건
                     </span>
                 </div>
                 {% if transaction_count > 0 %}
                 <a href="{% url 'material:erp_sync_export' %}?sync_type={{ sync_type }}&date_from={{ date_from }}&date_to={{ date_to }}"
-                   class="btn btn-success">
+                   class="dtl-btn-dark">
                     <i class="bi bi-download me-2"></i>ERP 엑셀 다운로드
                 </a>
                 {% endif %}
@@ -140,9 +142,9 @@
                             <td class="text-center">{{ trx.date|date:"Y-m-d" }}</td>
                             <td class="text-center">
                                 {% if trx.transaction_type == 'OUT_PROD' %}
-                                <span class="badge bg-primary">생산불출</span>
+                                <span class="dtl-pill blue">생산불출</span>
                                 {% else %}
-                                <span class="badge bg-warning text-dark">반품출고</span>
+                                <span class="dtl-pill amber">반품출고</span>
                                 {% endif %}
                             </td>
                             {% else %}
@@ -167,11 +169,9 @@
     </div>
 
     <!-- 사용 안내 -->
-    <div class="card shadow-sm border-0">
-        <div class="card-header bg-light">
-            <i class="bi bi-question-circle me-2"></i>사용 방법
-        </div>
-        <div class="card-body">
+    <div class="dtl-card mb-0">
+        <div class="dtl-card-header"><i class="bi bi-question-circle"></i>사용 방법</div>
+        <div class="dtl-card-body">
             <div class="row">
                 <div class="col-md-4">
                     <h6 class="fw-bold text-success"><i class="bi bi-1-circle me-2"></i>입고 처리</h6>

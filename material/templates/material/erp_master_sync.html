@@ -4,8 +4,21 @@
 {% block title %}ERP 마스터 동기화{% endblock %}
 
 {% block content %}
+<style>
+    /* erp_master_sync 전용 — material_base.html의 dtl-* 시스템을 로컬로 재사용 (사이드바 없는 화면) */
+    .dtl-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; margin-bottom: 1.25rem; overflow: hidden; }
+    .dtl-card-header { display: flex; align-items: center; gap: 0.5rem; padding: 0.85rem 1.25rem; border-bottom: 1px solid #eef0f2; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.02em; color: #6b7280; text-transform: uppercase; }
+    .dtl-pill { display: inline-flex; align-items: center; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.03em; padding: 0.2rem 0.6rem; border-radius: 999px; text-transform: uppercase; }
+    .dtl-pill.blue { background: #eef2ff; color: #4338ca; }
+    .dtl-pill.slate { background: #f3f4f6; color: #4b5563; }
+    .dtl-pill.green { background: #ecfdf5; color: #047857; }
+    .dtl-pill.amber { background: #fffbeb; color: #b45309; }
+    .dtl-pill.red { background: #fef2f2; color: #b91c1c; }
+    .dtl-pill.cyan { background: #ecfeff; color: #0e7490; }
+    .dtl-title { font-size: 1.35rem; font-weight: 700; color: #1f2937; letter-spacing: -0.01em; }
+</style>
 <div class="container-fluid px-4 py-3">
-    <h4 class="mb-3"><i class="bi bi-arrow-repeat me-2"></i>ERP 마스터 동기화</h4>
+    <span class="dtl-title d-block mb-3"><i class="bi bi-arrow-repeat me-2" style="color:#9ca3af;"></i>ERP 마스터 동기화</span>
 
     {% if not erp_enabled %}
     <div class="alert alert-warning">ERP 연동이 비활성화 상태입니다. (settings.py: ERP_ENABLED = False)</div>
@@ -47,10 +60,8 @@
     <div class="row g-3 mb-4">
         <!-- 거래처 동기화 카드 -->
         <div class="col-md-4">
-            <div class="card shadow-sm h-100">
-                <div class="card-header bg-white fw-bold">
-                    <i class="bi bi-building me-1 text-primary"></i> 거래처 동기화
-                </div>
+            <div class="dtl-card h-100 mb-0">
+                <div class="dtl-card-header"><i class="bi bi-building"></i> 거래처 동기화</div>
                 <div class="card-body">
                     <p class="text-muted small mb-2">
                         ERP 일반거래처(사용중)를 SCM 거래처로 동기화합니다.
@@ -82,24 +93,24 @@
                     {% if vendor_result %}
                     <div class="mt-3">
                         <div class="d-flex gap-2 flex-wrap">
-                            <span class="badge bg-secondary">전체 {{ vendor_result.total }}건</span>
+                            <span class="dtl-pill slate">전체 {{ vendor_result.total }}건</span>
                             {% if vendor_result.created > 0 %}
-                            <span class="badge bg-success" role="button" data-bs-toggle="modal" data-bs-target="#vendorCreatedModal" style="cursor:pointer;">
+                            <span class="dtl-pill green" role="button" data-bs-toggle="modal" data-bs-target="#vendorCreatedModal" style="cursor:pointer;">
                                 신규 {{ vendor_result.created }}건 <i class="bi bi-box-arrow-up-right"></i>
                             </span>
                             {% else %}
-                            <span class="badge bg-success">신규 0건</span>
+                            <span class="dtl-pill green">신규 0건</span>
                             {% endif %}
                             {% if vendor_result.updated > 0 %}
-                            <span class="badge bg-info" role="button" data-bs-toggle="modal" data-bs-target="#vendorUpdatedModal" style="cursor:pointer;">
+                            <span class="dtl-pill cyan" role="button" data-bs-toggle="modal" data-bs-target="#vendorUpdatedModal" style="cursor:pointer;">
                                 갱신 {{ vendor_result.updated }}건 <i class="bi bi-box-arrow-up-right"></i>
                             </span>
                             {% else %}
-                            <span class="badge bg-info">갱신 0건</span>
+                            <span class="dtl-pill cyan">갱신 0건</span>
                             {% endif %}
-                            <span class="badge bg-light text-muted border">동일 {{ vendor_result.unchanged }}건</span>
+                            <span class="dtl-pill slate">동일 {{ vendor_result.unchanged }}건</span>
                             {% if vendor_result.skipped > 0 %}
-                            <span class="badge bg-warning text-dark">건너뜀 {{ vendor_result.skipped }}건</span>
+                            <span class="dtl-pill amber">건너뜀 {{ vendor_result.skipped }}건</span>
                             {% endif %}
                         </div>
                     </div>
@@ -110,10 +121,8 @@
 
         <!-- 품목 동기화 카드 -->
         <div class="col-md-4">
-            <div class="card shadow-sm h-100">
-                <div class="card-header bg-white fw-bold">
-                    <i class="bi bi-box me-1 text-success"></i> 품목 동기화
-                </div>
+            <div class="dtl-card h-100 mb-0">
+                <div class="dtl-card-header"><i class="bi bi-box"></i> 품목 동기화</div>
                 <div class="card-body">
                     <p class="text-muted small mb-2">
                         ERP 품목정보(사용중)를 SCM 품목 마스터로 동기화합니다.
@@ -146,24 +155,24 @@
                     {% if item_result %}
                     <div class="mt-3">
                         <div class="d-flex gap-2 flex-wrap">
-                            <span class="badge bg-secondary">전체 {{ item_result.total }}건</span>
+                            <span class="dtl-pill slate">전체 {{ item_result.total }}건</span>
                             {% if item_result.created > 0 %}
-                            <span class="badge bg-success" role="button" data-bs-toggle="modal" data-bs-target="#itemCreatedModal" style="cursor:pointer;">
+                            <span class="dtl-pill green" role="button" data-bs-toggle="modal" data-bs-target="#itemCreatedModal" style="cursor:pointer;">
                                 신규 {{ item_result.created }}건 <i class="bi bi-box-arrow-up-right"></i>
                             </span>
                             {% else %}
-                            <span class="badge bg-success">신규 0건</span>
+                            <span class="dtl-pill green">신규 0건</span>
                             {% endif %}
                             {% if item_result.updated > 0 %}
-                            <span class="badge bg-info" role="button" data-bs-toggle="modal" data-bs-target="#itemUpdatedModal" style="cursor:pointer;">
+                            <span class="dtl-pill cyan" role="button" data-bs-toggle="modal" data-bs-target="#itemUpdatedModal" style="cursor:pointer;">
                                 갱신 {{ item_result.updated }}건 <i class="bi bi-box-arrow-up-right"></i>
                             </span>
                             {% else %}
-                            <span class="badge bg-info">갱신 0건</span>
+                            <span class="dtl-pill cyan">갱신 0건</span>
                             {% endif %}
-                            <span class="badge bg-light text-muted border">동일 {{ item_result.unchanged }}건</span>
+                            <span class="dtl-pill slate">동일 {{ item_result.unchanged }}건</span>
                             {% if item_result.skipped > 0 %}
-                            <span class="badge bg-warning text-dark">건너뜀 {{ item_result.skipped }}건</span>
+                            <span class="dtl-pill amber">건너뜀 {{ item_result.skipped }}건</span>
                             {% endif %}
                         </div>
                     </div>
@@ -174,10 +183,8 @@
 
         <!-- 입고이력 기반 업체 연결 카드 -->
         <div class="col-md-4">
-            <div class="card shadow-sm h-100 border-warning">
-                <div class="card-header bg-white fw-bold">
-                    <i class="bi bi-link-45deg me-1 text-warning"></i> 입고이력 기반 업체 연결
-                </div>
+            <div class="dtl-card h-100 mb-0" style="border-color:#fde68a;">
+                <div class="dtl-card-header"><i class="bi bi-link-45deg" style="color:#b45309;"></i> 입고이력 기반 업체 연결</div>
                 <div class="card-body">
                     <p class="text-muted small mb-2">
                         ERP 입고 내역에서 품번↔거래처 매핑을 추출하여<br>
@@ -218,17 +225,17 @@
                     {% if link_result %}
                     <div class="mt-3">
                         <div class="d-flex gap-2 flex-wrap">
-                            <span class="badge bg-secondary">입고 {{ link_result.total_headers }}건 분석</span>
-                            <span class="badge bg-info">매핑 {{ link_result.matched }}건</span>
+                            <span class="dtl-pill slate">입고 {{ link_result.total_headers }}건 분석</span>
+                            <span class="dtl-pill cyan">매핑 {{ link_result.matched }}건</span>
                             {% if link_result.updated > 0 %}
-                            <span class="badge bg-success" role="button" data-bs-toggle="modal" data-bs-target="#updatedModal" style="cursor:pointer;">
+                            <span class="dtl-pill green" role="button" data-bs-toggle="modal" data-bs-target="#updatedModal" style="cursor:pointer;">
                                 연결 {{ link_result.updated }}건 <i class="bi bi-box-arrow-up-right"></i>
                             </span>
                             {% else %}
-                            <span class="badge bg-success">연결 0건</span>
+                            <span class="dtl-pill green">연결 0건</span>
                             {% endif %}
                             {% if link_result.skipped_no_vendor > 0 %}
-                            <span class="badge bg-warning text-dark" role="button" data-bs-toggle="modal" data-bs-target="#skippedModal" style="cursor:pointer;">
+                            <span class="dtl-pill amber" role="button" data-bs-toggle="modal" data-bs-target="#skippedModal" style="cursor:pointer;">
                                 거래처없음 {{ link_result.skipped_no_vendor }}건 <i class="bi bi-box-arrow-up-right"></i>
                             </span>
                             {% endif %}
@@ -241,7 +248,7 @@
     </div>
 
     <!-- 안내사항 -->
-    <div class="card shadow-sm">
+    <div class="dtl-card mb-0">
         <div class="card-body">
             <h6 class="fw-bold mb-2"><i class="bi bi-info-circle me-1 text-muted"></i> 동기화 순서 안내</h6>
             <ol class="small text-muted mb-0">
@@ -259,9 +266,9 @@
 <div class="modal fade" id="vendorCreatedModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
-            <div class="modal-header bg-success text-white py-2">
+            <div class="modal-header py-2">
                 <h6 class="modal-title"><i class="bi bi-plus-circle me-1"></i>거래처 신규 등록 ({{ vendor_result.created }}건)</h6>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-0">
                 <table class="table table-sm table-hover mb-0">
@@ -288,9 +295,9 @@
 <div class="modal fade" id="vendorUpdatedModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
-            <div class="modal-header bg-info text-white py-2">
+            <div class="modal-header py-2">
                 <h6 class="modal-title"><i class="bi bi-arrow-repeat me-1"></i>거래처 정보 갱신 ({{ vendor_result.updated }}건)</h6>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-0">
                 <table class="table table-sm table-hover mb-0">
@@ -320,9 +327,9 @@
 <div class="modal fade" id="itemCreatedModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
-            <div class="modal-header bg-success text-white py-2">
+            <div class="modal-header py-2">
                 <h6 class="modal-title"><i class="bi bi-plus-circle me-1"></i>품목 신규 등록 ({{ item_result.created }}건)</h6>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-0">
                 <table class="table table-sm table-hover mb-0">
@@ -349,9 +356,9 @@
 <div class="modal fade" id="itemUpdatedModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
-            <div class="modal-header bg-info text-white py-2">
+            <div class="modal-header py-2">
                 <h6 class="modal-title"><i class="bi bi-arrow-repeat me-1"></i>품목 정보 갱신 ({{ item_result.updated }}건)</h6>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-0">
                 <table class="table table-sm table-hover mb-0">
@@ -381,9 +388,9 @@
 <div class="modal fade" id="updatedModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
-            <div class="modal-header bg-success text-white py-2">
+            <div class="modal-header py-2">
                 <h6 class="modal-title"><i class="bi bi-check-circle me-1"></i>업체 연결 완료 ({{ link_result.updated }}건)</h6>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-0">
                 <table class="table table-sm table-hover mb-0">
@@ -413,7 +420,7 @@
 <div class="modal fade" id="skippedModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
-            <div class="modal-header bg-warning py-2">
+            <div class="modal-header py-2" style="background:#fffbeb;">
                 <h6 class="modal-title"><i class="bi bi-exclamation-triangle me-1"></i>SCM 미등록 거래처 ({{ link_result.skipped_no_vendor }}건)</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
