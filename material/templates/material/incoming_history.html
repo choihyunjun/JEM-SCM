@@ -24,57 +24,55 @@
 
     <div class="dtl-card mb-4">
         <div class="dtl-card-header"><i class="bi bi-search"></i> 검색 조건</div>
-        <div class="card-body">
-            <form method="get" class="row g-2 align-items-end">
-                <div class="col-md-2">
-                    <label class="form-label small mb-1">시작일</label>
-                    <input type="date" name="start_date" class="form-control form-control-sm" value="{{ start_date|default:'' }}">
+        <div class="dtl-card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-6 col-lg-2">
+                    <label class="dtl-form-label">시작일</label>
+                    <input type="date" name="start_date" class="form-control form-control-sm dtl-form-control" value="{{ start_date|default:'' }}">
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label small mb-1">종료일</label>
-                    <input type="date" name="end_date" class="form-control form-control-sm" value="{{ end_date|default:'' }}">
+                <div class="col-6 col-lg-2">
+                    <label class="dtl-form-label">종료일</label>
+                    <input type="date" name="end_date" class="form-control form-control-sm dtl-form-control" value="{{ end_date|default:'' }}">
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label small mb-1">품번/품명</label>
-                    <input type="text" name="q" class="form-control form-control-sm" placeholder="품번 또는 품명 입력" value="{{ q }}" autocomplete="off">
+                <div class="col-6 col-lg-2">
+                    <label class="dtl-form-label">품번/품명</label>
+                    <input type="text" name="q" class="form-control form-control-sm dtl-form-control" placeholder="품번 또는 품명 입력" value="{{ q }}" autocomplete="off">
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label small mb-1">품목군</label>
+                <div class="col-6 col-lg-2">
+                    <label class="dtl-form-label">품목군</label>
                     <div class="input-group input-group-sm">
-                        <input type="text" name="q_group" id="q_group" class="form-control" placeholder="선택" value="{{ q_group }}" readonly onclick="openModal('group')" style="cursor:pointer; background:#fff;">
+                        <input type="text" name="q_group" id="q_group" class="form-control dtl-form-control" placeholder="선택" value="{{ q_group }}" readonly onclick="openModal('group')" style="cursor:pointer; background:#fff;">
                         {% if q_group %}
                         <button type="button" class="btn btn-outline-danger px-2" onclick="clearField('q_group')" title="초기화"><i class="fas fa-times"></i></button>
                         {% else %}
-                        <span class="input-group-text bg-white border-start-0" style="cursor:pointer;" onclick="openModal('group')"><i class="fas fa-chevron-down text-muted"></i></span>
+                        <span class="input-group-text bg-white" style="cursor:pointer;" onclick="openModal('group')"><i class="fas fa-chevron-down text-muted"></i></span>
                         {% endif %}
                     </div>
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label small mb-1">거래처</label>
+                <div class="col-6 col-lg-2">
+                    <label class="dtl-form-label">거래처</label>
                     <div class="input-group input-group-sm">
-                        <input type="text" name="q_vendor" id="q_vendor" class="form-control" placeholder="선택" value="{{ q_vendor }}" readonly onclick="openModal('vendor')" style="cursor:pointer; background:#fff;">
+                        <input type="text" name="q_vendor" id="q_vendor" class="form-control dtl-form-control" placeholder="선택" value="{{ q_vendor }}" readonly onclick="openModal('vendor')" style="cursor:pointer; background:#fff;">
                         {% if q_vendor %}
                         <button type="button" class="btn btn-outline-danger px-2" onclick="clearField('q_vendor')" title="초기화"><i class="fas fa-times"></i></button>
                         {% else %}
-                        <span class="input-group-text bg-white border-start-0" style="cursor:pointer;" onclick="openModal('vendor')"><i class="fas fa-chevron-down text-muted"></i></span>
+                        <span class="input-group-text bg-white" style="cursor:pointer;" onclick="openModal('vendor')"><i class="fas fa-chevron-down text-muted"></i></span>
                         {% endif %}
                     </div>
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label small mb-1">시스템</label>
-                    <select name="q_sys" class="form-select form-select-sm">
+                <div class="col-6 col-lg-2">
+                    <label class="dtl-form-label">시스템</label>
+                    <select name="q_sys" class="form-select form-select-sm dtl-form-control">
                         <option value="" {% if not q_sys %}selected{% endif %}>전체</option>
                         <option value="ERP" {% if q_sys == 'ERP' %}selected{% endif %}>ERP</option>
                         <option value="SCM" {% if q_sys == 'SCM' %}selected{% endif %}>SCM</option>
                     </select>
                 </div>
-                <div class="col-md-1">
-                    <button type="submit" class="btn btn-outline-secondary btn-sm w-100">
+                <div class="col-12 d-flex gap-2 mt-1">
+                    <button type="submit" class="dtl-btn-dark btn-sm">
                         <i class="bi bi-search"></i> 조회
                     </button>
-                </div>
-                <div class="col-md-1">
-                    <a href="{% url 'material:incoming_history' %}" class="btn btn-outline-light btn-sm w-100 text-muted">초기화</a>
+                    <a href="{% url 'material:incoming_history' %}" class="dtl-btn-outline btn-sm">초기화</a>
                 </div>
             </form>
         </div>
