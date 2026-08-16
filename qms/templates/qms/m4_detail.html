@@ -31,17 +31,17 @@
             </div>
             <div class="col-4 text-end">
                 {% if item.status == 'DRAFT' %}
-                    <span class="px-4 py-2 rounded-pill bg-secondary bg-opacity-10 text-secondary fw-bold border border-secondary border-opacity-25">작성 중</span>
+                    <span class="dtl-pill slate" style="font-size:0.85rem; padding:0.5rem 1.2rem;">작성 중</span>
                 {% elif item.status == 'PENDING_REVIEW' %}
-                    <span class="px-4 py-2 rounded-pill bg-warning bg-opacity-10 text-warning fw-bold border border-warning border-opacity-25">검토 대기</span>
+                    <span class="dtl-pill amber" style="font-size:0.85rem; padding:0.5rem 1.2rem;">검토 대기</span>
                 {% elif item.status == 'PENDING_REVIEW2' %}
-                    <span class="px-4 py-2 rounded-pill bg-warning bg-opacity-10 text-warning fw-bold border border-warning border-opacity-25">검토2 대기</span>
+                    <span class="dtl-pill amber" style="font-size:0.85rem; padding:0.5rem 1.2rem;">검토2 대기</span>
                 {% elif item.status == 'PENDING_APPROVE' %}
-                    <span class="px-4 py-2 rounded-pill bg-info bg-opacity-10 text-info fw-bold border border-info border-opacity-25">승인 대기</span>
+                    <span class="dtl-pill cyan" style="font-size:0.85rem; padding:0.5rem 1.2rem;">승인 대기</span>
                 {% elif item.status == 'APPROVED' %}
-                    <span class="px-4 py-2 rounded-pill bg-success bg-opacity-10 text-success fw-bold border border-success border-opacity-25">승인 완료</span>
+                    <span class="dtl-pill green" style="font-size:0.85rem; padding:0.5rem 1.2rem;">승인 완료</span>
                 {% elif item.status == 'REJECTED' %}
-                    <span class="px-4 py-2 rounded-pill bg-danger bg-opacity-10 text-danger fw-bold border border-danger border-opacity-25">반려됨</span>
+                    <span class="dtl-pill red" style="font-size:0.85rem; padding:0.5rem 1.2rem;">반려됨</span>
                 {% endif %}
 
                 {% if item.status == 'APPROVED' %}
@@ -81,7 +81,7 @@
         {% endif %}
 
         <div class="row g-4 mb-5">
-            <div class="col-12"><h5 class="fw-bold border-start border-4 border-primary ps-2 mb-0">기본 정보</h5></div>
+            <div class="col-12"><h5 class="fw-bold border-start border-4 ps-2 mb-0" style="border-color:#4338ca !important;">기본 정보</h5></div>
             <div class="col-md-3">
                 <div class="text-muted small mb-1">공장</div>
                 <div class="fw-semibold">{{ item.factory|default:"-" }}</div>
@@ -105,14 +105,14 @@
         </div>
 
         <div class="mb-5">
-            <h5 class="fw-bold border-start border-4 border-primary ps-2 mb-3">변경 상세 내용</h5>
+            <h5 class="fw-bold border-start border-4 ps-2 mb-3" style="border-color:#4338ca !important;">변경 상세 내용</h5>
             <div class="p-4 bg-light rounded-3 mb-4 border text-dark">
                 <div class="text-muted small mb-2 fw-bold">변경 사유</div>
                 <div class="lh-base">{{ item.reason|linebreaksbr }}</div>
             </div>
             <div class="row g-0 border rounded-3 overflow-hidden shadow-sm mb-4">
                 <div class="col-md-6 border-end p-4 bg-white">
-                    <div class="badge bg-secondary mb-3 px-3">As-Is (변경 전)</div>
+                    <div class="dtl-pill slate mb-3">As-Is (변경 전)</div>
                     <div class="text-secondary small lh-lg mb-4">{{ item.content_before|linebreaksbr|default:"내용 없음" }}</div>
                     {% if item.photo_before %}
                     <div class="text-center p-2 bg-white border rounded">
@@ -122,8 +122,8 @@
                     </div>
                     {% endif %}
                 </div>
-                <div class="col-md-6 p-4 bg-primary bg-opacity-10">
-                    <div class="badge bg-primary mb-3 px-3">To-Be (변경 후)</div>
+                <div class="col-md-6 p-4" style="background:#eef2ff;">
+                    <div class="dtl-pill blue mb-3">To-Be (변경 후)</div>
                     <div class="fw-medium small lh-lg mb-4 text-dark">{{ item.content_after|linebreaksbr|default:"내용 없음" }}</div>
                     {% if item.photo_after %}
                     <div class="text-center p-2 bg-white border rounded">
@@ -137,7 +137,7 @@
         </div>
 
         <div class="mb-5">
-            <h5 class="fw-bold border-start border-4 border-primary ps-2 mb-4">실시 계획 및 일정</h5>
+            <h5 class="fw-bold border-start border-4 ps-2 mb-4" style="border-color:#4338ca !important;">실시 계획 및 일정</h5>
             <div class="table-responsive">
                 <table class="table table-bordered align-middle text-center small m4-table">
                     <thead class="table-light">
@@ -179,7 +179,7 @@
         </div>
 
         <div class="mt-5">
-            <h5 class="fw-bold border-start border-4 border-primary ps-2 mb-4">사내 검토 현황</h5>
+            <h5 class="fw-bold border-start border-4 ps-2 mb-4" style="border-color:#4338ca !important;">사내 검토 현황</h5>
             <div class="table-responsive">
                 <table class="table table-bordered align-middle text-center small">
                     <thead class="table-light">
@@ -198,11 +198,11 @@
                             <td class="text-muted small">{{ review.sent_at|date:"Y-m-d"|default:"-" }}</td>
                             <td class="text-start p-3">
                                 <div class="mb-2 pb-2 border-bottom">
-                                    <span class="badge bg-dark mb-1">품질팀 요청</span>
+                                    <span class="dtl-pill slate mb-1">품질팀 요청</span>
                                     <div class="ps-2 text-primary fw-bold" style="white-space: pre-wrap;">{{ review.request_content|default:"상세 요청 내용 없음" }}</div>
                                 </div>
                                 <div id="review-display-{{ review.id }}">
-                                    <span class="badge bg-success mb-1">부서 답변</span>
+                                    <span class="dtl-pill green mb-1">부서 답변</span>
                                     <div class="ps-2" style="white-space: pre-wrap;">{{ review.content|linebreaksbr|default:"검토 의견을 기다리는 중입니다." }}</div>
                                     {% if review.evidence_file %}
                                         <div class="ps-2 mt-2">
@@ -325,12 +325,12 @@
                 {% for log in item.change_logs.all %}
                 <div class="list-group-item bg-light bg-opacity-10 py-3 border-bottom">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="fw-bold text-primary px-2 py-1 bg-primary bg-opacity-10 rounded" style="font-size: 0.85rem;">{{ log.field_name }} 수정</span>
+                        <span class="dtl-pill blue" style="font-size: 0.78rem;">{{ log.field_name }} 수정</span>
                         <span class="text-muted" style="font-size: 0.8rem;">{{ log.changed_at|date:"Y-m-d H:i" }}</span>
                     </div>
                     <div class="ps-2 border-start border-3 border-secondary border-opacity-25 mt-2 small">
-                        <div class="mb-1"><span class="badge bg-secondary opacity-75 me-1">이전</span> <span class="text-muted text-decoration-line-through">{{ log.old_value|truncatechars:100 }}</span></div>
-                        <div><span class="badge bg-success me-1">변경</span> <span class="fw-semibold text-dark">{{ log.new_value|truncatechars:100 }}</span></div>
+                        <div class="mb-1"><span class="dtl-pill slate me-1">이전</span> <span class="text-muted text-decoration-line-through">{{ log.old_value|truncatechars:100 }}</span></div>
+                        <div><span class="dtl-pill green me-1">변경</span> <span class="fw-semibold text-dark">{{ log.new_value|truncatechars:100 }}</span></div>
                     </div>
                     <div class="mt-2 text-end text-muted small">수정자: {{ log.user.last_name }}{{ log.user.first_name }}</div>
                 </div>
