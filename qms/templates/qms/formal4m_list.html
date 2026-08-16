@@ -1,19 +1,19 @@
 {% extends "qms/qms_base.html" %}
 
 {% block qms_content %}
-<div class="row mb-4 align-items-center">
-    <div class="col-lg-6">
-        <h4 class="fw-bold mb-0"><i class="bi bi-clipboard-check me-2"></i> 정식 4M</h4>
-        <div class="text-muted small mt-1">사전 4M 승인 완료 후 생성된 정식 4M 목록입니다.</div>
+<div class="dtl-wrap" style="max-width:1300px;">
+    <div class="row mb-4 align-items-center">
+        <div class="col-lg-6">
+            <span class="dtl-title"><i class="bi bi-clipboard-check me-2"></i>정식 4M</span>
+            <div class="dtl-subtitle mb-0 mt-1">사전 4M 승인 완료 후 생성된 정식 4M 목록입니다.</div>
+        </div>
     </div>
-</div>
 
-<div class="card shadow-sm border-0">
-    <div class="card-body p-0">
+    <div class="dtl-card mb-0">
         <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="table-light">
-                    <tr class="text-muted small">
+            <table class="table table-hover align-middle mb-0 dtl-table">
+                <thead>
+                    <tr>
                         <th style="width: 14%;">정식번호</th>
                         <th style="width: 12%;">양식</th>
                         <th style="width: 18%;">사전번호</th>
@@ -28,7 +28,7 @@
                     <tr>
                         <td class="fw-semibold">{{ it.formal_no }}</td>
                         <td>
-                            <span class="badge {% if it.template_type == 'FULL' %}bg-primary{% else %}bg-secondary{% endif %}">
+                            <span class="dtl-pill {% if it.template_type == 'FULL' %}blue{% else %}slate{% endif %}">
                                 {{ it.get_template_type_display }}
                             </span>
                         </td>
@@ -44,7 +44,7 @@
                         <td>{% if it.pre_request.vendor_org %}{{ it.pre_request.vendor_org.name }}{% else %}-{% endif %}</td>
                         <td class="text-muted small">{{ it.created_at|date:"Y-m-d H:i" }}</td>
                         <td class="text-end">
-                            <a href="{% url 'qms:formal4m_detail_by_id' it.id %}" class="btn btn-sm btn-outline-dark">
+                            <a href="{% url 'qms:formal4m_detail_by_id' it.id %}" class="dtl-btn-outline btn-sm">
                                 열기
                             </a>
                         </td>
