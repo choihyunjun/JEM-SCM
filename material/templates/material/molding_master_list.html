@@ -30,13 +30,13 @@
         <div>
             <form method="get" class="row g-2 align-items-end">
                 <div class="col-md-3 col-lg-2" style="position:relative;">
-                    <label class="form-label mb-0 small fw-bold">품번/품명</label>
-                    <input type="text" name="q" class="form-control form-control-sm" value="{{ q }}" placeholder="품번 또는 품명 검색" id="searchPartNo" autocomplete="off">
+                    <label class="dtl-form-label">품번/품명</label>
+                    <input type="text" name="q" class="form-control form-control-sm dtl-form-control" value="{{ q }}" placeholder="품번 또는 품명 검색" id="searchPartNo" autocomplete="off">
                     <div id="partNoDropdown" class="autocomplete-dropdown"></div>
                 </div>
                 <div class="col-md-2 col-lg-2">
-                    <label class="form-label mb-0 small fw-bold">품목</label>
-                    <select name="item_group" class="form-select form-select-sm">
+                    <label class="dtl-form-label">품목</label>
+                    <select name="item_group" class="form-select form-select-sm dtl-form-control">
                         <option value="">전체</option>
                         {% for ig in item_groups %}
                         <option value="{{ ig }}" {% if item_group == ig %}selected{% endif %}>{{ ig }}</option>
@@ -44,13 +44,13 @@
                     </select>
                 </div>
                 <div class="col-md-2 col-lg-2" style="position:relative;">
-                    <label class="form-label mb-0 small fw-bold">재료품번</label>
-                    <input type="text" name="material_part_no" class="form-control form-control-sm" value="{{ material_part_no }}" placeholder="재료품번 검색" id="searchMaterialNo" autocomplete="off">
+                    <label class="dtl-form-label">재료품번</label>
+                    <input type="text" name="material_part_no" class="form-control form-control-sm dtl-form-control" value="{{ material_part_no }}" placeholder="재료품번 검색" id="searchMaterialNo" autocomplete="off">
                     <div id="materialNoDropdown" class="autocomplete-dropdown"></div>
                 </div>
                 <div class="col-md-2 col-lg-2">
-                    <label class="form-label mb-0 small fw-bold">설비호기</label>
-                    <select name="machine_code" class="form-select form-select-sm">
+                    <label class="dtl-form-label">설비호기</label>
+                    <select name="machine_code" class="form-select form-select-sm dtl-form-control">
                         <option value="">전체</option>
                         {% for m in machines %}
                         <option value="{{ m.code }}" {% if machine_code == m.code %}selected{% endif %}>{{ m.code }} ({{ m.tonnage }}t)</option>
@@ -58,8 +58,8 @@
                     </select>
                 </div>
                 <div class="col-auto">
-                    <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> 조회</button>
-                    <a href="{% url 'material:molding_master_list' %}" class="btn btn-outline-secondary btn-sm">초기화</a>
+                    <button type="submit" class="dtl-btn-dark btn-sm"><i class="bi bi-search"></i> 조회</button>
+                    <a href="{% url 'material:molding_master_list' %}" class="dtl-btn-outline btn-sm">초기화</a>
                 </div>
             </form>
         </div>
