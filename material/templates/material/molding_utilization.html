@@ -5,26 +5,26 @@
 <div class="container-fluid" style="max-width: 1800px;">
     <div class="d-flex justify-content-between align-items-center mb-4 pt-3">
         <div>
-            <h3 class="fw-bold">성형 가동률</h3>
+            <span class="dtl-title d-block">성형 가동률</span>
             <span class="text-muted small">ERP 생산입고 데이터 기반 성형기 가동률 관리</span>
         </div>
         <div class="d-flex gap-2">
-            <button class="btn btn-outline-dark btn-sm" onclick="openMachineModal()">
+            <button class="dtl-btn-outline btn-sm" onclick="openMachineModal()">
                 <i class="bi bi-cpu me-1"></i> 성형기 관리
-                {% if no_tonnage_count %}<span class="badge bg-danger ms-1">{{ no_tonnage_count }}</span>{% endif %}
+                {% if no_tonnage_count %}<span class="dtl-pill red ms-1">{{ no_tonnage_count }}</span>{% endif %}
             </button>
-            <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#settingModal">
+            <button class="dtl-btn-outline btn-sm" data-bs-toggle="modal" data-bs-target="#settingModal">
                 <i class="bi bi-gear me-1"></i> 근무설정
             </button>
-            <button class="btn btn-primary btn-sm" id="btnErpSync" onclick="syncERP()">
+            <button class="dtl-btn-dark btn-sm" id="btnErpSync" onclick="syncERP()">
                 <i class="bi bi-cloud-download me-1"></i> ERP 동기화
             </button>
         </div>
     </div>
 
     <!-- 년/월 선택 -->
-    <div class="card shadow-sm mb-4">
-        <div class="card-body py-2">
+    <div class="dtl-toolbar mb-4">
+        <div>
             <form method="get" class="row g-2 align-items-center">
                 <div class="col-auto">
                     <label class="form-label mb-0 small fw-bold">년도</label>
@@ -57,7 +57,7 @@
                     <button type="submit" class="btn btn-primary btn-sm d-block"><i class="bi bi-search"></i> 조회</button>
                 </div>
                 <div class="col-auto d-flex align-items-end">
-                    <span class="badge bg-light text-dark border small">
+                    <span class="dtl-pill slate">
                         기준시간: 주간 {{ setting.day_shift_minutes }}분 / 야간 {{ setting.night_shift_minutes }}분 / 근무일 {{ setting.work_days }}일
                     </span>
                     <div class="btn-group btn-group-sm ms-2" role="group">

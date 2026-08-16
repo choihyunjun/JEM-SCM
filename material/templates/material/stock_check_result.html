@@ -6,20 +6,20 @@
 {% block production_content %}
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="fw-bold">재고 실사 결과</h3>
-        <a href="{% url 'material:stock_check' %}" class="btn btn-outline-secondary">
+        <span class="dtl-title">재고 실사 결과</span>
+        <a href="{% url 'material:stock_check' %}" class="dtl-btn-outline">
             <i class="bi bi-arrow-left me-1"></i>실사 검색
         </a>
     </div>
 
     {% if stocks %}
-    <div class="card shadow-sm">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-list-ul me-2"></i>검색 결과 ({{ stocks|length }}건)</span>
+    <div class="dtl-card mb-0">
+        <div class="dtl-card-header">
+            <span><i class="bi bi-list-ul"></i>검색 결과 ({{ stocks|length }}건)</span>
         </div>
         <div class="card-body p-0">
-            <table class="table table-hover mb-0">
-                <thead class="table-light">
+            <table class="table table-hover mb-0 dtl-table">
+                <thead>
                     <tr>
                         <th>창고</th>
                         <th>품번</th>
@@ -47,7 +47,7 @@
                         </td>
                         <td class="text-end diff-qty">0</td>
                         <td class="status-cell">
-                            <span class="badge bg-success">일치</span>
+                            <span class="dtl-pill green">일치</span>
                         </td>
                     </tr>
                     {% endfor %}
@@ -77,13 +77,13 @@ document.querySelectorAll('.actual-qty').forEach(input => {
 
         if (diff === 0) {
             diffCell.className = 'text-end diff-qty';
-            statusCell.innerHTML = '<span class="badge bg-success">일치</span>';
+            statusCell.innerHTML = '<span class="dtl-pill green">일치</span>';
         } else if (diff > 0) {
             diffCell.className = 'text-end diff-qty fw-bold text-primary';
-            statusCell.innerHTML = '<span class="badge bg-warning">초과</span>';
+            statusCell.innerHTML = '<span class="dtl-pill amber">초과</span>';
         } else {
             diffCell.className = 'text-end diff-qty fw-bold text-danger';
-            statusCell.innerHTML = '<span class="badge bg-danger">부족</span>';
+            statusCell.innerHTML = '<span class="dtl-pill red">부족</span>';
         }
     });
 });
