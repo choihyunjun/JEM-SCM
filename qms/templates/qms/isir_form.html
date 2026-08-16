@@ -3,24 +3,24 @@
 {% block title %}ISIR {% if mode == 'edit' %}수정{% else %}등록{% endif %}{% endblock %}
 
 {% block qms_content %}
-<div class="container-fluid p-0" style="max-width: 900px;">
+<div class="dtl-wrap" style="max-width: 900px;">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="fw-bold">ISIR {% if mode == 'edit' %}수정{% else %}등록{% endif %}</h3>
-        <a href="{% url 'qms:isir_list' %}" class="btn btn-outline-secondary">
+        <span class="dtl-title">ISIR {% if mode == 'edit' %}수정{% else %}등록{% endif %}</span>
+        <a href="{% url 'qms:isir_list' %}" class="dtl-btn-outline btn-sm">
             <i class="bi bi-arrow-left me-1"></i>목록으로
         </a>
     </div>
 
-    <div class="card shadow-sm">
-        <div class="card-body">
+    <div class="dtl-card mb-0">
+        <div class="dtl-card-body">
             <form method="post" enctype="multipart/form-data">
                 {% csrf_token %}
 
-                <h6 class="fw-bold text-primary mb-3"><i class="bi bi-info-circle me-2"></i>기본 정보</h6>
+                <div class="dtl-section-label"><span class="dtl-section-num">1</span>기본 정보</div>
                 <div class="row g-3 mb-4">
                     <div class="col-md-6">
-                        <label class="form-label fw-bold">ISIR 유형 <span class="text-danger">*</span></label>
-                        <select name="isir_type" class="form-select" required>
+                        <label class="dtl-form-label">ISIR 유형 <span class="text-danger">*</span></label>
+                        <select name="isir_type" class="form-select dtl-form-control" required>
                             <option value="">선택</option>
                             {% for value, label in type_choices %}
                             <option value="{{ value }}" {% if isir and isir.isir_type == value %}selected{% endif %}>{{ label }}</option>
@@ -28,9 +28,9 @@
                         </select>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label fw-bold">협력사 <span class="text-danger">*</span></label>
+                        <label class="dtl-form-label">협력사 <span class="text-danger">*</span></label>
                         <div class="input-group">
-                            <input type="text" id="vendorName" class="form-control" placeholder="협력사 검색..." readonly required
+                            <input type="text" id="vendorName" class="form-control dtl-form-control" placeholder="협력사 검색..." readonly required
                                    value="{% if isir and isir.vendor %}{{ isir.vendor.name }}{% endif %}">
                             <input type="hidden" name="vendor" id="vendorId" required
                                    value="{% if isir and isir.vendor %}{{ isir.vendor.id }}{% endif %}">
@@ -44,53 +44,53 @@
                     </div>
                 </div>
 
-                <h6 class="fw-bold text-primary mb-3"><i class="bi bi-box-seam me-2"></i>품목 정보</h6>
+                <div class="dtl-section-label"><span class="dtl-section-num">2</span>품목 정보</div>
                 <div class="row g-3 mb-4">
                     <div class="col-md-6">
-                        <label class="form-label fw-bold">품번 <span class="text-danger">*</span></label>
-                        <input type="text" name="part_no" class="form-control" required
+                        <label class="dtl-form-label">품번 <span class="text-danger">*</span></label>
+                        <input type="text" name="part_no" class="form-control dtl-form-control" required
                                value="{% if isir %}{{ isir.part_no }}{% endif %}">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label fw-bold">품명 <span class="text-danger">*</span></label>
-                        <input type="text" name="part_name" class="form-control" required
+                        <label class="dtl-form-label">품명 <span class="text-danger">*</span></label>
+                        <input type="text" name="part_name" class="form-control dtl-form-control" required
                                value="{% if isir %}{{ isir.part_name }}{% endif %}">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label fw-bold">도면REV</label>
-                        <input type="text" name="part_rev" class="form-control" placeholder="도면 개정번호"
+                        <label class="dtl-form-label">도면REV</label>
+                        <input type="text" name="part_rev" class="form-control dtl-form-control" placeholder="도면 개정번호"
                                value="{% if isir %}{{ isir.part_rev }}{% endif %}">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label fw-bold">도면번호</label>
-                        <input type="text" name="drawing_no" class="form-control" placeholder="도면번호"
+                        <label class="dtl-form-label">도면번호</label>
+                        <input type="text" name="drawing_no" class="form-control dtl-form-control" placeholder="도면번호"
                                value="{% if isir %}{{ isir.drawing_no }}{% endif %}">
                     </div>
                 </div>
 
-                <h6 class="fw-bold text-primary mb-3"><i class="bi bi-collection me-2"></i>샘플 정보</h6>
+                <div class="dtl-section-label"><span class="dtl-section-num">3</span>샘플 정보</div>
                 <div class="row g-3 mb-4">
                     <div class="col-md-4">
-                        <label class="form-label fw-bold">샘플 수량 <span class="text-danger">*</span></label>
-                        <input type="number" name="sample_qty" class="form-control" min="1" required
+                        <label class="dtl-form-label">샘플 수량 <span class="text-danger">*</span></label>
+                        <input type="number" name="sample_qty" class="form-control dtl-form-control" min="1" required
                                value="{% if isir %}{{ isir.sample_qty }}{% else %}5{% endif %}">
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label fw-bold">샘플 LOT</label>
-                        <input type="text" name="sample_lot" class="form-control" placeholder="샘플 LOT번호"
+                        <label class="dtl-form-label">샘플 LOT</label>
+                        <input type="text" name="sample_lot" class="form-control dtl-form-control" placeholder="샘플 LOT번호"
                                value="{% if isir %}{{ isir.sample_lot }}{% endif %}">
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label fw-bold">샘플 입고일</label>
-                        <input type="date" name="sample_received_date" class="form-control"
+                        <label class="dtl-form-label">샘플 입고일</label>
+                        <input type="date" name="sample_received_date" class="form-control dtl-form-control"
                                value="{% if isir and isir.sample_received_date %}{{ isir.sample_received_date|date:'Y-m-d' }}{% endif %}">
                     </div>
                 </div>
 
-                <h6 class="fw-bold text-primary mb-3"><i class="bi bi-paperclip me-2"></i>첨부파일</h6>
+                <div class="dtl-section-label"><span class="dtl-section-num">4</span>첨부파일</div>
                 <div class="row g-3 mb-4">
                     <div class="col-md-4">
-                        <label class="form-label fw-bold">검사성적서</label>
+                        <label class="dtl-form-label">검사성적서</label>
                         {% if isir and isir.report_file %}
                         <div class="mb-1">
                             <a href="{{ isir.report_file.url }}" target="_blank" class="text-decoration-none small">
@@ -98,10 +98,10 @@
                             </a>
                         </div>
                         {% endif %}
-                        <input type="file" name="report_file" class="form-control" accept=".pdf,.xlsx,.xls,.doc,.docx">
+                        <input type="file" name="report_file" class="form-control dtl-form-control" accept=".pdf,.xlsx,.xls,.doc,.docx">
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label fw-bold">사진1</label>
+                        <label class="dtl-form-label">사진1</label>
                         {% if isir and isir.photo1 %}
                         <div class="mb-1">
                             <a href="{{ isir.photo1.url }}" target="_blank" class="text-decoration-none small">
@@ -109,10 +109,10 @@
                             </a>
                         </div>
                         {% endif %}
-                        <input type="file" name="photo1" class="form-control" accept="image/*">
+                        <input type="file" name="photo1" class="form-control dtl-form-control" accept="image/*">
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label fw-bold">사진2</label>
+                        <label class="dtl-form-label">사진2</label>
                         {% if isir and isir.photo2 %}
                         <div class="mb-1">
                             <a href="{{ isir.photo2.url }}" target="_blank" class="text-decoration-none small">
@@ -120,55 +120,55 @@
                             </a>
                         </div>
                         {% endif %}
-                        <input type="file" name="photo2" class="form-control" accept="image/*">
+                        <input type="file" name="photo2" class="form-control dtl-form-control" accept="image/*">
                     </div>
                 </div>
 
                 <!-- SPC 데이터 (선택사항) -->
-                <div class="border rounded mb-4">
+                <div class="border rounded mb-4" style="border-color:#e5e7eb !important;">
                     <button class="btn btn-link w-100 text-start p-3 text-decoration-none" type="button"
                             data-bs-toggle="collapse" data-bs-target="#spcCollapse">
-                        <h6 class="fw-bold text-info mb-0">
-                            <i class="bi bi-graph-up me-2"></i>공정능력 데이터 (SPC) - 선택사항
+                        <span class="dtl-section-label mb-0" style="display:inline-flex;">
+                            <i class="bi bi-graph-up"></i>공정능력 데이터 (SPC) - 선택사항
                             <i class="bi bi-chevron-down float-end"></i>
-                        </h6>
+                        </span>
                     </button>
                     <div class="collapse{% if isir and isir.cpk_value %} show{% endif %}" id="spcCollapse">
-                        <div class="p-3 border-top bg-light">
+                        <div class="p-3 border-top" style="background:#fafafa;">
                             <div class="row g-3">
                                 <div class="col-md-6">
-                                    <label class="form-label">측정 특성</label>
-                                    <input type="text" name="cpk_characteristic" class="form-control" placeholder="예: 외경, 길이, 표면조도"
+                                    <label class="dtl-form-label">측정 특성</label>
+                                    <input type="text" name="cpk_characteristic" class="form-control dtl-form-control" placeholder="예: 외경, 길이, 표면조도"
                                            value="{% if isir %}{{ isir.cpk_characteristic }}{% endif %}">
                                 </div>
                                 <div class="col-md-3">
-                                    <label class="form-label">Cpk</label>
-                                    <input type="number" step="0.01" name="cpk_value" class="form-control" placeholder="예: 1.33"
+                                    <label class="dtl-form-label">Cpk</label>
+                                    <input type="number" step="0.01" name="cpk_value" class="form-control dtl-form-control" placeholder="예: 1.33"
                                            value="{% if isir and isir.cpk_value %}{{ isir.cpk_value }}{% endif %}">
                                 </div>
                                 <div class="col-md-3">
-                                    <label class="form-label">Ppk</label>
-                                    <input type="number" step="0.01" name="ppk_value" class="form-control" placeholder="예: 1.25"
+                                    <label class="dtl-form-label">Ppk</label>
+                                    <input type="number" step="0.01" name="ppk_value" class="form-control dtl-form-control" placeholder="예: 1.25"
                                            value="{% if isir and isir.ppk_value %}{{ isir.ppk_value }}{% endif %}">
                                 </div>
                                 <div class="col-md-3">
-                                    <label class="form-label">USL (상한규격)</label>
-                                    <input type="number" step="0.0001" name="usl" class="form-control"
+                                    <label class="dtl-form-label">USL (상한규격)</label>
+                                    <input type="number" step="0.0001" name="usl" class="form-control dtl-form-control"
                                            value="{% if isir and isir.usl %}{{ isir.usl }}{% endif %}">
                                 </div>
                                 <div class="col-md-3">
-                                    <label class="form-label">LSL (하한규격)</label>
-                                    <input type="number" step="0.0001" name="lsl" class="form-control"
+                                    <label class="dtl-form-label">LSL (하한규격)</label>
+                                    <input type="number" step="0.0001" name="lsl" class="form-control dtl-form-control"
                                            value="{% if isir and isir.lsl %}{{ isir.lsl }}{% endif %}">
                                 </div>
                                 <div class="col-md-3">
-                                    <label class="form-label">공정평균</label>
-                                    <input type="number" step="0.0001" name="process_mean" class="form-control"
+                                    <label class="dtl-form-label">공정평균</label>
+                                    <input type="number" step="0.0001" name="process_mean" class="form-control dtl-form-control"
                                            value="{% if isir and isir.process_mean %}{{ isir.process_mean }}{% endif %}">
                                 </div>
                                 <div class="col-md-3">
-                                    <label class="form-label">표준편차</label>
-                                    <input type="number" step="0.000001" name="process_std" class="form-control"
+                                    <label class="dtl-form-label">표준편차</label>
+                                    <input type="number" step="0.000001" name="process_std" class="form-control dtl-form-control"
                                            value="{% if isir and isir.process_std %}{{ isir.process_std }}{% endif %}">
                                 </div>
                             </div>
@@ -180,30 +180,30 @@
                 </div>
 
                 <!-- MSA 데이터 (선택사항) -->
-                <div class="border rounded mb-4">
+                <div class="border rounded mb-4" style="border-color:#e5e7eb !important;">
                     <button class="btn btn-link w-100 text-start p-3 text-decoration-none" type="button"
                             data-bs-toggle="collapse" data-bs-target="#msaCollapse">
-                        <h6 class="fw-bold text-warning mb-0">
-                            <i class="bi bi-rulers me-2"></i>측정시스템분석 (MSA) - 선택사항
+                        <span class="dtl-section-label mb-0" style="display:inline-flex;">
+                            <i class="bi bi-rulers"></i>측정시스템분석 (MSA) - 선택사항
                             <i class="bi bi-chevron-down float-end"></i>
-                        </h6>
+                        </span>
                     </button>
                     <div class="collapse{% if isir and isir.msa_grr_percent %} show{% endif %}" id="msaCollapse">
-                        <div class="p-3 border-top bg-light">
+                        <div class="p-3 border-top" style="background:#fafafa;">
                             <div class="row g-3">
                                 <div class="col-md-4">
-                                    <label class="form-label">Gage R&R (%)</label>
-                                    <input type="number" step="0.01" name="msa_grr_percent" class="form-control" placeholder="예: 8.5"
+                                    <label class="dtl-form-label">Gage R&R (%)</label>
+                                    <input type="number" step="0.01" name="msa_grr_percent" class="form-control dtl-form-control" placeholder="예: 8.5"
                                            value="{% if isir and isir.msa_grr_percent %}{{ isir.msa_grr_percent }}{% endif %}">
                                 </div>
                                 <div class="col-md-4">
-                                    <label class="form-label">NDC (구별범주수)</label>
-                                    <input type="number" name="msa_ndc" class="form-control" placeholder="≥5 권장"
+                                    <label class="dtl-form-label">NDC (구별범주수)</label>
+                                    <input type="number" name="msa_ndc" class="form-control dtl-form-control" placeholder="≥5 권장"
                                            value="{% if isir and isir.msa_ndc %}{{ isir.msa_ndc }}{% endif %}">
                                 </div>
                                 <div class="col-md-4">
-                                    <label class="form-label">MSA 판정</label>
-                                    <select name="msa_result" class="form-select">
+                                    <label class="dtl-form-label">MSA 판정</label>
+                                    <select name="msa_result" class="form-select dtl-form-control">
                                         <option value="">선택</option>
                                         <option value="ACCEPT" {% if isir and isir.msa_result == 'ACCEPT' %}selected{% endif %}>적합 (≤10%)</option>
                                         <option value="CONDITIONAL" {% if isir and isir.msa_result == 'CONDITIONAL' %}selected{% endif %}>조건부 적합 (10~30%)</option>
@@ -220,7 +220,7 @@
 
                 <div class="d-flex justify-content-end gap-2 mt-4">
                     <a href="{% url 'qms:isir_list' %}" class="btn btn-secondary">취소</a>
-                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>{% if mode == 'edit' %}수정{% else %}등록{% endif %}</button>
+                    <button type="submit" class="dtl-btn-dark"><i class="bi bi-check-lg me-1"></i>{% if mode == 'edit' %}수정{% else %}등록{% endif %}</button>
                 </div>
             </form>
         </div>
@@ -231,9 +231,9 @@
 <div class="modal fade" id="vendorSearchModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header bg-info text-white">
+            <div class="modal-header">
                 <h5 class="modal-title fw-bold"><i class="bi bi-search me-2"></i>협력사 검색</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="input-group mb-3">

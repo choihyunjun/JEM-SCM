@@ -3,38 +3,36 @@
 {% block title %}품질문서 {% if mode == 'edit' %}수정{% else %}등록{% endif %}{% endblock %}
 
 {% block qms_content %}
-<div class="container-fluid p-0" style="max-width: 900px;">
+<div class="dtl-wrap" style="max-width: 900px;">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="fw-bold">품질문서 {% if mode == 'edit' %}수정{% else %}등록{% endif %}</h3>
+        <span class="dtl-title">품질문서 {% if mode == 'edit' %}수정{% else %}등록{% endif %}</span>
     </div>
 
-    <div class="card shadow-sm">
-        <div class="card-header bg-white">
-            <i class="bi bi-pencil-square me-1"></i>문서 정보 입력
-        </div>
-        <div class="card-body">
+    <div class="dtl-card mb-0">
+        <div class="dtl-card-header"><i class="bi bi-pencil-square"></i>문서 정보 입력</div>
+        <div class="dtl-card-body">
             <form method="post" enctype="multipart/form-data">
                 {% csrf_token %}
 
                 <!-- 기본 정보 -->
                 <div class="row g-3 mb-4">
                     <div class="col-md-4">
-                        <label class="form-label fw-bold">문서번호 <span class="text-danger">*</span></label>
-                        <input type="text" name="doc_no" class="form-control" required
+                        <label class="dtl-form-label">문서번호 <span class="text-danger">*</span></label>
+                        <input type="text" name="doc_no" class="form-control dtl-form-control" required
                                placeholder="예: QM-001" value="{% if doc %}{{ doc.doc_no }}{% endif %}">
                         <div class="form-text">고유한 문서관리 번호를 입력하세요.</div>
                     </div>
                     <div class="col-md-8">
-                        <label class="form-label fw-bold">문서명 <span class="text-danger">*</span></label>
-                        <input type="text" name="doc_name" class="form-control" required
+                        <label class="dtl-form-label">문서명 <span class="text-danger">*</span></label>
+                        <input type="text" name="doc_name" class="form-control dtl-form-control" required
                                placeholder="예: 품질경영매뉴얼" value="{% if doc %}{{ doc.doc_name }}{% endif %}">
                     </div>
                 </div>
 
                 <div class="row g-3 mb-4">
                     <div class="col-md-4">
-                        <label class="form-label fw-bold">분류 <span class="text-danger">*</span></label>
-                        <select name="category" class="form-select" required>
+                        <label class="dtl-form-label">분류 <span class="text-danger">*</span></label>
+                        <select name="category" class="form-select dtl-form-control" required>
                             <option value="">-- 선택 --</option>
                             {% for value, label in category_choices %}
                             <option value="{{ value }}" {% if doc and doc.category == value %}selected{% endif %}>{{ label }}</option>
@@ -42,54 +40,54 @@
                         </select>
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label fw-bold">버전</label>
-                        <input type="text" name="version" class="form-control"
+                        <label class="dtl-form-label">버전</label>
+                        <input type="text" name="version" class="form-control dtl-form-control"
                                value="{% if doc %}{{ doc.version }}{% else %}1.0{% endif %}">
                     </div>
                 </div>
 
-                <hr class="my-4">
+                <hr class="my-4" style="border-color:#eef0f2;">
 
                 <!-- 문서 내용 -->
-                <h6 class="fw-bold mb-3"><i class="bi bi-file-text me-1"></i>문서 내용</h6>
+                <div class="dtl-section-label"><i class="bi bi-file-text"></i>문서 내용</div>
                 <div class="mb-4">
-                    <label class="form-label">문서 설명</label>
-                    <textarea name="description" class="form-control" rows="3"
+                    <label class="dtl-form-label">문서 설명</label>
+                    <textarea name="description" class="form-control dtl-form-control" rows="3"
                               placeholder="문서의 목적과 적용범위를 간략히 기술하세요.">{% if doc %}{{ doc.description }}{% endif %}</textarea>
                 </div>
 
-                <hr class="my-4">
+                <hr class="my-4" style="border-color:#eef0f2;">
 
                 <!-- 관련 정보 -->
-                <h6 class="fw-bold mb-3"><i class="bi bi-link-45deg me-1"></i>관련 정보</h6>
+                <div class="dtl-section-label"><i class="bi bi-link-45deg"></i>관련 정보</div>
                 <div class="row g-3 mb-4">
                     <div class="col-md-6">
-                        <label class="form-label">관련 품번</label>
-                        <input type="text" name="related_part_no" class="form-control"
+                        <label class="dtl-form-label">관련 품번</label>
+                        <input type="text" name="related_part_no" class="form-control dtl-form-control"
                                placeholder="관련 품번을 입력하세요"
                                value="{% if doc %}{{ doc.related_part_no }}{% endif %}">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">관련 공정</label>
-                        <input type="text" name="related_process" class="form-control"
+                        <label class="dtl-form-label">관련 공정</label>
+                        <input type="text" name="related_process" class="form-control dtl-form-control"
                                placeholder="관련 공정을 입력하세요"
                                value="{% if doc %}{{ doc.related_process }}{% endif %}">
                     </div>
                 </div>
 
-                <hr class="my-4">
+                <hr class="my-4" style="border-color:#eef0f2;">
 
                 <!-- 관리 정보 -->
-                <h6 class="fw-bold mb-3"><i class="bi bi-building me-1"></i>관리 정보</h6>
+                <div class="dtl-section-label"><i class="bi bi-building"></i>관리 정보</div>
                 <div class="row g-3 mb-4">
                     <div class="col-md-4">
-                        <label class="form-label">시행일</label>
-                        <input type="date" name="effective_date" class="form-control"
+                        <label class="dtl-form-label">시행일</label>
+                        <input type="date" name="effective_date" class="form-control dtl-form-control"
                                value="{% if doc %}{{ doc.effective_date|date:'Y-m-d' }}{% endif %}">
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label">만료일</label>
-                        <input type="date" name="expiry_date" class="form-control"
+                        <label class="dtl-form-label">만료일</label>
+                        <input type="date" name="expiry_date" class="form-control dtl-form-control"
                                value="{% if doc and doc.expiry_date %}{{ doc.expiry_date|date:'Y-m-d' }}{% endif %}">
                     </div>
                     <div class="col-md-4 d-flex align-items-end">
@@ -101,12 +99,12 @@
                     </div>
                 </div>
 
-                <hr class="my-4">
+                <hr class="my-4" style="border-color:#eef0f2;">
 
                 <!-- 파일 업로드 -->
-                <h6 class="fw-bold mb-3"><i class="bi bi-paperclip me-1"></i>첨부 파일</h6>
+                <div class="dtl-section-label"><i class="bi bi-paperclip"></i>첨부 파일</div>
                 <div class="mb-4">
-                    <label class="form-label fw-bold">문서 파일</label>
+                    <label class="dtl-form-label">문서 파일</label>
                     {% if doc and doc.file %}
                     <div class="mb-2">
                         <span class="text-muted">현재 파일:</span>
@@ -116,17 +114,17 @@
                     </div>
                     <div class="form-text mb-1">새 파일을 선택하면 기존 파일이 교체됩니다.</div>
                     {% endif %}
-                    <input type="file" name="file" class="form-control"
+                    <input type="file" name="file" class="form-control dtl-form-control"
                            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.hwp">
                     <div class="form-text">PDF, Word, Excel, PowerPoint, 한글 파일 업로드 가능</div>
                 </div>
 
                 <!-- 버튼 -->
                 <div class="d-flex justify-content-between mt-4 pt-3 border-top">
-                    <a href="{% url 'qms:qdoc_list' %}" class="btn btn-outline-secondary">
+                    <a href="{% url 'qms:qdoc_list' %}" class="dtl-btn-outline">
                         <i class="bi bi-arrow-left me-1"></i>취소
                     </a>
-                    <button type="submit" class="btn btn-primary btn-lg px-5">
+                    <button type="submit" class="dtl-btn-dark px-5">
                         <i class="bi bi-check-lg me-1"></i>{% if mode == 'edit' %}수정{% else %}등록{% endif %}
                     </button>
                 </div>

@@ -3,32 +3,32 @@
 {% block title %}시정조치 {% if mode == 'edit' %}수정{% else %}요청{% endif %}{% endblock %}
 
 {% block qms_content %}
-<div class="container-fluid p-0" style="max-width: 900px;">
+<div class="dtl-wrap" style="max-width: 900px;">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="fw-bold">시정조치 {% if mode == 'edit' %}수정{% else %}요청{% endif %}</h3>
-        <a href="{% url 'qms:capa_list' %}" class="btn btn-outline-secondary">
+        <span class="dtl-title">시정조치 {% if mode == 'edit' %}수정{% else %}요청{% endif %}</span>
+        <a href="{% url 'qms:capa_list' %}" class="dtl-btn-outline btn-sm">
             <i class="bi bi-arrow-left me-1"></i>목록으로
         </a>
     </div>
 
-    <div class="card shadow-sm">
-        <div class="card-body">
+    <div class="dtl-card mb-0">
+        <div class="dtl-card-body">
             <form method="post">
                 {% csrf_token %}
 
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <label class="form-label fw-bold">CAPA 유형 <span class="text-danger">*</span></label>
-                        <select name="capa_type" class="form-select" required>
+                        <label class="dtl-form-label">CAPA 유형 <span class="text-danger">*</span></label>
+                        <select name="capa_type" class="form-select dtl-form-control" required>
                             {% for value, label in type_choices %}
                             <option value="{{ value }}" {% if capa and capa.capa_type == value %}selected{% endif %}>{{ label }}</option>
                             {% endfor %}
                         </select>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label fw-bold">대상 협력사 <span class="text-danger">*</span></label>
+                        <label class="dtl-form-label">대상 협력사 <span class="text-danger">*</span></label>
                         <div class="input-group">
-                            <input type="text" id="vendorName" class="form-control" placeholder="협력사 검색..." readonly required
+                            <input type="text" id="vendorName" class="form-control dtl-form-control" placeholder="협력사 검색..." readonly required
                                    value="{% if capa and capa.vendor %}{{ capa.vendor.name }}{% endif %}">
                             <input type="hidden" name="vendor" id="vendorId" required
                                    value="{% if capa and capa.vendor %}{{ capa.vendor_id }}{% endif %}">
@@ -42,46 +42,46 @@
                     </div>
                 </div>
 
-                <hr class="my-4">
+                <hr class="my-4" style="border-color:#eef0f2;">
 
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <label class="form-label fw-bold">품번 <span class="text-danger">*</span></label>
-                        <input type="text" name="part_no" class="form-control" required
+                        <label class="dtl-form-label">품번 <span class="text-danger">*</span></label>
+                        <input type="text" name="part_no" class="form-control dtl-form-control" required
                                value="{% if capa %}{{ capa.part_no }}{% endif %}">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label fw-bold">품명 <span class="text-danger">*</span></label>
-                        <input type="text" name="part_name" class="form-control" required
+                        <label class="dtl-form-label">품명 <span class="text-danger">*</span></label>
+                        <input type="text" name="part_name" class="form-control dtl-form-control" required
                                value="{% if capa %}{{ capa.part_name }}{% endif %}">
                     </div>
                 </div>
 
-                <hr class="my-4">
+                <hr class="my-4" style="border-color:#eef0f2;">
 
                 <div class="row g-3">
                     <div class="col-12">
-                        <label class="form-label fw-bold">문제점 <span class="text-danger">*</span></label>
-                        <input type="text" name="issue_title" class="form-control" required placeholder="발생한 문제를 간략히 기술"
+                        <label class="dtl-form-label">문제점 <span class="text-danger">*</span></label>
+                        <input type="text" name="issue_title" class="form-control dtl-form-control" required placeholder="발생한 문제를 간략히 기술"
                                value="{% if capa %}{{ capa.issue_title }}{% endif %}">
                     </div>
                     <div class="col-12">
-                        <label class="form-label fw-bold">문제 상세 <span class="text-danger">*</span></label>
-                        <textarea name="issue_detail" class="form-control" rows="4" required placeholder="문제 내용을 상세히 기술하세요">{% if capa %}{{ capa.issue_detail }}{% endif %}</textarea>
+                        <label class="dtl-form-label">문제 상세 <span class="text-danger">*</span></label>
+                        <textarea name="issue_detail" class="form-control dtl-form-control" rows="4" required placeholder="문제 내용을 상세히 기술하세요">{% if capa %}{{ capa.issue_detail }}{% endif %}</textarea>
                     </div>
                 </div>
 
-                <hr class="my-4">
+                <hr class="my-4" style="border-color:#eef0f2;">
 
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <label class="form-label fw-bold">요청일 <span class="text-danger">*</span></label>
-                        <input type="date" name="request_date" class="form-control" required
+                        <label class="dtl-form-label">요청일 <span class="text-danger">*</span></label>
+                        <input type="date" name="request_date" class="form-control dtl-form-control" required
                                value="{% if capa %}{{ capa.request_date|date:'Y-m-d' }}{% endif %}">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label fw-bold">회신기한 <span class="text-danger">*</span></label>
-                        <input type="date" name="due_date" class="form-control" required
+                        <label class="dtl-form-label">회신기한 <span class="text-danger">*</span></label>
+                        <input type="date" name="due_date" class="form-control dtl-form-control" required
                                value="{% if capa %}{{ capa.due_date|date:'Y-m-d' }}{% endif %}">
                         <div class="form-text">협력사가 시정조치 내용을 회신해야 하는 기한</div>
                     </div>
@@ -89,7 +89,7 @@
 
                 <div class="d-flex justify-content-end gap-2 mt-4">
                     <a href="{% url 'qms:capa_list' %}" class="btn btn-secondary">취소</a>
-                    <button type="submit" class="btn btn-warning"><i class="bi bi-check-lg me-1"></i>{% if mode == 'edit' %}수정{% else %}요청{% endif %}</button>
+                    <button type="submit" class="dtl-btn-dark"><i class="bi bi-check-lg me-1"></i>{% if mode == 'edit' %}수정{% else %}요청{% endif %}</button>
                 </div>
             </form>
         </div>
@@ -100,9 +100,9 @@
 <div class="modal fade" id="vendorSearchModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header bg-info text-white">
+            <div class="modal-header">
                 <h5 class="modal-title fw-bold"><i class="bi bi-search me-2"></i>협력사 검색</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="input-group mb-3">

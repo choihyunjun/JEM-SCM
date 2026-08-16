@@ -3,28 +3,30 @@
 {% block title %}협력사 평가 생성{% endblock %}
 
 {% block qms_content %}
-<div class="container-fluid p-0" style="max-width: 900px;">
+<div class="dtl-wrap" style="max-width: 900px;">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="fw-bold">협력사 평가 생성/갱신</h3>
-        <a href="{% url 'qms:rating_list' %}" class="btn btn-outline-secondary">
+        <span class="dtl-title">협력사 평가 생성/갱신</span>
+        <a href="{% url 'qms:rating_list' %}" class="dtl-btn-outline btn-sm">
             <i class="bi bi-arrow-left me-1"></i>목록으로
         </a>
     </div>
 
-    <div class="card shadow-sm">
-        <div class="card-body">
-            <div class="alert alert-info">
-                <i class="bi bi-info-circle me-2"></i>
-                협력사와 평가 기간을 선택하면 해당 기간의 수입검사 결과, 납품 실적, 클레임 데이터를 자동으로 집계하여 평가합니다.
+    <div class="dtl-card mb-0">
+        <div class="dtl-card-body">
+            <div class="dtl-alert-warn" style="background:#eef2ff; border-color:#e0e7ff;">
+                <div style="color:#4338ca;">
+                    <i class="bi bi-info-circle me-2"></i>
+                    협력사와 평가 기간을 선택하면 해당 기간의 수입검사 결과, 납품 실적, 클레임 데이터를 자동으로 집계하여 평가합니다.
+                </div>
             </div>
 
             <form method="post">
                 {% csrf_token %}
 
                 <div class="mb-4">
-                    <label class="form-label fw-bold">협력사 <span class="text-danger">*</span></label>
+                    <label class="dtl-form-label">협력사 <span class="text-danger">*</span></label>
                     <div class="input-group">
-                        <input type="text" id="vendorName" class="form-control" placeholder="협력사 검색..." readonly required>
+                        <input type="text" id="vendorName" class="form-control dtl-form-control" placeholder="협력사 검색..." readonly required>
                         <input type="hidden" name="vendor" id="vendorId" required>
                         <button type="button" class="btn btn-outline-secondary" onclick="openVendorSearchModal()">
                             <i class="bi bi-search"></i>
@@ -37,16 +39,16 @@
 
                 <div class="row g-3 mb-4">
                     <div class="col-6">
-                        <label class="form-label fw-bold">연도 <span class="text-danger">*</span></label>
-                        <select name="year" class="form-select" required>
+                        <label class="dtl-form-label">연도 <span class="text-danger">*</span></label>
+                        <select name="year" class="form-select dtl-form-control" required>
                             {% for y in years %}
                             <option value="{{ y }}" {% if y == current_year %}selected{% endif %}>{{ y }}년</option>
                             {% endfor %}
                         </select>
                     </div>
                     <div class="col-6">
-                        <label class="form-label fw-bold">월 <span class="text-danger">*</span></label>
-                        <select name="month" class="form-select" required>
+                        <label class="dtl-form-label">월 <span class="text-danger">*</span></label>
+                        <select name="month" class="form-select dtl-form-control" required>
                             {% for m in months %}
                             <option value="{{ m }}" {% if m == current_month %}selected{% endif %}>{{ m }}월</option>
                             {% endfor %}
@@ -54,14 +56,16 @@
                     </div>
                 </div>
 
-                <div class="alert alert-warning">
-                    <i class="bi bi-exclamation-triangle me-2"></i>
-                    해당 기간에 이미 평가가 존재하면 데이터를 갱신합니다.
+                <div class="dtl-alert-warn">
+                    <div>
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        해당 기간에 이미 평가가 존재하면 데이터를 갱신합니다.
+                    </div>
                 </div>
 
                 <div class="d-flex justify-content-end gap-2">
                     <a href="{% url 'qms:rating_list' %}" class="btn btn-secondary">취소</a>
-                    <button type="submit" class="btn btn-success"><i class="bi bi-calculator me-1"></i>평가 생성/갱신</button>
+                    <button type="submit" class="dtl-btn-dark"><i class="bi bi-calculator me-1"></i>평가 생성/갱신</button>
                 </div>
             </form>
         </div>
@@ -72,9 +76,9 @@
 <div class="modal fade" id="vendorSearchModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header bg-info text-white">
+            <div class="modal-header">
                 <h5 class="modal-title fw-bold"><i class="bi bi-search me-2"></i>협력사 검색</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="input-group mb-3">

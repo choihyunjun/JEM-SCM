@@ -3,23 +3,23 @@
 {% block title %}부적합 {% if mode == 'edit' %}수정{% else %}등록{% endif %}{% endblock %}
 
 {% block qms_content %}
-<div class="container-fluid p-0" style="max-width: 900px;">
+<div class="dtl-wrap" style="max-width: 900px;">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="fw-bold">부적합 {% if mode == 'edit' %}수정{% else %}등록{% endif %}</h3>
-        <a href="{% url 'qms:nc_list' %}" class="btn btn-outline-secondary">
+        <span class="dtl-title">부적합 {% if mode == 'edit' %}수정{% else %}등록{% endif %}</span>
+        <a href="{% url 'qms:nc_list' %}" class="dtl-btn-outline btn-sm">
             <i class="bi bi-arrow-left me-1"></i>목록으로
         </a>
     </div>
 
-    <div class="card shadow-sm">
-        <div class="card-body">
+    <div class="dtl-card mb-0">
+        <div class="dtl-card-body">
             <form method="post" enctype="multipart/form-data">
                 {% csrf_token %}
 
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <label class="form-label fw-bold">발생구분 <span class="text-danger">*</span></label>
-                        <select name="source" class="form-select" required>
+                        <label class="dtl-form-label">발생구분 <span class="text-danger">*</span></label>
+                        <select name="source" class="form-select dtl-form-control" required>
                             <option value="">선택</option>
                             {% for value, label in source_choices %}
                             <option value="{{ value }}" {% if nc and nc.source == value %}selected{% endif %}>{{ label }}</option>
@@ -27,30 +27,30 @@
                         </select>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label fw-bold">발생일 <span class="text-danger">*</span></label>
-                        <input type="date" name="occurred_date" class="form-control" required value="{% if nc %}{{ nc.occurred_date|date:'Y-m-d' }}{% endif %}">
+                        <label class="dtl-form-label">발생일 <span class="text-danger">*</span></label>
+                        <input type="date" name="occurred_date" class="form-control dtl-form-control" required value="{% if nc %}{{ nc.occurred_date|date:'Y-m-d' }}{% endif %}">
                     </div>
                 </div>
 
-                <hr class="my-4">
+                <hr class="my-4" style="border-color:#eef0f2;">
 
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <label class="form-label fw-bold">품번 <span class="text-danger">*</span></label>
-                        <input type="text" name="part_no" class="form-control" required value="{% if nc %}{{ nc.part_no }}{% endif %}">
+                        <label class="dtl-form-label">품번 <span class="text-danger">*</span></label>
+                        <input type="text" name="part_no" class="form-control dtl-form-control" required value="{% if nc %}{{ nc.part_no }}{% endif %}">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label fw-bold">품명 <span class="text-danger">*</span></label>
-                        <input type="text" name="part_name" class="form-control" required value="{% if nc %}{{ nc.part_name }}{% endif %}">
+                        <label class="dtl-form-label">품명 <span class="text-danger">*</span></label>
+                        <input type="text" name="part_name" class="form-control dtl-form-control" required value="{% if nc %}{{ nc.part_name }}{% endif %}">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label fw-bold">LOT번호</label>
-                        <input type="text" name="lot_no" class="form-control" value="{% if nc %}{{ nc.lot_no }}{% endif %}">
+                        <label class="dtl-form-label">LOT번호</label>
+                        <input type="text" name="lot_no" class="form-control dtl-form-control" value="{% if nc %}{{ nc.lot_no }}{% endif %}">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label fw-bold">협력사</label>
+                        <label class="dtl-form-label">협력사</label>
                         <div class="input-group">
-                            <input type="text" id="vendorName" class="form-control" placeholder="협력사 검색 (수입검사 불량 시)" readonly value="{% if nc and nc.vendor %}{{ nc.vendor.name }}{% endif %}">
+                            <input type="text" id="vendorName" class="form-control dtl-form-control" placeholder="협력사 검색 (수입검사 불량 시)" readonly value="{% if nc and nc.vendor %}{{ nc.vendor.name }}{% endif %}">
                             <input type="hidden" name="vendor" id="vendorId" value="{% if nc and nc.vendor %}{{ nc.vendor_id }}{% endif %}">
                             <button type="button" class="btn btn-outline-secondary" onclick="openVendorSearchModal()">
                                 <i class="bi bi-search"></i>
@@ -62,24 +62,24 @@
                     </div>
                 </div>
 
-                <hr class="my-4">
+                <hr class="my-4" style="border-color:#eef0f2;">
 
                 <div class="row g-3">
                     <div class="col-md-4">
-                        <label class="form-label fw-bold">불량수량 <span class="text-danger">*</span></label>
-                        <input type="number" name="defect_qty" class="form-control" required min="1" value="{% if nc %}{{ nc.defect_qty }}{% endif %}">
+                        <label class="dtl-form-label">불량수량 <span class="text-danger">*</span></label>
+                        <input type="number" name="defect_qty" class="form-control dtl-form-control" required min="1" value="{% if nc %}{{ nc.defect_qty }}{% endif %}">
                     </div>
                     <div class="col-md-8">
-                        <label class="form-label fw-bold">불량유형 <span class="text-danger">*</span></label>
-                        <input type="text" name="defect_type" class="form-control" required placeholder="예: 치수불량, 외관불량, 기능불량" value="{% if nc %}{{ nc.defect_type }}{% endif %}">
+                        <label class="dtl-form-label">불량유형 <span class="text-danger">*</span></label>
+                        <input type="text" name="defect_type" class="form-control dtl-form-control" required placeholder="예: 치수불량, 외관불량, 기능불량" value="{% if nc %}{{ nc.defect_type }}{% endif %}">
                     </div>
                     <div class="col-12">
-                        <label class="form-label fw-bold">불량 상세 <span class="text-danger">*</span></label>
-                        <textarea name="defect_detail" class="form-control" rows="4" required placeholder="불량 내용을 상세히 기술하세요">{% if nc %}{{ nc.defect_detail }}{% endif %}</textarea>
+                        <label class="dtl-form-label">불량 상세 <span class="text-danger">*</span></label>
+                        <textarea name="defect_detail" class="form-control dtl-form-control" rows="4" required placeholder="불량 내용을 상세히 기술하세요">{% if nc %}{{ nc.defect_detail }}{% endif %}</textarea>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label fw-bold">불량 사진</label>
-                        <input type="file" name="photo" class="form-control" accept="image/*">
+                        <label class="dtl-form-label">불량 사진</label>
+                        <input type="file" name="photo" class="form-control dtl-form-control" accept="image/*">
                         {% if nc and nc.photo %}
                         <div class="mt-2">
                             <small class="text-muted">
@@ -92,7 +92,7 @@
 
                 <div class="d-flex justify-content-end gap-2 mt-4">
                     <a href="{% url 'qms:nc_list' %}" class="btn btn-secondary">취소</a>
-                    <button type="submit" class="btn btn-danger"><i class="bi bi-check-lg me-1"></i>{% if mode == 'edit' %}수정{% else %}등록{% endif %}</button>
+                    <button type="submit" class="dtl-btn-dark"><i class="bi bi-check-lg me-1"></i>{% if mode == 'edit' %}수정{% else %}등록{% endif %}</button>
                 </div>
             </form>
         </div>
@@ -103,9 +103,9 @@
 <div class="modal fade" id="vendorSearchModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header bg-info text-white">
+            <div class="modal-header">
                 <h5 class="modal-title fw-bold"><i class="bi bi-search me-2"></i>협력사 검색</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="input-group mb-3">
