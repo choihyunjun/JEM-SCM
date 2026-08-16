@@ -4,25 +4,25 @@
 {% block material_content %}
 <div class="container-fluid p-0">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="fw-bold">WMS 대시보드</h3>
+        <span class="dtl-title">WMS 대시보드</span>
         <div>
-            <span class="badge bg-light text-dark me-2"><i class="bi bi-calendar me-1"></i>{{ today }}</span>
-            <span class="badge bg-success">WMS v2.0</span>
+            <span class="dtl-pill slate me-2"><i class="bi bi-calendar me-1"></i>{{ today }}</span>
+            <span class="dtl-pill green">WMS v2.0</span>
         </div>
     </div>
 
     <!-- 1행: 핵심 KPI 카드 -->
-    <div class="row g-3 mb-4">
+    <div class="row g-3 mb-3">
         <div class="col-md-3 col-sm-6">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="dtl-card h-100 mb-0">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">총 재고 품목</div>
-                            <div class="h3 fw-bold mb-0 text-success">{{ total_parts|intcomma }}</div>
+                            <div class="h3 fw-bold mb-0" style="color:#047857;">{{ total_parts|intcomma }}</div>
                         </div>
-                        <div class="bg-success bg-opacity-10 p-3 rounded">
-                            <i class="bi bi-box-seam text-success fs-4"></i>
+                        <div class="p-3 rounded" style="background:#ecfdf5;">
+                            <i class="bi bi-box-seam fs-4" style="color:#047857;"></i>
                         </div>
                     </div>
                     <div class="small text-muted mt-2">총 {{ total_qty|intcomma }} EA</div>
@@ -31,15 +31,15 @@
         </div>
 
         <div class="col-md-3 col-sm-6">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="dtl-card h-100 mb-0">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">금일 입고</div>
-                            <div class="h3 fw-bold mb-0 text-primary">{{ today_in_count }}</div>
+                            <div class="h3 fw-bold mb-0" style="color:#4338ca;">{{ today_in_count }}</div>
                         </div>
-                        <div class="bg-primary bg-opacity-10 p-3 rounded">
-                            <i class="bi bi-arrow-down-square text-primary fs-4"></i>
+                        <div class="p-3 rounded" style="background:#eef2ff;">
+                            <i class="bi bi-arrow-down-square fs-4" style="color:#4338ca;"></i>
                         </div>
                     </div>
                     <div class="small text-muted mt-2">{{ today_in_qty|intcomma }} EA</div>
@@ -48,15 +48,15 @@
         </div>
 
         <div class="col-md-3 col-sm-6">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="dtl-card h-100 mb-0">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">금일 출고</div>
-                            <div class="h3 fw-bold mb-0 text-danger">{{ today_out_count }}</div>
+                            <div class="h3 fw-bold mb-0" style="color:#b91c1c;">{{ today_out_count }}</div>
                         </div>
-                        <div class="bg-danger bg-opacity-10 p-3 rounded">
-                            <i class="bi bi-arrow-up-square text-danger fs-4"></i>
+                        <div class="p-3 rounded" style="background:#fef2f2;">
+                            <i class="bi bi-arrow-up-square fs-4" style="color:#b91c1c;"></i>
                         </div>
                     </div>
                     <div class="small text-muted mt-2">{{ today_out_qty|intcomma }} EA</div>
@@ -65,15 +65,15 @@
         </div>
 
         <div class="col-md-3 col-sm-6">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="dtl-card h-100 mb-0">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">FIFO 경고</div>
-                            <div class="h3 fw-bold mb-0 {% if fifo_warning_count > 0 %}text-warning{% else %}text-secondary{% endif %}">{{ fifo_warning_count }}</div>
+                            <div class="h3 fw-bold mb-0" style="color:{% if fifo_warning_count > 0 %}#b45309{% else %}#6b7280{% endif %};">{{ fifo_warning_count }}</div>
                         </div>
-                        <div class="{% if fifo_warning_count > 0 %}bg-warning{% else %}bg-secondary{% endif %} bg-opacity-10 p-3 rounded">
-                            <i class="bi bi-exclamation-triangle {% if fifo_warning_count > 0 %}text-warning{% else %}text-secondary{% endif %} fs-4"></i>
+                        <div class="p-3 rounded" style="background:{% if fifo_warning_count > 0 %}#fffbeb{% else %}#f3f4f6{% endif %};">
+                            <i class="bi bi-exclamation-triangle fs-4" style="color:{% if fifo_warning_count > 0 %}#b45309{% else %}#6b7280{% endif %};"></i>
                         </div>
                     </div>
                     <div class="small text-muted mt-2">30일 이상 경과 LOT</div>
@@ -83,17 +83,17 @@
     </div>
 
     <!-- 2행: 월간 통계, BOM, 현품표 -->
-    <div class="row g-3 mb-4">
+    <div class="row g-3 mb-3">
         <div class="col-md-3 col-sm-6">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="dtl-card h-100 mb-0">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">이번달 입고</div>
-                            <div class="h3 fw-bold mb-0 text-info">{{ month_in_count }}</div>
+                            <div class="h3 fw-bold mb-0" style="color:#0e7490;">{{ month_in_count }}</div>
                         </div>
-                        <div class="bg-info bg-opacity-10 p-3 rounded">
-                            <i class="bi bi-calendar-check text-info fs-4"></i>
+                        <div class="p-3 rounded" style="background:#ecfeff;">
+                            <i class="bi bi-calendar-check fs-4" style="color:#0e7490;"></i>
                         </div>
                     </div>
                     <div class="small text-muted mt-2">{{ month_in_qty|intcomma }} EA</div>
@@ -102,15 +102,15 @@
         </div>
 
         <div class="col-md-3 col-sm-6">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="dtl-card h-100 mb-0">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">이번달 출고</div>
-                            <div class="h3 fw-bold mb-0 text-warning">{{ month_out_count }}</div>
+                            <div class="h3 fw-bold mb-0" style="color:#b45309;">{{ month_out_count }}</div>
                         </div>
-                        <div class="bg-warning bg-opacity-10 p-3 rounded">
-                            <i class="bi bi-calendar-x text-warning fs-4"></i>
+                        <div class="p-3 rounded" style="background:#fffbeb;">
+                            <i class="bi bi-calendar-x fs-4" style="color:#b45309;"></i>
                         </div>
                     </div>
                     <div class="small text-muted mt-2">{{ month_out_qty|intcomma }} EA</div>
@@ -119,15 +119,15 @@
         </div>
 
         <div class="col-md-3 col-sm-6">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="dtl-card h-100 mb-0">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">BOM 등록</div>
-                            <div class="h3 fw-bold mb-0 text-secondary">{{ bom_stats.product_count }}</div>
+                            <div class="h3 fw-bold mb-0" style="color:#4b5563;">{{ bom_stats.product_count }}</div>
                         </div>
-                        <div class="bg-secondary bg-opacity-10 p-3 rounded">
-                            <i class="bi bi-diagram-3 text-secondary fs-4"></i>
+                        <div class="p-3 rounded" style="background:#f3f4f6;">
+                            <i class="bi bi-diagram-3 fs-4" style="color:#4b5563;"></i>
                         </div>
                     </div>
                     <div class="small text-muted mt-2">구성품목: {{ bom_stats.bom_item_count }}개</div>
@@ -136,15 +136,15 @@
         </div>
 
         <div class="col-md-3 col-sm-6">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="dtl-card h-100 mb-0">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">현품표 발행</div>
-                            <div class="h3 fw-bold mb-0 text-info">{{ tag_stats.today_printed }}</div>
+                            <div class="h3 fw-bold mb-0" style="color:#0e7490;">{{ tag_stats.today_printed }}</div>
                         </div>
-                        <div class="bg-info bg-opacity-10 p-3 rounded">
-                            <i class="bi bi-qr-code text-info fs-4"></i>
+                        <div class="p-3 rounded" style="background:#ecfeff;">
+                            <i class="bi bi-qr-code fs-4" style="color:#0e7490;"></i>
                         </div>
                     </div>
                     <div class="small text-muted mt-2">미사용: {{ tag_stats.pending }}개</div>
@@ -157,14 +157,14 @@
     <div class="row g-4 mb-4">
         <!-- 좌측: 금일 입고 이력 -->
         <div class="col-md-6">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-white fw-bold py-3 border-bottom d-flex justify-content-between align-items-center">
-                    <span><i class="bi bi-arrow-down-square me-2 text-primary"></i>금일 입고 이력 <small class="text-muted fw-normal ms-2">({{ recent_inbound|length }}건)</small></span>
-                    <a href="{% url 'material:incoming_history' %}" class="btn btn-sm btn-outline-secondary">전체보기</a>
+            <div class="dtl-card h-100 mb-0">
+                <div class="dtl-card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-arrow-down-square"></i>금일 입고 이력 <small class="text-muted fw-normal ms-2">({{ recent_inbound|length }}건)</small></span>
+                    <a href="{% url 'material:incoming_history' %}" class="dtl-btn-outline btn-sm">전체보기</a>
                 </div>
                 <div class="card-body p-0" style="max-height: 560px; overflow-y: auto;">
-                    <table class="table table-hover m-0" style="font-size: 0.85rem;" id="tbl-inbound">
-                        <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
+                    <table class="table table-hover m-0 dtl-table" style="font-size: 0.85rem;" id="tbl-inbound">
+                        <thead style="position: sticky; top: 0; z-index: 1;">
                             <tr>
                                 <th>일시</th>
                                 <th>구분</th>
@@ -177,7 +177,7 @@
                             {% for tx in recent_inbound %}
                             <tr>
                                 <td><small class="text-muted">{{ tx.date|date:"H:i" }}</small></td>
-                                <td><span class="badge bg-primary">{{ tx.get_transaction_type_display }}</span></td>
+                                <td><span class="dtl-pill blue">{{ tx.get_transaction_type_display }}</span></td>
                                 <td><small>{{ tx.part.part_no }}</small></td>
                                 <td>
                                     {% if tx.warehouse_to %}
@@ -197,14 +197,14 @@
 
         <!-- 우측: 금일 출고 이력 -->
         <div class="col-md-6">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-white fw-bold py-3 border-bottom d-flex justify-content-between align-items-center">
-                    <span><i class="bi bi-arrow-up-square me-2 text-danger"></i>금일 출고 이력 <small class="text-muted fw-normal ms-2">({{ recent_outbound|length }}건)</small></span>
-                    <a href="{% url 'material:outgoing_history' %}" class="btn btn-sm btn-outline-secondary">전체보기</a>
+            <div class="dtl-card h-100 mb-0">
+                <div class="dtl-card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-arrow-up-square"></i>금일 출고 이력 <small class="text-muted fw-normal ms-2">({{ recent_outbound|length }}건)</small></span>
+                    <a href="{% url 'material:outgoing_history' %}" class="dtl-btn-outline btn-sm">전체보기</a>
                 </div>
                 <div class="card-body p-0" style="max-height: 560px; overflow-y: auto;">
-                    <table class="table table-hover m-0" style="font-size: 0.85rem;" id="tbl-outbound">
-                        <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
+                    <table class="table table-hover m-0 dtl-table" style="font-size: 0.85rem;" id="tbl-outbound">
+                        <thead style="position: sticky; top: 0; z-index: 1;">
                             <tr>
                                 <th>일시</th>
                                 <th>구분</th>
@@ -218,7 +218,7 @@
                             {% for tx in recent_outbound %}
                             <tr>
                                 <td><small class="text-muted">{{ tx.date|date:"H:i" }}</small></td>
-                                <td><span class="badge bg-danger">{{ tx.get_transaction_type_display }}</span></td>
+                                <td><span class="dtl-pill red">{{ tx.get_transaction_type_display }}</span></td>
                                 <td><small>{{ tx.part.part_no }}</small></td>
                                 <td>
                                     {% if tx.warehouse_from %}
@@ -242,14 +242,14 @@
     {% if fifo_warnings %}
     <div class="row mb-4">
         <div class="col-12">
-            <div class="card border-0 shadow-sm">
-                <div class="card-header bg-white fw-bold py-3 border-bottom d-flex justify-content-between align-items-center">
-                    <span><i class="bi bi-exclamation-triangle me-2 text-warning"></i>FIFO 경고 (30일+ 경과 LOT)</span>
-                    <span class="badge bg-warning text-dark">{{ fifo_warnings|length }}건</span>
+            <div class="dtl-card mb-0">
+                <div class="dtl-card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-exclamation-triangle"></i>FIFO 경고 (30일+ 경과 LOT)</span>
+                    <span class="dtl-pill amber">{{ fifo_warnings|length }}건</span>
                 </div>
                 <div class="card-body p-0">
-                    <table class="table table-hover m-0" style="font-size: 0.88rem;">
-                        <thead class="table-light">
+                    <table class="table table-hover m-0 dtl-table" style="font-size: 0.88rem;">
+                        <thead>
                             <tr>
                                 <th>품번</th>
                                 <th>LOT</th>
@@ -261,7 +261,7 @@
                             {% for stock in fifo_warnings %}
                             <tr>
                                 <td>{{ stock.part.part_no }}</td>
-                                <td><span class="badge bg-warning text-dark">{{ stock.lot_no }}</span></td>
+                                <td><span class="dtl-pill amber">{{ stock.lot_no }}</span></td>
                                 <td>{{ stock.warehouse.name|default:"-" }}</td>
                                 <td class="text-end fw-bold">{{ stock.quantity|intcomma }}</td>
                             </tr>
@@ -277,44 +277,42 @@
     <!-- 빠른 바로가기 -->
     <div class="row mb-4">
         <div class="col-12">
-            <div class="card border-0 shadow-sm">
-                <div class="card-header bg-white fw-bold py-3 border-bottom">
-                    <i class="bi bi-lightning me-2 text-primary"></i>빠른 바로가기
-                </div>
+            <div class="dtl-card mb-0">
+                <div class="dtl-card-header"><i class="bi bi-lightning"></i>빠른 바로가기</div>
                 <div class="card-body">
                     <div class="row g-3">
                         <div class="col-md-2 col-sm-4 col-6">
-                            <a href="{% url 'material:stock_list' %}" class="btn btn-outline-success w-100 py-3">
+                            <a href="{% url 'material:stock_list' %}" class="dtl-btn-outline w-100 py-3 d-block text-center">
                                 <i class="bi bi-box-seam d-block fs-4 mb-1"></i>
                                 <small>재고현황</small>
                             </a>
                         </div>
                         <div class="col-md-2 col-sm-4 col-6">
-                            <a href="{% url 'material:manual_incoming' %}" class="btn btn-outline-primary w-100 py-3">
+                            <a href="{% url 'material:manual_incoming' %}" class="dtl-btn-outline w-100 py-3 d-block text-center">
                                 <i class="bi bi-plus-circle d-block fs-4 mb-1"></i>
                                 <small>입고처리</small>
                             </a>
                         </div>
                         <div class="col-md-2 col-sm-4 col-6">
-                            <a href="{% url 'material:manual_outgoing' %}" class="btn btn-outline-danger w-100 py-3">
+                            <a href="{% url 'material:manual_outgoing' %}" class="dtl-btn-outline w-100 py-3 d-block text-center">
                                 <i class="bi bi-dash-circle d-block fs-4 mb-1"></i>
                                 <small>출고처리</small>
                             </a>
                         </div>
                         <div class="col-md-2 col-sm-4 col-6">
-                            <a href="{% url 'material:stock_move' %}" class="btn btn-outline-info w-100 py-3">
+                            <a href="{% url 'material:stock_move' %}" class="dtl-btn-outline w-100 py-3 d-block text-center">
                                 <i class="bi bi-arrow-left-right d-block fs-4 mb-1"></i>
                                 <small>재고이동</small>
                             </a>
                         </div>
                         <div class="col-md-2 col-sm-4 col-6">
-                            <a href="{% url 'material:transaction_history' %}" class="btn btn-outline-dark w-100 py-3">
+                            <a href="{% url 'material:transaction_history' %}" class="dtl-btn-outline w-100 py-3 d-block text-center">
                                 <i class="bi bi-clock-history d-block fs-4 mb-1"></i>
                                 <small>수불이력</small>
                             </a>
                         </div>
                         <div class="col-md-2 col-sm-4 col-6">
-                            <a href="{% url 'material:process_tag_form' %}" class="btn btn-outline-secondary w-100 py-3">
+                            <a href="{% url 'material:process_tag_form' %}" class="dtl-btn-outline w-100 py-3 d-block text-center">
                                 <i class="bi bi-qr-code d-block fs-4 mb-1"></i>
                                 <small>현품표</small>
                             </a>
@@ -351,7 +349,7 @@
             var time = r.date ? r.date.split(' ')[1] || r.date : '';
             return '<tr>'
                 +'<td><small class="text-muted">'+time+'</small></td>'
-                +'<td><span class="badge bg-primary">'+r.type+'</span></td>'
+                +'<td><span class="dtl-pill blue">'+r.type+'</span></td>'
                 +'<td><small>'+r.part_no+'</small></td>'
                 +'<td><small>'+(r.wh_to||'-')+'</small></td>'
                 +'<td class="text-end"><span class="text-primary fw-bold">+'+numberWithCommas(r.qty)+'</span></td>'
@@ -365,7 +363,7 @@
             var time = r.date ? r.date.split(' ')[1] || r.date : '';
             return '<tr>'
                 +'<td><small class="text-muted">'+time+'</small></td>'
-                +'<td><span class="badge bg-danger">'+r.type+'</span></td>'
+                +'<td><span class="dtl-pill red">'+r.type+'</span></td>'
                 +'<td><small>'+r.part_no+'</small></td>'
                 +'<td><small>'+(r.wh_from||'-')+'</small></td>'
                 +'<td><small>'+(r.vendor||'-')+'</small></td>'
@@ -401,7 +399,7 @@
             var tbOut = document.querySelector('#tbl-outbound tbody');
             if(tbOut) tbOut.innerHTML = buildOutboundRows(d.outbound);
             // 건수 갱신
-            var headers = document.querySelectorAll('.card-header small.text-muted.fw-normal');
+            var headers = document.querySelectorAll('.dtl-card-header small.text-muted.fw-normal');
             if(headers.length >= 2){
                 headers[0].textContent = '('+d.inbound.length+'건)';
                 headers[1].textContent = '('+d.outbound.length+'건)';
