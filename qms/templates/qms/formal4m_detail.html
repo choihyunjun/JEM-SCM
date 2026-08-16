@@ -15,7 +15,7 @@
             </nav>
             <h3 class="fw-bold">정식 4M</h3>
             <div class="mt-2">
-                <span class="badge {% if formal.template_type == 'FULL' %}bg-primary{% else %}bg-secondary{% endif %}">
+                <span class="dtl-pill {% if formal.template_type == 'FULL' %}blue{% else %}slate{% endif %}">
                     {{ formal.get_template_type_display }} 양식
                 </span>
                 {# 최종 승인 대기 또는 완료가 아닐 때만 전환 버튼 노출 #}
@@ -127,7 +127,7 @@
             <div class="p-4 border rounded-3 bg-white shadow-sm">
                 <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
                     <h5 class="fw-bold mb-0"><i class="bi bi-vector-pen me-2"></i>정식 4M 결재 승인</h5>
-                    <span class="badge {% if formal.approval_status == 'APPROVED' %}bg-success{% elif formal.approval_status == 'REJECTED' %}bg-danger{% else %}bg-warning text-dark{% endif %} fs-6 px-3 shadow-sm">
+                    <span class="dtl-pill {% if formal.approval_status == 'APPROVED' %}green{% elif formal.approval_status == 'REJECTED' %}red{% else %}amber{% endif %}" style="font-size:0.85rem; padding:0.4rem 1rem;">
                         {{ formal.get_approval_status_display }}
                     </span>
                 </div>
@@ -164,7 +164,7 @@
                             <div class="bg-light py-1 small border-bottom text-muted">검토1</div>
                             <div class="py-3 px-2">
                                 {% if formal.approval_is_reviewed %}
-                                    <div class="text-primary fw-bold border border-primary d-inline-block rounded-circle stamp">{{ formal.approval_reviewer_user.last_name }}</div>
+                                    <div class="fw-bold border d-inline-block rounded-circle stamp" style="color:#4338ca; border-color:#4338ca !important;">{{ formal.approval_reviewer_user.last_name }}</div>
                                     <div class="small mt-1 text-muted">{{ formal.approval_reviewed_at|date:"m.d" }}</div>
                                 {% elif formal.approval_reviewer_user %}
                                     <div class="text-muted small py-2 mt-1">{{ formal.approval_reviewer_user.last_name }}</div>
@@ -176,7 +176,7 @@
                             <div class="py-3 px-2">
                                 {% if formal.approval_reviewer_user2 %}
                                     {% if formal.approval_is_reviewed2 %}
-                                        <div class="text-primary fw-bold border border-primary d-inline-block rounded-circle stamp">{{ formal.approval_reviewer_user2.last_name }}</div>
+                                        <div class="fw-bold border d-inline-block rounded-circle stamp" style="color:#4338ca; border-color:#4338ca !important;">{{ formal.approval_reviewer_user2.last_name }}</div>
                                         <div class="small mt-1 text-muted">{{ formal.approval_reviewed2_at|date:"m.d" }}</div>
                                     {% else %}<div class="text-muted small py-2 mt-1">{{ formal.approval_reviewer_user2.last_name }}</div>{% endif %}
                                 {% else %}<div class="text-muted small py-2 mt-1">-</div>{% endif %}
@@ -186,7 +186,7 @@
                             <div class="bg-light py-1 small border-bottom text-muted">최종승인</div>
                             <div class="py-3 px-2">
                                 {% if formal.approval_is_approved %}
-                                    <div class="text-primary fw-bold border border-primary d-inline-block rounded-circle stamp">{{ formal.approval_approver_user.last_name }}</div>
+                                    <div class="fw-bold border d-inline-block rounded-circle stamp" style="color:#4338ca; border-color:#4338ca !important;">{{ formal.approval_approver_user.last_name }}</div>
                                     <div class="small mt-1 text-muted">{{ formal.approval_approved_at|date:"m.d" }}</div>
                                 {% elif formal.approval_approver_user %}
                                     <div class="text-muted small py-2 mt-1">{{ formal.approval_approver_user.last_name }}</div>
@@ -273,7 +273,7 @@
 
         <hr class="my-4" />
 
-        <h5 class="fw-bold border-start border-4 border-primary ps-2 mb-3">제출요구서류 및 제출 서류</h5>
+        <h5 class="fw-bold border-start border-4 ps-2 mb-3" style="border-color:#4338ca !important;">제출요구서류 및 제출 서류</h5>
         <div class="table-responsive">
             <table class="table table-bordered align-middle small">
                 <thead class="table-light"><tr class="text-center text-muted"><th style="width: 6%;">NO</th><th>제출요구서류</th><th style="width: 22%;">첨부</th><th style="width: 25%;">검토</th><th style="width: 25%;">비고</th></tr></thead>
@@ -292,7 +292,7 @@
                         </td>
                         <td class="text-center align-middle">
                             <div class="d-flex justify-content-center align-items-center gap-2">
-                                <span class="badge {% if it.review_status == 'OK' %}bg-success{% elif it.review_status == 'REJECT' %}bg-danger{% else %}bg-secondary{% endif %}">{{ it.get_review_status_display }}</span>
+                                <span class="dtl-pill {% if it.review_status == 'OK' %}green{% elif it.review_status == 'REJECT' %}red{% else %}slate{% endif %}">{{ it.get_review_status_display }}</span>
                                 {% if actor.is_internal %}{% if formal.approval_status != 'APPROVED' and formal.approval_status != 'PENDING_APPROVE' %}
                                 <form class="d-print-none" action="{% url 'qms:formal4m_review_update' formal.id it.id %}" method="POST">
                                     {% csrf_token %}
@@ -320,7 +320,7 @@
 
         {% if formal.template_type == 'FULL' %}
         <hr class="my-5" />
-        <h5 class="fw-bold border-start border-4 border-primary ps-2 mb-3 text-secondary">4M 변경 검토 결과</h5>
+        <h5 class="fw-bold border-start border-4 ps-2 mb-3 text-secondary" style="border-color:#4338ca !important;">4M 변경 검토 결과</h5>
         <div class="table-responsive">
             <table class="table table-bordered align-middle small">
                 <thead class="table-light"><tr class="text-center text-muted"><th>검사항목</th><th>규격</th><th>검사방법</th><th>판정</th><th>비고</th><th>첨부</th></tr></thead>
@@ -345,7 +345,7 @@
         </div>
         
         <hr class="my-5" />
-        <h5 class="fw-bold border-start border-4 border-primary ps-2 mb-3 text-secondary">일정 계획</h5>
+        <h5 class="fw-bold border-start border-4 ps-2 mb-3 text-secondary" style="border-color:#4338ca !important;">일정 계획</h5>
         <div class="table-responsive">
             <table class="table table-bordered align-middle small">
                 <thead class="table-light"><tr class="text-center text-muted"><th>업체</th><th>항목</th><th>진행</th><th>계획일</th><th>담당자</th><th>부서</th><th>비고</th>{% if actor.is_internal and formal.approval_status != 'APPROVED' and formal.approval_status != 'PENDING_APPROVE' %}<th style="width: 10%;" class="d-print-none">저장</th>{% endif %}</tr></thead>
@@ -372,7 +372,7 @@
         </div>
 
         <hr class="my-5" />
-        <h5 class="fw-bold border-start border-4 border-primary ps-2 mb-3 text-secondary">단계별 기록</h5>
+        <h5 class="fw-bold border-start border-4 ps-2 mb-3 text-secondary" style="border-color:#4338ca !important;">단계별 기록</h5>
         <div class="table-responsive">
             <table class="table table-bordered align-middle small">
                 <thead class="table-light"><tr class="text-center text-muted"><th>단계</th><th>일자</th><th>비고</th><th>첨부</th>{% if formal.approval_status != 'APPROVED' %}<th style="width: 10%;" class="d-print-none">저장</th>{% endif %}</tr></thead>
@@ -396,7 +396,7 @@
         </div>
 
         <hr class="my-5" />
-        <h5 class="fw-bold border-start border-4 border-primary ps-2 mb-3">사내 승인 (최종승인 확정)</h5>
+        <h5 class="fw-bold border-start border-4 ps-2 mb-3" style="border-color:#4338ca !important;">사내 승인 (최종승인 확정)</h5>
         {% if actor.is_internal %}
         <form method="post" action="{% url 'qms:formal4m_approval_update' formal.id %}" class="d-print-none p-3 border rounded bg-light bg-opacity-50">
             {% csrf_token %}
