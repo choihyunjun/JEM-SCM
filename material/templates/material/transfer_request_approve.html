@@ -37,8 +37,8 @@
       <div class="dtl-card-body">
         <div class="row g-3">
           <div class="col-md-4">
-            <label class="form-label fw-bold">출고창고 <span class="text-danger">*</span></label>
-            <select name="warehouse_from" id="wh-from" class="form-select" required>
+            <label class="dtl-form-label">출고창고 <span class="text-danger">*</span></label>
+            <select name="warehouse_from" id="wh-from" class="form-select dtl-form-control" required>
               <option value="">-- 선택 --</option>
               {% for wh in warehouses %}
               <option value="{{ wh.pk }}" data-pk="{{ wh.pk }}" {% if wh.code == "2000" %}selected{% endif %}>{{ wh.code }} - {{ wh.name }}</option>
@@ -46,8 +46,8 @@
             </select>
           </div>
           <div class="col-md-4">
-            <label class="form-label fw-bold">이동창고 <span class="text-danger">*</span></label>
-            <select name="warehouse_to" id="wh-to" class="form-select" required>
+            <label class="dtl-form-label">이동창고 <span class="text-danger">*</span></label>
+            <select name="warehouse_to" id="wh-to" class="form-select dtl-form-control" required>
               <option value="">-- 선택 --</option>
               {% for wh in warehouses %}
               <option value="{{ wh.pk }}" {% if wh.code == "3000" %}selected{% endif %}>{{ wh.code }} - {{ wh.name }}</option>

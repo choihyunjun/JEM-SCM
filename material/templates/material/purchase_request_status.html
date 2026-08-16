@@ -17,6 +17,13 @@
     .dtl-pill.red { background: #fef2f2; color: #b91c1c; }
     .dtl-pill.cyan { background: #ecfeff; color: #0e7490; }
     .dtl-title { font-size: 1.35rem; font-weight: 700; color: #1f2937; letter-spacing: -0.01em; }
+    .dtl-btn-dark { background: #1f2937; border: none; color: #fff; font-weight: 600; font-size: 0.85rem; padding: 0.5rem 1.4rem; border-radius: 8px; transition: background 0.15s ease; }
+    .dtl-btn-dark:hover { background: #111827; color: #fff; }
+    .dtl-btn-outline { background: #fff; border: 1px solid #d1d5db; color: #374151; font-weight: 600; font-size: 0.85rem; padding: 0.5rem 1.4rem; border-radius: 8px; transition: all 0.15s ease; }
+    .dtl-btn-outline:hover { background: #f9fafb; color: #111827; }
+    .dtl-form-label { font-size: 0.82rem; font-weight: 700; color: #374151; margin-bottom: 0.35rem; display: block; }
+    .dtl-form-control { border: 1px solid #e5e7eb; border-radius: 8px; font-size: 0.9rem; }
+    .dtl-form-control:focus { border-color: #c7d2fe; box-shadow: 0 0 0 3px rgba(79,70,229,0.08); }
 </style>
 <div class="d-flex justify-content-between align-items-center mb-3">
     <span class="dtl-title"><i class="bi bi-cart-check me-2" style="color:#9ca3af;"></i>발주요청 현황</span>
@@ -30,11 +37,11 @@
     <div>
         <form method="get" class="row g-2 align-items-end">
             <div class="col-md-3">
-                <input type="text" name="q" class="form-control form-control-sm"
+                <input type="text" name="q" class="form-control form-control-sm dtl-form-control"
                        placeholder="품번 / 품명 / 신청번호" value="{{ q }}">
             </div>
             <div class="col-md-2">
-                <select name="status" class="form-select form-select-sm">
+                <select name="status" class="form-select form-select-sm dtl-form-control">
                     <option value="">전체 상태</option>
                     {% for code, label in status_choices %}
                     <option value="{{ code }}" {% if status_filter == code %}selected{% endif %}>{{ label }}</option>
@@ -42,8 +49,8 @@
                 </select>
             </div>
             <div class="col-auto">
-                <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search"></i></button>
-                <a href="{% url 'material:purchase_request_status' %}" class="btn btn-sm btn-secondary">초기화</a>
+                <button type="submit" class="dtl-btn-dark btn-sm"><i class="bi bi-search"></i></button>
+                <a href="{% url 'material:purchase_request_status' %}" class="dtl-btn-outline btn-sm">초기화</a>
             </div>
         </form>
     </div>

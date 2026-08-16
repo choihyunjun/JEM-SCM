@@ -52,31 +52,31 @@
                 </li>
             </ul>
         </div>
-        <div class="card-body">
+        <div class="dtl-card-body">
             <!-- 검색 필터 -->
             <form method="get" class="row g-3 align-items-end mb-4">
                 <input type="hidden" name="sync_type" value="{{ sync_type }}">
                 <div class="col-auto">
-                    <label class="form-label small text-muted">시작일</label>
-                    <input type="date" name="date_from" class="form-control" value="{{ date_from }}">
+                    <label class="dtl-form-label">시작일</label>
+                    <input type="date" name="date_from" class="form-control dtl-form-control" value="{{ date_from }}">
                 </div>
                 <div class="col-auto">
-                    <label class="form-label small text-muted">종료일</label>
-                    <input type="date" name="date_to" class="form-control" value="{{ date_to }}">
+                    <label class="dtl-form-label">종료일</label>
+                    <input type="date" name="date_to" class="form-control dtl-form-control" value="{{ date_to }}">
                 </div>
                 <div class="col-auto">
-                    <button type="submit" class="btn btn-primary">
+                    <button type="submit" class="dtl-btn-dark">
                         <i class="bi bi-search me-1"></i>조회
                     </button>
                 </div>
                 <div class="col-auto">
-                    <button type="button" class="btn btn-outline-secondary" onclick="setToday()">오늘</button>
+                    <button type="button" class="dtl-btn-outline" onclick="setToday()">오늘</button>
                 </div>
                 <div class="col-auto">
-                    <button type="button" class="btn btn-outline-secondary" onclick="setThisWeek()">이번 주</button>
+                    <button type="button" class="dtl-btn-outline" onclick="setThisWeek()">이번 주</button>
                 </div>
                 <div class="col-auto">
-                    <button type="button" class="btn btn-outline-secondary" onclick="setThisMonth()">이번 달</button>
+                    <button type="button" class="dtl-btn-outline" onclick="setThisMonth()">이번 달</button>
                 </div>
             </form>
 

@@ -19,22 +19,22 @@
         <div class="dtl-card-body">
           <div class="row g-2 align-items-end">
             <div class="col-md-5 position-relative">
-              <label class="form-label small mb-1">품번/품명 검색</label>
-              <input type="text" id="search-part-no" class="form-control form-control-sm"
+              <label class="dtl-form-label">품번/품명 검색</label>
+              <input type="text" id="search-part-no" class="form-control form-control-sm dtl-form-control"
                      placeholder="품번 또는 품명 입력" autocomplete="off">
               <div id="suggestions" class="position-absolute w-100 bg-white border rounded shadow-sm"
                    style="display:none;z-index:1050;max-height:280px;overflow-y:auto;top:100%;"></div>
             </div>
             <div class="col-md-3">
-              <label class="form-label small mb-1">신청수량</label>
-              <input type="number" id="add-qty" class="form-control form-control-sm" min="1" placeholder="수량">
+              <label class="dtl-form-label">신청수량</label>
+              <input type="number" id="add-qty" class="form-control form-control-sm dtl-form-control" min="1" placeholder="수량">
             </div>
             <div class="col-md-3">
-              <label class="form-label small mb-1">비고</label>
-              <input type="text" id="add-remark" class="form-control form-control-sm" placeholder="선택">
+              <label class="dtl-form-label">비고</label>
+              <input type="text" id="add-remark" class="form-control form-control-sm dtl-form-control" placeholder="선택">
             </div>
             <div class="col-md-1">
-              <button type="button" class="btn btn-primary btn-sm w-100" id="btn-add">추가</button>
+              <button type="button" class="dtl-btn-dark btn-sm w-100" id="btn-add">추가</button>
             </div>
           </div>
 
@@ -77,8 +77,8 @@
         </div>
 
         <div class="mb-3">
-          <label class="form-label small fw-bold">전체 신청사유 <span class="text-muted fw-normal">(선택)</span></label>
-          <textarea name="remark" class="form-control form-control-sm" rows="2"
+          <label class="dtl-form-label">전체 신청사유 <span class="text-muted fw-normal">(선택)</span></label>
+          <textarea name="remark" class="form-control form-control-sm dtl-form-control" rows="2"
                     placeholder="이동이 필요한 이유를 입력하세요"></textarea>
         </div>
 
