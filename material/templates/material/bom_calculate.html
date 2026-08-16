@@ -5,8 +5,8 @@
 {% block material_content %}
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h4 class="mb-0"><i class="bi bi-calculator me-2"></i>소요량 계산</h4>
-        <a href="{% url 'material:bom_list' %}" class="btn btn-secondary btn-sm">
+        <span class="dtl-title"><i class="bi bi-calculator me-2" style="color:#9ca3af;"></i>소요량 계산</span>
+        <a href="{% url 'material:bom_list' %}" class="dtl-btn-outline btn-sm">
             <i class="bi bi-arrow-left me-1"></i>BOM 목록
         </a>
     </div>
@@ -44,9 +44,7 @@
         <!-- 단일 제품 계산 탭 -->
         <div class="tab-pane fade show active" id="single" role="tabpanel">
             <div class="card mb-4">
-                <div class="card-header bg-primary text-white">
-                    <i class="bi bi-input-cursor me-2"></i>제품 및 생산수량 입력
-                </div>
+                <div class="dtl-card-header"><i class="bi bi-input-cursor"></i>제품 및 생산수량 입력</div>
                 <div class="card-body">
                     <form method="post" id="singleForm">
                         {% csrf_token %}
@@ -84,15 +82,13 @@
             <div class="row">
                 <div class="col-md-7">
                     <div class="card mb-4">
-                        <div class="card-header bg-primary text-white">
-                            <i class="bi bi-grid me-2"></i>품목군별 BOM 일괄 다운로드
-                        </div>
+                        <div class="dtl-card-header"><i class="bi bi-grid"></i>품목군별 BOM 일괄 다운로드</div>
                         <div class="card-body">
                             <!-- 품목군 선택 버튼 -->
                             <div class="mb-3">
                                 <button type="button" class="btn btn-outline-primary w-100" data-bs-toggle="modal" data-bs-target="#pgModal">
                                     <i class="bi bi-check2-square me-2"></i>품목군 선택하기
-                                    <span class="badge bg-primary ms-2" id="pgSelectedBadge" style="display:none;">0</span>
+                                    <span class="dtl-pill blue ms-2" id="pgSelectedBadge" style="display:none;">0</span>
                                 </button>
                             </div>
 
@@ -128,9 +124,7 @@
                 </div>
                 <div class="col-md-5">
                     <div class="card">
-                        <div class="card-header bg-info text-white">
-                            <i class="bi bi-question-circle me-2"></i>출력 파일 형식
-                        </div>
+                        <div class="dtl-card-header"><i class="bi bi-question-circle"></i>출력 파일 형식</div>
                         <div class="card-body">
                             <table class="table table-sm table-bordered mb-3">
                                 <thead class="table-light">
@@ -163,11 +157,11 @@
         <div class="modal fade" id="pgModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" style="max-width:480px;">
                 <div class="modal-content">
-                    <div class="modal-header bg-primary text-white py-2">
+                    <div class="modal-header py-2">
                         <h6 class="modal-title fw-bold mb-0">
                             <i class="bi bi-grid me-2"></i>품목군 선택
                         </h6>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body p-0">
                         <!-- 검색 + 전체선택 -->
@@ -203,9 +197,7 @@
             <div class="row">
                 <div class="col-md-7">
                     <div class="card mb-4">
-                        <div class="card-header bg-success text-white">
-                            <i class="bi bi-upload me-2"></i>엑셀 파일 업로드
-                        </div>
+                        <div class="dtl-card-header"><i class="bi bi-upload"></i>엑셀 파일 업로드</div>
                         <div class="card-body">
                             <form method="post" enctype="multipart/form-data" id="batchForm">
                                 {% csrf_token %}
@@ -225,7 +217,7 @@
                                     <div class="alert alert-info mb-0">
                                         <i class="bi bi-file-earmark me-2"></i>
                                         <span id="batchFileName"></span>
-                                        <span class="badge bg-primary ms-2" id="batchFileSize"></span>
+                                        <span class="dtl-pill blue ms-2" id="batchFileSize"></span>
                                     </div>
                                 </div>
 
@@ -241,9 +233,7 @@
 
                 <div class="col-md-5">
                     <div class="card">
-                        <div class="card-header bg-info text-white">
-                            <i class="bi bi-question-circle me-2"></i>업로드 파일 형식
-                        </div>
+                        <div class="dtl-card-header"><i class="bi bi-question-circle"></i>업로드 파일 형식</div>
                         <div class="card-body">
                             <h6 class="fw-bold mb-2">양식 1 - 행 단위</h6>
                             <table class="table table-sm table-bordered mb-2">
@@ -251,9 +241,9 @@
                                     <tr><th>컬럼명</th><th>설명</th><th>필수</th></tr>
                                 </thead>
                                 <tbody>
-                                    <tr><td><code>날짜</code></td><td>필요일자 (YYYYMMDD)</td><td><span class="badge bg-danger">필수</span></td></tr>
-                                    <tr><td><code>품번</code></td><td>제품(모품) 품번</td><td><span class="badge bg-danger">필수</span></td></tr>
-                                    <tr><td><code>계획수량</code></td><td>생산 수량</td><td><span class="badge bg-danger">필수</span></td></tr>
+                                    <tr><td><code>날짜</code></td><td>필요일자 (YYYYMMDD)</td><td><span class="dtl-pill red">필수</span></td></tr>
+                                    <tr><td><code>품번</code></td><td>제품(모품) 품번</td><td><span class="dtl-pill red">필수</span></td></tr>
+                                    <tr><td><code>계획수량</code></td><td>생산 수량</td><td><span class="dtl-pill red">필수</span></td></tr>
                                 </tbody>
                             </table>
                             <div class="alert alert-secondary small mb-3 py-2">
@@ -294,7 +284,7 @@
             <span>
                 <i class="bi bi-list-check me-2"></i>
                 소요량 계산 결과 - <strong>{{ product.part_no }}</strong> ({{ product.part_name }})
-                <span class="badge bg-light text-dark ms-2">생산수량: {{ production_qty }}개</span>
+                <span class="dtl-pill slate ms-2">생산수량: {{ production_qty }}개</span>
             </span>
             <div>
                 <a href="{% url 'material:bom_calc_export' %}?part_no={{ product.part_no }}&qty={{ production_qty }}{% if single_session_key %}&session_key={{ single_session_key }}{% endif %}"
@@ -337,7 +327,7 @@
                         {% if item.is_semi %}
                         <tr class="bom-semi-row {% if item.level == 2 %}bom-semi-l2{% elif item.level >= 3 %}bom-semi-l3{% endif %}" data-semi-id="semi-{{ forloop.counter }}" onclick="toggleSemiChildren(this)">
                             <td class="text-muted">{{ forloop.counter }}</td>
-                            <td><span class="badge bg-secondary">L{{ item.level }}</span></td>
+                            <td><span class="dtl-pill slate">L{{ item.level }}</span></td>
                             <td style="padding-left: {{ item.level }}rem;">
                                 <i class="bi bi-chevron-down me-1 semi-toggle-icon text-secondary"></i>
                                 <strong>{{ item.child_part_no }}</strong>
@@ -374,9 +364,9 @@
                             </td>
                             <td class="text-end">
                                 {% if item.shortage > 0 %}
-                                <span class="badge bg-danger">{{ item.shortage|floatformat:0 }}</span>
+                                <span class="dtl-pill red">{{ item.shortage|floatformat:0 }}</span>
                                 {% else %}
-                                <span class="badge bg-success">충족</span>
+                                <span class="dtl-pill green">충족</span>
                                 {% endif %}
                             </td>
                             <td class="small">{{ item.vendor_name|default:"-" }}</td>
@@ -413,7 +403,7 @@
             <span>
                 <i class="bi bi-list-check me-2"></i>
                 일괄 소요량 계산 결과
-                <span class="badge bg-light text-dark ms-2">{{ batch_results|length }}개 제품</span>
+                <span class="dtl-pill slate ms-2">{{ batch_results|length }}개 제품</span>
             </span>
             <div>
                 <button type="button" class="btn btn-sm btn-outline-light me-2" data-bs-toggle="modal" data-bs-target="#excelExportModal">
@@ -435,10 +425,10 @@
         <div class="card-body border-bottom py-2 d-flex justify-content-between align-items-center" id="batchPaginationTop">
             <div class="d-flex align-items-center gap-2">
                 <button class="btn btn-sm btn-outline-secondary batch-filter-btn active" data-filter="all" onclick="setBatchFilter('all')">
-                    전체 <span class="badge bg-secondary ms-1">{{ batch_results|length }}</span>
+                    전체 <span class="dtl-pill slate ms-1">{{ batch_results|length }}</span>
                 </button>
                 <button class="btn btn-sm btn-outline-warning batch-filter-btn" data-filter="missing" onclick="setBatchFilter('missing')" style="display:none;" id="btnFilterMissing">
-                    <i class="bi bi-exclamation-triangle me-1"></i>BOM 없음 <span class="badge bg-warning text-dark ms-1" id="missingFilterCount">0</span>
+                    <i class="bi bi-exclamation-triangle me-1"></i>BOM 없음 <span class="dtl-pill amber ms-1" id="missingFilterCount">0</span>
                 </button>
             </div>
             <div class="d-flex align-items-center gap-2" id="paginationControls">
@@ -487,7 +477,7 @@
                                 {% endif %}
                                 <td class="fw-bold">
                                     <i class="bi bi-box-seam me-1"></i>{{ item.child_part_no }}
-                                    <span class="badge bg-warning text-dark ms-1">반제품</span>
+                                    <span class="dtl-pill amber ms-1">반제품</span>
                                 </td>
                                 <td class="fw-bold">{{ item.child_part_name }}</td>
                                 <td class="text-end fw-bold">{{ item.required_qty|floatformat:2 }}</td>
@@ -512,9 +502,9 @@
                                 <td class="text-end">{{ item.stock_qty }}</td>
                                 <td class="text-end">
                                     {% if item.shortage > 0 %}
-                                    <span class="badge bg-danger">{{ item.shortage|floatformat:0 }}</span>
+                                    <span class="dtl-pill red">{{ item.shortage|floatformat:0 }}</span>
                                     {% else %}
-                                    <span class="badge bg-success">OK</span>
+                                    <span class="dtl-pill green">OK</span>
                                     {% endif %}
                                 </td>
                                 <td>{{ item.vendor_name|default:"-" }}</td>
@@ -536,9 +526,9 @@
                                 <td class="text-end">{{ item.stock_qty }}</td>
                                 <td class="text-end">
                                     {% if item.shortage > 0 %}
-                                    <span class="badge bg-danger">{{ item.shortage|floatformat:0 }}</span>
+                                    <span class="dtl-pill red">{{ item.shortage|floatformat:0 }}</span>
                                     {% else %}
-                                    <span class="badge bg-success">OK</span>
+                                    <span class="dtl-pill green">OK</span>
                                     {% endif %}
                                 </td>
                                 <td>{{ item.vendor_name|default:"-" }}</td>
@@ -610,7 +600,7 @@
     <div class="modal fade" id="vendorSelectModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
-                <div class="modal-header bg-warning">
+                <div class="modal-header" style="background:#fffbeb;">
                     <h5 class="modal-title fw-bold">
                         <i class="bi bi-funnel me-2"></i>거래처 선택 후 소요량 등록
                     </h5>
@@ -628,7 +618,7 @@
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="vendorSelectAll" checked onchange="toggleAllVendors(this)">
                             <label class="form-check-label fw-bold" for="vendorSelectAll">전체 선택</label>
-                            <span class="badge bg-secondary ms-1" id="vendorSelectedCount"></span>
+                            <span class="dtl-pill slate ms-1" id="vendorSelectedCount"></span>
                         </div>
                     </div>
                     <div id="vendorCheckboxList" style="max-height: 350px; overflow-y: auto;">
@@ -651,7 +641,7 @@
                 <div class="modal-header" style="background:#fff3cd;">
                     <h5 class="modal-title fw-bold">
                         <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
-                        거래처 미연결 품목 <span id="unlinkedCount" class="badge bg-warning text-dark">0</span>건
+                        거래처 미연결 품목 <span id="unlinkedCount" class="dtl-pill amber">0</span>건
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
@@ -690,16 +680,16 @@
 
     {% if not result and not batch_results and request.method != 'POST' %}
     <!-- 사용 안내 -->
-    <div class="card border-info">
+    <div class="dtl-card mb-0">
         <div class="card-body text-center py-5">
-            <i class="bi bi-info-circle text-info" style="font-size: 4rem;"></i>
+            <i class="bi bi-info-circle" style="font-size: 4rem; color:#4338ca;"></i>
             <h5 class="mt-3">소요량 계산 기능</h5>
             <p class="text-muted mb-0">
                 제품 품번과 생산 수량을 입력하면<br>
                 BOM을 기반으로 필요한 자재량을 자동 계산합니다.<br>
                 <strong>현재고와 비교하여 부족 수량도 확인</strong>할 수 있습니다.<br><br>
-                <span class="badge bg-primary">단일 제품</span> 개별 품번 입력하여 계산<br>
-                <span class="badge bg-success">엑셀 일괄</span> 여러 제품을 엑셀로 한번에 계산
+                <span class="dtl-pill blue">단일 제품</span> 개별 품번 입력하여 계산<br>
+                <span class="dtl-pill green">엑셀 일괄</span> 여러 제품을 엑셀로 한번에 계산
             </p>
         </div>
     </div>
@@ -1282,7 +1272,7 @@ function showVendorSelectModal() {
         div.innerHTML =
             '<input class="form-check-input vendor-cb" type="checkbox" value="' + name + '" id="vendor_' + idx + '" checked onchange="updateVendorCount()">' +
             '<label class="form-check-label" for="vendor_' + idx + '">' + name +
-            ' <span class="badge bg-light text-dark">' + vendorSet[name] + '건</span></label>';
+            ' <span class="dtl-pill slate">' + vendorSet[name] + '건</span></label>';
         listEl.appendChild(div);
     });
 
@@ -1388,7 +1378,7 @@ function pgModalFilter() {
             '<input class="form-check-input pgcb" type="checkbox" id="' + safeId + '" ' + checked + ' onchange="pgCbChange(\'' + g.replace(/\\/g,'\\\\').replace(/'/g,"\\'") + '\', this)">' +
             '<label class="form-check-label w-100" for="' + safeId + '" style="cursor:pointer;">' +
                 '<span class="fw-bold">' + g + '</span>' +
-                '<span class="badge bg-light text-dark border ms-2">' + cnt + '개 제품</span>' +
+                '<span class="dtl-pill slate ms-2">' + cnt + '개 제품</span>' +
             '</label>';
         list.appendChild(div);
     });
@@ -1466,7 +1456,7 @@ function pgRender() {
     pgSelected.forEach(function(g) {
         var cnt = (partGroupProductMap[g] || []).length;
         var span = document.createElement('span');
-        span.className = 'badge bg-primary d-inline-flex align-items-center gap-1 py-1 px-2';
+        span.className = 'dtl-pill blue d-inline-flex align-items-center gap-1 py-1 px-2';
         span.style.fontSize = '0.8rem';
         span.innerHTML = g + ' <span class="opacity-75">(' + cnt + ')</span>' +
             ' <button type="button" style="background:none;border:none;color:#fff;padding:0;font-size:1rem;line-height:1;cursor:pointer;" onclick="pgRemoveGroup(\'' + g.replace(/\\/g,'\\\\').replace(/'/g,"\\'") + '\')">&times;</button>';
@@ -1486,7 +1476,7 @@ function pgRender() {
     preview.innerHTML = prodList.length === 0
         ? '<span class="text-muted small">품목군을 선택하면 포함 제품이 표시됩니다.</span>'
         : prodList.map(function(p) {
-            return '<span class="badge bg-light text-dark border me-1 mb-1" style="font-size:0.75rem;">' + p.part_no + ' ' + p.part_name + '</span>';
+            return '<span class="dtl-pill slate me-1 mb-1" style="font-size:0.75rem;">' + p.part_no + ' ' + p.part_name + '</span>';
           }).join('');
 }
 

@@ -5,8 +5,8 @@
 {% block material_content %}
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h4 class="mb-0"><i class="bi bi-upload me-2"></i>BOM 업로드</h4>
-        <a href="{% url 'material:bom_list' %}" class="btn btn-secondary btn-sm">
+        <span class="dtl-title"><i class="bi bi-upload me-2" style="color:#9ca3af;"></i>BOM 업로드</span>
+        <a href="{% url 'material:bom_list' %}" class="dtl-btn-outline btn-sm">
             <i class="bi bi-arrow-left me-1"></i>목록으로
         </a>
     </div>
@@ -24,17 +24,15 @@
     <div class="row">
         <!-- 업로드 폼 -->
         <div class="col-md-7">
-            <div class="card">
-                <div class="card-header bg-success text-white">
-                    <i class="bi bi-file-earmark-spreadsheet me-2"></i>BOM 파일 업로드
-                </div>
-                <div class="card-body">
+            <div class="dtl-card mb-0">
+                <div class="dtl-card-header"><i class="bi bi-file-earmark-spreadsheet"></i>BOM 파일 업로드</div>
+                <div class="dtl-card-body">
                     <form method="post" enctype="multipart/form-data" id="uploadForm">
                         {% csrf_token %}
 
                         <div class="mb-4">
-                            <label class="form-label fw-bold">파일 선택 (CSV 또는 XLSX)</label>
-                            <input type="file" name="bom_file" class="form-control form-control-lg"
+                            <label class="dtl-form-label">파일 선택 (CSV 또는 XLSX)</label>
+                            <input type="file" name="bom_file" class="form-control form-control-lg dtl-form-control"
                                    accept=".csv,.xlsx" required id="bomFile">
                             <div class="form-text">
                                 <i class="bi bi-info-circle me-1"></i>
@@ -46,12 +44,12 @@
                             <div class="alert alert-info mb-0">
                                 <i class="bi bi-file-earmark me-2"></i>
                                 <span id="fileName"></span>
-                                <span class="badge bg-primary ms-2" id="fileSize"></span>
+                                <span class="dtl-pill blue ms-2" id="fileSize"></span>
                             </div>
                         </div>
 
                         <div class="d-grid">
-                            <button type="submit" class="btn btn-success btn-lg" id="submitBtn">
+                            <button type="submit" class="dtl-btn-dark" id="submitBtn">
                                 <i class="bi bi-cloud-upload me-2"></i>업로드 및 등록
                             </button>
                         </div>
@@ -62,11 +60,9 @@
 
         <!-- 업로드 가이드 -->
         <div class="col-md-5">
-            <div class="card">
-                <div class="card-header bg-info text-white">
-                    <i class="bi bi-question-circle me-2"></i>엑셀 파일 형식 안내
-                </div>
-                <div class="card-body">
+            <div class="dtl-card mb-0">
+                <div class="dtl-card-header"><i class="bi bi-question-circle"></i>엑셀 파일 형식 안내</div>
+                <div class="dtl-card-body">
                     <h6 class="fw-bold mb-3">필수 컬럼 (헤더명 그대로)</h6>
                     <div class="small">
                         <table class="table table-sm table-bordered">
@@ -116,11 +112,9 @@
                 </div>
             </div>
 
-            <div class="card mt-3">
-                <div class="card-header bg-warning text-dark">
-                    <i class="bi bi-exclamation-triangle me-2"></i>주의사항
-                </div>
-                <div class="card-body small">
+            <div class="dtl-card mt-3 mb-0">
+                <div class="dtl-card-header" style="color:#b45309;"><i class="bi bi-exclamation-triangle" style="color:#b45309;"></i>주의사항</div>
+                <div class="dtl-card-body small">
                     <ul class="mb-0">
                         <li>기존에 같은 모품번이 있으면 <strong>업데이트</strong> 됩니다.</li>
                         <li>같은 모품-순번-자품번 조합이 있으면 <strong>덮어쓰기</strong> 됩니다.</li>
@@ -132,15 +126,13 @@
 
             <!-- 현재 BOM 데이터 현황 및 전체 삭제 -->
             {% if product_count > 0 or bom_count > 0 %}
-            <div class="card mt-3 border-danger">
-                <div class="card-header bg-danger text-white">
-                    <i class="bi bi-database me-2"></i>현재 등록된 BOM 데이터
-                </div>
-                <div class="card-body">
+            <div class="dtl-card mt-3 mb-0" style="border-color:#fecaca;">
+                <div class="dtl-card-header" style="color:#b91c1c;"><i class="bi bi-database" style="color:#b91c1c;"></i>현재 등록된 BOM 데이터</div>
+                <div class="dtl-card-body">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <div>
-                            <span class="badge bg-primary fs-6 me-2">모품: {{ product_count }}건</span>
-                            <span class="badge bg-secondary fs-6">BOM 항목: {{ bom_count }}건</span>
+                            <span class="dtl-pill blue me-2">모품: {{ product_count }}건</span>
+                            <span class="dtl-pill slate">BOM 항목: {{ bom_count }}건</span>
                         </div>
                     </div>
                     <form method="post" action="{% url 'material:bom_delete_all' %}" id="deleteAllForm">
