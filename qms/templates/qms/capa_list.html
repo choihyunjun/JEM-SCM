@@ -4,10 +4,10 @@
 {% block title %}시정조치 관리{% endblock %}
 
 {% block qms_content %}
-<div class="container-fluid p-0">
+<div class="dtl-wrap" style="max-width:1300px;">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="fw-bold">시정조치 관리</h3>
-        <a href="{% url 'qms:capa_create' %}" class="btn btn-warning">
+        <span class="dtl-title">시정조치 관리</span>
+        <a href="{% url 'qms:capa_create' %}" class="dtl-btn-dark">
             <i class="bi bi-plus-lg me-1"></i>시정조치 요청
         </a>
     </div>
@@ -15,83 +15,81 @@
     <!-- 통계 카드 -->
     <div class="row g-3 mb-4">
         <div class="col-md-3 col-6">
-            <div class="card border-0 shadow-sm text-center p-3">
-                <div class="small text-muted">전체</div>
-                <div class="h4 fw-bold">{{ stats.total }}</div>
+            <div class="dtl-card mb-0 text-center p-3">
+                <div class="dtl-field-label">전체</div>
+                <div class="h4 fw-bold mb-0" style="color:#1f2937;">{{ stats.total }}</div>
             </div>
         </div>
         <div class="col-md-3 col-6">
-            <div class="card border-0 shadow-sm text-center p-3">
-                <div class="small text-muted">요청</div>
-                <div class="h4 fw-bold text-warning">{{ stats.requested }}</div>
+            <div class="dtl-card mb-0 text-center p-3">
+                <div class="dtl-field-label">요청</div>
+                <div class="h4 fw-bold mb-0" style="color:#b45309;">{{ stats.requested }}</div>
             </div>
         </div>
         <div class="col-md-3 col-6">
-            <div class="card border-0 shadow-sm text-center p-3 {% if stats.overdue > 0 %}border-danger{% endif %}">
-                <div class="small text-muted">기한초과</div>
-                <div class="h4 fw-bold text-danger">{{ stats.overdue }}</div>
+            <div class="dtl-card mb-0 text-center p-3">
+                <div class="dtl-field-label">기한초과</div>
+                <div class="h4 fw-bold mb-0" style="color:#b91c1c;">{{ stats.overdue }}</div>
             </div>
         </div>
         <div class="col-md-3 col-6">
-            <div class="card border-0 shadow-sm text-center p-3">
-                <div class="small text-muted">완료</div>
-                <div class="h4 fw-bold text-success">{{ stats.closed }}</div>
+            <div class="dtl-card mb-0 text-center p-3">
+                <div class="dtl-field-label">완료</div>
+                <div class="h4 fw-bold mb-0" style="color:#047857;">{{ stats.closed }}</div>
             </div>
         </div>
     </div>
 
     <!-- 필터 -->
-    <div class="card shadow-sm mb-4">
-        <div class="card-body">
-            <form method="get" class="row g-2 align-items-end">
-                <div class="col-md-2">
-                    <label class="form-label small">상태</label>
-                    <select name="status" class="form-select form-select-sm">
-                        <option value="">전체</option>
-                        {% for value, label in status_choices %}
-                        <option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
-                    </select>
+    <div class="dtl-toolbar">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="dtl-form-label">상태</label>
+                <select name="status" class="form-select form-select-sm dtl-form-control">
+                    <option value="">전체</option>
+                    {% for value, label in status_choices %}
+                    <option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="dtl-form-label">유형</label>
+                <select name="capa_type" class="form-select form-select-sm dtl-form-control">
+                    <option value="">전체</option>
+                    {% for value, label in type_choices %}
+                    <option value="{{ value }}" {% if request.GET.capa_type == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="dtl-form-label">협력사</label>
+                <select name="vendor" class="form-select form-select-sm dtl-form-control">
+                    <option value="">전체</option>
+                    {% for v in vendors %}
+                    <option value="{{ v.id }}" {% if request.GET.vendor == v.id|stringformat:"i" %}selected{% endif %}>{{ v.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <div class="form-check">
+                    <input type="checkbox" class="form-check-input" name="overdue" value="yes" id="overdue" {% if request.GET.overdue == 'yes' %}checked{% endif %}>
+                    <label class="form-check-label text-danger small" for="overdue">기한초과만</label>
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label small">유형</label>
-                    <select name="capa_type" class="form-select form-select-sm">
-                        <option value="">전체</option>
-                        {% for value, label in type_choices %}
-                        <option value="{{ value }}" {% if request.GET.capa_type == value %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small">협력사</label>
-                    <select name="vendor" class="form-select form-select-sm">
-                        <option value="">전체</option>
-                        {% for v in vendors %}
-                        <option value="{{ v.id }}" {% if request.GET.vendor == v.id|stringformat:"i" %}selected{% endif %}>{{ v.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <div class="form-check">
-                        <input type="checkbox" class="form-check-input" name="overdue" value="yes" id="overdue" {% if request.GET.overdue == 'yes' %}checked{% endif %}>
-                        <label class="form-check-label text-danger" for="overdue">기한초과만</label>
-                    </div>
-                </div>
-                <div class="col-md-2">
-                    <button type="submit" class="btn btn-dark btn-sm w-100"><i class="bi bi-search me-1"></i>검색</button>
-                </div>
-                <div class="col-md-1">
-                    <a href="{% url 'qms:capa_list' %}" class="btn btn-outline-secondary btn-sm w-100">초기화</a>
-                </div>
-            </form>
-        </div>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="dtl-btn-dark btn-sm w-100"><i class="bi bi-search me-1"></i>검색</button>
+            </div>
+            <div class="col-md-1">
+                <a href="{% url 'qms:capa_list' %}" class="dtl-btn-outline btn-sm w-100 text-center d-block">초기화</a>
+            </div>
+        </form>
     </div>
 
     <!-- 목록 -->
-    <div class="card shadow-sm">
-        <div class="card-body p-0">
-            <table class="table table-hover mb-0">
-                <thead class="table-dark">
+    <div class="dtl-card">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 dtl-table">
+                <thead>
                     <tr>
                         <th>시정조치번호</th>
                         <th>유형</th>
@@ -106,12 +104,12 @@
                 </thead>
                 <tbody>
                     {% for capa in capas %}
-                    <tr class="{% if capa.is_overdue %}table-danger{% endif %}">
+                    <tr>
                         <td>
-                            <a href="{% url 'qms:capa_detail' pk=capa.pk %}" class="fw-bold">{{ capa.capa_no }}</a>
+                            <a href="{% url 'qms:capa_detail' pk=capa.pk %}" class="fw-bold text-decoration-none">{{ capa.capa_no }}</a>
                         </td>
                         <td>
-                            <span class="badge bg-{% if capa.capa_type == 'CA' %}primary{% else %}info{% endif %}">
+                            <span class="dtl-pill {% if capa.capa_type == 'CA' %}blue{% else %}cyan{% endif %}">
                                 {{ capa.get_capa_type_display }}
                             </span>
                         </td>
@@ -122,11 +120,11 @@
                         <td>
                             {{ capa.due_date }}
                             {% if capa.is_overdue %}
-                            <i class="bi bi-exclamation-circle text-danger"></i>
+                            <i class="bi bi-exclamation-circle text-danger" title="기한초과"></i>
                             {% endif %}
                         </td>
                         <td>
-                            <span class="badge bg-{% if capa.status == 'CLOSED' %}success{% elif capa.status == 'REQUESTED' %}warning{% elif capa.is_overdue %}danger{% else %}secondary{% endif %}">
+                            <span class="dtl-pill {% if capa.status == 'CLOSED' %}green{% elif capa.status == 'REQUESTED' %}amber{% elif capa.is_overdue %}red{% else %}slate{% endif %}">
                                 {{ capa.get_status_display }}
                             </span>
                         </td>
@@ -148,7 +146,7 @@
     <!-- 페이징 -->
     {% if capas.has_other_pages %}
     <nav class="mt-4">
-        <ul class="pagination justify-content-center">
+        <ul class="pagination pagination-sm justify-content-center">
             {% if capas.has_previous %}
             <li class="page-item"><a class="page-link" href="?page={{ capas.previous_page_number }}&{{ request.GET.urlencode }}">&laquo;</a></li>
             {% endif %}

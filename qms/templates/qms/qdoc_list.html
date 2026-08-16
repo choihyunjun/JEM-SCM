@@ -3,10 +3,10 @@
 {% block title %}품질문서 관리{% endblock %}
 
 {% block qms_content %}
-<div class="container-fluid p-0">
+<div class="dtl-wrap" style="max-width:1300px;">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="fw-bold">품질문서 관리</h3>
-        <a href="{% url 'qms:qdoc_create' %}" class="btn btn-primary">
+        <span class="dtl-title">품질문서 관리</span>
+        <a href="{% url 'qms:qdoc_create' %}" class="dtl-btn-dark">
             <i class="bi bi-plus-lg me-1"></i>문서 등록
         </a>
     </div>
@@ -14,89 +14,79 @@
     <!-- 통계 카드 -->
     <div class="row g-3 mb-4">
         <div class="col-6 col-md-3">
-            <div class="card border-0 bg-primary bg-opacity-10">
-                <div class="card-body text-center py-3">
-                    <div class="h3 mb-0 text-primary">{{ stats.total }}</div>
-                    <small class="text-muted">전체 문서</small>
-                </div>
+            <div class="dtl-card mb-0 text-center p-3">
+                <div class="dtl-field-label">전체 문서</div>
+                <div class="h4 fw-bold mb-0" style="color:#1f2937;">{{ stats.total }}</div>
             </div>
         </div>
         <div class="col-6 col-md-3">
-            <div class="card border-0 bg-success bg-opacity-10">
-                <div class="card-body text-center py-3">
-                    <div class="h3 mb-0 text-success">{{ stats.approved }}</div>
-                    <small class="text-muted">승인 문서</small>
-                </div>
+            <div class="dtl-card mb-0 text-center p-3">
+                <div class="dtl-field-label">승인 문서</div>
+                <div class="h4 fw-bold mb-0" style="color:#047857;">{{ stats.approved }}</div>
             </div>
         </div>
         <div class="col-6 col-md-3">
-            <div class="card border-0 bg-warning bg-opacity-10">
-                <div class="card-body text-center py-3">
-                    <div class="h3 mb-0 text-warning">{{ stats.review }}</div>
-                    <small class="text-muted">검토중</small>
-                </div>
+            <div class="dtl-card mb-0 text-center p-3">
+                <div class="dtl-field-label">검토중</div>
+                <div class="h4 fw-bold mb-0" style="color:#b45309;">{{ stats.review }}</div>
             </div>
         </div>
         <div class="col-6 col-md-3">
-            <div class="card border-0 bg-secondary bg-opacity-10">
-                <div class="card-body text-center py-3">
-                    <div class="h3 mb-0 text-secondary">{{ stats.draft }}</div>
-                    <small class="text-muted">작성중</small>
-                </div>
+            <div class="dtl-card mb-0 text-center p-3">
+                <div class="dtl-field-label">작성중</div>
+                <div class="h4 fw-bold mb-0" style="color:#4b5563;">{{ stats.draft }}</div>
             </div>
         </div>
     </div>
 
     <!-- 필터 -->
-    <div class="card shadow-sm mb-4">
-        <div class="card-body py-3">
-            <form method="get" class="row g-2 align-items-end">
-                <div class="col-md-3">
-                    <label class="form-label small">문서 검색</label>
-                    <input type="text" name="q" class="form-control" placeholder="문서번호, 문서명..." value="{{ request.GET.q }}">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small">분류</label>
-                    <select name="category" class="form-select">
-                        <option value="">전체</option>
-                        {% for value, label in category_choices %}
-                        <option value="{{ value }}" {% if request.GET.category == value %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small">상태</label>
-                    <select name="status" class="form-select">
-                        <option value="">전체</option>
-                        {% for value, label in status_choices %}
-                        <option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small">부서</label>
-                    <select name="department" class="form-select">
-                        <option value="">전체</option>
-                        {% for dept in departments %}
-                        <option value="{{ dept }}" {% if request.GET.department == dept %}selected{% endif %}>{{ dept }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <button type="submit" class="btn btn-dark me-1">
-                        <i class="bi bi-search me-1"></i>검색
-                    </button>
-                    <a href="{% url 'qms:qdoc_list' %}" class="btn btn-outline-secondary">초기화</a>
-                </div>
-            </form>
-        </div>
+    <div class="dtl-toolbar">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="dtl-form-label">문서 검색</label>
+                <input type="text" name="q" class="form-control dtl-form-control" placeholder="문서번호, 문서명..." value="{{ request.GET.q }}">
+            </div>
+            <div class="col-md-2">
+                <label class="dtl-form-label">분류</label>
+                <select name="category" class="form-select dtl-form-control">
+                    <option value="">전체</option>
+                    {% for value, label in category_choices %}
+                    <option value="{{ value }}" {% if request.GET.category == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="dtl-form-label">상태</label>
+                <select name="status" class="form-select dtl-form-control">
+                    <option value="">전체</option>
+                    {% for value, label in status_choices %}
+                    <option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="dtl-form-label">부서</label>
+                <select name="department" class="form-select dtl-form-control">
+                    <option value="">전체</option>
+                    {% for dept in departments %}
+                    <option value="{{ dept }}" {% if request.GET.department == dept %}selected{% endif %}>{{ dept }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="dtl-btn-dark me-1">
+                    <i class="bi bi-search me-1"></i>검색
+                </button>
+                <a href="{% url 'qms:qdoc_list' %}" class="dtl-btn-outline">초기화</a>
+            </div>
+        </form>
     </div>
 
     <!-- 문서 목록 -->
-    <div class="card shadow-sm">
+    <div class="dtl-card">
         <div class="table-responsive">
-            <table class="table table-hover mb-0 align-middle">
-                <thead class="table-dark">
+            <table class="table table-hover mb-0 align-middle dtl-table">
+                <thead>
                     <tr>
                         <th style="width: 140px;">문서번호</th>
                         <th>문서명</th>
@@ -124,38 +114,38 @@
                         </td>
                         <td class="text-center">
                             {% if doc.category == 'MANUAL' %}
-                            <span class="badge bg-primary">매뉴얼</span>
+                            <span class="dtl-pill blue">매뉴얼</span>
                             {% elif doc.category == 'PROCEDURE' %}
-                            <span class="badge bg-success">절차서</span>
+                            <span class="dtl-pill green">절차서</span>
                             {% elif doc.category == 'INSTRUCTION' %}
-                            <span class="badge bg-info">지시서</span>
+                            <span class="dtl-pill cyan">지시서</span>
                             {% elif doc.category == 'STANDARD' %}
-                            <span class="badge bg-warning text-dark">기준서</span>
+                            <span class="dtl-pill amber">기준서</span>
                             {% elif doc.category == 'FORM' %}
-                            <span class="badge bg-secondary">양식</span>
+                            <span class="dtl-pill slate">양식</span>
                             {% else %}
-                            <span class="badge bg-dark">{{ doc.get_category_display }}</span>
+                            <span class="dtl-pill slate">{{ doc.get_category_display }}</span>
                             {% endif %}
                         </td>
                         <td class="text-center">
-                            <span class="badge bg-outline-dark border">Rev.{{ doc.revision }}</span>
+                            <span class="dtl-pill slate">Rev.{{ doc.revision }}</span>
                         </td>
                         <td class="text-center">
                             {% if doc.status == 'APPROVED' %}
-                            <span class="badge bg-success">승인</span>
+                            <span class="dtl-pill green">승인</span>
                             {% elif doc.status == 'REVIEW' %}
-                            <span class="badge bg-warning text-dark">검토중</span>
+                            <span class="dtl-pill amber">검토중</span>
                             {% elif doc.status == 'DRAFT' %}
-                            <span class="badge bg-secondary">작성중</span>
+                            <span class="dtl-pill slate">작성중</span>
                             {% else %}
-                            <span class="badge bg-danger">폐기</span>
+                            <span class="dtl-pill red">폐기</span>
                             {% endif %}
                         </td>
                         <td class="small">{{ doc.department|default:"-" }}</td>
                         <td class="text-center small">{{ doc.effective_date|default:"-" }}</td>
                         <td class="text-center">
                             {% if doc.file %}
-                            <a href="{{ doc.file.url }}" target="_blank" class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation();">
+                            <a href="{{ doc.file.url }}" target="_blank" class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation();">
                                 <i class="bi bi-download"></i>
                             </a>
                             {% else %}
@@ -179,7 +169,7 @@
     <!-- 페이지네이션 -->
     {% if documents.has_other_pages %}
     <nav class="mt-4">
-        <ul class="pagination justify-content-center mb-0">
+        <ul class="pagination pagination-sm justify-content-center mb-0">
             {% if documents.has_previous %}
             <li class="page-item">
                 <a class="page-link" href="?page={{ documents.previous_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">
