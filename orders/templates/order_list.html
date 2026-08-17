@@ -107,18 +107,18 @@
                         <button type="button" class="btn btn-sm btn-danger" onclick="deleteSelected();">
                             <i class="bi bi-trash"></i> 삭제
                         </button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="closeSelected();">
+                        <button type="button" class="btn btn-sm btn-warning" onclick="closeSelected();">
                             <i class="bi bi-check-all"></i> 마감
                         </button>
                         {% endif %}
 
                         <a href="{% url 'order_approve_all' %}"
-                           class="btn btn-sm btn-outline-secondary"
+                           class="btn btn-sm btn-outline-success"
                            onclick="return confirm('미확인 발주를 일괄 승인하시겠습니까?');">
                             전체승인
                         </a>
-                        <a href="{% url 'order_export' %}" class="btn btn-sm btn-outline-secondary">
-                            <i class="bi bi-file-earmark-excel"></i> 엑셀
+                        <a href="{% url 'order_export' %}" class="btn btn-sm btn-success">
+                            <i class="bi bi-file-earmark-excel"></i> 엑셀 저장
                         </a>
                     </div>
                 </div>
