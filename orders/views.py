@@ -1690,6 +1690,16 @@ def delete_delivery_order(request, order_id):
         messages.error(request, "이미 처리된 납품서는 삭제할 수 없습니다.")
         return redirect('label_list')
 
+    # 한 번이라도 입고 처리(WMS 트랜잭션 생성)된 적 있는 납품서는 삭제 불가.
+    # 부분취소로 인해 status가 다시 PENDING으로 리셋된 경우가 여기 해당되는데,
+    # 이런 건 이미 반출확인 등으로 PO 잔량이 일부 복구된 이력이 있어서
+    # 전체삭제 시 라벨 발행량을 전부 되돌리면 잔량이 중복 복구됨.
+    if MaterialTransaction is not None and MaterialTransaction.objects.filter(
+        ref_delivery_order=order.order_no
+    ).exists():
+        messages.error(request, "이 납품서는 입고 처리 이력이 있어 삭제할 수 없습니다. (부분취소 이력이 있는 납품서는 삭제 불가)")
+        return redirect('label_list')
+
     with transaction.atomic():
         for item in order.items.all():
             LabelPrintLog.objects.filter(
