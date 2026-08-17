@@ -2,7 +2,7 @@
 {% load humanize %}
 
 {% block material_content %}
-<div class="container-fluid p-0">
+<div class="dtl-wrap" style="max-width:1400px;">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <span class="dtl-title">WMS 대시보드</span>
         <span class="text-muted small">{{ today }} · WMS v2.0</span>
@@ -12,7 +12,7 @@
     <div class="row g-3 mb-3">
         <div class="col-md-3 col-sm-6">
             <div class="dtl-card h-100 mb-0">
-                <div class="card-body">
+                <div class="dtl-card-body card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">총 재고 품목</div>
@@ -29,7 +29,7 @@
 
         <div class="col-md-3 col-sm-6">
             <div class="dtl-card h-100 mb-0">
-                <div class="card-body">
+                <div class="dtl-card-body card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">금일 입고</div>
@@ -46,7 +46,7 @@
 
         <div class="col-md-3 col-sm-6">
             <div class="dtl-card h-100 mb-0">
-                <div class="card-body">
+                <div class="dtl-card-body card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">금일 출고</div>
@@ -63,7 +63,7 @@
 
         <div class="col-md-3 col-sm-6">
             <div class="dtl-card h-100 mb-0">
-                <div class="card-body">
+                <div class="dtl-card-body card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">FIFO 경고</div>
@@ -83,7 +83,7 @@
     <div class="row g-3 mb-3">
         <div class="col-md-3 col-sm-6">
             <div class="dtl-card h-100 mb-0">
-                <div class="card-body">
+                <div class="dtl-card-body card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">이번달 입고</div>
@@ -100,7 +100,7 @@
 
         <div class="col-md-3 col-sm-6">
             <div class="dtl-card h-100 mb-0">
-                <div class="card-body">
+                <div class="dtl-card-body card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">이번달 출고</div>
@@ -117,7 +117,7 @@
 
         <div class="col-md-3 col-sm-6">
             <div class="dtl-card h-100 mb-0">
-                <div class="card-body">
+                <div class="dtl-card-body card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">BOM 등록</div>
@@ -134,7 +134,7 @@
 
         <div class="col-md-3 col-sm-6">
             <div class="dtl-card h-100 mb-0">
-                <div class="card-body">
+                <div class="dtl-card-body card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">현품표 발행</div>
@@ -276,7 +276,7 @@
         <div class="col-12">
             <div class="dtl-card mb-0">
                 <div class="dtl-card-header"><i class="bi bi-lightning"></i>빠른 바로가기</div>
-                <div class="card-body">
+                <div class="dtl-card-body card-body">
                     <div class="row g-3">
                         <div class="col-md-2 col-sm-4 col-6">
                             <a href="{% url 'material:stock_list' %}" class="dtl-btn-outline w-100 py-3 d-block text-center">
