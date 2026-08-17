@@ -73,7 +73,6 @@ urlpatterns = [
     path('label/print_note/<int:order_id>/', views.delivery_note_print, name='delivery_note_print'),
     path('label/action/', views.label_print_action, name='label_print_action'),
     path('label/delete/<int:order_id>/', views.delete_delivery_order, name='delete_delivery_order'),
-    path('label/force-cancel/<int:order_id>/', views.force_cancel_delivery_order, name='force_cancel_delivery_order'),
 
     # [QR 스캔 프로세스]
     path('label/receive_scan/', views.receive_delivery_order_scan, name='receive_delivery_order_scan'),

@@ -96,8 +96,6 @@
                                         <span class="badge bg-success">입고완료</span>
                                     {% elif order.status == 'REJECTED' %}
                                         <span class="badge bg-danger">반려(전수불량)</span>
-                                    {% elif order.status == 'CANCELLED' %}
-                                        <span class="badge bg-dark">취소됨</span>
                                     {% endif %}
                                 </td>
                                 <td>
@@ -108,23 +106,13 @@
                                         <a href="{% url 'delivery_note_print' order.id %}" target="_blank" class="btn btn-sm btn-outline-secondary">
                                             <i class="bi bi-file-text"></i> 납품서
                                         </a>
-                                        {% if order.status == 'PENDING' %}
                                         <form action="{% url 'delete_delivery_order' order.id %}" method="post" class="m-0">
                                             {% csrf_token %}
-                                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('정말 삭제하시겠습니까?\n(발행된 라벨 이력도 함께 삭제됩니다)')">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="스캔 전이거나, 스캔했어도 실제로 입고 확정된 게 없으면 취소 가능"
+                                                    onclick="return confirm('이 납품서를 취소하시겠습니까?\n(발행된 라벨 이력 및 정리 안 된 입고 건이 함께 원복됩니다)')">
                                                 <i class="bi bi-trash"></i>
                                             </button>
                                         </form>
-                                        {% endif %}
-                                        {% if user.is_superuser and order.status != 'CANCELLED' %}
-                                        <form action="{% url 'force_cancel_delivery_order' order.id %}" method="post" class="m-0">
-                                            {% csrf_token %}
-                                            <button type="submit" class="btn btn-sm btn-dark" title="관리자 전용: 정리 안 된 입고 건을 원복하고 완전 취소"
-                                                    onclick="return confirm('[관리자 전용] 이 납품서를 완전 취소하시겠습니까?\n\n아직 정리되지 않은 WMS 입고/재고/수입검사 건을 되돌립니다.\n(이미 반출 확인된 품목의 PO 잔량 복구는 건드리지 않음)\n수입검사 합격/무검사 직납으로 실제 입고 확정된 품목이 있으면 취소되지 않습니다.\n되돌릴 수 없는 작업입니다.')">
-                                                <i class="bi bi-exclamation-octagon"></i> 완전취소
-                                            </button>
-                                        </form>
-                                        {% endif %}
                                     </div>
                                 </td>
                             </tr>
