@@ -3204,9 +3204,11 @@ def transfer_history(request):
     from django.db.models import Q
     from orders.models import Part
 
-    # 이동(TRANSFER, TRF_ERP) 타입 조회
+    # 이동(TRANSFER, TRF_ERP) 타입 조회 (수입검사 판정 시 자동생성되는 이동건은 제외)
     qs = MaterialTransaction.objects.filter(
         transaction_type__in=['TRANSFER', 'TRF_ERP']
+    ).exclude(
+        remark__startswith='[수입검사]'
     ).select_related(
         'part', 'warehouse_from', 'warehouse_to', 'actor'
     ).order_by('-date', '-id')
