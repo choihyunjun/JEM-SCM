@@ -220,8 +220,13 @@
             --bs-table-hover-bg: #f0f7ff;
         }
 
-        /* [카드 헤더] bg-dark 카드헤더 → 밝은 톤으로 통일 */
-        #layoutSidenav_content .card > .card-header.bg-dark {
+        /* [카드 헤더] 원색 카드헤더(bg-dark/primary/success/danger/info/secondary) → 밝은 톤으로 통일 */
+        #layoutSidenav_content .card > .card-header.bg-dark,
+        #layoutSidenav_content .card > .card-header.bg-primary,
+        #layoutSidenav_content .card > .card-header.bg-success,
+        #layoutSidenav_content .card > .card-header.bg-danger,
+        #layoutSidenav_content .card > .card-header.bg-info,
+        #layoutSidenav_content .card > .card-header.bg-secondary {
             background: #f1f3f5 !important;
             color: #374151 !important;
             border-bottom: 1px solid #e3e8ef;
