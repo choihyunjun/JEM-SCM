@@ -103,11 +103,11 @@
                 <span class="fw-bold text-secondary me-2"><i class="bi bi-calendar-check"></i> 기간</span>
             </div>
             <div class="col-auto">
-                <input type="date" name="start_date" class="form-control form-control-sm" value="{{ start_date }}">
-            </div>
-            <div class="col-auto">~</div>
-            <div class="col-auto">
-                <input type="date" name="end_date" class="form-control form-control-sm" value="{{ end_date }}">
+                <div class="input-group input-group-sm" style="width: 240px;">
+                    <input type="date" name="start_date" class="form-control form-control-sm" value="{{ start_date }}">
+                    <span class="input-group-text px-1">~</span>
+                    <input type="date" name="end_date" class="form-control form-control-sm" value="{{ end_date }}">
+                </div>
             </div>
 
             <div class="col-auto ms-3">

@@ -476,6 +476,17 @@
             /* ─── 8. QMS 필터 상단 줄 (col-lg 비율 조정) ─── */
             .col-lg-4, .col-lg-8 { width: 100%; }
             .col-lg-8.text-end { text-align: left !important; }
+
+            /* ─── 9. 최근 방문 탭 바: 가로 스크롤 가능함을 알리는 페이드 힌트 ─── */
+            #recentTabsBar { position: relative; }
+            #recentTabsBar::after {
+                content: '';
+                position: absolute;
+                top: 0; right: 0; bottom: 0;
+                width: 28px;
+                background: linear-gradient(to right, rgba(241,243,245,0), rgba(241,243,245,0.95));
+                pointer-events: none;
+            }
         }
     </style>
 </head>
