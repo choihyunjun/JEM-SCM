@@ -1712,6 +1712,79 @@ def delete_delivery_order(request, order_id):
 
     return redirect('label_list')
 
+
+@login_required
+@require_POST
+def force_cancel_delivery_order(request, order_id):
+    """[관리자 전용] 납품서 완전 취소.
+
+    delete_delivery_order와 달리 처리 이력(WMS 입고, 수입검사, 반출)이
+    있어도 전부 원복하고 취소 처리한다. 실수로 등록해서 처리까지
+    진행됐지만 전체를 무효화해야 하는 예외적인 경우를 위한 기능.
+
+    - 연결된 모든 MaterialTransaction을 _do_cancel_incoming(delete_all)로
+      되돌림 (재고 원복, 수입검사 삭제, ERP 삭제 등 기존 로직 재사용)
+    - 하나라도 되돌리기 실패하면(마감, 라벨발행 등) 전체 롤백하고 사유 표시
+    - ReturnLog 전부 삭제 + LabelPrintLog 전부 삭제로 PO 잔량 원복
+      (반출 확인된 품목도 같이 지워서 이중 복구 없이 정합성 유지)
+    - DeliveryOrder/DeliveryOrderItem은 삭제하지 않고 status='CANCELLED'로
+      남겨서 감사 기록은 보존
+    """
+    if not request.user.is_superuser:
+        messages.error(request, "관리자만 사용할 수 있는 기능입니다.")
+        return redirect('label_list')
+
+    order = get_object_or_404(DeliveryOrder, pk=order_id)
+
+    if order.status == 'CANCELLED':
+        messages.warning(request, "이미 취소된 납품서입니다.")
+        return redirect('label_list')
+
+    if MaterialTransaction is None:
+        messages.error(request, "WMS 연동 모델을 불러올 수 없습니다.")
+        return redirect('label_list')
+
+    trxs = list(MaterialTransaction.objects.filter(ref_delivery_order=order.order_no))
+
+    try:
+        with transaction.atomic():
+            from material.views import _do_cancel_incoming
+
+            for trx in trxs:
+                success, message = _do_cancel_incoming(trx, 'delete_all')
+                if not success:
+                    raise Exception(message)
+
+            # 반출 이력 전부 삭제 (확인 여부 무관) - 아래에서 라벨 이력을
+            # 통째로 복구하므로, 반출로 이미 복구된 품목도 같이 지워야
+            # 잔량 계산(총발주 - 발행 + 반출)이 이중 복구 없이 맞아떨어짐
+            ReturnLog.objects.filter(delivery_order=order).delete()
+
+            # 라벨 발행 이력 전부 삭제 -> PO 잔량 전체 복구
+            restored_qty = 0
+            for item in order.items.all():
+                deleted_count, _ = LabelPrintLog.objects.filter(
+                    part_no=item.part_no,
+                    printed_qty=item.total_qty,
+                ).delete()
+                if deleted_count:
+                    restored_qty += item.total_qty
+
+            order.is_received = False
+            order.status = 'CANCELLED'
+            order.save()
+
+        messages.success(
+            request,
+            f"납품서 [{order.order_no}] 완전 취소 완료 "
+            f"(입고 이력 {len(trxs)}건 원복, PO 잔량 {restored_qty}개 복구)"
+        )
+    except Exception as e:
+        messages.error(request, f"완전 취소 실패: {e} (문제된 품목을 먼저 개별적으로 해결한 뒤 다시 시도하세요)")
+
+    return redirect('label_list')
+
+
 @login_required
 @menu_permission_required('can_scm_label_view')
 def label_print_action(request):

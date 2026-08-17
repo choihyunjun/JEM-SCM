@@ -199,6 +199,7 @@ class DeliveryOrder(models.Model):
         ('RECEIVED', '입고완료(검사대기)'),
         ('APPROVED', '검사합격(입고확정)'),
         ('REJECTED', '검사불합격(반려)'),
+        ('CANCELLED', '취소됨'),
     ]
     status = models.CharField("상태", max_length=20, choices=STATUS_CHOICES, default='PENDING')
 
