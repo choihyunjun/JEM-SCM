@@ -3405,6 +3405,8 @@ def stock_move(request):
 
         history_qs = MaterialTransaction.objects.filter(
             transaction_type__in=['TRANSFER', 'TRF_ERP']
+        ).exclude(
+            remark__startswith='[수입검사]'
         ).select_related('part', 'warehouse_from', 'warehouse_to', 'actor').annotate(
             rm_label_count=Count('used_labels', distinct=True),
             tag_count=Count('used_tags', distinct=True),
