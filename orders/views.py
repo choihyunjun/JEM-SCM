@@ -2200,6 +2200,17 @@ def receive_delivery_order_confirm(request):
                 if not part:
                     continue
 
+                # 이미 이 납품서+품번+LOT로 처리된 입고 트랜잭션이 있으면 건너뜀
+                # (부분 취소 후 재스캔 시 이미 완결된 품목이 중복 입고되는 것 방지)
+                already_processed = MaterialTransaction.objects.filter(
+                    ref_delivery_order=do.order_no,
+                    part=part,
+                    lot_no=item.lot_no,
+                ).exists()
+                if already_processed:
+                    messages.info(request, f"[{item.part_no}] 이미 처리된 품목이라 건너뛰었습니다.")
+                    continue
+
                 # LOT 정보 포함하여 재고 저장
                 # select_for_update로 동시성 문제 방지
                 with db_transaction.atomic():
