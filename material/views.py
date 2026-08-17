@@ -1026,6 +1026,22 @@ def _do_cancel_incoming(trx, cancel_action):
             # 트랜잭션 삭제
             trx.delete()
 
+            # SCM 라벨 발행 이력(PO 잔량) 복구 - 이미 반출(ReturnLog)로 처리된
+            # 품목이면 건드리지 않음 (반출 확인 경로에서 이미 잔량이 복구되므로
+            # 여기서 또 복구하면 중복 복구가 됨)
+            label_restored_qty = 0
+            if ref_do_no:
+                from orders.models import LabelPrintLog, ReturnLog
+                already_via_return = ReturnLog.objects.filter(
+                    delivery_order__order_no=ref_do_no, part=part
+                ).exists()
+                if not already_via_return:
+                    deleted_count, _ = LabelPrintLog.objects.filter(
+                        part_no=part.part_no, printed_qty=trx_qty
+                    ).delete()
+                    if deleted_count:
+                        label_restored_qty = trx_qty
+
             # 납품서에 남은 입고 건이 없으면 재처리 가능하도록 납품서 상태 리셋
             do_reset = False
             if ref_do_no and not other_items_exist:
@@ -1041,6 +1057,8 @@ def _do_cancel_incoming(trx, cancel_action):
             msg = f"입고 건 [{trx_no}] 삭제 완료 (재고 {trx_qty}개 차감). 납품서 [{ref_do_no}]가 재처리 가능 상태로 초기화되었습니다."
         else:
             msg = f"입고 건 [{trx_no}] 삭제 완료 (재고 {trx_qty}개 차감)"
+        if label_restored_qty:
+            msg += f" / PO 잔량 {label_restored_qty}개 복구됨"
         if erp_notices:
             msg += " / " + "; ".join(erp_notices)
         return True, msg
