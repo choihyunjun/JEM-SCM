@@ -108,8 +108,8 @@
                                         </a>
                                         <form action="{% url 'delete_delivery_order' order.id %}" method="post" class="m-0">
                                             {% csrf_token %}
-                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="스캔 전이거나, 스캔했어도 실제로 입고 확정된 게 없으면 취소 가능"
-                                                    onclick="return confirm('이 납품서를 취소하시겠습니까?\n(발행된 라벨 이력 및 정리 안 된 입고 건이 함께 원복됩니다)')">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="스캔(WMS 입고 처리)된 적 없는 납품서만 취소 가능"
+                                                    onclick="return confirm('이 납품서를 취소하시겠습니까?\n(발행된 라벨 이력이 함께 삭제되어 PO 잔량이 복구됩니다)\n\n※ 스캔되어 WMS에 입고 이력이 남아있으면 취소되지 않습니다.')">
                                                 <i class="bi bi-trash"></i>
                                             </button>
                                         </form>

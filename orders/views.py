@@ -1669,15 +1669,15 @@ def label_list(request):
 def delete_delivery_order(request, order_id):
     """납품서 취소.
 
-    - 스캔(WMS 입고 처리) 이력이 아예 없는 품목: 라벨 발행 이력만 지워서
-      PO 잔량 복구 (기존 방식 그대로)
-    - 스캔은 됐지만 아직 정리 안 된 품목(예: 실수로 스캔 후 취소하려는 경우):
-      _do_cancel_incoming(delete_all)으로 개별 원복 (재고/수입검사/ERP 정리,
-      PO 잔량 복구까지 그 함수가 알아서 처리 - 이미 반출 확인된 품목은
-      건드리지 않음)
-    - 수입검사 합격했거나 무검사 직납으로 이미 실제 재고에 들어간 품목이
-      하나라도 있으면 취소 자체를 차단 (결론적으로 입고 수량이 0인
-      납품서만 취소 가능)
+    스캔(WMS 입고 처리)된 적 있는 품목이 하나라도 있으면 취소 자체를 차단한다.
+    스캔된 품목은 실물이 이미 어느 창고엔가(검사대기창고든 부적합창고든)
+    물리적으로 존재하는 상태라서, 여기서 시스템 기록만 지우면 "실물은
+    있는데 시스템엔 없는" 유령재고가 생긴다. 이런 품목은 반드시 WMS
+    입고 관리 화면에서 실물을 직접 확인하는 담당자가 개별적으로
+    취소해야 한다.
+
+    이 함수는 "한 번도 스캔된 적 없는" 품목의 납품서만 취소 가능하며,
+    이 경우 라벨 발행 이력만 지워서 PO 잔량을 복구한다.
     """
     resp = require_action_perm(request, 'delivery.delete')
     if resp:
@@ -1698,55 +1698,25 @@ def delete_delivery_order(request, order_id):
         messages.error(request, "삭제 권한이 없습니다.")
         return redirect('label_list')
 
-    trxs = list(MaterialTransaction.objects.filter(ref_delivery_order=order.order_no)) if MaterialTransaction else []
-
-    blocking = []
-    for t in trxs:
-        try:
-            insp = t.inspection
-        except Exception:
-            insp = None
-        if insp and insp.status == 'APPROVED':
-            blocking.append(f"{t.part.part_no}(수입검사 합격)")
-
-    if Incoming.objects.filter(delivery_order_no=order.order_no).exists():
-        blocking.append("무검사 직납으로 이미 입고 확정된 품목 있음")
-
-    if blocking:
+    if MaterialTransaction is not None and MaterialTransaction.objects.filter(
+        ref_delivery_order=order.order_no
+    ).exists():
         messages.error(
             request,
-            "실제로 재고에 남아있는(입고 확정된) 품목이 있어 취소할 수 없습니다: "
-            + ", ".join(blocking) + " (해당 품목은 개별적으로 먼저 처리하세요)"
+            "이 납품서는 이미 스캔되어 WMS에 입고 이력(실물 재고)이 남아있어 여기서 바로 취소할 수 없습니다. "
+            "WMS 입고 관리 화면에서 해당 품목을 먼저 개별적으로 취소한 뒤 다시 시도하세요."
         )
         return redirect('label_list')
 
-    try:
-        with transaction.atomic():
-            from material.views import _do_cancel_incoming
-
-            scanned_part_nos = set()
-            for trx in trxs:
-                success, message = _do_cancel_incoming(trx, 'delete_all')
-                if not success:
-                    raise Exception(message)
-                scanned_part_nos.add(trx.part.part_no)
-
-            # 스캔된 적 없는 품목만 여기서 라벨 발행 이력 삭제(PO 잔량 복구).
-            # 스캔됐던 품목은 위 _do_cancel_incoming이 이미 처리했음.
-            for item in order.items.all():
-                if item.part_no in scanned_part_nos:
-                    continue
-                LabelPrintLog.objects.filter(
-                    part_no=item.part_no,
-                    printed_qty=item.total_qty,
-                    printed_at__date=order.created_at.date()
-                ).delete()
-
-            order.delete()
-
+    with transaction.atomic():
+        for item in order.items.all():
+            LabelPrintLog.objects.filter(
+                part_no=item.part_no,
+                printed_qty=item.total_qty,
+                printed_at__date=order.created_at.date()
+            ).delete()
+        order.delete()
         messages.success(request, "납품서가 취소되었습니다.")
-    except Exception as e:
-        messages.error(request, f"취소 실패: {e}")
 
     return redirect('label_list')
 
