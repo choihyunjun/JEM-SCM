@@ -1485,19 +1485,26 @@ def import_inspection_detail(request, pk):
                     erp_no = target_do_item.erp_order_no if target_do_item else ""
                     erp_seq = target_do_item.erp_order_seq if target_do_item else ""
 
-                    incoming_obj, _ = Incoming.objects.get_or_create(
+                    # Incoming은 (납품서번호+품번) 단위라 LOT 구분이 없음.
+                    # 같은 품번이 한 납품서에 여러 LOT으로 나뉘어 각각
+                    # 판정되는 경우, 덮어쓰면 먼저 판정된 LOT의 수량이
+                    # 유실되므로 누적한다.
+                    incoming_obj, created = Incoming.objects.get_or_create(
                         delivery_order_no=ref_do_no,
                         part=part,
                         defaults={
                             "in_date": timezone.localtime().date(),
                             "quantity": total_input,
+                            "confirmed_qty": qty_good,
                             "erp_order_no": erp_no,
                             "erp_order_seq": erp_seq,
                         },
                     )
-                    incoming_obj.quantity = total_input
-                    incoming_obj.confirmed_qty = qty_good
-                    incoming_obj.save()
+                    if not created:
+                        incoming_obj.quantity = F("quantity") + total_input
+                        incoming_obj.confirmed_qty = F("confirmed_qty") + qty_good
+                        incoming_obj.save(update_fields=["quantity", "confirmed_qty"])
+                        incoming_obj.refresh_from_db()
 
                     # (주의) SCM Inventory.base_stock 누적은 정책에 따라 ON/OFF
                     if qty_good > 0:

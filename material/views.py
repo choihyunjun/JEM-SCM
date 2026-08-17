@@ -8076,6 +8076,18 @@ def cancel_stock_move(request, trx_id):
     if trx.transaction_type == 'TRF_ERP':
         return JsonResponse({'success': False, 'error': 'ERP에서 동기화된 재고이동 건은 SCM에서 취소할 수 없습니다. ERP(아마란스)에서 삭제해주세요.'})
 
+    # 수입검사 판정 시 자동생성된 이동건(TRX-OK/TRX-NG)은 여기서 취소 불가.
+    # 이 함수는 재고/ERP/라벨만 원복하고 연결된 ImportInspection 상태는
+    # 안 건드려서, 여기서 취소하면 "검사는 합격/불합격으로 남아있는데
+    # 재고는 없는" 불일치가 생김. 이런 건 반드시 입고 관리 화면의
+    # "입고만 취소"(수입검사 판정을 PENDING으로 되돌리는 경로)를 써야 함.
+    if (trx.remark or '').startswith('[수입검사]'):
+        return JsonResponse({
+            'success': False,
+            'error': '수입검사 판정으로 생성된 이동 건은 여기서 취소할 수 없습니다. '
+                     '입고 관리 화면에서 해당 입고 건의 "입고만 취소"를 이용해 검사 판정부터 되돌리세요.'
+        })
+
     # 마감 체크
     is_closed, warning_msg, _ = check_closing_date(
         trx.date.date() if hasattr(trx.date, 'date') and callable(trx.date.date) else trx.date
