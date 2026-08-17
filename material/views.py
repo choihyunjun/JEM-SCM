@@ -1026,21 +1026,32 @@ def _do_cancel_incoming(trx, cancel_action):
             # 트랜잭션 삭제
             trx.delete()
 
-            # SCM 라벨 발행 이력(PO 잔량) 복구 - 이미 반출(ReturnLog)로 처리된
-            # 품목이면 건드리지 않음 (반출 확인 경로에서 이미 잔량이 복구되므로
-            # 여기서 또 복구하면 중복 복구가 됨)
+            # SCM 라벨 발행 이력(PO 잔량) 복구.
+            # 이 트랜잭션 수량(trx_qty) 중 이미 반출(ReturnLog)로 복구된
+            # 수량은 빼고, 나머지(=이번에 새로 재고에서 빠지는 수량)만 복구한다.
+            # (예: 100개 중 양품80/불량20으로 판정, 불량 20은 이미 반출 확인
+            #  완료된 상태에서 남은 양품 80까지 취소하는 경우 -> 80만 복구.
+            #  100 전체를 복구하면 이미 반출로 복구된 20이 중복 복구되고,
+            #  반대로 건너뛰면 80이 영원히 복구 안 됨)
             label_restored_qty = 0
             if ref_do_no:
                 from orders.models import LabelPrintLog, ReturnLog
-                already_via_return = ReturnLog.objects.filter(
+                already_returned_qty = ReturnLog.objects.filter(
                     delivery_order__order_no=ref_do_no, part=part
-                ).exists()
-                if not already_via_return:
-                    deleted_count, _ = LabelPrintLog.objects.filter(
+                ).aggregate(total=Sum('quantity'))['total'] or 0
+
+                restore_qty = trx_qty - already_returned_qty
+                if restore_qty > 0:
+                    label = LabelPrintLog.objects.filter(
                         part_no=part.part_no, printed_qty=trx_qty
-                    ).delete()
-                    if deleted_count:
-                        label_restored_qty = trx_qty
+                    ).first()
+                    if label:
+                        if restore_qty >= label.printed_qty:
+                            label.delete()
+                        else:
+                            label.printed_qty = label.printed_qty - restore_qty
+                            label.save(update_fields=['printed_qty'])
+                        label_restored_qty = restore_qty
 
             # 납품서에 남은 입고 건이 없으면 재처리 가능하도록 납품서 상태 리셋
             do_reset = False
