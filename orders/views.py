@@ -1962,31 +1962,51 @@ def incoming_cancel(request):
     do_no = target_inc.delivery_order_no
     do = DeliveryOrder.objects.filter(order_no=do_no).first()
 
-    with transaction.atomic():
-        if mode == 'item':
-            if do:
-                LabelPrintLog.objects.filter(part_no=target_inc.part.part_no, printed_qty=target_inc.quantity).delete()
-                DeliveryOrderItem.objects.filter(order=do, part_no=target_inc.part.part_no, total_qty=target_inc.quantity).delete()
-
-            target_inc.delete()
-            messages.success(request, f"품목 {target_inc.part.part_no} 입고 취소 및 잔량이 복구되었습니다.")
-
-        elif mode == 'all':
-            Incoming.objects.filter(delivery_order_no=do_no).delete()
-            if do:
-                # 같은 납품서에 연결된 다른 입고 건(수입검사 등)이 남아있으면 상태를 건드리지 않음
-                other_items_exist = False
+    # Incoming은 "무검사 직납" 품목에만 생성되는데, 그 품목은 WMS 쪽에도
+    # MaterialTransaction + 실제 재고가 같이 생성돼 있다. 여기서 SCM
+    # 레코드(Incoming/라벨/DeliveryOrderItem)만 지우고 WMS 재고는 안
+    # 건드리면, "PO는 복구됐는데 창고엔 실물이 그대로 남아있는" 유령재고가
+    # 생긴다. 그래서 _do_cancel_incoming(WMS 쪽 정식 취소 로직)을 재사용해서
+    # 같이 원복한다 (재고/ERP 원복 + 라벨 복구까지 그 함수가 처리하므로
+    # 여기서 라벨을 따로 지우지 않는다).
+    try:
+        with transaction.atomic():
+            if mode == 'item':
                 if MaterialTransaction is not None:
-                    other_items_exist = MaterialTransaction.objects.filter(
-                        ref_delivery_order=do_no,
+                    from material.views import _do_cancel_incoming
+                    for trx in MaterialTransaction.objects.filter(
+                        ref_delivery_order=do_no, part=target_inc.part,
                         transaction_type__in=['IN_MANUAL', 'IN_SCM', 'IN_ERP']
-                    ).exists()
+                    ):
+                        success, message = _do_cancel_incoming(trx, 'delete_all')
+                        if not success:
+                            raise Exception(message)
 
-                if not other_items_exist:
-                    do.is_received = False
-                    do.save()
+                if do:
+                    DeliveryOrderItem.objects.filter(
+                        order=do, part_no=target_inc.part.part_no, total_qty=target_inc.quantity
+                    ).delete()
 
-            messages.success(request, f"납품서 {do_no} 입고 취소 완료. (품목 데이터는 보존됩니다)")
+                target_inc.delete()
+                messages.success(request, f"품목 {target_inc.part.part_no} 입고 취소 및 잔량이 복구되었습니다.")
+
+            elif mode == 'all':
+                incomings = list(Incoming.objects.filter(delivery_order_no=do_no))
+                if MaterialTransaction is not None:
+                    from material.views import _do_cancel_incoming
+                    part_ids = {inc.part_id for inc in incomings}
+                    for trx in MaterialTransaction.objects.filter(
+                        ref_delivery_order=do_no, part_id__in=part_ids,
+                        transaction_type__in=['IN_MANUAL', 'IN_SCM', 'IN_ERP']
+                    ):
+                        success, message = _do_cancel_incoming(trx, 'delete_all')
+                        if not success:
+                            raise Exception(message)
+
+                Incoming.objects.filter(delivery_order_no=do_no).delete()
+                messages.success(request, f"납품서 {do_no} 입고 취소 완료. (품목 데이터는 보존됩니다)")
+    except Exception as e:
+        messages.error(request, f"취소 실패: {e}")
 
     return redirect('incoming_list')
 
