@@ -454,9 +454,18 @@
             .scm-filter .form-control { width: 100% !important; min-width: 0 !important; }
             .scm-filter .input-group { width: 100% !important; min-width: 0 !important; }
 
-            /* ─── 4. input-group 내 고정너비 form-control 재정의 ─── */
-            .input-group .form-control,
-            .input-group .form-select { min-width: 0 !important; }
+            /* ─── 4. input-group 내부 form-control: 위 1/3번 규칙이 개별 100%로
+               덮어써서 두 input이 서로 밀어내던 문제 -> flex로 균등 배분되게 재정의
+               (form.row .form-control / .scm-filter .form-control 보다 더 구체적인
+               선택자라 우선 적용됨) ─── */
+            form.row .input-group .form-control,
+            form.row .input-group .form-select,
+            .scm-filter .input-group .form-control,
+            .scm-filter .input-group .form-select {
+                width: 1% !important;
+                min-width: 0 !important;
+                flex: 1 1 auto !important;
+            }
 
             /* ─── 5. 버튼 그룹 줄바꿈 ─── */
             .btn-group { flex-wrap: wrap; }
