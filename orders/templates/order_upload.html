@@ -46,12 +46,12 @@
             <h5 class="fw-bold m-0 text-success">STEP 2. 데이터 검증 및 최종 등록</h5>
             <span class="badge bg-secondary fs-6">
                 총 {{ preview_data|length }}건 /
-                <span class="text-success-emphasis">등록 {{ valid_count }}</span> /
-                <span class="text-danger-emphasis">제외 {{ error_count }}</span>
+                <span class="text-success-emphasis">등록 <span id="validCountText">{{ valid_count }}</span></span> /
+                <span class="text-danger-emphasis">제외 <span id="errorCountText">{{ error_count }}</span></span>
             </span>
         </div>
 
-        <form action="{% url 'order_create_confirm' %}" method="post">
+        <form action="{% url 'order_create_confirm' %}" method="post" id="uploadPreviewForm">
             {% csrf_token %}
             <div class="card-body p-0">
                 <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
@@ -70,15 +70,27 @@
                         </thead>
                         <tbody>
                             {% for row in preview_data %}
-                            <tr class="{% if not row.is_valid %}table-danger{% endif %}">
+                            <tr class="upload-row {% if not row.is_valid %}table-danger{% endif %}"
+                                data-part-no="{{ row.part_no }}" data-quantity="{{ row.quantity }}" data-due-date="{{ row.due_date }}">
                                 <td>{{ forloop.counter }}</td>
                                 <td class="text-start fw-bold">{{ row.part_no }}</td>
                                 <td class="text-start">{{ row.part_name|default:"-" }}</td>
-                                <td class="fw-bold">{{ row.vendor|default:"-" }}</td>
+                                <td class="fw-bold vendor-cell">
+                                    {% if row.error_type == 'vendor_not_assigned' %}
+                                    <div class="position-relative" style="min-width:170px;">
+                                        <input type="text" class="form-control form-control-sm vendor-link-input"
+                                               placeholder="업체 검색 후 연결..." autocomplete="off">
+                                        <div class="vendor-link-dropdown position-absolute bg-white border rounded shadow-sm"
+                                             style="display:none;z-index:1060;width:100%;max-height:180px;overflow-y:auto;top:100%;left:0;"></div>
+                                    </div>
+                                    {% else %}
+                                    {{ row.vendor|default:"-" }}
+                                    {% endif %}
+                                </td>
                                 <td>{{ row.part_group|default:"-" }}</td>
                                 <td class="fw-bold text-end pe-3">{{ row.quantity|intcomma }}</td>
                                 <td>{{ row.due_date }}</td>
-                                <td>
+                                <td class="status-cell">
                                     {% if row.is_valid %}
                                         <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>정상</span>
                                     {% elif row.error_type == 'part_not_found' %}
@@ -103,14 +115,11 @@
             </div>
             <div class="card-footer bg-white p-3 text-end">
                 <a href="{% url 'order_upload' %}" class="btn btn-secondary me-2">취소 (다시 올리기)</a>
-                {% if valid_count > 0 %}
-                <button type="submit" class="btn btn-success fw-bold px-5"
-                        onclick="return confirm('오류 품목 {{ error_count }}건을 제외하고 정상 품목 {{ valid_count }}건만 등록하시겠습니까?')">
+                <button type="submit" class="btn btn-success fw-bold px-5" id="finalSubmitBtn"
+                        {% if valid_count == 0 %}disabled{% endif %}
+                        onclick="return confirmFinalSubmit()">
                     <i class="bi bi-check-circle-fill me-2"></i> 최종 등록 확정
                 </button>
-                {% else %}
-                <button type="button" class="btn btn-secondary px-5" disabled>등록 가능한 품목이 없습니다</button>
-                {% endif %}
             </div>
         </form>
     </div>
@@ -159,6 +168,103 @@
 </div>
 
 <script>
+// 최종 등록 확정 - 현재(인라인 연결 반영된) 카운트로 확인창 표시
+function confirmFinalSubmit() {
+    var validN = document.getElementById('validCountText').textContent;
+    var errorN = document.getElementById('errorCountText').textContent;
+    return confirm('오류 품목 ' + errorN + '건을 제외하고 정상 품목 ' + validN + '건만 등록하시겠습니까?');
+}
+
+// "협력사 미지정" 행에서 바로 업체 연결
+(function() {
+    var csrfInput = document.querySelector('#uploadPreviewForm input[name=csrfmiddlewaretoken]');
+    var csrfToken = csrfInput ? csrfInput.value : '';
+
+    document.querySelectorAll('.vendor-link-input').forEach(function(input) {
+        var row = input.closest('tr.upload-row');
+        var dropdown = row.querySelector('.vendor-link-dropdown');
+        var searchTimer = null;
+
+        input.addEventListener('input', function() {
+            clearTimeout(searchTimer);
+            var q = input.value.trim();
+            if (q.length < 1) { dropdown.style.display = 'none'; return; }
+            searchTimer = setTimeout(function() {
+                fetch('/api/vendors/search/?q=' + encodeURIComponent(q))
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        var results = data.results || [];
+                        if (!results.length) {
+                            dropdown.innerHTML = '<div class="px-2 py-2 text-muted small">검색 결과 없음</div>';
+                        } else {
+                            dropdown.innerHTML = results.map(function(v) {
+                                return '<div class="px-2 py-2 small border-bottom vendor-link-option" style="cursor:pointer;" data-id="' + v.id + '" data-name="' + v.name.replace(/"/g, '&quot;') + '">'
+                                    + '<span class="text-muted">[' + v.code + ']</span> ' + v.name + '</div>';
+                            }).join('');
+                        }
+                        dropdown.style.display = 'block';
+                    });
+            }, 250);
+        });
+
+        input.addEventListener('blur', function() {
+            setTimeout(function() { dropdown.style.display = 'none'; }, 200);
+        });
+
+        dropdown.addEventListener('mousedown', function(e) {
+            var opt = e.target.closest('.vendor-link-option');
+            if (!opt) return;
+            e.preventDefault();
+            linkVendor(row, opt.dataset.id, opt.dataset.name);
+        });
+    });
+
+    function linkVendor(row, vendorId, vendorName) {
+        var partNo = row.dataset.partNo;
+        var vendorCell = row.querySelector('.vendor-cell');
+        vendorCell.innerHTML = '<span class="text-muted small"><span class="spinner-border spinner-border-sm me-1"></span>연결 중...</span>';
+
+        fetch('/api/parts/link-vendor/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ part_no: partNo, vendor_id: vendorId })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data.success) {
+                alert(data.error || '연결에 실패했습니다.');
+                vendorCell.textContent = '-';
+                return;
+            }
+            vendorCell.textContent = data.vendor_name;
+
+            var statusCell = row.querySelector('.status-cell');
+            statusCell.innerHTML = '<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>정상</span>';
+            row.classList.remove('table-danger');
+
+            // 폼 제출용 hidden input 추가 (이 행은 원래 오류라 없었음)
+            var hidden = document.createElement('span');
+            hidden.innerHTML =
+                '<input type="hidden" name="part_no_list[]" value="' + partNo + '">' +
+                '<input type="hidden" name="quantity_list[]" value="' + row.dataset.quantity + '">' +
+                '<input type="hidden" name="due_date_list[]" value="' + row.dataset.dueDate + '">';
+            while (hidden.firstChild) row.appendChild(hidden.firstChild);
+
+            // 상단 카운트 갱신
+            var validEl = document.getElementById('validCountText');
+            var errorEl = document.getElementById('errorCountText');
+            validEl.textContent = parseInt(validEl.textContent, 10) + 1;
+            errorEl.textContent = parseInt(errorEl.textContent, 10) - 1;
+
+            document.getElementById('finalSubmitBtn').disabled = false;
+        })
+        .catch(function() {
+            alert('연결 중 오류가 발생했습니다.');
+            vendorCell.textContent = '-';
+        });
+    }
+})();
+
 // 수기 입력 폼 토글
 function toggleManualForm() {
     const form = document.getElementById('manualOrderForm');
