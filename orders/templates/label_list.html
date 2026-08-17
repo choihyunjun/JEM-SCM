@@ -119,8 +119,8 @@
                                         {% if user.is_superuser and order.status != 'CANCELLED' %}
                                         <form action="{% url 'force_cancel_delivery_order' order.id %}" method="post" class="m-0">
                                             {% csrf_token %}
-                                            <button type="submit" class="btn btn-sm btn-dark" title="관리자 전용: 처리 이력까지 전부 원복하고 완전 취소"
-                                                    onclick="return confirm('[관리자 전용] 이 납품서를 완전 취소하시겠습니까?\n\n연결된 모든 입고/재고/수입검사/반출 이력을 되돌리고,\nPO 잔량을 전부 복구합니다. 되돌릴 수 없습니다.')">
+                                            <button type="submit" class="btn btn-sm btn-dark" title="관리자 전용: 정리 안 된 입고 건을 원복하고 완전 취소"
+                                                    onclick="return confirm('[관리자 전용] 이 납품서를 완전 취소하시겠습니까?\n\n아직 정리되지 않은 WMS 입고/재고/수입검사 건을 되돌립니다.\n(이미 반출 확인된 품목의 PO 잔량 복구는 건드리지 않음)\n수입검사 합격/무검사 직납으로 실제 입고 확정된 품목이 있으면 취소되지 않습니다.\n되돌릴 수 없는 작업입니다.')">
                                                 <i class="bi bi-exclamation-octagon"></i> 완전취소
                                             </button>
                                         </form>

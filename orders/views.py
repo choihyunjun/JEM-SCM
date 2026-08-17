@@ -1746,6 +1746,33 @@ def force_cancel_delivery_order(request, order_id):
 
     trxs = list(MaterialTransaction.objects.filter(ref_delivery_order=order.order_no))
 
+    # 완전취소는 "결론적으로 입고된 수량이 없는" 납품서만 대상으로 함.
+    # 수입검사 합격했거나 무검사 직납으로 이미 확정된 품목(=실제로 재고에
+    # 남아있는 품목)이 하나라도 있으면 여기서 같이 취소하지 않는다.
+    # PO 잔량 복구는 반출 확인(confirm_return) 경로에서만 일어나야 하고,
+    # 여기서는 절대 건드리지 않는다 - 아직 안 정리된 트랜잭션만
+    # _do_cancel_incoming으로 개별 원복한다 (반출 이력 있는 품목은
+    # 그 함수가 이미 알아서 건드리지 않음).
+    blocking = []
+    for t in trxs:
+        try:
+            insp = t.inspection
+        except Exception:
+            insp = None
+        if insp and insp.status == 'APPROVED':
+            blocking.append(f"{t.part.part_no}(수입검사 합격)")
+
+    if Incoming.objects.filter(delivery_order_no=order.order_no).exists():
+        blocking.append("무검사 직납으로 이미 입고 확정된 품목 있음")
+
+    if blocking:
+        messages.error(
+            request,
+            "실제로 재고에 남아있는(입고 확정된) 품목이 있어 완전취소할 수 없습니다: "
+            + ", ".join(blocking) + " (해당 품목은 개별적으로 먼저 처리하세요)"
+        )
+        return redirect('label_list')
+
     try:
         with transaction.atomic():
             from material.views import _do_cancel_incoming
@@ -1755,29 +1782,13 @@ def force_cancel_delivery_order(request, order_id):
                 if not success:
                     raise Exception(message)
 
-            # 반출 이력 전부 삭제 (확인 여부 무관) - 아래에서 라벨 이력을
-            # 통째로 복구하므로, 반출로 이미 복구된 품목도 같이 지워야
-            # 잔량 계산(총발주 - 발행 + 반출)이 이중 복구 없이 맞아떨어짐
-            ReturnLog.objects.filter(delivery_order=order).delete()
-
-            # 라벨 발행 이력 전부 삭제 -> PO 잔량 전체 복구
-            restored_qty = 0
-            for item in order.items.all():
-                deleted_count, _ = LabelPrintLog.objects.filter(
-                    part_no=item.part_no,
-                    printed_qty=item.total_qty,
-                ).delete()
-                if deleted_count:
-                    restored_qty += item.total_qty
-
             order.is_received = False
             order.status = 'CANCELLED'
             order.save()
 
         messages.success(
             request,
-            f"납품서 [{order.order_no}] 완전 취소 완료 "
-            f"(입고 이력 {len(trxs)}건 원복, PO 잔량 {restored_qty}개 복구)"
+            f"납품서 [{order.order_no}] 완전 취소 완료 (입고 이력 {len(trxs)}건 원복)"
         )
     except Exception as e:
         messages.error(request, f"완전 취소 실패: {e} (문제된 품목을 먼저 개별적으로 해결한 뒤 다시 시도하세요)")
