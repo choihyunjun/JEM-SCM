@@ -180,6 +180,10 @@
             border-radius: 0 0 10px 10px;
             overflow: hidden;
         }
+        /* SB Admin 테마 기본 카드 여백이 좁아서 넉넉하게 보정 (p-0/py-* 유틸리티는 !important라 그대로 우선 적용됨) */
+        #layoutSidenav_content .card > .card-body, #layoutSidenav_content .card > .card-footer {
+            padding: 1.25rem;
+        }
 
         /* [테이블] 통합 테이블 스타일 */
         #layoutSidenav_content .table {
