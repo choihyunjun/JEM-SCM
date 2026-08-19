@@ -55,7 +55,7 @@
                                 <div class="position-relative">
                                     <input type="text" name="part_no" class="form-control form-control-lg dtl-form-control"
                                            id="partNoInput" placeholder="품번 입력 (검색)" autocomplete="off"
-                                           value="{{ product.part_no|default:'' }}" required>
+                                           value="{{ product.part_no|default:input_part_no|default:'' }}" required>
                                     <div id="autocompleteList" class="autocomplete-list"></div>
                                 </div>
                             </div>
@@ -75,6 +75,24 @@
                     </form>
                 </div>
             </div>
+
+            {% if single_missing_part_no %}
+            <div class="dtl-card mb-4" id="singleBomSyncCard">
+                <div class="card-body bg-warning-subtle d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <span>
+                        <i class="bi bi-exclamation-triangle text-warning me-1"></i>
+                        품번 <strong>{{ single_missing_part_no }}</strong>에 해당하는 BOM이 없습니다.
+                        <span class="text-muted ms-2">ERP에서 BOM을 가져올 수 있습니다.</span>
+                    </span>
+                    <button type="button" class="btn btn-sm btn-warning fw-bold" id="btnSyncSingleBom"
+                            data-part-no="{{ single_missing_part_no }}" data-qty="{{ production_qty }}"
+                            onclick="syncSingleMissingBom(this)">
+                        <i class="bi bi-cloud-download me-1"></i>ERP BOM 확인
+                    </button>
+                </div>
+                <div id="singleBomSyncResult" class="card-body pt-0 small" style="display:none;"></div>
+            </div>
+            {% endif %}
         </div>
 
         <!-- 품목군별 BOM 다운로드 탭 -->
@@ -1034,6 +1052,51 @@ async function syncMissingBom() {
         logDiv.innerHTML += '<div class="text-primary fw-bold mt-1"><i class="bi bi-info-circle me-1"></i>' + synced + '건 동기화 완료. 새로고침 후 엑셀을 다시 업로드하면 BOM이 반영됩니다.</div>';
     } else {
         btn.innerHTML = 'ERP에 BOM 없음';
+    }
+}
+
+async function syncSingleMissingBom(btn) {
+    var partNo = btn.dataset.partNo;
+    var qty = btn.dataset.qty;
+    var resultDiv = document.getElementById('singleBomSyncResult');
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>동기화 중...';
+    resultDiv.style.display = '';
+    resultDiv.className = 'card-body pt-0 small text-muted';
+    resultDiv.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>ERP에서 BOM 조회 중...';
+
+    var csrfToken = document.querySelector('#singleForm [name=csrfmiddlewaretoken]').value;
+
+    try {
+        var res = await fetch('{% url "material:bom_sync_missing" %}', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ part_no: partNo })
+        });
+        var data = await res.json();
+
+        if (data.success) {
+            resultDiv.className = 'card-body pt-0 small text-success';
+            resultDiv.innerHTML = '<i class="bi bi-check-circle me-1"></i>BOM ' + data.bom_count + '개 등록 완료. 다시 계산합니다...';
+            var form = document.getElementById('singleForm');
+            form.querySelector('[name=part_no]').value = partNo;
+            form.querySelector('[name=production_qty]').value = qty;
+            form.submit();
+        } else {
+            resultDiv.className = 'card-body pt-0 small text-danger';
+            resultDiv.innerHTML = '<i class="bi bi-x-circle me-1"></i>' + data.error;
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-cloud-download me-1"></i>ERP BOM 확인';
+        }
+    } catch (e) {
+        resultDiv.className = 'card-body pt-0 small text-danger';
+        resultDiv.innerHTML = '<i class="bi bi-x-circle me-1"></i>요청 실패';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-cloud-download me-1"></i>ERP BOM 확인';
     }
 }
 

@@ -4942,6 +4942,8 @@ def bom_calculate(request):
     session_key = None
     structured = []
     single_session_key = None
+    single_missing_part_no = None
+    input_part_no = None
 
     if request.method == 'POST':
         calc_type = request.POST.get('calc_type', 'single')
@@ -4950,6 +4952,7 @@ def bom_calculate(request):
             # 단일 제품 계산
             part_no = request.POST.get('part_no', '').strip()
             production_qty = int(request.POST.get('production_qty', 0) or 0)
+            input_part_no = part_no
 
             if part_no and production_qty > 0:
                 product, part_name, result, structured = _calculate_bom_requirements(part_no, production_qty)
@@ -4969,6 +4972,7 @@ def bom_calculate(request):
                 else:
                     structured = []
                     single_session_key = None
+                    single_missing_part_no = part_no
                     messages.warning(request, f"품번 '{part_no}'에 해당하는 BOM이 없습니다.")
 
         elif calc_type == 'batch':
@@ -5143,6 +5147,8 @@ def bom_calculate(request):
         'result': result,
         'structured_items': structured if calc_type == 'single' else None,
         'single_session_key': single_session_key if calc_type == 'single' else None,
+        'single_missing_part_no': single_missing_part_no,
+        'input_part_no': input_part_no,
         'calc_type': calc_type,
         'batch_results': batch_results,
         'shortage_count': shortage_count,
