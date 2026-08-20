@@ -1525,13 +1525,13 @@ def incoming_history(request):
     if ng_wh:
         qs = qs.exclude(warehouse_to=ng_wh)
 
-    # ERP 미등록(진짜 실패만 - 거래처 ERP코드 없어서 대상 자체가 아닌 건은 제외) 건수
+    # ERP 미등록 건수 (erp_incoming_no가 비어있으면 이유 불문 전부 포함).
     # 현재 검색 필터와 무관하게 항상 전체 기준으로 세어서, 담당자가 놓치지 않도록 배지로 표시
-    erp_failed_count = qs.filter(erp_sync_status='FAILED').count()
+    erp_failed_count = qs.filter(Q(erp_incoming_no__isnull=True) | Q(erp_incoming_no='')).count()
 
     erp_failed = request.GET.get('erp_failed') == '1'
     if erp_failed:
-        qs = qs.filter(erp_sync_status='FAILED')
+        qs = qs.filter(Q(erp_incoming_no__isnull=True) | Q(erp_incoming_no=''))
 
     # 2) 검색 필터
     q = (request.GET.get('q') or '').strip()
