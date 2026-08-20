@@ -1375,8 +1375,22 @@ def reregister_erp_price(request, trx_id):
             if insp:
                 origin_trx = insp.inbound_transaction
 
-        import re as _re
-        if origin_trx.remark:
+        # 1순위: SCM 납품서로 들어온 건이면 DeliveryOrderItem에 정식 저장된 발주번호 사용
+        # (qms 수입검사 최초 등록 때와 동일한 우선순위 — 이게 빠져있으면 SCM
+        # 납품서 기반 건은 재반영할 때마다 예외입고(PO 미연결)로 등록돼버림)
+        if origin_trx.ref_delivery_order:
+            from orders.models import DeliveryOrderItem as _DOI
+            doi = _DOI.objects.filter(
+                order__order_no=origin_trx.ref_delivery_order,
+                part_no=origin_trx.part.part_no
+            ).first()
+            if doi:
+                erp_order_no = doi.erp_order_no or ''
+                erp_order_seq = doi.erp_order_seq or ''
+
+        # 2순위(폴백): 수기입고 remark에서 정규식으로 추출
+        if not erp_order_no and origin_trx.remark:
+            import re as _re
             m = _re.search(r'ERP:(\S+)-(\d+)', origin_trx.remark or '')
             if m:
                 erp_order_no = m.group(1)
