@@ -176,7 +176,14 @@ def register_erp_incoming(trx, qty, warehouse_code, erp_order_no='', erp_order_s
     else:
         unit_price, vat_price = fetch_erp_item_price(trx.part.part_no, vendor.erp_code, use_integrated_only=use_integrated_only)
     if unit_price <= 0:
-        return False, None, f'단가 미등록 ({trx.part.part_no}/{vendor.erp_code})'
+        error_msg = f'단가 미등록 ({trx.part.part_no}/{vendor.erp_code})'
+        try:
+            trx.erp_sync_status = 'FAILED'
+            trx.erp_sync_message = error_msg
+            trx.save(update_fields=['erp_sync_status', 'erp_sync_message'])
+        except Exception:
+            pass
+        return False, None, error_msg
     supply_amount = round(unit_price * qty)      # 공급가액
     vat_amount = round(supply_amount * 0.1)      # 부가세 (10%)
     total_amount = supply_amount + vat_amount     # 합계액
