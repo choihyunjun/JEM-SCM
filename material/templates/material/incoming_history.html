@@ -109,7 +109,7 @@
     <div class="dtl-card mb-4">
         <div class="dtl-card-header d-flex justify-content-between align-items-center">
             <span><i class="bi bi-clock-history"></i> 입고 내역</span>
-            <span class="dtl-pill slate">{{ page_obj.paginator.count }}건</span>
+            <span class="dtl-pill {% if erp_failed %}red{% else %}slate{% endif %}">{{ page_obj.paginator.count }}건</span>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
