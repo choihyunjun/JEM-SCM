@@ -15,7 +15,16 @@
             <span class="dtl-title d-block">입고 내역 조회</span>
             <span class="text-muted small">입고 처리된 내역을 조회하고 단가를 재반영할 수 있습니다.</span>
         </div>
-        <div>
+        <div class="d-flex align-items-center gap-2">
+            {% if erp_failed %}
+            <a href="{% url 'material:incoming_history' %}" class="dtl-pill amber" style="cursor:pointer; text-decoration:none;" title="필터 해제">
+                <i class="bi bi-x-circle me-1"></i>ERP 미등록만 보는 중 · 해제
+            </a>
+            {% elif erp_failed_count > 0 %}
+            <a href="?erp_failed=1" class="dtl-pill amber" style="cursor:pointer; text-decoration:none;">
+                <i class="bi bi-exclamation-triangle me-1"></i>ERP 미등록 {{ erp_failed_count }}건
+            </a>
+            {% endif %}
             <a href="{% url 'material:manual_incoming' %}" class="dtl-btn-outline btn-sm">
                 <i class="bi bi-box-arrow-in-down me-1"></i> 입고처리
             </a>
