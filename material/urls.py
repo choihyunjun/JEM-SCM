@@ -106,6 +106,7 @@ urlpatterns = [
     # 원재료 관리
     path('raw-material/', views.raw_material_layout, name='raw_material_layout'),
     path('raw-material/incoming/', views.raw_material_incoming, name='raw_material_incoming'),
+    path('raw-material/incoming/bulk-print-labels/', views.bulk_print_raw_material_labels, name='bulk_print_raw_material_labels'),
     path('raw-material/rack-manage/', views.raw_material_rack_manage, name='raw_material_rack_manage'),
     path('raw-material/setting/', views.raw_material_setting, name='raw_material_setting'),
     path('raw-material/setting/auto-stock/', views.api_raw_material_auto_stock, name='api_raw_material_auto_stock'),

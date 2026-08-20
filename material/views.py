@@ -7375,6 +7375,113 @@ def raw_material_incoming(request):
     return render(request, 'material/raw_material_incoming.html', context)
 
 
+@login_required
+@wms_permission_required('can_wms_incoming_label')
+def bulk_print_raw_material_labels(request):
+    """[WMS] 입고라벨 일괄 발행.
+
+    사람이 화면에서 각 건의 포장단위/포장수/유효기간을 직접 확인·입력한
+    뒤 넘겨준 값만 그대로 사용한다 (품목설정 기본값을 서버에서 다시
+    자동 채우지 않음 - 그 값이 검증 안 된 기본값일 수 있어서 위험).
+    한 건씩 독립 처리해서 일부 실패가 나머지에 영향 주지 않게 한다.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST만 허용'}, status=405)
+
+    import json as _json
+    try:
+        body = _json.loads(request.body)
+    except Exception:
+        return JsonResponse({'success': False, 'error': '잘못된 요청'}, status=400)
+
+    items = body.get('items') or []
+    if not items:
+        return JsonResponse({'success': False, 'error': '선택된 항목이 없습니다.'})
+
+    created_label_ids = []
+    fail_details = []
+    success_count = 0
+
+    for raw in items:
+        inspection_id = raw.get('inspection_id')
+        try:
+            pkg_qty = float(raw.get('pkg_qty') or 0)
+            pkg_count = int(raw.get('pkg_count') or 0)
+        except (TypeError, ValueError):
+            fail_details.append(f'#{inspection_id}: 포장단위/포장수는 숫자여야 합니다.')
+            continue
+        unit = raw.get('unit') or 'KG'
+        expiry_date_str = (raw.get('expiry_date') or '').strip()
+
+        if pkg_qty <= 0 or pkg_count <= 0:
+            fail_details.append(f'#{inspection_id}: 포장단위와 포장수는 0보다 커야 합니다.')
+            continue
+
+        expiry_date = None
+        if expiry_date_str:
+            from datetime import datetime as _dt
+            try:
+                expiry_date = _dt.strptime(expiry_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                fail_details.append(f'#{inspection_id}: 유효기간 형식이 올바르지 않습니다.')
+                continue
+
+        try:
+            inspection = ImportInspection.objects.select_related(
+                'inbound_transaction', 'inbound_transaction__part', 'inbound_transaction__vendor'
+            ).get(id=inspection_id)
+        except ImportInspection.DoesNotExist:
+            fail_details.append(f'#{inspection_id}: 해당 수입검사 건을 찾을 수 없습니다.')
+            continue
+
+        if inspection.status != 'APPROVED':
+            fail_details.append(f'{inspection.inbound_transaction.part.part_no}: 수입검사 합격 판정이 필요합니다.')
+            continue
+
+        trx = inspection.inbound_transaction
+        part = trx.part
+
+        if RawMaterialLabel.objects.filter(incoming_transaction=trx).exists():
+            fail_details.append(f'{part.part_no}: 이미 라벨이 발행된 건입니다.')
+            continue
+
+        try:
+            with transaction.atomic():
+                labels = []
+                for _ in range(pkg_count):
+                    label = RawMaterialLabel.objects.create(
+                        label_id=RawMaterialLabel.generate_label_id(),
+                        part=part,
+                        part_no=part.part_no,
+                        part_name=part.part_name,
+                        lot_no=trx.lot_no,
+                        quantity=pkg_qty,
+                        unit=unit,
+                        expiry_date=expiry_date,
+                        incoming_transaction=trx,
+                        vendor=trx.vendor,
+                        status='INSTOCK',
+                        printed_by=request.user,
+                    )
+                    labels.append(label)
+
+                trx.remark = f'{trx.remark or ""} [라벨 {pkg_count}장 발행 ({pkg_qty}{dict(RawMaterialLabel.UNIT_CHOICES).get(unit, unit)}×{pkg_count})]'.strip()
+                trx.save()
+
+            created_label_ids.extend([l.id for l in labels])
+            success_count += 1
+        except Exception as e:
+            fail_details.append(f'{part.part_no}: 발행 실패 ({e})')
+
+    return JsonResponse({
+        'success': True,
+        'success_count': success_count,
+        'fail_count': len(fail_details),
+        'fail_details': fail_details,
+        'label_ids': created_label_ids,
+    })
+
+
 @wms_permission_required('can_wms_storage_rack')
 def raw_material_rack_manage(request):
     """

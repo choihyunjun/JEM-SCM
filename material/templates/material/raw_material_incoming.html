@@ -51,18 +51,28 @@
                     </span>
                     <span class="dtl-pill green">{{ approved_inspections|length }}건</span>
                 </div>
+                <div id="bulkLabelBar" class="d-flex justify-content-between align-items-center" style="background:#fffbeb; padding:0.7rem 1.25rem; border-bottom:1px solid #fde68a; display:none;">
+                    <div>
+                        <input type="checkbox" id="bulkCheckAll" onclick="toggleBulkCheckAll(this)" class="form-check-input me-2" style="cursor:pointer;">
+                        <span class="small fw-semibold" id="bulkSelectedText">전체 선택</span>
+                    </div>
+                    <button type="button" class="dtl-btn-dark btn-sm" style="background:#b45309;" id="btnOpenBulkModal" onclick="openBulkLabelModal()" disabled>
+                        <i class="bi bi-qr-code me-1"></i>일괄 라벨 발행 (<span id="bulkSelectedCount">0</span>건)
+                    </button>
+                </div>
                 <div class="card-body p-0">
                     {% if approved_inspections %}
                     <div class="table-responsive">
                         <table class="table table-hover mb-0 align-middle">
                             <thead class="table-light">
                                 <tr>
-                                    <th class="ps-3" style="width: 12%;">검사일시</th>
-                                    <th style="width: 15%;">품번</th>
+                                    <th class="ps-3" style="width: 3%;"></th>
+                                    <th style="width: 12%;">검사일시</th>
+                                    <th style="width: 14%;">품번</th>
                                     <th>품명</th>
-                                    <th class="text-end" style="width: 10%;">수량</th>
-                                    <th class="text-center" style="width: 10%;">LOT</th>
-                                    <th style="width: 12%;">거래처</th>
+                                    <th class="text-end" style="width: 9%;">수량</th>
+                                    <th class="text-center" style="width: 9%;">LOT</th>
+                                    <th style="width: 11%;">거래처</th>
                                     <th class="text-center" style="width: 12%;">라벨 상태</th>
                                     <th class="text-center" style="width: 10%;">관리</th>
                                 </tr>
@@ -70,7 +80,20 @@
                             <tbody>
                                 {% for insp in approved_inspections %}
                                 <tr class="inspection-row">
-                                    <td class="ps-3 small text-muted">
+                                    <td class="ps-3">
+                                        {% if not insp.is_scm and insp.label_count == 0 and insp.pallet_count == 0 %}
+                                        <input type="checkbox" class="form-check-input bulk-label-cb" style="cursor:pointer;"
+                                               onclick="event.stopPropagation(); updateBulkSelection();"
+                                               data-insp-id="{{ insp.id }}"
+                                               data-part-no="{{ insp.inbound_transaction.part.part_no }}"
+                                               data-part-name="{{ insp.inbound_transaction.part.part_name }}"
+                                               data-qty="{{ insp.inbound_transaction.quantity }}"
+                                               data-has-setting="{{ insp.has_setting|yesno:'1,' }}"
+                                               data-unit-weight="{{ insp.setting_unit_weight }}"
+                                               data-shelf-life="{{ insp.setting_shelf_life }}">
+                                        {% endif %}
+                                    </td>
+                                    <td class="small text-muted">
                                         {{ insp.inspected_at|date:"m/d H:i" }}
                                     </td>
                                     <td class="fw-bold text-primary">
@@ -396,6 +419,47 @@
     </div>
 </div>
 
+<!-- 일괄 라벨 발행 모달 -->
+<div class="modal fade" id="bulkLabelModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-qr-code me-2"></i>일괄 라벨 발행 - 내용 확인</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning py-2 px-3 small mb-3">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    포장단위/유효기간은 품목설정이 있으면 참고용으로만 미리 채워집니다. <b>실제 포장 규격과 다르면 직접 수정하세요.</b>
+                    품목설정이 없는 품목(빨간 테두리)은 반드시 직접 입력해야 합니다.
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width:13%;">품번</th>
+                                <th>품명</th>
+                                <th class="text-end" style="width:9%;">입고수량</th>
+                                <th style="width:13%;">포장단위(kg)</th>
+                                <th class="text-end" style="width:8%;">포장수</th>
+                                <th style="width:16%;">유효기간</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bulkLabelTbody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <span class="text-muted small me-auto" id="bulkModalHint"></span>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn btn-warning fw-bold" id="btnSubmitBulk" onclick="submitBulkLabels()" style="background:#b45309;color:#fff;">
+                    <i class="bi bi-qr-code me-1"></i>일괄 발행 확정
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- 라벨 취소 확인 모달 -->
 <div class="modal fade" id="labelCancelModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-sm">
@@ -513,6 +577,141 @@
 </div>
 
 <script>
+// ── 일괄 라벨 발행 ──
+function toggleBulkCheckAll(el) {
+    document.querySelectorAll('.bulk-label-cb').forEach(cb => { cb.checked = el.checked; });
+    updateBulkSelection();
+}
+
+function updateBulkSelection() {
+    const all = document.querySelectorAll('.bulk-label-cb');
+    const checked = document.querySelectorAll('.bulk-label-cb:checked');
+    document.getElementById('bulkSelectedCount').textContent = checked.length;
+    document.getElementById('bulkSelectedText').textContent = checked.length > 0 ? `${checked.length}건 선택됨` : '전체 선택';
+    document.getElementById('btnOpenBulkModal').disabled = (checked.length === 0);
+    document.getElementById('bulkCheckAll').checked = all.length > 0 && checked.length === all.length;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    if (document.querySelectorAll('.bulk-label-cb').length > 0) {
+        document.getElementById('bulkLabelBar').style.display = 'flex';
+    }
+});
+
+function bulkPkgCountFor(row) {
+    const qty = parseFloat(row.dataset.qty) || 0;
+    const pkgQty = parseFloat(row.querySelector('.bulk-pkg-qty').value) || 0;
+    const countCell = row.querySelector('.bulk-pkg-count');
+    countCell.textContent = pkgQty > 0 ? Math.max(1, Math.round(qty / pkgQty)) : '-';
+}
+
+function openBulkLabelModal() {
+    const checked = Array.from(document.querySelectorAll('.bulk-label-cb:checked'));
+    if (checked.length === 0) return;
+
+    const tbody = document.getElementById('bulkLabelTbody');
+    tbody.innerHTML = '';
+    const today = new Date();
+
+    checked.forEach(cb => {
+        const d = cb.dataset;
+        const hasSetting = d.hasSetting === '1';
+        const unitWeight = parseFloat(d.unitWeight) || 0;
+        const shelfLife = parseInt(d.shelfLife) || 0;
+
+        let expiryVal = '';
+        if (hasSetting && shelfLife > 0) {
+            const expiry = new Date(today.getTime() + shelfLife * 86400000);
+            expiryVal = `${expiry.getFullYear()}-${String(expiry.getMonth() + 1).padStart(2, '0')}-${String(expiry.getDate()).padStart(2, '0')}`;
+        }
+
+        const tr = document.createElement('tr');
+        tr.dataset.inspId = d.inspId;
+        tr.dataset.qty = d.qty;
+        if (!hasSetting) tr.className = 'table-danger';
+        tr.innerHTML = `
+            <td class="fw-bold text-primary small">${d.partNo}</td>
+            <td class="small">${d.partName}</td>
+            <td class="text-end small">${Number(d.qty).toLocaleString()}</td>
+            <td><input type="number" class="form-control form-control-sm bulk-pkg-qty" min="0" step="0.01"
+                       value="${hasSetting && unitWeight > 0 ? unitWeight : ''}"
+                       placeholder="${hasSetting ? '' : '직접 입력 필요'}"
+                       oninput="bulkPkgCountFor(this.closest('tr'))"></td>
+            <td class="text-end small bulk-pkg-count">-</td>
+            <td><input type="date" class="form-control form-control-sm bulk-expiry" value="${expiryVal}"></td>
+        `;
+        tbody.appendChild(tr);
+        bulkPkgCountFor(tr);
+    });
+
+    document.getElementById('bulkModalHint').textContent = `${checked.length}건 선택됨`;
+    new bootstrap.Modal(document.getElementById('bulkLabelModal')).show();
+}
+
+function submitBulkLabels() {
+    const rows = Array.from(document.querySelectorAll('#bulkLabelTbody tr'));
+    const items = [];
+    const errors = [];
+
+    rows.forEach(row => {
+        const pkgQty = parseFloat(row.querySelector('.bulk-pkg-qty').value) || 0;
+        const expiry = row.querySelector('.bulk-expiry').value;
+        const partNo = row.querySelector('td').textContent;
+        if (pkgQty <= 0) {
+            errors.push(`${partNo}: 포장단위를 입력하세요.`);
+            return;
+        }
+        const qty = parseFloat(row.dataset.qty) || 0;
+        items.push({
+            inspection_id: row.dataset.inspId,
+            pkg_qty: pkgQty,
+            pkg_count: Math.max(1, Math.round(qty / pkgQty)),
+            unit: 'KG',
+            expiry_date: expiry || '',
+        });
+    });
+
+    if (errors.length > 0) {
+        alert('입력을 확인하세요:\n\n' + errors.join('\n'));
+        return;
+    }
+    if (items.length === 0) return;
+    if (!confirm(`${items.length}건 라벨을 발행하시겠습니까?`)) return;
+
+    const btn = document.getElementById('btnSubmitBulk');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>처리 중...';
+
+    fetch("{% url 'material:bulk_print_raw_material_labels' %}", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+        body: JSON.stringify({ items: items })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (!data.success) {
+            alert('실패: ' + (data.error || '알 수 없는 오류'));
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-qr-code me-1"></i>일괄 발행 확정';
+            return;
+        }
+        let msg = `${data.success_count}건 발행 완료`;
+        if (data.fail_count > 0) {
+            msg += `, ${data.fail_count}건 실패:\n` + data.fail_details.join('\n');
+        }
+        alert(msg);
+        if (data.label_ids && data.label_ids.length > 0) {
+            window.open(`{% url 'material:raw_material_label_print' %}?ids=${data.label_ids.join(',')}`, '_blank');
+        }
+        window.location.reload();
+    })
+    .catch(err => {
+        alert('오류: ' + err);
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-qr-code me-1"></i>일괄 발행 확정';
+    });
+}
+
 let modalTotalQty = 0;
 
 function openLabelModal(inspId, partNo, partName, totalQty, hasSetting, unitWeight, shelfLife) {
