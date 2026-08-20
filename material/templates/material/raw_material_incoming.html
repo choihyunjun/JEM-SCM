@@ -90,7 +90,8 @@
                                                data-qty="{{ insp.inbound_transaction.quantity }}"
                                                data-has-setting="{{ insp.has_setting|yesno:'1,' }}"
                                                data-unit-weight="{{ insp.setting_unit_weight }}"
-                                               data-shelf-life="{{ insp.setting_shelf_life }}">
+                                               data-shelf-life="{{ insp.setting_shelf_life }}"
+                                               data-lot="{{ insp.inbound_transaction.lot_no|date:'Y-m-d' }}">
                                         {% endif %}
                                     </td>
                                     <td class="small text-muted">
@@ -611,19 +612,26 @@ function openBulkLabelModal() {
 
     const tbody = document.getElementById('bulkLabelTbody');
     tbody.innerHTML = '';
-    const today = new Date();
 
     checked.forEach(cb => {
         const d = cb.dataset;
         const hasSetting = d.hasSetting === '1';
         const unitWeight = parseFloat(d.unitWeight) || 0;
-        const shelfLife = parseInt(d.shelfLife) || 0;
+        // 품목설정에 보관기간이 없거나 품목설정 자체가 없으면 시스템 기본값(365일) 사용
+        // - 모델 자체의 기본값(RawMaterialSetting.shelf_life_days default=365)과 동일해서
+        //   임의 추측이 아니라 원래 쓰는 기본값. 포장단위와 달리 틀려도 실물 표기
+        //   오류가 아니라 유효기간 관리 화면에서 재검토하면 되는 값이라 자동 채움이 안전함
+        const shelfLife = parseInt(d.shelfLife) || 365;
 
-        let expiryVal = '';
-        if (hasSetting && shelfLife > 0) {
-            const expiry = new Date(today.getTime() + shelfLife * 86400000);
-            expiryVal = `${expiry.getFullYear()}-${String(expiry.getMonth() + 1).padStart(2, '0')}-${String(expiry.getDate()).padStart(2, '0')}`;
+        // LOT일자 기준으로 계산 (유효기간 관리 화면과 동일한 기준 - "오늘" 기준이 아님).
+        // LOT이 없으면 오늘 날짜로 대체
+        let baseDate = new Date();
+        if (d.lot) {
+            const [ly, lm, ld] = d.lot.split('-').map(Number);
+            if (ly && lm && ld) baseDate = new Date(ly, lm - 1, ld);
         }
+        const expiry = new Date(baseDate.getTime() + shelfLife * 86400000);
+        const expiryVal = `${expiry.getFullYear()}-${String(expiry.getMonth() + 1).padStart(2, '0')}-${String(expiry.getDate()).padStart(2, '0')}`;
 
         const tr = document.createElement('tr');
         tr.dataset.inspId = d.inspId;
