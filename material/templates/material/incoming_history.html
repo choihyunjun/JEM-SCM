@@ -185,6 +185,8 @@
                             <td>
                                 {% if item.erp_incoming_no %}
                                 <i class="fas fa-check-circle text-success" title="{{ item.erp_incoming_no }}"></i>
+                                {% elif item.erp_sync_status == 'FAILED' %}
+                                <i class="fas fa-exclamation-circle text-danger" title="ERP 등록 실패: {{ item.erp_sync_message|default:'' }}"></i>
                                 {% else %}
                                 <i class="fas fa-minus-circle text-muted" style="opacity:0.3;"></i>
                                 {% endif %}
