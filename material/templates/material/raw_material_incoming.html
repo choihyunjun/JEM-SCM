@@ -148,7 +148,7 @@
                                             </button>
                                             {% else %}
                                             <button type="button" class="btn btn-success btn-print"
-                                                    onclick="openLabelModal('{{ insp.id }}', '{{ insp.inbound_transaction.part.part_no }}', '{{ insp.inbound_transaction.part.part_name|truncatechars:30 }}', {{ insp.inbound_transaction.quantity }}, {{ insp.has_setting|yesno:'true,false' }}, {{ insp.setting_unit_weight }}, {{ insp.setting_shelf_life }})">
+                                                    onclick="openLabelModal('{{ insp.id }}', '{{ insp.inbound_transaction.part.part_no }}', '{{ insp.inbound_transaction.part.part_name|truncatechars:30 }}', {{ insp.inbound_transaction.quantity }}, {{ insp.has_setting|yesno:'true,false' }}, {{ insp.setting_unit_weight }}, {{ insp.setting_shelf_life }}, '{{ insp.inbound_transaction.lot_no|date:"Y-m-d" }}')">
                                                 <i class="bi bi-qr-code"></i> 라벨발행
                                             </button>
                                             {% endif %}
@@ -171,7 +171,7 @@
                                         {% else %}
                                         <div class="btn-group btn-group-sm">
                                             <button type="button" class="btn btn-success btn-print"
-                                                    onclick="openLabelModal('{{ insp.id }}', '{{ insp.inbound_transaction.part.part_no }}', '{{ insp.inbound_transaction.part.part_name|truncatechars:30 }}', {{ insp.inbound_transaction.quantity }}, {{ insp.has_setting|yesno:'true,false' }}, {{ insp.setting_unit_weight }}, {{ insp.setting_shelf_life }})">
+                                                    onclick="openLabelModal('{{ insp.id }}', '{{ insp.inbound_transaction.part.part_no }}', '{{ insp.inbound_transaction.part.part_name|truncatechars:30 }}', {{ insp.inbound_transaction.quantity }}, {{ insp.has_setting|yesno:'true,false' }}, {{ insp.setting_unit_weight }}, {{ insp.setting_shelf_life }}, '{{ insp.inbound_transaction.lot_no|date:"Y-m-d" }}')">
                                                 <i class="bi bi-qr-code"></i> 라벨발행
                                             </button>
                                             <button type="button" class="btn btn-outline-primary btn-print"
@@ -721,9 +721,11 @@ function submitBulkLabels() {
 }
 
 let modalTotalQty = 0;
+let modalLotDate = null; // 'YYYY-MM-DD' - 라벨발행 모달에서 유효기간 계산 기준(LOT일자)
 
-function openLabelModal(inspId, partNo, partName, totalQty, hasSetting, unitWeight, shelfLife) {
+function openLabelModal(inspId, partNo, partName, totalQty, hasSetting, unitWeight, shelfLife, lot) {
     modalTotalQty = parseFloat(totalQty);
+    modalLotDate = lot || null;
     document.getElementById('modalInspectionId').value = inspId;
     document.getElementById('modalPartNo').textContent = partNo;
     document.getElementById('modalPartName').textContent = partName;
@@ -749,7 +751,7 @@ function openLabelModal(inspId, partNo, partName, totalQty, hasSetting, unitWeig
         // 유효기간 ON + 설정값으로 날짜 계산
         document.getElementById('expiryToggle').checked = true;
         toggleExpiry();
-        setExpiryDays(shelfLife);
+        setExpiryDays(shelfLife, modalLotDate);
     } else {
         settingAlert.style.display = 'none';
         noSettingAlert.style.display = 'block';
@@ -797,8 +799,12 @@ function toggleExpiry() {
 
 // 개월수 퀵 선택
 function setExpiryMonths(months) {
-    const today = new Date();
-    const expiry = new Date(today.getFullYear(), today.getMonth() + months, today.getDate());
+    let base = new Date();
+    if (modalLotDate) {
+        const [ly, lm, ld] = modalLotDate.split('-').map(Number);
+        if (ly && lm && ld) base = new Date(ly, lm - 1, ld);
+    }
+    const expiry = new Date(base.getFullYear(), base.getMonth() + months, base.getDate());
     setExpiryDateValue(expiry);
 
     // 버튼 활성화 표시
@@ -814,10 +820,15 @@ function setExpiryMonths(months) {
     }
 }
 
-// 일수로 유효기간 설정 (품목설정에서)
-function setExpiryDays(days) {
-    const today = new Date();
-    const expiry = new Date(today.getTime() + days * 86400000);
+// 일수로 유효기간 설정 (품목설정에서) - baseDateStr(LOT일자, 'YYYY-MM-DD')이 있으면
+// 그 날짜 기준, 없으면 오늘 기준 (유효기간 관리 대시보드와 동일하게 LOT일자 기준으로 계산)
+function setExpiryDays(days, baseDateStr) {
+    let base = new Date();
+    if (baseDateStr) {
+        const [by, bm, bd] = baseDateStr.split('-').map(Number);
+        if (by && bm && bd) base = new Date(by, bm - 1, bd);
+    }
+    const expiry = new Date(base.getTime() + days * 86400000);
     setExpiryDateValue(expiry);
 
     // 버튼 활성 해제 (커스텀 일수이므로)
