@@ -145,6 +145,7 @@
                             data-lot="{{ item.lot_no|date:'Y-m-d'|default:'' }}"
                             data-warehouse="{{ item.display_warehouse.name|default:'' }}"
                             data-erp-no="{{ item.erp_incoming_no|default:'' }}"
+                            data-erp-msg="{{ item.erp_sync_message|default:'' }}"
                             data-remark="{{ item.display_remark|default:'' }}"
                             data-actor="{{ item.actor.username|default:'' }}"
                             data-label-issued="{{ item.label_issued|yesno:'발행,미발행' }}"
@@ -550,7 +551,9 @@ function openDetail(row) {
     document.getElementById('detailWarehouse').textContent = d.warehouse || '-';
     document.getElementById('detailErpNo').innerHTML = d.erpNo
         ? `<span class="dtl-pill green">${d.erpNo}</span>`
-        : '<span class="text-muted">-</span>';
+        : (d.erpMsg
+            ? `<span class="dtl-pill red" title="${d.erpMsg}"><i class="bi bi-exclamation-triangle me-1"></i>미등록 - ${d.erpMsg}</span>`
+            : '<span class="dtl-pill slate">미등록</span>');
     document.getElementById('detailActor').textContent = d.actor || '-';
     document.getElementById('detailRemarkText').textContent = d.remark || '-';
     document.getElementById('detailRemarkInput').value = d.remark || '';
