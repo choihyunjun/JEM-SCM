@@ -3579,19 +3579,21 @@ def stock_move(request):
                     if int(source_stock.quantity) < qty:
                         raise ValueError(f"[{p_no}] LOT 재고 부족 (보유: {source_stock.quantity}, 요청: {qty})")
 
-                    # LOT 정보 저장 (이동 시 동일 LOT 유지)
+                    # LOT 정보 저장 (이동 시 동일 LOT/배치 유지)
                     lot_no = source_stock.lot_no
+                    production_lot = source_stock.production_lot
 
                     # 출고 창고 재고 차감
                     MaterialStock.objects.filter(pk=source_stock.pk).update(
                         quantity=F('quantity') - qty
                     )
 
-                    # 2-2. 받는 창고에 동일 LOT로 재고 증가
+                    # 2-2. 받는 창고에 동일 LOT/배치로 재고 증가
                     target_stock, _ = MaterialStock.objects.select_for_update().get_or_create(
                         warehouse=to_wh,
                         part=part_obj,
                         lot_no=lot_no,  # 동일 LOT 번호로 이동
+                        production_lot=production_lot,  # 동일 생산 배치로 이동
                         defaults={'quantity': 0}
                     )
 
@@ -3610,9 +3612,18 @@ def stock_move(request):
                             part=part_obj,
                             quantity__gt=0,
                             lot_no__isnull=False,
-                        ).order_by('lot_no').first()
+                        ).order_by('lot_no', 'production_lot').first()
 
-                        if oldest_lot and oldest_lot.lot_no < lot_no:
+                        is_violation = False
+                        if oldest_lot:
+                            if oldest_lot.lot_no < lot_no:
+                                is_violation = True
+                            elif (oldest_lot.lot_no == lot_no
+                                  and oldest_lot.production_lot and production_lot
+                                  and oldest_lot.production_lot < production_lot):
+                                is_violation = True
+
+                        if is_violation:
                             fifo_reason = fifo_reasons[i] if i < len(fifo_reasons) else ''
                             fifo_remark = f" [FIFO 위반: {fifo_reason or '사유 미입력'}]"
 
@@ -3628,6 +3639,7 @@ def stock_move(request):
                         part=part_obj,
                         quantity=qty,
                         lot_no=lot_no,
+                        production_lot=production_lot,
                         warehouse_from=from_wh,
                         warehouse_to=to_wh,
                         result_stock=target_stock.quantity,
@@ -3858,14 +3870,14 @@ def api_get_available_lots(request):
         if not warehouse:
             return JsonResponse({'error': '존재하지 않는 창고입니다.'}, status=404)
 
-        # 해당 창고의 해당 품목 LOT별 재고 조회
-        # 우선순위: lot_no=NULL(ERP 재고) 먼저 → 오래된 LOT 순 (FIFO)
+        # 해당 창고의 해당 품목 LOT(+배치)별 재고 조회
+        # 우선순위: lot_no=NULL(ERP 재고) 먼저 → 오래된 LOT 순 → 같은 날짜면 배치(production_lot) 순 (FIFO)
         from django.db.models import F as _F
         lot_stocks = MaterialStock.objects.filter(
             warehouse=warehouse,
             part=part,
             quantity__gt=0
-        ).order_by(_F('lot_no').asc(nulls_first=True))
+        ).order_by(_F('lot_no').asc(nulls_first=True), _F('production_lot').asc(nulls_first=True))
 
         lots = []
         for stock in lot_stocks:
@@ -3873,9 +3885,14 @@ def api_get_available_lots(request):
                 days_old = (timezone.now().date() - stock.lot_no).days
             else:
                 days_old = 99999  # NULL = 가장 오래된 재고 (우선 소진)
+            lot_label = stock.lot_no.strftime('%Y-%m-%d') if stock.lot_no else None
+            if lot_label and stock.production_lot:
+                lot_label = f'{lot_label} (LOT {stock.production_lot})'
             lot_info = {
                 'stock_id': stock.id,
                 'lot_no': stock.lot_no.strftime('%Y-%m-%d') if stock.lot_no else None,
+                'production_lot': stock.production_lot,
+                'lot_label': lot_label,
                 'quantity': stock.quantity,
                 'days_old': days_old,
                 'is_null_lot': stock.lot_no is None,
@@ -7739,6 +7756,66 @@ def api_raw_material_auto_stock(request):
     return JsonResponse({'updated': updated})
 
 
+@wms_permission_required('can_wms_stock_edit')
+def production_lot_item_list(request):
+    """
+    [WMS] LOT 관리품목 설정
+    - 여기 등록된 품목만 ERP 생산입고의 실제 LOT번호(lotNb)를 배치 단위로 저장하고,
+      재고이동/출고 FIFO도 입고일자+배치 단위로 세분화해서 관리한다.
+    - 미등록 품목은 지금처럼 입고일자 단위로만 관리됨 (동작 변화 없음).
+    """
+    from .models import ProductionLotItem
+
+    if request.method == 'POST':
+        part_id = request.POST.get('part_id')
+        remark = request.POST.get('remark', '').strip()
+        try:
+            part = Part.objects.get(id=part_id)
+        except Part.DoesNotExist:
+            messages.error(request, '해당 품목을 찾을 수 없습니다.')
+            return redirect('material:production_lot_item_list')
+
+        item, created = ProductionLotItem.objects.get_or_create(
+            part=part,
+            defaults={'remark': remark, 'created_by': request.user, 'is_active': True}
+        )
+        if not created:
+            messages.warning(request, f'{part.part_no}은(는) 이미 등록되어 있습니다.')
+        else:
+            messages.success(request, f'{part.part_no} LOT 관리품목으로 등록했습니다.')
+        return redirect('material:production_lot_item_list')
+
+    items = ProductionLotItem.objects.select_related('part', 'created_by').order_by('part__part_no')
+
+    context = {
+        'items': items,
+    }
+    return render(request, 'material/production_lot_item_list.html', context)
+
+
+@wms_permission_required('can_wms_stock_edit')
+def production_lot_item_toggle(request, item_id):
+    """LOT 관리품목 사용/미사용 토글"""
+    from .models import ProductionLotItem
+    if request.method == 'POST':
+        item = get_object_or_404(ProductionLotItem, id=item_id)
+        item.is_active = not item.is_active
+        item.save(update_fields=['is_active'])
+    return redirect('material:production_lot_item_list')
+
+
+@wms_permission_required('can_wms_stock_edit')
+def production_lot_item_delete(request, item_id):
+    """LOT 관리품목 삭제 (등록 취소, 향후 입고분부터 다시 날짜 단위 관리로 전환)"""
+    from .models import ProductionLotItem
+    if request.method == 'POST':
+        item = get_object_or_404(ProductionLotItem, id=item_id)
+        part_no = item.part.part_no
+        item.delete()
+        messages.success(request, f'{part_no}을(를) LOT 관리품목에서 제외했습니다.')
+    return redirect('material:production_lot_item_list')
+
+
 @wms_permission_required('can_wms_stock_view')
 def api_raw_material_labels(request):
     """
@@ -8238,11 +8315,12 @@ def cancel_stock_move(request, trx_id):
         with transaction.atomic():
             from .models import RawMaterialLabel, ProcessTag
 
-            # 1. 받는 창고 재고 차감
+            # 1. 받는 창고 재고 차감 (LOT 관리품목은 배치까지 일치해야 정확한 행을 찾음)
             target_stock = MaterialStock.objects.filter(
                 warehouse=trx.warehouse_to,
                 part=trx.part,
-                lot_no=trx.lot_no
+                lot_no=trx.lot_no,
+                production_lot=trx.production_lot
             ).first()
 
             if not target_stock or target_stock.quantity < trx.quantity:
@@ -8261,6 +8339,7 @@ def cancel_stock_move(request, trx_id):
                 warehouse=trx.warehouse_from,
                 part=trx.part,
                 lot_no=trx.lot_no,
+                production_lot=trx.production_lot,
                 defaults={'quantity': 0}
             )
             MaterialStock.objects.filter(pk=source_stock.pk).update(
@@ -8591,6 +8670,7 @@ def manual_outgoing(request):
 
             part_ids = request.POST.getlist('part_ids[]')
             lot_nos = request.POST.getlist('lot_nos[]')
+            stock_ids = request.POST.getlist('stock_ids[]')
             quantities = request.POST.getlist('quantities[]')
             remarks = request.POST.getlist('remarks[]')
 
@@ -8625,28 +8705,46 @@ def manual_outgoing(request):
                     qty = int(quantities[i])
                     rmk = remarks[i] if i < len(remarks) else ''
                     lot_no_str = lot_nos[i] if i < len(lot_nos) and lot_nos[i] else None
+                    stock_id = stock_ids[i] if i < len(stock_ids) and stock_ids[i] else None
 
                     if qty <= 0:
                         continue
 
                     part = Part.objects.get(id=p_id)
 
-                    # LOT 번호 처리
-                    from datetime import datetime
-                    lot_date = None
-                    if lot_no_str:
-                        try:
-                            lot_date = datetime.strptime(lot_no_str, '%Y-%m-%d').date()
-                        except (ValueError, TypeError):
-                            pass
-
                     # (1) 재고 확인 및 차감
-                    stock, _ = MaterialStock.objects.get_or_create(
-                        warehouse=warehouse,
-                        part=part,
-                        lot_no=lot_date,
-                        defaults={'quantity': 0}
-                    )
+                    # stock_id가 있으면(LOT 선택 드롭다운에서 넘어온 정상 케이스) 그 재고 행을 그대로 사용 -
+                    # LOT 관리품목은 같은 날짜에도 배치(production_lot)가 여러 개일 수 있어서
+                    # 날짜만으로 재조회하면 행이 여러 개 걸려 틀린 배치를 차감할 수 있음.
+                    production_lot = None
+                    if stock_id:
+                        try:
+                            stock = MaterialStock.objects.select_for_update().get(
+                                id=stock_id, warehouse=warehouse, part=part
+                            )
+                            lot_date = stock.lot_no
+                            production_lot = stock.production_lot
+                        except (MaterialStock.DoesNotExist, ValueError):
+                            stock = None
+                    else:
+                        stock = None
+
+                    if stock is None:
+                        # 폴백: stock_id가 없는 예전 클라이언트 대비 (LOT 관리품목이 아닌 경우만 안전)
+                        from datetime import datetime
+                        lot_date = None
+                        if lot_no_str:
+                            try:
+                                lot_date = datetime.strptime(lot_no_str, '%Y-%m-%d').date()
+                            except (ValueError, TypeError):
+                                pass
+                        stock, _ = MaterialStock.objects.get_or_create(
+                            warehouse=warehouse,
+                            part=part,
+                            lot_no=lot_date,
+                            production_lot=None,
+                            defaults={'quantity': 0}
+                        )
 
                     if stock.quantity < qty:
                         messages.warning(
@@ -8668,6 +8766,7 @@ def manual_outgoing(request):
                         part=part,
                         quantity=-qty,
                         lot_no=lot_date,
+                        production_lot=production_lot,
                         warehouse_from=warehouse,
                         result_stock=stock.quantity,
                         vendor=vendor,
@@ -8765,11 +8864,12 @@ def cancel_manual_outgoing(request, trx_id):
 
     try:
         with transaction.atomic():
-            # 재고 복원
+            # 재고 복원 (LOT 관리품목은 배치까지 일치해야 정확한 행으로 복원됨)
             stock, _ = MaterialStock.objects.get_or_create(
                 warehouse=trx.warehouse_from,
                 part=trx.part,
                 lot_no=trx.lot_no,
+                production_lot=trx.production_lot,
                 defaults={'quantity': 0}
             )
             MaterialStock.objects.filter(pk=stock.pk).update(
@@ -12180,10 +12280,12 @@ def transfer_request_approve(request, pk):
         with transaction.atomic():
             for line, lot_no, qty, is_fifo in line_inputs:
                 if is_fifo:
-                    # FIFO: 오래된 LOT부터 순서대로 수량 소진
+                    # FIFO: 오래된 LOT부터, 같은 날짜면 배치(production_lot) 순으로 수량 소진
                     fifo_stocks = list(MaterialStock.objects.filter(
                         warehouse=from_wh, part=line.part, quantity__gt=0
-                    ).order_by(F('lot_no').asc(nulls_first=True)).select_for_update())
+                    ).order_by(
+                        F('lot_no').asc(nulls_first=True), F('production_lot').asc(nulls_first=True)
+                    ).select_for_update())
 
                     remaining = qty
                     first_trx = None
@@ -12193,19 +12295,22 @@ def transfer_request_approve(request, pk):
                         take = min(int(s.quantity), remaining)
                         MaterialStock.objects.filter(pk=s.pk).update(quantity=F('quantity') - take)
                         target_stock, _ = MaterialStock.objects.get_or_create(
-                            warehouse=to_wh, part=line.part, lot_no=s.lot_no,
+                            warehouse=to_wh, part=line.part, lot_no=s.lot_no, production_lot=s.production_lot,
                             defaults={'quantity': 0}
                         )
                         MaterialStock.objects.filter(pk=target_stock.pk).update(quantity=F('quantity') + take)
                         target_stock.refresh_from_db()
 
                         lot_label = s.lot_no.strftime('%Y-%m-%d') if s.lot_no else 'NULL'
+                        if s.production_lot:
+                            lot_label = f'{lot_label} (LOT {s.production_lot})'
                         trx = _create_trx(
                             transaction_type='TRANSFER',
                             date=now,
                             part=line.part,
                             quantity=take,
                             lot_no=s.lot_no,
+                            production_lot=s.production_lot,
                             warehouse_from=from_wh,
                             warehouse_to=to_wh,
                             result_stock=target_stock.quantity,
@@ -12223,24 +12328,33 @@ def transfer_request_approve(request, pk):
                     line.save()
 
                 else:
-                    stock = MaterialStock.objects.select_for_update().get(
+                    # LOT 관리품목은 같은 날짜(lot_no)에 배치(production_lot)가 여러 개일 수 있어
+                    # get() 대신 오래된 배치부터 정렬해 첫 건을 사용 (crash 방지 + FIFO 유지)
+                    stock = MaterialStock.objects.select_for_update().filter(
                         warehouse=from_wh, part=line.part, lot_no=lot_no
-                    )
+                    ).order_by(F('production_lot').asc(nulls_first=True)).first()
+                    if stock is None:
+                        raise ValueError(f'{line.part.part_no}: 선택한 LOT의 재고를 찾을 수 없습니다.')
+                    production_lot = stock.production_lot
+
                     MaterialStock.objects.filter(pk=stock.pk).update(quantity=F('quantity') - qty)
                     target_stock, _ = MaterialStock.objects.get_or_create(
-                        warehouse=to_wh, part=line.part, lot_no=lot_no,
+                        warehouse=to_wh, part=line.part, lot_no=lot_no, production_lot=production_lot,
                         defaults={'quantity': 0}
                     )
                     MaterialStock.objects.filter(pk=target_stock.pk).update(quantity=F('quantity') + qty)
                     target_stock.refresh_from_db()
 
                     lot_label = lot_no.strftime('%Y-%m-%d') if lot_no else 'NULL'
+                    if production_lot:
+                        lot_label = f'{lot_label} (LOT {production_lot})'
                     trx = _create_trx(
                         transaction_type='TRANSFER',
                         date=now,
                         part=line.part,
                         quantity=qty,
                         lot_no=lot_no,
+                        production_lot=production_lot,
                         warehouse_from=from_wh,
                         warehouse_to=to_wh,
                         result_stock=target_stock.quantity,
@@ -12344,16 +12458,18 @@ def transfer_request_revoke(request, pk):
     try:
         with transaction.atomic():
             for trx in trxs:
-                # 재고 역산: from_wh +=, to_wh -=
+                # 재고 역산: from_wh +=, to_wh -= (LOT 관리품목은 배치까지 일치)
                 from_stock, _ = MaterialStock.objects.get_or_create(
                     warehouse=trx.warehouse_from, part=trx.part, lot_no=trx.lot_no,
+                    production_lot=trx.production_lot,
                     defaults={'quantity': 0}
                 )
                 MaterialStock.objects.filter(pk=from_stock.pk).update(
                     quantity=F('quantity') + trx.quantity
                 )
                 to_stock = MaterialStock.objects.filter(
-                    warehouse=trx.warehouse_to, part=trx.part, lot_no=trx.lot_no
+                    warehouse=trx.warehouse_to, part=trx.part, lot_no=trx.lot_no,
+                    production_lot=trx.production_lot
                 ).first()
                 if to_stock:
                     MaterialStock.objects.filter(pk=to_stock.pk).update(

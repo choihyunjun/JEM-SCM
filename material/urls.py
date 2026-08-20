@@ -110,6 +110,10 @@ urlpatterns = [
     path('raw-material/rack-manage/', views.raw_material_rack_manage, name='raw_material_rack_manage'),
     path('raw-material/setting/', views.raw_material_setting, name='raw_material_setting'),
     path('raw-material/setting/auto-stock/', views.api_raw_material_auto_stock, name='api_raw_material_auto_stock'),
+
+    path('stock/production-lot-item/', views.production_lot_item_list, name='production_lot_item_list'),
+    path('stock/production-lot-item/<int:item_id>/toggle/', views.production_lot_item_toggle, name='production_lot_item_toggle'),
+    path('stock/production-lot-item/<int:item_id>/delete/', views.production_lot_item_delete, name='production_lot_item_delete'),
     path('raw-material/expiry/', views.raw_material_expiry, name='raw_material_expiry'),
     path('raw-material/label-print/', views.raw_material_label_print, name='raw_material_label_print'),
     path('raw-material/pallet-label/create/', views.pallet_label_create, name='pallet_label_create'),

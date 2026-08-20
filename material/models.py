@@ -43,6 +43,10 @@ class MaterialStock(models.Model):
     warehouse = models.ForeignKey(Warehouse, on_delete=models.CASCADE, verbose_name="창고")
     part = models.ForeignKey(Part, on_delete=models.CASCADE, verbose_name="품목")
     lot_no = models.DateField("LOT 번호(생산일)", null=True, blank=True)
+    # [LOT 관리품목 전용] ERP 생산입고 LOT번호(lotNb) 원문. lot_no(날짜)와 별개로,
+    # ProductionLotItem에 등록된 품목만 채워짐 - 같은 날짜 안에서도 실제 생산 배치 단위로
+    # 재고를 분리 추적하기 위함. 미등록 품목은 항상 NULL (기존 동작 그대로).
+    production_lot = models.CharField("생산 LOT(배치)", max_length=20, null=True, blank=True)
     quantity = models.IntegerField("현재고", default=0)
 
     # 로케이션(Rack/Bin) 관리까지 필요하다면 추후 여기에 location 필드 추가
@@ -50,7 +54,7 @@ class MaterialStock(models.Model):
     class Meta:
         verbose_name = "창고별 재고 현황"
         verbose_name_plural = "2. 창고별 재고 현황"
-        unique_together = ('warehouse', 'part', 'lot_no') # 한 창고에 같은 품목/LOT가 중복되지 않도록
+        unique_together = ('warehouse', 'part', 'lot_no', 'production_lot') # 한 창고에 같은 품목/LOT/배치가 중복되지 않도록
 
     def __str__(self):
         # Part 모델의 part_no 필드 사용 (orders.models.Part)
@@ -96,6 +100,7 @@ class MaterialTransaction(models.Model):
     # 품목 및 수량
     part = models.ForeignKey(Part, on_delete=models.CASCADE, verbose_name="품목")
     lot_no = models.DateField("LOT 번호(생산일)", null=True, blank=True)
+    production_lot = models.CharField("생산 LOT(배치)", max_length=20, null=True, blank=True)
     quantity = models.IntegerField("변동수량") # 입고(+), 출고(-)
 
     # 위치 정보 (From -> To)
@@ -1493,3 +1498,30 @@ class PurchaseOrderRequest(models.Model):
         last = cls.objects.filter(request_no__startswith=prefix).order_by('-request_no').first()
         seq = int(last.request_no.split('-')[-1]) + 1 if last else 1
         return f"{prefix}{seq:04d}"
+
+
+# -----------------------------------------------------------------------------
+# LOT 관리품목 (Production Lot Managed Items)
+# -----------------------------------------------------------------------------
+class ProductionLotItem(models.Model):
+    """
+    [WMS] ERP 생산입고(lotNb)를 배치 단위로 추적할 품목.
+    여기 등록된 품목만 MaterialStock/MaterialTransaction의 production_lot이
+    채워지고, 같은 입고일자 안에서도 실제 생산 배치 단위로 FIFO가 세분화된다.
+    미등록 품목은 지금처럼 입고일자(lot_no) 단위로만 관리됨 (동작 변화 없음).
+    """
+    part = models.OneToOneField(Part, on_delete=models.CASCADE, verbose_name="품목",
+                                 related_name='production_lot_item')
+    is_active = models.BooleanField("사용", default=True)
+    remark = models.CharField("비고", max_length=200, blank=True)
+
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="등록자")
+    created_at = models.DateTimeField("등록일시", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "LOT 관리품목"
+        verbose_name_plural = "LOT 관리품목"
+        ordering = ['part__part_no']
+
+    def __str__(self):
+        return f"{self.part.part_no} ({'사용' if self.is_active else '미사용'})"

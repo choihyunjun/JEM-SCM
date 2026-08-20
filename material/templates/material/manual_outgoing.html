@@ -523,7 +523,7 @@
                 if (lot.is_null_lot) {
                     displayText = `ERP 재고 (재고: ${lot.quantity.toLocaleString()} ${unit}) ★ 우선 소진`;
                 } else {
-                    displayText = `${lot.lot_no} (재고: ${lot.quantity.toLocaleString()} ${unit}, ${lot.days_old}일 경과)`;
+                    displayText = `${lot.lot_label || lot.lot_no} (재고: ${lot.quantity.toLocaleString()} ${unit}, ${lot.days_old}일 경과)`;
                     if (isFifo) displayText += ' ⚠️ FIFO 추천';
                 }
                 option.textContent = displayText;
@@ -769,6 +769,7 @@
             <td class="text-center">
                 ${lotDisplay}
                 <input type="hidden" name="lot_nos[]" value="${lotNo}">
+                <input type="hidden" name="stock_ids[]" value="${selectedOption.value}">
             </td>
             <td class="fw-bold fs-5 text-end pe-4">
                 ${parseInt(qty).toLocaleString()}

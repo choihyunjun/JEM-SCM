@@ -2122,7 +2122,7 @@ def sync_erp_receipt(date_from=None, date_to=None):
     - 재고: MaterialStock LOT 레코드 생성/증가 + NULL 차감
     Returns: (synced_count, skipped_count, error_count, error_list)
     """
-    from material.models import MaterialTransaction, MaterialStock, Warehouse
+    from material.models import MaterialTransaction, MaterialStock, Warehouse, ProductionLotItem
     from orders.models import Part
     from django.utils import timezone as tz
     from django.db.models import F
@@ -2150,6 +2150,11 @@ def sync_erp_receipt(date_from=None, date_to=None):
             transaction_type='RCV_ERP',
             erp_incoming_no__isnull=False
         ).values_list('erp_incoming_no', flat=True)
+    )
+
+    # LOT 관리품목 목록 (여기 포함된 품번만 ERP의 실제 생산 LOT번호를 배치 단위로 저장)
+    lot_managed_part_ids = set(
+        ProductionLotItem.objects.filter(is_active=True).values_list('part_id', flat=True)
     )
 
     synced = 0
@@ -2206,13 +2211,19 @@ def sync_erp_receipt(date_from=None, date_to=None):
             # LOT = 입고일(rcvDt) → 생산실적일로 사용
             lot_date = erp_date  # 위에서 파싱한 datetime.date 객체
 
+            # LOT 관리품목이면 ERP의 실제 생산 LOT번호(lotNb)를 배치 단위로 추가 저장.
+            # 미등록 품목은 지금처럼 항상 None → 기존 동작과 완전히 동일.
+            production_lot = None
+            if part.id in lot_managed_part_ids:
+                production_lot = (item.get('lotNb', '') or '').strip() or None
+
             twh_nm = item.get('twhNm', '') or ''
 
             # ── 1) LOT 재고 반영 (MaterialStock) ──
             with transaction.atomic():
-                # LOT 재고 생성/증가
+                # LOT 재고 생성/증가 (LOT 관리품목은 배치별로도 분리)
                 lot_stock, created = MaterialStock.objects.select_for_update().get_or_create(
-                    warehouse=warehouse, part=part, lot_no=lot_date,
+                    warehouse=warehouse, part=part, lot_no=lot_date, production_lot=production_lot,
                     defaults={'quantity': 0}
                 )
                 MaterialStock.objects.filter(pk=lot_stock.pk).update(
@@ -2235,6 +2246,7 @@ def sync_erp_receipt(date_from=None, date_to=None):
                 date=rcv_date,
                 part=part,
                 lot_no=lot_date,
+                production_lot=production_lot,
                 quantity=qty,
                 warehouse_to=warehouse,
                 result_stock=0,

@@ -1,0 +1,176 @@
+{% extends 'material/material_base.html' %}
+{% load humanize %}
+
+{% block title %}LOT 관리품목{% endblock %}
+
+{% block material_content %}
+<div class="container-fluid p-0">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <span class="dtl-title">LOT 관리품목</span>
+            <span class="text-muted small d-block mt-1">
+                여기 등록된 품목은 ERP 생산입고의 실제 LOT번호(배치)를 그대로 추적해서,
+                같은 입고일자 안에서도 배치 단위로 FIFO가 세분화됩니다. 등록 안 한 품목은 지금처럼 입고일자 단위로만 관리됩니다.
+            </span>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- 품목 추가 폼 -->
+        <div class="col-lg-4">
+            <div class="dtl-card mb-0">
+                <div class="dtl-card-header"><i class="bi bi-plus-circle"></i>품목 추가</div>
+                <div class="dtl-card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="part_id" id="selectedPartId">
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">품목 선택 <span class="text-danger">*</span></label>
+                            <div class="position-relative">
+                                <input type="text" id="partSearchInput" class="form-control"
+                                       placeholder="품번 또는 품명 검색..." autocomplete="off">
+                                <div id="partSearchResults" class="list-group position-absolute w-100 shadow"
+                                     style="z-index:1050; max-height:250px; overflow-y:auto; display:none;"></div>
+                            </div>
+                            <div id="selectedPartDisplay" class="mt-2" style="display:none;">
+                                <span class="dtl-pill blue" style="font-size:0.85rem;" id="selectedPartBadge"></span>
+                                <button type="button" class="btn btn-sm btn-outline-secondary ms-1" onclick="clearSelection()">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">비고</label>
+                            <input type="text" name="remark" class="form-control" placeholder="예: JBE RELAY 계열">
+                        </div>
+
+                        <button type="submit" class="dtl-btn-dark w-100" id="submitBtn" disabled>
+                            <i class="bi bi-check-lg me-1"></i>등록
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- 등록 목록 -->
+        <div class="col-lg-8">
+            <div class="dtl-card mb-0">
+                <div class="dtl-card-header">
+                    <span>등록된 LOT 관리품목</span>
+                    <span class="dtl-pill slate ms-2">{{ items|length }}건</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0 dtl-table">
+                            <thead>
+                                <tr>
+                                    <th>품번</th>
+                                    <th>품명</th>
+                                    <th>비고</th>
+                                    <th>상태</th>
+                                    <th>등록자</th>
+                                    <th>등록일시</th>
+                                    <th class="text-end">관리</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in items %}
+                                <tr>
+                                    <td class="fw-bold">{{ item.part.part_no }}</td>
+                                    <td>{{ item.part.part_name|truncatechars:20 }}</td>
+                                    <td class="text-muted small">{{ item.remark|default:"-" }}</td>
+                                    <td>
+                                        {% if item.is_active %}
+                                        <span class="dtl-pill green">사용</span>
+                                        {% else %}
+                                        <span class="dtl-pill slate">미사용</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-muted small">{{ item.created_by.username|default:"-" }}</td>
+                                    <td class="text-muted small">{{ item.created_at|date:"Y-m-d H:i" }}</td>
+                                    <td class="text-end">
+                                        <form method="post" action="{% url 'material:production_lot_item_toggle' item.id %}" style="display:inline;">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                                {% if item.is_active %}미사용으로{% else %}사용으로{% endif %}
+                                            </button>
+                                        </form>
+                                        <form method="post" action="{% url 'material:production_lot_item_delete' item.id %}" style="display:inline;"
+                                              onsubmit="return confirm('{{ item.part.part_no }}을(를) LOT 관리품목에서 제외할까요? (기존 이력은 유지되고, 앞으로 입고분부터 날짜 단위로만 관리됩니다)');">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">제외</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="7" class="text-center py-4 text-muted">
+                                        등록된 LOT 관리품목이 없습니다.
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let searchTimer = null;
+const searchInput = document.getElementById('partSearchInput');
+const searchResults = document.getElementById('partSearchResults');
+
+searchInput.addEventListener('input', function() {
+    clearTimeout(searchTimer);
+    const q = this.value.trim();
+    if (q.length < 2) { searchResults.style.display = 'none'; return; }
+
+    searchTimer = setTimeout(() => {
+        fetch(`{% url "material:api_part_search" %}?q=${encodeURIComponent(q)}`)
+        .then(r => r.json())
+        .then(data => {
+            if (!data.results.length) {
+                searchResults.innerHTML = '<div class="list-group-item text-muted text-center py-2">검색 결과 없음</div>';
+                searchResults.style.display = 'block';
+                return;
+            }
+            let html = '';
+            data.results.forEach(p => {
+                html += `<button type="button" class="list-group-item list-group-item-action py-2"
+                    onclick="selectPart(${p.id}, '${p.part_no}', '${p.part_name.replace(/'/g, "\\'")}')">
+                    <strong>${p.part_no}</strong> <small class="text-muted">${p.part_name}</small>
+                </button>`;
+            });
+            searchResults.innerHTML = html;
+            searchResults.style.display = 'block';
+        });
+    }, 300);
+});
+
+document.addEventListener('click', function(e) {
+    if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+        searchResults.style.display = 'none';
+    }
+});
+
+function selectPart(id, partNo, partName) {
+    document.getElementById('selectedPartId').value = id;
+    document.getElementById('selectedPartBadge').textContent = `${partNo} - ${partName}`;
+    document.getElementById('selectedPartDisplay').style.display = 'block';
+    document.getElementById('submitBtn').disabled = false;
+    searchResults.style.display = 'none';
+    searchInput.value = '';
+}
+
+function clearSelection() {
+    document.getElementById('selectedPartId').value = '';
+    document.getElementById('selectedPartDisplay').style.display = 'none';
+    document.getElementById('submitBtn').disabled = true;
+}
+</script>
+{% endblock %}

@@ -599,7 +599,7 @@
                 if (lot.is_null_lot) {
                     displayText = `ERP 재고 (재고: ${lot.quantity.toLocaleString()} ${unit}) ★ 우선 소진`;
                 } else {
-                    displayText = `${lot.lot_no} (재고: ${lot.quantity.toLocaleString()} ${unit}, ${lot.days_old}일 경과)`;
+                    displayText = `${lot.lot_label || lot.lot_no} (재고: ${lot.quantity.toLocaleString()} ${unit}, ${lot.days_old}일 경과)`;
                     if (index === 0 || (index === 1 && data.lots[0].is_null_lot)) {
                         displayText += ' ⚠️ FIFO 추천';
                     }
