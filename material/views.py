@@ -7756,7 +7756,7 @@ def api_raw_material_auto_stock(request):
     return JsonResponse({'updated': updated})
 
 
-@wms_permission_required('can_wms_stock_edit')
+@wms_permission_required('can_wms_lot_allocation')
 def production_lot_item_list(request):
     """
     [WMS] LOT 관리품목 설정
@@ -7793,7 +7793,7 @@ def production_lot_item_list(request):
     return render(request, 'material/production_lot_item_list.html', context)
 
 
-@wms_permission_required('can_wms_stock_edit')
+@wms_permission_required('can_wms_lot_allocation')
 def production_lot_item_toggle(request, item_id):
     """LOT 관리품목 사용/미사용 토글"""
     from .models import ProductionLotItem
@@ -7804,7 +7804,7 @@ def production_lot_item_toggle(request, item_id):
     return redirect('material:production_lot_item_list')
 
 
-@wms_permission_required('can_wms_stock_edit')
+@wms_permission_required('can_wms_lot_allocation')
 def production_lot_item_delete(request, item_id):
     """LOT 관리품목 삭제 (등록 취소, 향후 입고분부터 다시 날짜 단위 관리로 전환)"""
     from .models import ProductionLotItem

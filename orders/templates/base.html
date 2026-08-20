@@ -790,13 +790,13 @@
 
                             {# 재고/수불 관리 #}
                             {% if user|has_perm:'can_wms_stock_list' or user|has_perm:'can_wms_stock_transfer' or user|has_perm:'can_wms_transfer_history' or user|has_perm:'can_wms_transaction_history' or user|has_perm:'can_wms_lot_allocation' %}
-                            <a class="nav-link collapsed {% if request.resolver_match.url_name in 'stock_list,stock_transfer,stock_move,transfer_history,transaction_history,lot_allocation' %}active{% endif %}"
-                               href="#" data-bs-toggle="collapse" data-bs-target="#collapseStock" aria-expanded="{% if request.resolver_match.url_name in 'stock_list,stock_transfer,stock_move,transfer_history,transaction_history,lot_allocation' %}true{% else %}false{% endif %}" aria-controls="collapseStock">
+                            <a class="nav-link collapsed {% if request.resolver_match.url_name in 'stock_list,stock_transfer,stock_move,transfer_history,transaction_history,lot_allocation,production_lot_item_list' %}active{% endif %}"
+                               href="#" data-bs-toggle="collapse" data-bs-target="#collapseStock" aria-expanded="{% if request.resolver_match.url_name in 'stock_list,stock_transfer,stock_move,transfer_history,transaction_history,lot_allocation,production_lot_item_list' %}true{% else %}false{% endif %}" aria-controls="collapseStock">
                                 <div class="sb-nav-link-icon"><i class="bi bi-boxes"></i></div>
                                 재고/수불 관리
                                 <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
                             </a>
-                            <div class="collapse {% if request.resolver_match.url_name in 'stock_list,stock_transfer,stock_move,transfer_history,transaction_history,lot_allocation' %}show{% endif %}"
+                            <div class="collapse {% if request.resolver_match.url_name in 'stock_list,stock_transfer,stock_move,transfer_history,transaction_history,lot_allocation,production_lot_item_list' %}show{% endif %}"
                                  id="collapseStock" data-bs-parent="#sidenavAccordion">
                                 <nav class="sb-sidenav-menu-nested nav">
                                     {% if user|has_perm:'can_wms_stock_list' %}<a class="nav-link {% if request.resolver_match.url_name == 'stock_list' %}active{% endif %}" href="{% url 'material:stock_list' %}">자재 재고 현황</a>{% endif %}
@@ -804,6 +804,7 @@
                                     {% if user|has_perm:'can_wms_transfer_history' %}<a class="nav-link {% if request.resolver_match.url_name == 'transfer_history' %}active{% endif %}" href="{% url 'material:transfer_history' %}">재고 이동 현황</a>{% endif %}
                                     {% if user|has_perm:'can_wms_transaction_history' %}<a class="nav-link {% if request.resolver_match.url_name == 'transaction_history' %}active{% endif %}" href="{% url 'material:transaction_history' %}">기간별 수불 대장</a>{% endif %}
                                     {% if user|has_perm:'can_wms_lot_allocation' %}<a class="nav-link {% if request.resolver_match.url_name == 'lot_allocation' %}active{% endif %}" href="{% url 'material:lot_allocation' %}">LOT 별도 적용</a>{% endif %}
+                                    {% if user|has_perm:'can_wms_lot_allocation' %}<a class="nav-link {% if request.resolver_match.url_name == 'production_lot_item_list' %}active{% endif %}" href="{% url 'material:production_lot_item_list' %}">LOT 관리품목</a>{% endif %}
                                 </nav>
                             </div>
                             {% endif %}
