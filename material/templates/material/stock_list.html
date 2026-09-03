@@ -319,9 +319,14 @@ function showLotDetails(partNo, warehouseCode) {
                     }
 
                     const lotClass = lot.is_null_lot ? 'text-muted' : 'text-primary';
+                    let lotCell = '<span class="fw-bold ' + lotClass + '">' + escapeHtml(lot.lot_label || lot.lot_no) + '</span>';
+                    // LOT 관리품목: 생산 LOT번호가 메인, 입고일자는 작게 보조 표기
+                    if (lot.production_lot && lot.lot_no && lot.lot_no !== lot.lot_label) {
+                        lotCell += '<br><span class="text-muted" style="font-size:0.8em;">입고 ' + escapeHtml(lot.lot_no) + '</span>';
+                    }
                     html += '<tr>';
                     html += '  <td><span class="badge bg-secondary me-1">' + escapeHtml(lot.warehouse_code) + '</span>' + escapeHtml(lot.warehouse) + '</td>';
-                    html += '  <td class="text-center fw-bold ' + lotClass + '">' + escapeHtml(lot.lot_label || lot.lot_no) + '</td>';
+                    html += '  <td class="text-center">' + lotCell + '</td>';
                     html += '  <td class="text-end fw-bold">' + Number(lot.quantity).toLocaleString() + ' ' + (data.weight_unit || 'EA') + '</td>';
                     html += '  <td class="text-center ' + daysClass + '">' + daysText + '</td>';
                     html += '</tr>';

@@ -44,6 +44,7 @@ def _generate_trx_no():
         seq = 1
 
     return f'{prefix}-{seq:04d}'
+    
 
 
 def _create_trx(**kwargs):
@@ -926,9 +927,12 @@ def _trim_lot_stock_fifo(warehouse, part, excess_qty, now, reason=''):
     if excess_qty <= 0:
         return 0
 
+    # LOT 관리품목: 실제 생산 LOT번호(production_lot, 예 2635711 = YY주차요일순번)가
+    #   FIFO 1순위. 등록 이전 입고분(production_lot=NULL)이 가장 오래된 재고이므로 nulls_first.
+    # 미등록 품목: production_lot이 전부 NULL → lot_no(입고일자)가 사실상 1순위 (기존 동작).
     rows = list(MaterialStock.objects.filter(
         warehouse=warehouse, part=part, lot_no__isnull=False, quantity__gt=0
-    ).order_by(F('lot_no').asc(), F('production_lot').asc(nulls_first=True)))
+    ).order_by(F('production_lot').asc(nulls_first=True), F('lot_no').asc(nulls_first=True)))
 
     remaining = int(excess_qty)
     trimmed_total = 0

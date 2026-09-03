@@ -3774,10 +3774,11 @@ def get_lot_details(request, part_no):
         total_qty = base_qs.aggregate(total=Sum('quantity'))['total'] or 0
 
         # 표시용: quantity > 0인 LOT만 (NULL 제외, LOT만 보여줌)
-        # LOT 관리품목은 같은 입고일자 안에서 production_lot(생산 배치번호) 오름차순으로 세분화
+        # LOT 관리품목: 실제 생산 LOT번호(production_lot)가 LOT이자 FIFO 1순위.
+        # 미등록 품목: production_lot이 전부 NULL → 입고일자(lot_no)가 사실상 1순위.
         from django.db.models import F as _F
         lot_stocks = base_qs.filter(lot_no__isnull=False, quantity__gt=0).order_by(
-            _F('lot_no').asc(), _F('production_lot').asc(nulls_first=True)
+            _F('production_lot').asc(nulls_first=True), _F('lot_no').asc(nulls_first=True)
         )
 
         lot_data = []
@@ -3787,8 +3788,8 @@ def get_lot_details(request, part_no):
         for stock in lot_stocks:
             days_old = (timezone.now().date() - stock.lot_no).days
             date_str = stock.lot_no.strftime('%Y-%m-%d')
-            # LOT 관리품목: 실제 생산 배치번호가 LOT. 미등록 품목: 입고일자가 LOT.
-            lot_label = f'{stock.production_lot} · {date_str}' if stock.production_lot else date_str
+            # LOT 관리품목이면 생산 LOT번호가 LOT. 미등록 품목이면 입고일자가 LOT.
+            lot_label = stock.production_lot or date_str
             lot_info = {
                 'warehouse': stock.warehouse.name,
                 'warehouse_code': stock.warehouse.code,
@@ -3878,13 +3879,13 @@ def api_get_available_lots(request):
             return JsonResponse({'error': '존재하지 않는 창고입니다.'}, status=404)
 
         # 해당 창고의 해당 품목 LOT(+배치)별 재고 조회
-        # 우선순위: lot_no=NULL(ERP 재고) 먼저 → 오래된 LOT 순 → 같은 날짜면 배치(production_lot) 순 (FIFO)
+        # FIFO 우선순위: production_lot(생산 LOT번호) → lot_no(입고일자). 둘 다 NULL(ERP 재고)이 최우선 소진.
         from django.db.models import F as _F
         lot_stocks = MaterialStock.objects.filter(
             warehouse=warehouse,
             part=part,
             quantity__gt=0
-        ).order_by(_F('lot_no').asc(nulls_first=True), _F('production_lot').asc(nulls_first=True))
+        ).order_by(_F('production_lot').asc(nulls_first=True), _F('lot_no').asc(nulls_first=True))
 
         lots = []
         for stock in lot_stocks:
@@ -3894,7 +3895,7 @@ def api_get_available_lots(request):
                 days_old = 99999  # NULL = 가장 오래된 재고 (우선 소진)
             lot_label = stock.lot_no.strftime('%Y-%m-%d') if stock.lot_no else None
             if lot_label and stock.production_lot:
-                lot_label = f'{lot_label} (LOT {stock.production_lot})'
+                lot_label = f'{stock.production_lot} · 입고 {lot_label}'
             lot_info = {
                 'stock_id': stock.id,
                 'lot_no': stock.lot_no.strftime('%Y-%m-%d') if stock.lot_no else None,
@@ -12287,11 +12288,11 @@ def transfer_request_approve(request, pk):
         with transaction.atomic():
             for line, lot_no, qty, is_fifo in line_inputs:
                 if is_fifo:
-                    # FIFO: 오래된 LOT부터, 같은 날짜면 배치(production_lot) 순으로 수량 소진
+                    # FIFO: 생산 LOT번호(production_lot) → 입고일자(lot_no) 순으로 수량 소진
                     fifo_stocks = list(MaterialStock.objects.filter(
                         warehouse=from_wh, part=line.part, quantity__gt=0
                     ).order_by(
-                        F('lot_no').asc(nulls_first=True), F('production_lot').asc(nulls_first=True)
+                        F('production_lot').asc(nulls_first=True), F('lot_no').asc(nulls_first=True)
                     ).select_for_update())
 
                     remaining = qty
@@ -12569,7 +12570,7 @@ def api_transfer_request_lots(request):
 
     stocks = list(MaterialStock.objects.filter(
         warehouse=wh, part=part, quantity__gt=0
-    ).order_by(F('lot_no').asc(nulls_first=True)))
+    ).order_by(F('production_lot').asc(nulls_first=True), F('lot_no').asc(nulls_first=True)))
 
     if not stocks:
         return JsonResponse({'ok': True, 'lots': []})
@@ -12577,9 +12578,13 @@ def api_transfer_request_lots(request):
     total_qty = int(sum(s.quantity for s in stocks))
     lots = [{'lot_no': '__FIFO__', 'lot_label': f'전체 (FIFO 자동분할)', 'qty': total_qty, 'fifo': True}]
     for s in stocks:
+        if s.lot_no:
+            label = f'{s.production_lot} · 입고 {s.lot_no:%Y-%m-%d}' if s.production_lot else f'{s.lot_no:%Y-%m-%d}'
+        else:
+            label = 'NULL (ERP 미러)'
         lots.append({
             'lot_no': s.lot_no.isoformat() if s.lot_no else '',
-            'lot_label': s.lot_no.strftime('%Y-%m-%d') if s.lot_no else 'NULL (ERP 미러)',
+            'lot_label': label,
             'qty': int(s.quantity),
             'fifo': False,
         })
