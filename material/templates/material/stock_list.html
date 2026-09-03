@@ -276,6 +276,17 @@ function showLotDetails(partNo, warehouseCode) {
                 html += '</div>';
             }
 
+            if (data.sync_needed) {
+                const gap = Number(data.sync_gap);
+                html += '<div class="alert alert-danger border-danger">';
+                html += '  <i class="bi bi-exclamation-octagon-fill me-2"></i>';
+                html += '  <strong>재고 정합 필요.</strong> 아래 LOT 재고 합계(' + Number(data.shown_total).toLocaleString() + ')가 ';
+                html += '  ERP 현재고(' + Number(data.total_quantity).toLocaleString() + ')와 ';
+                html += '  <strong>' + Math.abs(gap).toLocaleString() + ' ' + (data.weight_unit || 'EA') + '</strong> ';
+                html += (gap < 0 ? '많습니다' : '적습니다') + '. ERP 재고동기화를 실행하세요.';
+                html += '</div>';
+            }
+
             if (data.lot_details.length === 0) {
                 html += '<div class="alert alert-info">LOT 정보가 없습니다.</div>';
             } else {
@@ -296,9 +307,9 @@ function showLotDetails(partNo, warehouseCode) {
                     let daysText = Number(lot.days_old) + '일';
 
                     if (lot.is_null_lot) {
-                        // ERP 관리 버킷(날짜 LOT 미배분분) - 재고일수 개념 없음
-                        daysClass = lot.needs_sync ? 'text-danger fw-bold' : 'text-muted';
-                        daysText = lot.needs_sync ? 'ERP 재고동기화 필요' : '-';
+                        // LOT 미지정 실재고 - 생산일이 없어 재고일수 개념 없음
+                        daysClass = 'text-muted';
+                        daysText = '-';
                     } else if (lot.days_old >= 60) {
                         daysClass = 'text-danger fw-bold';
                         daysText = Number(lot.days_old) + '일 (위험)';
@@ -307,9 +318,7 @@ function showLotDetails(partNo, warehouseCode) {
                         daysText = Number(lot.days_old) + '일 (주의)';
                     }
 
-                    const lotClass = lot.is_null_lot
-                        ? (lot.needs_sync ? 'text-danger' : 'text-muted')
-                        : 'text-primary';
+                    const lotClass = lot.is_null_lot ? 'text-muted' : 'text-primary';
                     html += '<tr>';
                     html += '  <td><span class="badge bg-secondary me-1">' + escapeHtml(lot.warehouse_code) + '</span>' + escapeHtml(lot.warehouse) + '</td>';
                     html += '  <td class="text-center fw-bold ' + lotClass + '">' + escapeHtml(lot.lot_no) + '</td>';

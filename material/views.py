@@ -3798,35 +3798,25 @@ def get_lot_details(request, part_no):
             if oldest_lot is None or stock.lot_no < oldest_lot:
                 oldest_lot = stock.lot_no
 
-        # LOT에 배분 안 된 나머지 (ERP 관리분)
-        # 정상 상태에서는 0 이상. 음수면 LOT 재고가 ERP 현재고를 초과한 것으로,
-        # ERP 재고동기화(sync_stock_from_erp)가 오래된 LOT을 FIFO로 축소해 해소한다.
-        unallocated = total_qty - lot_total
-        if unallocated != 0:
-            # NULL LOT 재고를 창고별로 표시
-            null_stocks = base_qs.filter(lot_no__isnull=True).exclude(quantity=0)
-            if null_stocks.exists():
-                for ns in null_stocks:
-                    lot_data.insert(0, {
-                        'warehouse': ns.warehouse.name,
-                        'warehouse_code': ns.warehouse.code,
-                        'lot_no': 'ERP 재고(미배분)' if ns.quantity >= 0 else 'ERP 재고(정합 필요)',
-                        'quantity': ns.quantity,
-                        'days_old': None,
-                        'is_null_lot': True,
-                        'needs_sync': ns.quantity < 0,
-                    })
-            else:
-                wh = base_qs.first().warehouse if base_qs.exists() else None
-                lot_data.insert(0, {
-                    'warehouse': wh.name if wh else '-',
-                    'warehouse_code': wh.code if wh else '-',
-                    'lot_no': 'ERP 재고(미배분)' if unallocated >= 0 else 'ERP 재고(정합 필요)',
-                    'quantity': unallocated,
-                    'days_old': None,
-                    'is_null_lot': True,
-                    'needs_sync': unallocated < 0,
-                })
+        # LOT이 없는 "실제" 재고만 표시 (lot_no=NULL, 수량 > 0).
+        # 음수/0 NULL 레코드는 허수(sync_stock_from_erp가 차액을 떠넘긴 잔재)이므로
+        # 절대 화면에 행으로 노출하지 않는다.
+        null_shown_total = 0
+        for ns in base_qs.filter(lot_no__isnull=True, quantity__gt=0):
+            lot_data.insert(0, {
+                'warehouse': ns.warehouse.name,
+                'warehouse_code': ns.warehouse.code,
+                'lot_no': 'LOT 미지정',
+                'quantity': ns.quantity,
+                'days_old': None,
+                'is_null_lot': True,
+            })
+            null_shown_total += ns.quantity
+
+        # 화면에 표시된 재고 합계가 전체(ERP) 합계와 다르면 = 허수 LOT/음수 NULL 이 있다는 뜻.
+        # 행으로 보여주는 대신 상단에 "재고동기화 필요" 안내만 띄운다.
+        shown_total = lot_total + null_shown_total
+        sync_gap = total_qty - shown_total
 
         # FIFO 경고 판정 (60일 이상 된 LOT가 있으면 경고)
         fifo_warning = False
@@ -3840,6 +3830,9 @@ def get_lot_details(request, part_no):
             'part_name': part.part_name,
             'vendor_name': part.vendor.name if part.vendor else '-',
             'total_quantity': total_qty,
+            'shown_total': shown_total,
+            'sync_gap': sync_gap,
+            'sync_needed': sync_gap != 0,
             'lot_details': lot_data,
             'fifo_warning': fifo_warning,
             'oldest_lot': oldest_lot.strftime('%Y-%m-%d') if oldest_lot else None,
