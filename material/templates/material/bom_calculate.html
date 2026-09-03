@@ -663,13 +663,13 @@
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body">
+                <div class="modal-body" id="vendorLinkModalBody">
                     <p class="text-muted small mb-3">
                         <i class="bi bi-info-circle me-1"></i>
                         거래처가 없는 품목은 발주가 불가합니다. 지금 바로 연결하거나 건너뛸 수 있습니다.
                     </p>
                     <div id="vendorLinkSummary" class="alert alert-success py-2 small" style="display:none;"></div>
-                    <div class="table-responsive">
+                    <div class="table-responsive" id="vendorLinkTableWrap">
                         <table class="table table-sm align-middle mb-0">
                             <thead class="table-light">
                                 <tr>
@@ -1140,6 +1140,19 @@ document.addEventListener('DOMContentLoaded', function() {
     if (el) vendorSelectModal = new bootstrap.Modal(el);
     var el2 = document.getElementById('vendorLinkModal');
     if (el2) vendorLinkModal = new bootstrap.Modal(el2);
+
+    // vl-dropdown은 position:fixed로 body에 붙여서 모달/테이블의 스크롤 영역
+    // 바깥까지 나오게 하는데, 그 상태에서 모달이나 테이블을 스크롤하면
+    // 좌표가 안 맞게 되므로 스크롤 시 그냥 닫아버림
+    function closeAllVlDropdowns() {
+        document.querySelectorAll('body > .vl-dropdown').forEach(function(d) {
+            d.style.display = 'none';
+        });
+    }
+    var vlModalBody = document.getElementById('vendorLinkModalBody');
+    var vlTableWrap = document.getElementById('vendorLinkTableWrap');
+    if (vlModalBody) vlModalBody.addEventListener('scroll', closeAllVlDropdowns);
+    if (vlTableWrap) vlTableWrap.addEventListener('scroll', closeAllVlDropdowns);
 });
 
 function confirmRegisterDemand() {
@@ -1156,6 +1169,9 @@ function openVendorLinkModal() {
     document.getElementById('unlinkedCount').textContent = uniqueUnlinkedParts.length;
     document.getElementById('vendorLinkSummary').style.display = 'none';
     document.getElementById('vendorLinkStatus').textContent = '';
+
+    // 이전에 열었을 때 body로 옮겨놨던 드롭다운 잔재 정리
+    document.querySelectorAll('body > .vl-dropdown').forEach(function(d) { d.remove(); });
 
     var tbody = document.getElementById('vendorLinkTableBody');
     tbody.innerHTML = '';
@@ -1183,7 +1199,7 @@ function openVendorLinkModal() {
                         '<input type="text" class="form-control vl-search" data-idx="' + idx + '" data-part-no="' + p.part_no.replace(/"/g, '&quot;') + '" placeholder="업체명 검색 (2자 이상)..." autocomplete="off">' +
                         '<button type="button" class="btn btn-outline-secondary vl-clear" data-idx="' + idx + '" style="display:none; font-size:1rem; line-height:1;">×</button>' +
                     '</div>' +
-                    '<div class="list-group vl-dropdown position-absolute w-100" data-idx="' + idx + '" style="display:none;z-index:2000;max-height:160px;overflow-y:auto;top:100%;border:1px solid #dee2e6;border-radius:0 0 6px 6px;box-shadow:0 4px 8px rgba(0,0,0,0.1);"></div>' +
+                    '<div class="list-group vl-dropdown" data-idx="' + idx + '" style="display:none;position:fixed;z-index:2000;max-height:160px;overflow-y:auto;border:1px solid #dee2e6;border-radius:0 0 6px 6px;box-shadow:0 4px 8px rgba(0,0,0,0.1);"></div>' +
                 '</div>' +
             '</td>';
         tbody.appendChild(tr);
@@ -1192,6 +1208,18 @@ function openVendorLinkModal() {
         var clearBtn = tr.querySelector('.vl-clear');
         var dropEl = tr.querySelector('.vl-dropdown');
         var partNo = p.part_no;
+
+        // 모달(overflow-y:auto) + table-responsive(overflow-x:auto) 두 겹의
+        // 스크롤 영역 안에 있으면 절대위치로는 카드 밖으로 못 나와서 잘림.
+        // body로 옮기고 position:fixed + 좌표를 직접 계산해서 붙임.
+        document.body.appendChild(dropEl);
+
+        function positionDropdown() {
+            var rect = searchInput.getBoundingClientRect();
+            dropEl.style.top = rect.bottom + 'px';
+            dropEl.style.left = rect.left + 'px';
+            dropEl.style.width = rect.width + 'px';
+        }
 
         searchInput.addEventListener('input', function() {
             var q = this.value.trim();
@@ -1222,6 +1250,7 @@ function openVendorLinkModal() {
                                 dropEl.appendChild(item);
                             });
                         }
+                        positionDropdown();
                         dropEl.style.display = 'block';
                     });
             }, 250);
