@@ -3774,11 +3774,10 @@ def get_lot_details(request, part_no):
         total_qty = base_qs.aggregate(total=Sum('quantity'))['total'] or 0
 
         # 표시용: quantity > 0인 LOT만 (NULL 제외, LOT만 보여줌)
-        # LOT 관리품목: 실제 생산 LOT번호(production_lot)가 LOT이자 FIFO 1순위.
-        # 미등록 품목: production_lot이 전부 NULL → 입고일자(lot_no)가 사실상 1순위.
-        from django.db.models import F as _F
-        lot_stocks = base_qs.filter(lot_no__isnull=False, quantity__gt=0).order_by(
-            _F('production_lot').asc(nulls_first=True), _F('lot_no').asc(nulls_first=True)
+        # LOT 관리품목: 실제 생산 LOT번호(production_lot)가 LOT이자 FIFO 1순위 (파싱 정렬).
+        from material.erp_api import fifo_sort_key
+        lot_stocks = sorted(
+            base_qs.filter(lot_no__isnull=False, quantity__gt=0), key=fifo_sort_key
         )
 
         lot_data = []
@@ -3879,13 +3878,12 @@ def api_get_available_lots(request):
             return JsonResponse({'error': '존재하지 않는 창고입니다.'}, status=404)
 
         # 해당 창고의 해당 품목 LOT(+배치)별 재고 조회
-        # FIFO 우선순위: production_lot(생산 LOT번호) → lot_no(입고일자). 둘 다 NULL(ERP 재고)이 최우선 소진.
-        from django.db.models import F as _F
-        lot_stocks = MaterialStock.objects.filter(
-            warehouse=warehouse,
-            part=part,
-            quantity__gt=0
-        ).order_by(_F('production_lot').asc(nulls_first=True), _F('lot_no').asc(nulls_first=True))
+        # FIFO 우선순위: production_lot(생산 LOT번호, 파싱) → lot_no(입고일자). NULL(ERP 재고)이 최우선 소진.
+        from material.erp_api import fifo_sort_key
+        lot_stocks = sorted(
+            MaterialStock.objects.filter(warehouse=warehouse, part=part, quantity__gt=0),
+            key=fifo_sort_key,
+        )
 
         lots = []
         for stock in lot_stocks:
@@ -12288,12 +12286,11 @@ def transfer_request_approve(request, pk):
         with transaction.atomic():
             for line, lot_no, qty, is_fifo in line_inputs:
                 if is_fifo:
-                    # FIFO: 생산 LOT번호(production_lot) → 입고일자(lot_no) 순으로 수량 소진
-                    fifo_stocks = list(MaterialStock.objects.filter(
+                    # FIFO: 생산 LOT번호(production_lot, 파싱) → 입고일자(lot_no) 순으로 수량 소진
+                    from material.erp_api import fifo_sort_key
+                    fifo_stocks = sorted(MaterialStock.objects.filter(
                         warehouse=from_wh, part=line.part, quantity__gt=0
-                    ).order_by(
-                        F('production_lot').asc(nulls_first=True), F('lot_no').asc(nulls_first=True)
-                    ).select_for_update())
+                    ).select_for_update(), key=fifo_sort_key)
 
                     remaining = qty
                     first_trx = None
@@ -12568,9 +12565,11 @@ def api_transfer_request_lots(request):
     except Warehouse.DoesNotExist:
         return JsonResponse({'ok': False, 'error': '창고 없음'})
 
-    stocks = list(MaterialStock.objects.filter(
-        warehouse=wh, part=part, quantity__gt=0
-    ).order_by(F('production_lot').asc(nulls_first=True), F('lot_no').asc(nulls_first=True)))
+    from material.erp_api import fifo_sort_key
+    stocks = sorted(
+        MaterialStock.objects.filter(warehouse=wh, part=part, quantity__gt=0),
+        key=fifo_sort_key,
+    )
 
     if not stocks:
         return JsonResponse({'ok': True, 'lots': []})

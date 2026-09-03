@@ -910,10 +910,43 @@ def compare_erp_stock(year=None):
     return True, comparison, summary, None
 
 
+def parse_production_lot(production_lot):
+    """
+    ERP 생산 LOT번호를 (년, 주차, 요일, 순번) 튜플로 파싱.
+    형식: YY(2) WW(2) D(1) SEQ(가변폭 1~2)  예) '2633411' → (26,33,4,11), '263341' → (26,33,4,1)
+    파싱 불가 시 None.
+    """
+    s = (production_lot or '').strip()
+    if len(s) >= 6 and s.isdigit():
+        try:
+            return (int(s[0:2]), int(s[2:4]), int(s[4:5]), int(s[5:]))
+        except ValueError:
+            pass
+    return None
+
+
+def fifo_sort_key(stock):
+    """
+    MaterialStock 행의 FIFO 소진 순서 키 (오래된 것 = 작은 값).
+    - LOT 관리품목: production_lot(생산 LOT번호)을 (년,주,요일,순번)으로 파싱해 1순위
+    - 그 외/파싱불가/NULL: lot_no(입고일자)를 같은 축(년,주차,요일)으로 환산, 순번은 -1(배치보다 앞)
+    - lot_no도 없으면(ERP NULL 미러) 최우선 소진
+    """
+    from datetime import date as _date
+    plk = parse_production_lot(getattr(stock, 'production_lot', None))
+    if plk is not None:
+        return (plk[0], plk[1], plk[2], plk[3], stock.lot_no or _date.min)
+    d = stock.lot_no
+    if d is None:
+        return (-1, -1, -1, -1, _date.min)
+    iso = d.isocalendar()
+    return (d.year % 100, iso[1], iso[2], -1, d)
+
+
 def _trim_lot_stock_fifo(warehouse, part, excess_qty, now, reason=''):
     """
     LOT 재고 합계가 ERP 현재고를 초과할 때, 초과분(excess_qty)을 가장 오래된 LOT부터
-    FIFO(lot_no 오름차순, 같은 날짜면 production_lot 순)로 축소한다.
+    FIFO(fifo_sort_key: 생산 LOT번호 우선, 없으면 입고일자)로 축소한다.
 
     ERP를 단일 진실로 보므로 SCM의 LOT 재고 합계는 절대 ERP 현재고를 넘을 수 없다.
     과거에는 이 초과분을 lot_no=NULL 버킷에 음수로 투기했고("ERP 재고 -380,466" 같은 garbage),
@@ -927,12 +960,11 @@ def _trim_lot_stock_fifo(warehouse, part, excess_qty, now, reason=''):
     if excess_qty <= 0:
         return 0
 
-    # LOT 관리품목: 실제 생산 LOT번호(production_lot, 예 2635711 = YY주차요일순번)가
-    #   FIFO 1순위. 등록 이전 입고분(production_lot=NULL)이 가장 오래된 재고이므로 nulls_first.
-    # 미등록 품목: production_lot이 전부 NULL → lot_no(입고일자)가 사실상 1순위 (기존 동작).
-    rows = list(MaterialStock.objects.filter(
+    # FIFO 정렬: LOT 관리품목은 생산 LOT번호(2633411 등)를 (년,주,요일,순번)으로 파싱해 1순위.
+    #   순번이 가변폭(263341 vs 2633411)이라 DB 문자열 정렬로는 안 되고 파이썬에서 정렬.
+    rows = sorted(MaterialStock.objects.filter(
         warehouse=warehouse, part=part, lot_no__isnull=False, quantity__gt=0
-    ).order_by(F('production_lot').asc(nulls_first=True), F('lot_no').asc(nulls_first=True)))
+    ), key=fifo_sort_key)
 
     remaining = int(excess_qty)
     trimmed_total = 0
