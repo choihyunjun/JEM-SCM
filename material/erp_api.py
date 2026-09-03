@@ -2610,19 +2610,19 @@ def sync_erp_stock_transfer(date_from=None, date_to=None):
                 from material.models import MaterialStock
                 from django.db.models import F as _F
                 remaining = qty
-                # 1) LOT 재고 FIFO (오래된 LOT부터)
-                from_lots = list(MaterialStock.objects.filter(
+                # 1) LOT 재고 FIFO (생산 LOT번호 → 입고일자 순). 이동 시 LOT/생산배치를 그대로 유지.
+                from_lots = sorted(MaterialStock.objects.filter(
                     warehouse=from_wh, part=part, lot_no__isnull=False, quantity__gt=0
-                ).order_by('lot_no'))
+                ), key=fifo_sort_key)
                 for src in from_lots:
                     if remaining <= 0:
                         break
                     take = min(src.quantity, remaining)
                     # 출고창고 LOT 감소
                     MaterialStock.objects.filter(pk=src.pk).update(quantity=_F('quantity') - take)
-                    # 입고창고 동일 LOT에 병합 (없으면 생성)
+                    # 입고창고 동일 LOT/생산배치에 병합 (없으면 생성)
                     dst, _cr = MaterialStock.objects.get_or_create(
-                        warehouse=to_wh, part=part, lot_no=src.lot_no,
+                        warehouse=to_wh, part=part, lot_no=src.lot_no, production_lot=src.production_lot,
                         defaults={'quantity': 0}
                     )
                     MaterialStock.objects.filter(pk=dst.pk).update(quantity=_F('quantity') + take)
