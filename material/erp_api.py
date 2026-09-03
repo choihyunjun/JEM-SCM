@@ -910,16 +910,17 @@ def compare_erp_stock(year=None):
     return True, comparison, summary, None
 
 
-def parse_production_lot(production_lot):
+def production_lot_date(production_lot):
     """
-    ERP 생산 LOT번호를 (년, 주차, 요일, 순번) 튜플로 파싱.
-    형식: YY(2) WW(2) D(1) SEQ(가변폭 1~2)  예) '2633411' → (26,33,4,11), '263341' → (26,33,4,1)
+    ERP 생산 LOT번호 앞부분 YY(2)WW(2)D(1) 를 실제 생산일(date)로 변환. 뒤 자리(순번 등)는 무시.
+    형식 예: '2633511' / '263351' → 둘 다 2026년 ISO 33주 5요일.
     파싱 불가 시 None.
     """
     s = (production_lot or '').strip()
-    if len(s) >= 6 and s.isdigit():
+    if len(s) >= 5 and s[:5].isdigit():
         try:
-            return (int(s[0:2]), int(s[2:4]), int(s[4:5]), int(s[5:]))
+            from datetime import date as _date
+            return _date.fromisocalendar(2000 + int(s[0:2]), int(s[2:4]), int(s[4:5]))
         except ValueError:
             pass
     return None
@@ -928,19 +929,16 @@ def parse_production_lot(production_lot):
 def fifo_sort_key(stock):
     """
     MaterialStock 행의 FIFO 소진 순서 키 (오래된 것 = 작은 값).
-    - LOT 관리품목: production_lot(생산 LOT번호)을 (년,주,요일,순번)으로 파싱해 1순위
-    - 그 외/파싱불가/NULL: lot_no(입고일자)를 같은 축(년,주차,요일)으로 환산, 순번은 -1(배치보다 앞)
-    - lot_no도 없으면(ERP NULL 미러) 최우선 소진
+    - LOT 관리품목: production_lot 앞부분(YYWWD)을 생산일로 환산해 1순위. 뒤 순번은 무시.
+    - 그 외: lot_no(입고일자)
+    - 둘 다 없으면(ERP NULL 미러) 최우선 소진
+    같은 날짜 안에서는 production_lot 문자열 → pk 로 결정적 정렬(FIFO 의미는 없음).
     """
     from datetime import date as _date
-    plk = parse_production_lot(getattr(stock, 'production_lot', None))
-    if plk is not None:
-        return (plk[0], plk[1], plk[2], plk[3], stock.lot_no or _date.min)
-    d = stock.lot_no
+    d = production_lot_date(getattr(stock, 'production_lot', None)) or stock.lot_no
     if d is None:
-        return (-1, -1, -1, -1, _date.min)
-    iso = d.isocalendar()
-    return (d.year % 100, iso[1], iso[2], -1, d)
+        return (_date.min, '', 0)
+    return (d, stock.production_lot or '', stock.pk or 0)
 
 
 def _trim_lot_stock_fifo(warehouse, part, excess_qty, now, reason=''):
@@ -960,8 +958,7 @@ def _trim_lot_stock_fifo(warehouse, part, excess_qty, now, reason=''):
     if excess_qty <= 0:
         return 0
 
-    # FIFO 정렬: LOT 관리품목은 생산 LOT번호(2633411 등)를 (년,주,요일,순번)으로 파싱해 1순위.
-    #   순번이 가변폭(263341 vs 2633411)이라 DB 문자열 정렬로는 안 되고 파이썬에서 정렬.
+    # FIFO 정렬: LOT 관리품목은 생산 LOT번호 앞부분(YYWWD)을 생산일로 환산해 1순위 (fifo_sort_key).
     rows = sorted(MaterialStock.objects.filter(
         warehouse=warehouse, part=part, lot_no__isnull=False, quantity__gt=0
     ), key=fifo_sort_key)
