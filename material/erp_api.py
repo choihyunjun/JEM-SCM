@@ -909,18 +909,63 @@ def compare_erp_stock(year=None):
     return True, comparison, summary, None
 
 
+def _trim_lot_stock_fifo(warehouse, part, excess_qty, now, reason=''):
+    """
+    LOT 재고 합계가 ERP 현재고를 초과할 때, 초과분(excess_qty)을 가장 오래된 LOT부터
+    FIFO(lot_no 오름차순, 같은 날짜면 production_lot 순)로 축소한다.
+
+    ERP를 단일 진실로 보므로 SCM의 LOT 재고 합계는 절대 ERP 현재고를 넘을 수 없다.
+    과거에는 이 초과분을 lot_no=NULL 버킷에 음수로 투기했고("ERP 재고 -380,466" 같은 garbage),
+    이제는 원인이 된 오래된 LOT 재고를 직접 깎아 정합을 맞춘다.
+
+    Returns: 실제 축소된 총 수량
+    """
+    from material.models import MaterialStock
+    from django.db.models import F
+
+    if excess_qty <= 0:
+        return 0
+
+    rows = list(MaterialStock.objects.filter(
+        warehouse=warehouse, part=part, lot_no__isnull=False, quantity__gt=0
+    ).order_by(F('lot_no').asc(), F('production_lot').asc(nulls_first=True)))
+
+    remaining = int(excess_qty)
+    trimmed_total = 0
+    for row in rows:
+        if remaining <= 0:
+            break
+        take = min(int(row.quantity), remaining)
+        MaterialStock.objects.filter(pk=row.pk).update(quantity=F('quantity') - take)
+        remaining -= take
+        trimmed_total += take
+        _create_trx(
+            transaction_type='LOT_CORRECT',
+            date=now,
+            part=part,
+            lot_no=row.lot_no,
+            production_lot=row.production_lot,
+            quantity=-take,
+            warehouse_from=warehouse,
+            result_stock=max(int(row.quantity) - take, 0),
+            remark=f'{reason} [{row.lot_no} -{take:,}]'[:200],
+        )
+    return trimmed_total
+
+
 def sync_stock_from_erp():
     """
-    ERP 현재고와 SCM 재고 총량을 비교하여 lot_no=NULL 레코드만 조정.
-    - LOT 레코드(수기 입고)는 절대 건드리지 않음
-    - lot_no=NULL 레코드 = "ERP 관리 버킷"
+    ERP 현재고와 SCM 재고 총량을 비교하여 정합을 맞춘다.
+    - LOT 재고 합계 <= ERP 현재고: 차액을 lot_no=NULL 버킷으로 흡수 (기존 동작)
+    - LOT 재고 합계 > ERP 현재고: 초과분을 오래된 LOT부터 FIFO로 축소 (_trim_lot_stock_fifo)
+      → NULL 버킷은 항상 0 이상으로 유지 (음수 "ERP 재고" garbage 원천 차단)
     - 멱등성: 여러 번 실행해도 동일 결과
-    Returns: dict {adjusted, increased, decreased, created, skipped_no_part, skipped_no_wh, error}
+    Returns: dict {adjusted, increased, decreased, created, lot_trimmed, skipped_no_part, skipped_no_wh, error}
     """
     from django.core.cache import cache as _cache
 
     result = {
-        'adjusted': 0, 'increased': 0, 'decreased': 0, 'created': 0,
+        'adjusted': 0, 'increased': 0, 'decreased': 0, 'created': 0, 'lot_trimmed': 0,
         'skipped_no_part': 0, 'skipped_no_wh': 0, 'error': None,
     }
 
@@ -1001,17 +1046,14 @@ def _sync_stock_from_erp_inner(result, _cache):
     # 5) 각 (wh, part)별로 차이 계산 & 재고 조정
     for idx, (wh_cd, item_cd) in enumerate(all_keys):
         erp_qty = erp_map.get((wh_cd, item_cd), 0)
-        scm_qty = scm_map.get((wh_cd, item_cd), 0)
         lot_qty = scm_lot_map.get((wh_cd, item_cd), 0)
         current_null = scm_null_map.get((wh_cd, item_cd), 0)
 
-        # target_null: 음수 허용 → 음수이면 LOT 재고가 ERP를 초과하는 케이스
-        target_null = erp_qty - lot_qty
+        need_trim = lot_qty > erp_qty
+        target_null = max(erp_qty - lot_qty, 0)
 
-        # NULL 버킷(ERP 관리 버킷)만 조정 — LOT 레코드(수기 입고/WMS 관리분)는 절대 건드리지 않음.
-        # target_null이 음수(LOT재고 > ERP재고)이더라도 LOT을 깎지 않고 NULL 버킷을 음수로 반영만 한다.
-        diff = target_null - current_null
-        if diff == 0:
+        # 이미 정합 (LOT합 <= ERP, NULL 버킷도 목표치) → 건너뜀
+        if not need_trim and target_null == current_null:
             continue
 
         part = part_map.get(item_cd)
@@ -1021,6 +1063,23 @@ def _sync_stock_from_erp_inner(result, _cache):
         warehouse = wh_map.get(wh_cd)
         if not warehouse:
             result['skipped_no_wh'] += 1
+            continue
+
+        # ── LOT 재고 합계가 ERP 현재고를 초과 → 오래된 LOT부터 FIFO로 축소 ──
+        #    과거에는 NULL 버킷에 음수로 투기해 "ERP 재고 -380,466" 같은 garbage가 생겼다.
+        if need_trim:
+            trimmed = _trim_lot_stock_fifo(
+                warehouse, part, lot_qty - erp_qty, now,
+                reason=f'ERP정합 LOT축소 (ERP={erp_qty} < LOT합={lot_qty})',
+            )
+            if trimmed:
+                lot_qty -= trimmed
+                result['lot_trimmed'] += 1
+            target_null = max(erp_qty - lot_qty, 0)
+
+        diff = target_null - current_null
+        if diff == 0:
+            result['adjusted'] += 1
             continue
 
         null_stock = MaterialStock.objects.filter(
@@ -1097,9 +1156,12 @@ def _sync_stock_from_erp_inner(result, _cache):
 
     _cache.set('erp_sync_progress', {
         'stage': '완료!', 'percent': 100,
-        'detail': f'조정 {result["adjusted"]}건 (증가 {result["increased"]}, 감소 {result["decreased"]})',
+        'detail': f'조정 {result["adjusted"]}건 (증가 {result["increased"]}, 감소 {result["decreased"]}, LOT축소 {result["lot_trimmed"]})',
     }, timeout=30)
-    logger.info(f'ERP 재고동기화: 조정 {result["adjusted"]}건 (증가 {result["increased"]}, 감소 {result["decreased"]})')
+    logger.info(
+        f'ERP 재고동기화: 조정 {result["adjusted"]}건 '
+        f'(증가 {result["increased"]}, 감소 {result["decreased"]}, LOT축소 {result["lot_trimmed"]})'
+    )
     return result
 
 

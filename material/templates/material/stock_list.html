@@ -295,7 +295,11 @@ function showLotDetails(partNo, warehouseCode) {
                     let daysClass = '';
                     let daysText = Number(lot.days_old) + '일';
 
-                    if (lot.days_old >= 60) {
+                    if (lot.is_null_lot) {
+                        // ERP 관리 버킷(날짜 LOT 미배분분) - 재고일수 개념 없음
+                        daysClass = lot.needs_sync ? 'text-danger fw-bold' : 'text-muted';
+                        daysText = lot.needs_sync ? 'ERP 재고동기화 필요' : '-';
+                    } else if (lot.days_old >= 60) {
                         daysClass = 'text-danger fw-bold';
                         daysText = Number(lot.days_old) + '일 (위험)';
                     } else if (lot.days_old >= 30) {
@@ -303,9 +307,12 @@ function showLotDetails(partNo, warehouseCode) {
                         daysText = Number(lot.days_old) + '일 (주의)';
                     }
 
+                    const lotClass = lot.is_null_lot
+                        ? (lot.needs_sync ? 'text-danger' : 'text-muted')
+                        : 'text-primary';
                     html += '<tr>';
                     html += '  <td><span class="badge bg-secondary me-1">' + escapeHtml(lot.warehouse_code) + '</span>' + escapeHtml(lot.warehouse) + '</td>';
-                    html += '  <td class="text-center fw-bold text-primary">' + escapeHtml(lot.lot_no) + '</td>';
+                    html += '  <td class="text-center fw-bold ' + lotClass + '">' + escapeHtml(lot.lot_no) + '</td>';
                     html += '  <td class="text-end fw-bold">' + Number(lot.quantity).toLocaleString() + ' ' + (data.weight_unit || 'EA') + '</td>';
                     html += '  <td class="text-center ' + daysClass + '">' + daysText + '</td>';
                     html += '</tr>';

@@ -3798,7 +3798,9 @@ def get_lot_details(request, part_no):
             if oldest_lot is None or stock.lot_no < oldest_lot:
                 oldest_lot = stock.lot_no
 
-        # LOT에 배분 안 된 나머지 (ERP 관리분 - 마이너스 포함)
+        # LOT에 배분 안 된 나머지 (ERP 관리분)
+        # 정상 상태에서는 0 이상. 음수면 LOT 재고가 ERP 현재고를 초과한 것으로,
+        # ERP 재고동기화(sync_stock_from_erp)가 오래된 LOT을 FIFO로 축소해 해소한다.
         unallocated = total_qty - lot_total
         if unallocated != 0:
             # NULL LOT 재고를 창고별로 표시
@@ -3808,20 +3810,22 @@ def get_lot_details(request, part_no):
                     lot_data.insert(0, {
                         'warehouse': ns.warehouse.name,
                         'warehouse_code': ns.warehouse.code,
-                        'lot_no': 'ERP 재고',
+                        'lot_no': 'ERP 재고(미배분)' if ns.quantity >= 0 else 'ERP 재고(정합 필요)',
                         'quantity': ns.quantity,
-                        'days_old': 99999,
+                        'days_old': None,
                         'is_null_lot': True,
+                        'needs_sync': ns.quantity < 0,
                     })
             else:
                 wh = base_qs.first().warehouse if base_qs.exists() else None
                 lot_data.insert(0, {
                     'warehouse': wh.name if wh else '-',
                     'warehouse_code': wh.code if wh else '-',
-                    'lot_no': 'ERP 재고',
+                    'lot_no': 'ERP 재고(미배분)' if unallocated >= 0 else 'ERP 재고(정합 필요)',
                     'quantity': unallocated,
-                    'days_old': 99999,
+                    'days_old': None,
                     'is_null_lot': True,
+                    'needs_sync': unallocated < 0,
                 })
 
         # FIFO 경고 판정 (60일 이상 된 LOT가 있으면 경고)
