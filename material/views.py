@@ -3774,8 +3774,11 @@ def get_lot_details(request, part_no):
         total_qty = base_qs.aggregate(total=Sum('quantity'))['total'] or 0
 
         # 표시용: quantity > 0인 LOT만 (NULL 제외, LOT만 보여줌)
+        # LOT 관리품목은 같은 입고일자 안에서 production_lot(생산 배치번호) 오름차순으로 세분화
         from django.db.models import F as _F
-        lot_stocks = base_qs.filter(lot_no__isnull=False, quantity__gt=0).order_by(_F('lot_no').asc())
+        lot_stocks = base_qs.filter(lot_no__isnull=False, quantity__gt=0).order_by(
+            _F('lot_no').asc(), _F('production_lot').asc(nulls_first=True)
+        )
 
         lot_data = []
         lot_total = 0
@@ -3783,10 +3786,15 @@ def get_lot_details(request, part_no):
 
         for stock in lot_stocks:
             days_old = (timezone.now().date() - stock.lot_no).days
+            date_str = stock.lot_no.strftime('%Y-%m-%d')
+            # LOT 관리품목: 실제 생산 배치번호가 LOT. 미등록 품목: 입고일자가 LOT.
+            lot_label = f'{stock.production_lot} · {date_str}' if stock.production_lot else date_str
             lot_info = {
                 'warehouse': stock.warehouse.name,
                 'warehouse_code': stock.warehouse.code,
-                'lot_no': stock.lot_no.strftime('%Y-%m-%d'),
+                'lot_no': date_str,
+                'production_lot': stock.production_lot or '',
+                'lot_label': lot_label,
                 'quantity': stock.quantity,
                 'days_old': days_old,
                 'is_null_lot': False,
@@ -3807,6 +3815,8 @@ def get_lot_details(request, part_no):
                 'warehouse': ns.warehouse.name,
                 'warehouse_code': ns.warehouse.code,
                 'lot_no': 'LOT 미지정',
+                'production_lot': '',
+                'lot_label': 'LOT 미지정',
                 'quantity': ns.quantity,
                 'days_old': None,
                 'is_null_lot': True,

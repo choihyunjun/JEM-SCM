@@ -321,7 +321,7 @@ function showLotDetails(partNo, warehouseCode) {
                     const lotClass = lot.is_null_lot ? 'text-muted' : 'text-primary';
                     html += '<tr>';
                     html += '  <td><span class="badge bg-secondary me-1">' + escapeHtml(lot.warehouse_code) + '</span>' + escapeHtml(lot.warehouse) + '</td>';
-                    html += '  <td class="text-center fw-bold ' + lotClass + '">' + escapeHtml(lot.lot_no) + '</td>';
+                    html += '  <td class="text-center fw-bold ' + lotClass + '">' + escapeHtml(lot.lot_label || lot.lot_no) + '</td>';
                     html += '  <td class="text-end fw-bold">' + Number(lot.quantity).toLocaleString() + ' ' + (data.weight_unit || 'EA') + '</td>';
                     html += '  <td class="text-center ' + daysClass + '">' + daysText + '</td>';
                     html += '</tr>';
