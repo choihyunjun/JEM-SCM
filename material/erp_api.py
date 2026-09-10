@@ -2250,7 +2250,6 @@ def sync_erp_receipt(date_from=None, date_to=None):
         if rcv_nb in existing_nbs:
             skipped += 1
             continue
-        existing_nbs.add(rcv_nb)  # 같은 rcvNb 중복 처리 방지
 
         try:
             item_cd = item.get('itemCd', '')
@@ -2273,7 +2272,7 @@ def sync_erp_receipt(date_from=None, date_to=None):
                 now = tz.localtime(tz.now())
                 rcv_date = now.replace(year=erp_date.year, month=erp_date.month, day=erp_date.day)
             except (ValueError, TypeError):
-                rcv_date = tz.now()
+                raise ValueError(f'생산입고일 형식 오류: {rcv_dt!r}')
 
             # 입고창고 매칭 (twhCd = 입고 대상 창고)
             twh_cd = item.get('twhCd', '')
@@ -2292,8 +2291,17 @@ def sync_erp_receipt(date_from=None, date_to=None):
 
             twh_nm = item.get('twhNm', '') or ''
 
-            # ── 1) LOT 재고 반영 (MaterialStock) ──
+            # 재고와 이력을 함께 커밋한다. 이력 실패 시 NULL 차감도 복원한다.
             with transaction.atomic():
+                # 신규 재고 행이 없어도 같은 품목의 동시 수신을 직렬화한다.
+                Part.objects.select_for_update().get(pk=part.pk)
+                if MaterialTransaction.objects.filter(
+                    transaction_type='RCV_ERP', erp_incoming_no=rcv_nb
+                ).exists():
+                    existing_nbs.add(rcv_nb)
+                    skipped += 1
+                    continue
+
                 # LOT 재고 생성/증가 (LOT 관리품목은 배치별로도 분리)
                 lot_stock, created = MaterialStock.objects.select_for_update().get_or_create(
                     warehouse=warehouse, part=part, lot_no=lot_date, production_lot=production_lot,
@@ -2313,21 +2321,20 @@ def sync_erp_receipt(date_from=None, date_to=None):
                         quantity=F('quantity') - deduct
                     )
 
-            # ── 2) 이력 기록 (MaterialTransaction) ──
-            _create_trx(
-                transaction_type='RCV_ERP',
-                date=rcv_date,
-                part=part,
-                lot_no=lot_date,
-                production_lot=production_lot,
-                quantity=qty,
-                warehouse_to=warehouse,
-                result_stock=0,
-                remark=f'ERP생산입고({twh_nm}) {remark}'.strip(),
-                erp_incoming_no=rcv_nb,
-                erp_sync_status='SUCCESS',
-                erp_sync_message=f'ERP 생산입고 동기화 ({rcv_nb})',
-            )
+                _create_trx(
+                    transaction_type='RCV_ERP',
+                    date=rcv_date,
+                    part=part,
+                    lot_no=lot_date,
+                    production_lot=production_lot,
+                    quantity=qty,
+                    warehouse_to=warehouse,
+                    result_stock=0,
+                    remark=f'ERP생산입고({twh_nm}) {remark}'.strip(),
+                    erp_incoming_no=rcv_nb,
+                    erp_sync_status='SUCCESS',
+                    erp_sync_message=f'ERP 생산입고 동기화 ({rcv_nb})',
+                )
             existing_nbs.add(rcv_nb)
             synced += 1
 

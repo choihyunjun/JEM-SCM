@@ -147,7 +147,7 @@
           sel.disabled = false;
           data.lots.forEach(lot => {
             const opt = document.createElement('option');
-            opt.value = lot.lot_no;
+            opt.value = lot.fifo ? '__FIFO__' : `stock:${lot.stock_id}`;
             opt.textContent = lot.fifo
               ? `▶ ${lot.lot_label}  (총 ${lot.qty.toLocaleString()}개)`
               : `${lot.lot_label}  (${lot.qty.toLocaleString()}개)`;

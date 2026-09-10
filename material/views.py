@@ -12212,7 +12212,6 @@ def transfer_request_approve(request, pk):
         messages.error(request, '출고창고와 이동창고가 동일합니다.')
         return redirect('material:transfer_request_approve', pk=pk)
 
-    import datetime
     # 체크된(이번에 처리할) 라인만 파싱
     line_inputs = []
     for line in pending_lines:
@@ -12229,12 +12228,16 @@ def transfer_request_approve(request, pk):
             return redirect('material:transfer_request_approve', pk=pk)
 
         is_fifo = (lot_str == '__FIFO__')
-        lot_no = None
-        if not is_fifo and lot_str:
+        stock_id = None
+        if not is_fifo:
             try:
-                lot_no = datetime.date.fromisoformat(lot_str)
+                if not lot_str.startswith('stock:'):
+                    raise ValueError
+                stock_id = int(lot_str[6:])
+                if stock_id <= 0:
+                    raise ValueError
             except ValueError:
-                messages.error(request, f'{line.part.part_no}: LOT 날짜 형식 오류.')
+                messages.error(request, f'{line.part.part_no}: 화면을 새로고침한 뒤 LOT를 다시 선택해주세요.')
                 return redirect('material:transfer_request_approve', pk=pk)
 
         if is_fifo:
@@ -12246,14 +12249,13 @@ def transfer_request_approve(request, pk):
                 return redirect('material:transfer_request_approve', pk=pk)
         else:
             available = MaterialStock.objects.filter(
-                warehouse=from_wh, part=line.part, lot_no=lot_no
+                pk=stock_id, warehouse=from_wh, part=line.part
             ).aggregate(total=Sum('quantity'))['total'] or 0
             if available < qty:
-                lot_label = lot_str if lot_str else 'NULL(ERP미러)'
-                messages.error(request, f'{line.part.part_no} [LOT:{lot_label}]: 재고 부족 (가용 {available}, 신청 {qty})')
+                messages.error(request, f'{line.part.part_no}: 선택한 LOT 재고 부족 (가용 {available}, 신청 {qty})')
                 return redirect('material:transfer_request_approve', pk=pk)
 
-        line_inputs.append((line, lot_no, qty, is_fifo))
+        line_inputs.append((line, stock_id, qty, is_fifo))
 
     if not line_inputs:
         messages.error(request, '처리할 품목을 1개 이상 체크해주세요.')
@@ -12265,7 +12267,13 @@ def transfer_request_approve(request, pk):
 
     try:
         with transaction.atomic():
-            for line, lot_no, qty, is_fifo in line_inputs:
+            req = MaterialTransferRequest.objects.select_for_update().get(pk=pk)
+            if req.status not in ('PENDING', 'PARTIAL'):
+                raise ValueError('이미 처리된 이동 요청입니다. 화면을 새로고침해주세요.')
+            for line, stock_id, qty, is_fifo in line_inputs:
+                line = req.lines.select_for_update().get(pk=line.pk)
+                if line.approved_qty is not None:
+                    raise ValueError('이미 처리된 품목입니다. 화면을 새로고침해주세요.')
                 if is_fifo:
                     # FIFO: 생산 LOT번호(production_lot, 파싱) → 입고일자(lot_no) 순으로 수량 소진
                     from material.erp_api import fifo_sort_key
@@ -12279,7 +12287,11 @@ def transfer_request_approve(request, pk):
                         if remaining <= 0:
                             break
                         take = min(int(s.quantity), remaining)
-                        MaterialStock.objects.filter(pk=s.pk).update(quantity=F('quantity') - take)
+                        updated = MaterialStock.objects.filter(pk=s.pk, quantity__gte=take).update(
+                            quantity=F('quantity') - take
+                        )
+                        if not updated:
+                            raise ValueError(f'{line.part.part_no}: 재고가 변경되었습니다. 다시 조회해주세요.')
                         target_stock, _ = MaterialStock.objects.get_or_create(
                             warehouse=to_wh, part=line.part, lot_no=s.lot_no, production_lot=s.production_lot,
                             defaults={'quantity': 0}
@@ -12308,22 +12320,29 @@ def transfer_request_approve(request, pk):
                             first_trx = trx
                         remaining -= take
 
+                    if remaining:
+                        raise ValueError(f'{line.part.part_no}: 재고 부족. 다시 조회해주세요.')
+
                     line.lot_no = None  # FIFO는 단일 LOT 없음
                     line.approved_qty = qty
                     line.transfer_transaction = first_trx
                     line.save()
 
                 else:
-                    # LOT 관리품목은 같은 날짜(lot_no)에 배치(production_lot)가 여러 개일 수 있어
-                    # get() 대신 오래된 배치부터 정렬해 첫 건을 사용 (crash 방지 + FIFO 유지)
+                    # 선택한 재고 행으로 날짜와 생산 배치를 함께 식별한다.
                     stock = MaterialStock.objects.select_for_update().filter(
-                        warehouse=from_wh, part=line.part, lot_no=lot_no
-                    ).order_by(F('production_lot').asc(nulls_first=True)).first()
+                        pk=stock_id, warehouse=from_wh, part=line.part
+                    ).first()
                     if stock is None:
                         raise ValueError(f'{line.part.part_no}: 선택한 LOT의 재고를 찾을 수 없습니다.')
+                    lot_no = stock.lot_no
                     production_lot = stock.production_lot
 
-                    MaterialStock.objects.filter(pk=stock.pk).update(quantity=F('quantity') - qty)
+                    updated = MaterialStock.objects.filter(pk=stock.pk, quantity__gte=qty).update(
+                        quantity=F('quantity') - qty
+                    )
+                    if not updated:
+                        raise ValueError(f'{line.part.part_no}: 선택한 LOT 재고 부족. 다시 조회해주세요.')
                     target_stock, _ = MaterialStock.objects.get_or_create(
                         warehouse=to_wh, part=line.part, lot_no=lot_no, production_lot=production_lot,
                         defaults={'quantity': 0}
@@ -12563,6 +12582,7 @@ def api_transfer_request_lots(request):
         else:
             label = 'NULL (ERP 미러)'
         lots.append({
+            'stock_id': s.pk,
             'lot_no': s.lot_no.isoformat() if s.lot_no else '',
             'lot_label': label,
             'qty': int(s.quantity),
