@@ -1,9 +1,11 @@
 from django.urls import path
 from . import views
+from . import erp_recovery
 
 app_name = 'material'
 
 urlpatterns = [
+    path('inbound/erp-operations/', erp_recovery.incoming_operations, name='erp_incoming_operations'),
     path('', views.dashboard, name='dashboard'),
     path('api/dashboard/', views.dashboard_api, name='dashboard_api'),
     

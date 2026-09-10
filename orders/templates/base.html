@@ -825,7 +825,8 @@
                                  id="collapseInboundWMS"
                                  data-bs-parent="#sidenavAccordion">
                                 <nav class="sb-sidenav-menu-nested nav">
-                                    {% if user|has_perm:'can_wms_incoming_process' %}<a class="nav-link {% if 'manual_incoming' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'material:manual_incoming' %}">입고처리</a>{% endif %}
+                                    {% if user|has_perm:'can_wms_incoming_process' %}<a class="nav-link {% if 'manual_incoming' in request.resolver_match.url_name %}active{% endif %}
+                                    {% if user|has_perm:'can_wms_incoming_process' %}<a class="nav-link" href="{% url 'material:erp_incoming_operations' %}">ERP 입고 연동 관리</a>{% endif %}" href="{% url 'material:manual_incoming' %}">입고처리</a>{% endif %}
                                     {% if user|has_perm:'can_wms_incoming_history' %}<a class="nav-link {% if 'incoming_history' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'material:incoming_history' %}">입고 내역 조회</a>{% endif %}
                                     {% if user|has_perm:'can_wms_incoming_label' %}<a class="nav-link {% if 'raw_material_incoming' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'material:raw_material_incoming' %}">입고라벨 발행</a>{% endif %}
                                 </nav>

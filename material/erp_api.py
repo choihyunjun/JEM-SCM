@@ -157,6 +157,22 @@ def register_erp_incoming(trx, qty, warehouse_code, erp_order_no='', erp_order_s
     if not getattr(settings, 'ERP_ENABLED', False):
         return False, None, 'ERP 비활성화'
 
+    trx.refresh_from_db(fields=['erp_incoming_no', 'erp_sync_status', 'erp_sync_message'])
+    if trx.erp_incoming_no:
+        return True, trx.erp_incoming_no, None
+
+    if not erp_order_no:
+        from .incoming import delivery_item_for_incoming
+        origin = trx.source_incoming if trx.source_incoming_id else trx
+        item = delivery_item_for_incoming(origin)
+        if item:
+            erp_order_no, erp_order_seq = item.erp_order_no or '', item.erp_order_seq or ''
+        elif origin.remark:
+            import re
+            match = re.search(r'ERP:(\S+)-(\d+)', origin.remark)
+            if match:
+                erp_order_no, erp_order_seq = match.groups()
+
     # 거래처 ERP 코드 확인
     vendor = trx.vendor
     if not vendor or not vendor.erp_code:
@@ -236,56 +252,18 @@ def register_erp_incoming(trx, qty, warehouse_code, erp_order_no='', erp_order_s
         }]
     }
 
-    success, data, error = call_erp_api('/apiproxy/api20A02I00201', body)
-
-    # 결과를 트랜잭션에 저장
-    if success:
-        erp_no = data.get('resultData', '')
-        try:
-            trx.erp_incoming_no = erp_no
-            trx.erp_sync_status = 'SUCCESS'
-            trx.erp_sync_message = f'ERP 입고번호: {erp_no}'
-            trx.save(update_fields=['erp_incoming_no', 'erp_sync_status', 'erp_sync_message'])
-            logger.info(f'ERP 입고등록 성공: {trx.transaction_no} -> {erp_no}')
-            return True, erp_no, None
-        except Exception as save_err:
-            # DB 저장 실패 → ERP에서도 삭제하여 불일치 방지
-            logger.error(f'ERP 입고등록 DB 저장 실패, ERP 롤백 시도: {trx.transaction_no} -> {save_err}')
-            delete_erp_incoming(erp_no)
-            return False, None, f'DB 저장 실패 (ERP 롤백 시도): {save_err}'
-    else:
-        trx.erp_sync_status = 'FAILED'
-        trx.erp_sync_message = error or 'Unknown error'
-        trx.save(update_fields=['erp_sync_status', 'erp_sync_message'])
-        logger.warning(f'ERP 입고등록 실패: {trx.transaction_no} -> {error}')
-        return False, None, error
+    from .erp_outbox import enqueue_registration
+    return enqueue_registration(trx, body)
 
 
 def delete_erp_incoming(erp_incoming_no):
-    """
-    ERP 입고정보 삭제
-    - erp_incoming_no: ERP 입고번호 (예: 'RV2602000217')
-    Returns: (success: bool, error: str or None)
-    """
+    """Persist deletion with the local change; dispatch only after commit."""
     if not getattr(settings, 'ERP_ENABLED', False):
         return False, 'ERP 비활성화'
-
     if not erp_incoming_no:
         return False, 'ERP 입고번호 없음'
-
-    body = {
-        'coCd': settings.ERP_COMPANY_CODE,
-        'rcvNb': erp_incoming_no,
-    }
-
-    success, data, error = call_erp_api('/apiproxy/api20A02D00201', body)
-
-    if success:
-        logger.info(f'ERP 입고삭제 성공: {erp_incoming_no}')
-        return True, None
-    else:
-        logger.warning(f'ERP 입고삭제 실패: {erp_incoming_no} -> {error}')
-        return False, error
+    from .erp_outbox import enqueue_deletion
+    return enqueue_deletion(erp_incoming_no)
 
 
 def fetch_erp_bom(parent_code):

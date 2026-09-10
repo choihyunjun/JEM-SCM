@@ -1,9 +1,11 @@
 {% extends 'qms/qms_base.html' %}
+{% load auth_extras %}
 {% load humanize %}
 
 {% block title %}문서 상세 - {{ document.doc_no }}{% endblock %}
 
 {% block qms_content %}
+<style>.qms-readonly button {display:none}</style>
 <div class="dtl-wrap" style="max-width:1400px;">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
@@ -20,15 +22,15 @@
             {% else %}
             <span class="dtl-pill red">폐기</span>
             {% endif %}
-            <a href="{% url 'qms:qdoc_edit' pk=doc.pk %}" class="btn btn-outline-secondary btn-sm">
+            {% if user|has_perm:'can_qms_doc_edit' %}<a href="{% url 'qms:qdoc_edit' pk=doc.pk %}" class="btn btn-outline-secondary btn-sm">
                 <i class="bi bi-pencil me-1"></i>수정
-            </a>
-            <button type="button" class="btn btn-outline-danger btn-sm" onclick="if(confirm('정말 삭제하시겠습니까?')) document.getElementById('deleteForm').submit();">
+            </a>{% endif %}
+            {% if user|has_perm:'can_qms_doc_edit' %}<button type="button" class="btn btn-outline-danger btn-sm" onclick="if(confirm('정말 삭제하시겠습니까?')) document.getElementById('deleteForm').submit();">
                 <i class="bi bi-trash me-1"></i>삭제
-            </button>
+            </button>{% endif %}
         </div>
     </div>
-    <form id="deleteForm" method="post" action="{% url 'qms:qdoc_delete' pk=doc.pk %}" style="display:none;">{% csrf_token %}</form>
+    <form id="deleteForm" method="post" action="{% url 'qms:qdoc_delete' pk=doc.pk %}" style="display:none;"><fieldset {% if not user|has_perm:'can_qms_doc_edit' %}disabled class="qms-readonly"{% endif %}>{% csrf_token %}</fieldset></form>
 
     <div class="row g-4">
         <!-- 좌측: 문서 정보 -->
@@ -186,7 +188,7 @@
             <div class="dtl-card">
                 <div class="dtl-card-header"><i class="bi bi-toggle-on"></i>상태 관리</div>
                 <div class="dtl-card-body">
-                    <form method="post">
+                    <form method="post"><fieldset {% if not user|has_perm:'can_qms_doc_edit' %}disabled class="qms-readonly"{% endif %}>
                         {% csrf_token %}
                         <input type="hidden" name="action" value="update_status">
                         <div class="mb-3">
@@ -200,7 +202,7 @@
                         <button type="submit" class="dtl-btn-dark w-100">
                             <i class="bi bi-save me-1"></i>상태 변경
                         </button>
-                    </form>
+                    </fieldset></form>
                 </div>
             </div>
 
@@ -258,7 +260,7 @@
 <div class="modal fade" id="addRevisionModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form method="post" enctype="multipart/form-data">
+            <form method="post" enctype="multipart/form-data"><fieldset {% if not user|has_perm:'can_qms_doc_edit' %}disabled class="qms-readonly"{% endif %}>
                 {% csrf_token %}
                 <input type="hidden" name="action" value="add_revision">
                 <div class="modal-header bg-info text-white">
@@ -295,7 +297,7 @@
                         <i class="bi bi-check-lg me-1"></i>개정 등록
                     </button>
                 </div>
-            </form>
+            </fieldset></form>
         </div>
     </div>
 </div>
@@ -304,7 +306,7 @@
 <div class="modal fade" id="editDocModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <form method="post" enctype="multipart/form-data">
+            <form method="post" enctype="multipart/form-data"><fieldset {% if not user|has_perm:'can_qms_doc_edit' %}disabled class="qms-readonly"{% endif %}>
                 {% csrf_token %}
                 <input type="hidden" name="action" value="update">
                 <div class="modal-header bg-dark text-white">
@@ -365,7 +367,7 @@
                         <i class="bi bi-check-lg me-1"></i>저장
                     </button>
                 </div>
-            </form>
+            </fieldset></form>
         </div>
     </div>
 </div>

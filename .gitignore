@@ -8,6 +8,7 @@ __pycache__/
 
 # 로컬 데이터베이스 (깃허브에 올리지 않음)
 db.sqlite3
+/backups/
 
 # 로그 및 보안 파일
 *.log

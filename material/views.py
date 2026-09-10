@@ -36,19 +36,6 @@ def wms_permission_required(*permission_fields):
     - superuser는 모든 권한
     - 복수 권한 전달 가능: @wms_permission_required('can_a', 'can_b')
     """
-    legacy_map = {
-        'can_wms_stock_view': ['can_wms_inout', 'can_wms_adjustment'],
-        'can_wms_stock_edit': ['can_wms_adjustment'],
-        'can_wms_inout_view': ['can_wms_inout'],
-        'can_wms_inout_edit': ['can_wms_inout'],
-        'can_wms_bom_view': ['can_wms_bom'],
-        'can_wms_bom_edit': ['can_wms_bom'],
-        'can_wms_label_view': ['can_wms_inout_view', 'can_wms_inout'],
-        'can_wms_label_edit': ['can_wms_inout_edit', 'can_wms_inout'],
-        'can_wms_field_view': ['can_wms_stock_view', 'can_wms_inout'],
-        'can_wms_field_edit': ['can_wms_stock_edit', 'can_wms_adjustment'],
-    }
-
     def decorator(view_func):
         @wraps(view_func)
         @login_required
@@ -56,14 +43,9 @@ def wms_permission_required(*permission_fields):
             if request.user.is_superuser:
                 return view_func(request, *args, **kwargs)
 
-            profile = _get_profile(request.user)
-            if profile:
-                for pf in permission_fields:
-                    if getattr(profile, pf, False):
-                        return view_func(request, *args, **kwargs)
-                    for legacy_field in legacy_map.get(pf, []):
-                        if getattr(profile, legacy_field, False):
-                            return view_func(request, *args, **kwargs)
+            from orders.access import has_permission
+            if any(has_permission(request.user, pf) for pf in permission_fields):
+                return view_func(request, *args, **kwargs)
 
             messages.error(request, "해당 메뉴에 대한 접근 권한이 없습니다.")
             return redirect('order_list')
@@ -610,6 +592,7 @@ def manual_incoming(request):
                         warehouse=warehouse,
                         part=part,
                         lot_no=lot_date,
+                        production_lot=None,
                         defaults={'quantity': 0}
                     )
                     MaterialStock.objects.filter(pk=stock.pk).update(
@@ -683,7 +666,7 @@ def manual_incoming(request):
                             if erp_ok:
                                 messages.info(request, f'ERP 입고등록 완료: {erp_rcv_no}')
                             elif erp_err:
-                                messages.warning(request, f'ERP 연동 실패: {erp_err}')
+                                (messages.info if erp_err.startswith('ERP 전송 대기') else messages.warning)(request, erp_err)
                             else:
                                 messages.info(request, 'ERP 연동 건너뜀 (거래처 ERP코드 없음)')
                         except Exception as e:
@@ -802,6 +785,7 @@ def _do_cancel_incoming(trx, cancel_action):
     Returns: (success: bool, message: str)
     """
     from .models import RawMaterialLabel
+    from .cancellation import inspection_transfers_for_cancel, label_for_cancel
 
     if trx.transaction_type == 'IN_ERP':
         return False, "ERP에서 동기화된 입고 건은 WMS에서 삭제할 수 없습니다. ERP(아마란스)에서 삭제해주세요."
@@ -834,10 +818,15 @@ def _do_cancel_incoming(trx, cancel_action):
 
         try:
             with transaction.atomic():
+                from .erp_outbox import guard_receipt_change
+                guard_receipt_change(trx)
                 part = trx.part
                 lot_no = trx.lot_no
 
                 if inspection.status == 'APPROVED' or inspection.status == 'REJECTED':
+                    inspection_transfers = inspection_transfers_for_cancel(trx, inspection)
+                    for transfer in inspection_transfers:
+                        guard_receipt_change(transfer)
                     # 판정 완료 상태 → 목표 창고/부적합 창고 재고 원복 + 검사대기 복원
 
                     # 재고 충분한지 먼저 검증 (ERP 삭제 등 외부 부작용 실행 전에 확인해야
@@ -847,23 +836,19 @@ def _do_cancel_incoming(trx, cancel_action):
                         target_code = inspection.target_warehouse_code or '2000'
                         wh_good = Warehouse.objects.filter(code=target_code).first()
                         good_stock = MaterialStock.objects.filter(
-                            warehouse=wh_good, part=part, lot_no=lot_no
+                            warehouse=wh_good, part=part, lot_no=lot_no, production_lot=trx.production_lot
                         ).first() if wh_good else None
                         if not (good_stock and good_stock.quantity >= inspection.qty_good):
                             raise Exception(f"목표 창고({target_code}) 양품 재고가 부족하여 취소할 수 없습니다.")
 
                     # ERP 입고 삭제 (이동 트랜잭션 삭제 전에 처리)
                     from material.erp_api import delete_erp_incoming as del_erp_cancel
-                    for erp_trx in MaterialTransaction.objects.filter(
-                        transaction_type='TRANSFER',
-                        part=part, lot_no=lot_no,
-                        warehouse_from=trx.warehouse_to,
-                        remark__startswith='[수입검사]',
+                    for erp_trx in inspection_transfers.filter(
                         erp_incoming_no__isnull=False,
                     ).exclude(erp_incoming_no=''):
                         erp_ok, erp_err = del_erp_cancel(erp_trx.erp_incoming_no)
                         if erp_ok:
-                            erp_notices.append(f'ERP 입고 삭제 완료: {erp_trx.erp_incoming_no}')
+                            erp_notices.append(f'ERP 입고 삭제 요청 저장: {erp_trx.erp_incoming_no}')
                         else:
                             raise Exception(f'ERP 입고 삭제 실패: {erp_err} (ERP번호: {erp_trx.erp_incoming_no})')
 
@@ -876,7 +861,7 @@ def _do_cancel_incoming(trx, cancel_action):
                         wh_bad = Warehouse.objects.filter(code='8200').first()
                         if wh_bad:
                             bad_stock = MaterialStock.objects.filter(
-                                warehouse=wh_bad, part=part, lot_no=lot_no
+                                warehouse=wh_bad, part=part, lot_no=lot_no, production_lot=trx.production_lot
                             ).first()
                             if bad_stock and bad_stock.quantity >= inspection.qty_bad:
                                 MaterialStock.objects.filter(pk=bad_stock.pk).update(
@@ -884,16 +869,11 @@ def _do_cancel_incoming(trx, cancel_action):
                                 )
 
                     # 양품/불량 이동 트랜잭션 삭제
-                    MaterialTransaction.objects.filter(
-                        transaction_type='TRANSFER',
-                        part=part, lot_no=lot_no,
-                        warehouse_from=trx.warehouse_to,
-                        remark__startswith='[수입검사]',
-                    ).delete()
+                    inspection_transfers.delete()
 
                     # 검사대기 창고에 원래 수량 복원
                     inspect_stock, _ = MaterialStock.objects.get_or_create(
-                        warehouse=trx.warehouse_to, part=part, lot_no=lot_no
+                        warehouse=trx.warehouse_to, part=part, lot_no=lot_no, production_lot=trx.production_lot
                     )
                     MaterialStock.objects.filter(pk=inspect_stock.pk).update(
                         quantity=F('quantity') + trx.quantity
@@ -922,6 +902,8 @@ def _do_cancel_incoming(trx, cancel_action):
     # ── 전체 삭제 ──
     try:
         with transaction.atomic():
+            from .erp_outbox import guard_receipt_change
+            guard_receipt_change(trx)
             part = trx.part
             lot_no = trx.lot_no
 
@@ -942,13 +924,18 @@ def _do_cancel_incoming(trx, cancel_action):
                 except Exception:
                     pass
 
+            # 취소 대상을 확정한 뒤에만 재고/ERP를 변경한다.
+            label = label_for_cancel(trx)
             if inspection and inspection.status in ('APPROVED', 'REJECTED'):
+                inspection_transfers = inspection_transfers_for_cancel(trx, inspection)
+                for transfer in inspection_transfers:
+                    guard_receipt_change(transfer)
                 if inspection.qty_good > 0:
                     target_code = inspection.target_warehouse_code or '2000'
                     wh_good = Warehouse.objects.filter(code=target_code).first()
                     if wh_good:
                         good_stock = MaterialStock.objects.filter(
-                            warehouse=wh_good, part=part, lot_no=lot_no
+                            warehouse=wh_good, part=part, lot_no=lot_no, production_lot=trx.production_lot
                         ).first()
                         if good_stock and good_stock.quantity >= inspection.qty_good:
                             MaterialStock.objects.filter(pk=good_stock.pk).update(
@@ -961,7 +948,7 @@ def _do_cancel_incoming(trx, cancel_action):
                     wh_bad = Warehouse.objects.filter(code='8200').first()
                     if wh_bad:
                         bad_stock = MaterialStock.objects.filter(
-                            warehouse=wh_bad, part=part, lot_no=lot_no
+                            warehouse=wh_bad, part=part, lot_no=lot_no, production_lot=trx.production_lot
                         ).first()
                         if bad_stock and bad_stock.quantity >= inspection.qty_bad:
                             MaterialStock.objects.filter(pk=bad_stock.pk).update(
@@ -970,30 +957,23 @@ def _do_cancel_incoming(trx, cancel_action):
 
                 # 판정 시 생성된 ERP 입고 삭제
                 from material.erp_api import delete_erp_incoming as del_erp_insp
-                for erp_trx in MaterialTransaction.objects.filter(
-                    transaction_type='TRANSFER',
-                    part=part, lot_no=lot_no,
-                    warehouse_from=trx.warehouse_to,
-                    remark__startswith='[수입검사]',
+                for erp_trx in inspection_transfers.filter(
                     erp_incoming_no__isnull=False,
                 ).exclude(erp_incoming_no=''):
                     ok, err = del_erp_insp(erp_trx.erp_incoming_no)
                     if ok:
-                        erp_notices.append(f'ERP 입고 삭제 완료: {erp_trx.erp_incoming_no}')
+                        erp_notices.append(f'ERP 입고 삭제 요청 저장: {erp_trx.erp_incoming_no}')
+                    else:
+                        raise Exception(f'ERP 입고 삭제 실패: {err} (ERP번호: {erp_trx.erp_incoming_no})')
 
                 # 양품/불량 이동 트랜잭션 삭제
-                MaterialTransaction.objects.filter(
-                    transaction_type='TRANSFER',
-                    part=part, lot_no=lot_no,
-                    warehouse_from=trx.warehouse_to,
-                    remark__startswith='[수입검사]',
-                ).delete()
+                inspection_transfers.delete()
             else:
                 # PENDING 또는 검사 없음 → 검사대기(또는 입고) 창고에서 차감
                 stock = MaterialStock.objects.filter(
                     warehouse=trx.warehouse_to,
                     part=part,
-                    lot_no=lot_no
+                    lot_no=lot_no, production_lot=trx.production_lot
                 ).first()
 
                 if not stock:
@@ -1012,7 +992,7 @@ def _do_cancel_incoming(trx, cancel_action):
                 from material.erp_api import delete_erp_incoming
                 erp_ok, erp_err = delete_erp_incoming(erp_no)
                 if erp_ok:
-                    erp_notices.append(f'ERP 입고 삭제 완료: {erp_no}')
+                    erp_notices.append(f'ERP 입고 삭제 요청 저장: {erp_no}')
                 else:
                     raise Exception(f'ERP 입고 삭제 실패: {erp_err} (ERP번호: {erp_no})')
 
@@ -1042,9 +1022,6 @@ def _do_cancel_incoming(trx, cancel_action):
 
                 restore_qty = trx_qty - already_returned_qty
                 if restore_qty > 0:
-                    label = LabelPrintLog.objects.filter(
-                        part_no=part.part_no, printed_qty=trx_qty
-                    ).first()
                     if label:
                         if restore_qty >= label.printed_qty:
                             label.delete()
@@ -1243,10 +1220,12 @@ def edit_manual_incoming(request, trx_id):
     # === 재고 조정 + 저장 (atomic) ===
     try:
         with transaction.atomic():
+            from .erp_outbox import guard_receipt_change
+            had_pending_registration = guard_receipt_change(trx)
             if qty_changed or lot_changed:
                 # (A) 기존 재고 차감
                 old_stock = MaterialStock.objects.filter(
-                    warehouse=warehouse, part=trx.part, lot_no=old_lot
+                    warehouse=warehouse, part=trx.part, lot_no=old_lot, production_lot=trx.production_lot
                 ).first()
 
                 if not old_stock or old_stock.quantity < old_qty:
@@ -1262,7 +1241,7 @@ def edit_manual_incoming(request, trx_id):
 
                 # (B) 새 재고 증가
                 new_stock, _ = MaterialStock.objects.get_or_create(
-                    warehouse=warehouse, part=trx.part, lot_no=new_lot_date,
+                    warehouse=warehouse, part=trx.part, lot_no=new_lot_date, production_lot=trx.production_lot,
                     defaults={'quantity': 0}
                 )
                 MaterialStock.objects.filter(pk=new_stock.pk).update(
@@ -1285,19 +1264,19 @@ def edit_manual_incoming(request, trx_id):
 
             # (E) ERP 재등록 (무검사 + ERP 연동 건)
             erp_no = trx.erp_incoming_no
-            if erp_no and (qty_changed or lot_changed):
+            if (erp_no and (qty_changed or lot_changed)) or had_pending_registration:
                 from material.erp_api import delete_erp_incoming, register_erp_incoming
-                del_ok, del_err = delete_erp_incoming(erp_no)
-                if not del_ok:
-                    raise Exception(f'ERP 입고 삭제 실패: {del_err}')
-
-                trx.erp_incoming_no = None
-                trx.erp_sync_status = 'PENDING'
-                trx.save(update_fields=['erp_incoming_no', 'erp_sync_status'])
+                if erp_no:
+                    del_ok, del_err = delete_erp_incoming(erp_no)
+                    if not del_ok:
+                        raise ValueError(f'ERP 입고 삭제 실패: {del_err}')
+                    trx.erp_incoming_no = None
+                    trx.erp_sync_status = 'PENDING'
+                    trx.save(update_fields=['erp_incoming_no', 'erp_sync_status'])
 
                 reg_ok, reg_no, reg_err = register_erp_incoming(trx, new_qty, warehouse.code)
-                if not reg_ok and reg_err:
-                    logger.warning(f'ERP 재등록 실패: {reg_err}')
+                if not reg_ok and not trx.erp_operations.filter(kind='REGISTER', status='PENDING').exists():
+                    raise ValueError(f'ERP 재등록 요청 저장 실패: {reg_err}')
 
         return JsonResponse({
             'success': True,
@@ -1342,94 +1321,96 @@ def reregister_erp_price(request, trx_id):
             return JsonResponse({'success': False, 'error': '단가는 0보다 커야 합니다.'})
 
     try:
-        from material.erp_api import delete_erp_incoming, register_erp_incoming
+        with transaction.atomic():
+            from material.erp_api import delete_erp_incoming, register_erp_incoming
 
-        erp_no = trx.erp_incoming_no
+            from material.erp_outbox import guard_receipt_change
+            guard_receipt_change(trx)
+            erp_no = trx.erp_incoming_no
 
-        # 창고 코드 결정 — 수입검사 대기장(1000)이면 TRANSFER의 최종 창고 사용
-        wh = trx.warehouse_to
-        warehouse_code = wh.code if wh else '2000'
-        if warehouse_code == '1000':
-            transfer = MaterialTransaction.objects.filter(
-                part=trx.part, lot_no=trx.lot_no,
-                transaction_type='TRANSFER',
-                warehouse_from__code='1000',
-            ).order_by('-date').first()
-            if transfer and transfer.warehouse_to:
-                warehouse_code = transfer.warehouse_to.code
+            from material.incoming import delivery_item_for_incoming
+            from material.cancellation import inspection_transfers_for_cancel
+            origin_trx = trx
+            if trx.source_incoming_id:
+                origin_trx = trx.source_incoming
+            elif trx.transaction_type == 'TRANSFER' and '수입검사' in (trx.remark or ''):
+                candidates = []
+                for inspection in ImportInspection.objects.filter(
+                    inbound_transaction__part=trx.part,
+                    inbound_transaction__lot_no=trx.lot_no,
+                    inbound_transaction__production_lot=trx.production_lot,
+                    status__in=['APPROVED', 'REJECTED'],
+                ).select_related('inbound_transaction'):
+                    try:
+                        if inspection_transfers_for_cancel(inspection.inbound_transaction, inspection).filter(pk=trx.pk).exists():
+                            candidates.append(inspection.inbound_transaction)
+                    except ValueError:
+                        continue
+                if len(candidates) != 1:
+                    raise ValueError('검사 이동의 원본 입고 연결을 먼저 확인해 주세요.')
+                origin_trx = candidates[0]
+            inspection = getattr(origin_trx, 'inspection', None)
+            if inspection and trx.pk == origin_trx.pk:
+                if inspection.status == 'PENDING':
+                    raise ValueError('검사 판정 후 ERP 입고를 등록해 주세요.')
+                targets = list(inspection_transfers_for_cancel(origin_trx, inspection).exclude(warehouse_to__code='8200'))
+                if len(targets) != 1:
+                    raise ValueError('양품 입고 이력을 특정할 수 없습니다.')
+                trx = targets[0]
+                erp_no = trx.erp_incoming_no
+            wh = trx.warehouse_to
+            warehouse_code = wh.code if wh else '2000'
+            doi = delivery_item_for_incoming(origin_trx)
+            erp_order_no = (doi.erp_order_no or '') if doi else ''
+            erp_order_seq = (doi.erp_order_seq or '') if doi else ''
+
+            # 2순위(폴백): 수기입고 remark에서 정규식으로 추출
+            if not erp_order_no and origin_trx.remark:
+                import re as _re
+                m = _re.search(r'ERP:(\S+)-(\d+)', origin_trx.remark or '')
+                if m:
+                    erp_order_no = m.group(1)
+                    erp_order_seq = m.group(2)
+
+            guard_receipt_change(trx)
+            erp_no = trx.erp_incoming_no
+            if manual_unit_price is None:
+                from material.erp_api import fetch_erp_item_price
+                price, _ = fetch_erp_item_price(trx.part.part_no, trx.vendor.erp_code if trx.vendor else '', use_integrated_only=use_integrated_only)
+                if price <= 0:
+                    raise ValueError('단가 미등록: 기존 ERP 전표를 유지했습니다.')
+            # 1) 기존 ERP 입고 삭제 (있는 경우만)
+            if erp_no:
+                del_ok, del_err = delete_erp_incoming(erp_no)
+                if not del_ok:
+                    return JsonResponse({'success': False, 'error': f'ERP 입고 삭제 실패: {del_err}'})
+
+                trx.erp_incoming_no = None
+                trx.erp_sync_status = 'PENDING'
+                trx.save(update_fields=['erp_incoming_no', 'erp_sync_status'])
+
+            # 2) 최신 단가로 (재)등록
+            price_mode = f'수동입력({manual_unit_price})' if manual_unit_price is not None else ('통합단가전용' if use_integrated_only else '일반(fallback)')
+            print(f'[단가재반영] trx={trx.id}, part={trx.part.part_no}, qty={trx.quantity}, wh={warehouse_code}, vendor={trx.vendor.erp_code if trx.vendor else None}, 단가모드={price_mode}', flush=True)
+            reg_ok, reg_no, reg_err = register_erp_incoming(
+                trx, trx.quantity, warehouse_code,
+                erp_order_no=erp_order_no, erp_order_seq=erp_order_seq,
+                use_integrated_only=use_integrated_only,
+                manual_unit_price=manual_unit_price,
+            )
+            print(f'[단가재반영] 결과: ok={reg_ok}, no={reg_no}, err={reg_err}', flush=True)
+
+            if not reg_ok and trx.erp_operations.filter(kind='REGISTER', status='PENDING').exists():
+                return JsonResponse({'success': True, 'pending': True, 'message': 'ERP 재반영 요청을 저장했습니다. ERP 입고 연동 관리에서 결과를 확인해 주세요.'})
+            if reg_ok:
+                action = '재반영' if erp_no else '등록'
+                return JsonResponse({
+                    'success': True,
+                    'message': f'ERP 단가 {action} 완료 (ERP번호: {reg_no})',
+                    'new_erp_no': reg_no
+                })
             else:
-                warehouse_code = '2000'
-
-        # 발주번호 추출 (remark에서)
-        erp_order_no, erp_order_seq = '', ''
-        origin_trx = trx
-        if trx.transaction_type == 'TRANSFER' and trx.remark and '수입검사' in trx.remark:
-            # 검사입고인 경우 원본 입고 트랜잭션 찾기
-            from qms.models import ImportInspection as II
-            insp = II.objects.filter(
-                inbound_transaction__part=trx.part,
-                inbound_transaction__lot_no=trx.lot_no,
-                inbound_transaction__vendor=trx.vendor,
-                status='APPROVED'
-            ).select_related('inbound_transaction').order_by('-inspected_at').first()
-            if insp:
-                origin_trx = insp.inbound_transaction
-
-        # 1순위: SCM 납품서로 들어온 건이면 DeliveryOrderItem에 정식 저장된 발주번호 사용
-        # (qms 수입검사 최초 등록 때와 동일한 우선순위 — 이게 빠져있으면 SCM
-        # 납품서 기반 건은 재반영할 때마다 예외입고(PO 미연결)로 등록돼버림)
-        if origin_trx.ref_delivery_order:
-            from orders.models import DeliveryOrderItem as _DOI
-            doi = _DOI.objects.filter(
-                order__order_no=origin_trx.ref_delivery_order,
-                part_no=origin_trx.part.part_no
-            ).first()
-            if doi:
-                erp_order_no = doi.erp_order_no or ''
-                erp_order_seq = doi.erp_order_seq or ''
-
-        # 2순위(폴백): 수기입고 remark에서 정규식으로 추출
-        if not erp_order_no and origin_trx.remark:
-            import re as _re
-            m = _re.search(r'ERP:(\S+)-(\d+)', origin_trx.remark or '')
-            if m:
-                erp_order_no = m.group(1)
-                erp_order_seq = m.group(2)
-
-        # 1) 기존 ERP 입고 삭제 (있는 경우만)
-        if erp_no:
-            del_ok, del_err = delete_erp_incoming(erp_no)
-            if not del_ok:
-                return JsonResponse({'success': False, 'error': f'ERP 입고 삭제 실패: {del_err}'})
-
-            trx.erp_incoming_no = None
-            trx.erp_sync_status = 'PENDING'
-            trx.save(update_fields=['erp_incoming_no', 'erp_sync_status'])
-
-        # 2) 최신 단가로 (재)등록
-        price_mode = f'수동입력({manual_unit_price})' if manual_unit_price is not None else ('통합단가전용' if use_integrated_only else '일반(fallback)')
-        print(f'[단가재반영] trx={trx.id}, part={trx.part.part_no}, qty={trx.quantity}, wh={warehouse_code}, vendor={trx.vendor.erp_code if trx.vendor else None}, 단가모드={price_mode}', flush=True)
-        reg_ok, reg_no, reg_err = register_erp_incoming(
-            trx, trx.quantity, warehouse_code,
-            erp_order_no=erp_order_no, erp_order_seq=erp_order_seq,
-            use_integrated_only=use_integrated_only,
-            manual_unit_price=manual_unit_price,
-        )
-        print(f'[단가재반영] 결과: ok={reg_ok}, no={reg_no}, err={reg_err}', flush=True)
-
-        if reg_ok:
-            action = '재반영' if erp_no else '등록'
-            return JsonResponse({
-                'success': True,
-                'message': f'ERP 단가 {action} 완료 (ERP번호: {reg_no})',
-                'new_erp_no': reg_no
-            })
-        else:
-            err_detail = f' 기존 입고({erp_no})는 이미 삭제되었습니다.' if erp_no else ''
-            return JsonResponse({
-                'success': False,
-                'error': f'ERP 등록 실패: {reg_err}.{err_detail}'
-            })
+                raise ValueError(f'ERP 재등록 요청 저장 실패: {reg_err}')
 
     except Exception as e:
         logger.error(f'단가 재반영 오류: {e}', exc_info=True)

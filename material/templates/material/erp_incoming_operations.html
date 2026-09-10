@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid py-4">
+  <h3>ERP 입고 연동 관리</h3>
+  <p>입고 등록·취소 요청의 처리 상태를 확인합니다. ‘ERP 확인 필요’ 건은 전표를 먼저 확인해 주세요.</p>
+  <form method="get" class="mb-3">
+    <label for="status">상태</label>
+    <select name="status" id="status"><option value="">전체</option>
+      {% for value,label in statuses %}<option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select><button class="btn btn-sm btn-secondary">조회</button>
+  </form>
+  <table class="table table-bordered">
+    <thead><tr><th>등록일</th><th>입고 이력</th><th>요청</th><th>상태</th><th>ERP 전표</th><th>처리·이력</th></tr></thead>
+    <tbody>{% for job in page_obj %}<tr>
+      <td>{{ job.created_at|date:'Y-m-d H:i' }}</td><td>{{ job.transaction_no }}</td>
+      <td>{{ job.get_kind_display }}</td><td>{{ job.get_status_display }}</td><td>{{ job.erp_no|default:'—' }}</td>
+      <td><p>{{ job.message }}</p>
+        {% if job.status == 'PENDING' %}
+        <form method="post">{% csrf_token %}<input type="hidden" name="operation" value="{{ job.pk }}">
+          <button name="action" value="send" class="btn btn-sm btn-primary">대기 요청 전송</button>
+        </form>{% endif %}
+        {% if job.status == 'REVIEW' or job.status == 'RUNNING' %}
+        <form method="post">{% csrf_token %}<input type="hidden" name="operation" value="{{ job.pk }}">
+          <button name="action" value="reconcile" class="btn btn-sm btn-secondary">ERP 처리 여부 조회</button>
+        </form>{% endif %}
+        {% if job.status == 'REVIEW' or job.status == 'FAILED' %}
+        <details><summary>ERP에서 미처리를 확인한 경우 재전송</summary>
+          <p>이미 처리된 요청을 재전송하면 중복 전표가 생길 수 있습니다. ERP에서 미처리 여부를 확인하고 기록해 주세요.</p>
+          <form method="post">{% csrf_token %}<input type="hidden" name="operation" value="{{ job.pk }}">
+            <input name="note" required aria-label="ERP 확인 내용" placeholder="확인 일시와 확인 내용">
+            <button name="action" value="verified_retry" class="btn btn-sm btn-primary">확인 기록 후 재전송</button>
+          </form>
+        </details>{% endif %}
+        <details><summary>요청 이력</summary><ul>{% for event in job.events.all %}
+          <li>{{ event.created_at|date:'Y-m-d H:i:s' }} · {{ event.action }} · {{ event.actor|default:'시스템' }} {{ event.message }}</li>
+        {% endfor %}</ul></details>
+      </td></tr>{% empty %}<tr><td colspan="6">연동 요청이 없습니다.</td></tr>{% endfor %}</tbody>
+  </table>
+  {% if page_obj.has_previous %}<a href="?status={{ status|urlencode }}&page={{ page_obj.previous_page_number }}">이전</a>{% endif %}
+  <span>{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+  {% if page_obj.has_next %}<a href="?status={{ status|urlencode }}&page={{ page_obj.next_page_number }}">다음</a>{% endif %}
+</div>
+{% endblock %}

@@ -51,16 +51,8 @@ def has_perm(user, perm_name):
     - profile이 없으면 False
     - 권한 필드가 없으면 False
     """
-    if not user or not user.is_authenticated:
-        return False
-    if user.is_superuser:
-        return True
-    profile = getattr(user, 'profile', None)
-    if not profile:
-        return False
-    if getattr(profile, 'role', None) == 'VENDOR' and perm_name in _VENDOR_BLOCKED_PERMS:
-        return False
-    return getattr(profile, perm_name, False)
+    from orders.access import has_permission
+    return has_permission(user, perm_name)
 
 
 @register.filter(name='in_list')

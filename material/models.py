@@ -55,6 +55,17 @@ class MaterialStock(models.Model):
         verbose_name = "창고별 재고 현황"
         verbose_name_plural = "2. 창고별 재고 현황"
         unique_together = ('warehouse', 'part', 'lot_no', 'production_lot') # 한 창고에 같은 품목/LOT/배치가 중복되지 않도록
+        constraints = [
+            models.UniqueConstraint(fields=['warehouse', 'part', 'lot_no'],
+                                    condition=models.Q(production_lot__isnull=True, lot_no__isnull=False),
+                                    name='stock_unique_without_batch'),
+            models.UniqueConstraint(fields=['warehouse', 'part', 'production_lot'],
+                                    condition=models.Q(lot_no__isnull=True, production_lot__isnull=False),
+                                    name='stock_unique_without_date'),
+            models.UniqueConstraint(fields=['warehouse', 'part'],
+                                    condition=models.Q(lot_no__isnull=True, production_lot__isnull=True),
+                                    name='stock_unique_without_lot'),
+        ]
 
     def __str__(self):
         # Part 모델의 part_no 필드 사용 (orders.models.Part)
@@ -116,7 +127,17 @@ class MaterialTransaction(models.Model):
     actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name="처리자")
     remark = models.CharField("비고", max_length=200, blank=True, null=True)
     
+    # 검사 이동이 어느 입고에서 발생했는지 직접 연결한다.
+    source_incoming = models.ForeignKey(
+        'self', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='inspection_transfers', verbose_name="원본 입고이력",
+    )
+
     # SCM 연동용 (어떤 납품서로 들어왔는지)
+    delivery_item = models.ForeignKey(
+        'orders.DeliveryOrderItem', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='material_transactions', verbose_name='원본 납품서 품목',
+    )
     ref_delivery_order = models.CharField("참조 납품서번호", max_length=50, blank=True, null=True)
 
     # ERP 연동
@@ -142,6 +163,48 @@ class MaterialTransaction(models.Model):
 # -----------------------------------------------------------------------------
 # 4. BOM 관리 (Bill of Materials)
 # -----------------------------------------------------------------------------
+class ERPIncomingOperation(models.Model):
+    """Durable outgoing requests, committed together with the local stock change."""
+    import uuid as _uuid
+
+    id = models.UUIDField(primary_key=True, default=_uuid.uuid4, editable=False)
+    kind = models.CharField(max_length=10, choices=[('REGISTER', '입고 등록'), ('DELETE', '입고 삭제')])
+    transaction = models.ForeignKey(MaterialTransaction, on_delete=models.SET_NULL, null=True, blank=True,
+                                    related_name='erp_operations')
+    transaction_no = models.CharField(max_length=30, blank=True)
+    payload = models.JSONField(default=dict)
+    status = models.CharField(max_length=12, default='PENDING', choices=[
+        ('PENDING', '전송 대기'), ('RUNNING', '전송 중'), ('SUCCESS', '완료'),
+        ('FAILED', '실패'), ('REVIEW', 'ERP 확인 필요'), ('CANCELLED', '전송 취소'),
+    ], db_index=True)
+    erp_no = models.CharField(max_length=30, blank=True)
+    message = models.TextField(blank=True)
+    attempts = models.PositiveIntegerField(default=0)
+    depends_on = models.ForeignKey('self', on_delete=models.PROTECT, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'ERP 입고 연동 요청'
+        verbose_name_plural = 'ERP 입고 연동 요청'
+        ordering = ['created_at']
+        constraints = [
+            models.UniqueConstraint(fields=['transaction'],
+                condition=models.Q(kind='REGISTER', status__in=['PENDING', 'RUNNING', 'FAILED', 'REVIEW']),
+                name='one_active_erp_receipt_request'),
+            models.UniqueConstraint(fields=['erp_no'], condition=models.Q(kind='DELETE'),
+                name='one_erp_receipt_delete_request'),
+        ]
+
+
+class ERPIncomingEvent(models.Model):
+    operation = models.ForeignKey(ERPIncomingOperation, on_delete=models.PROTECT, related_name='events')
+    action = models.CharField(max_length=30)
+    message = models.TextField(blank=True)
+    actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
 class Product(models.Model):
     """
     [BOM] 모품 (완제품/반제품) 마스터

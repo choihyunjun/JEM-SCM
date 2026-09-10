@@ -99,42 +99,9 @@ ROLE_ACTION_PERMS = {
 }
 
 def role_has_menu_perm(user, permission_field: str) -> bool:
-    """
-    메뉴 권한 체크 - UserProfile의 boolean 필드 우선, 없으면 role 기반 폴백
-    레거시 필드와 새 필드 모두 체크
-    """
-    if getattr(user, 'is_superuser', False):
-        return True
+    from .access import has_permission
+    return has_permission(user, permission_field)
 
-    # 레거시 → 새 권한 필드 매핑
-    LEGACY_TO_NEW = {
-        'can_view_orders': 'can_scm_order_view',
-        'can_register_orders': 'can_scm_order_edit',
-        'can_view_inventory': 'can_scm_inventory_view',
-        'can_manage_incoming': 'can_scm_incoming_edit',
-        'can_manage_parts': 'can_scm_admin',
-        'can_view_reports': 'can_scm_report',
-        'can_access_scm_admin': 'can_scm_admin',
-        'can_view_order': 'can_scm_order_view',  # vendor_delivery_report에서 사용
-    }
-
-    profile = _get_profile(user)
-    if not profile:
-        return False
-
-    # 1. 새 권한 필드 체크 (레거시 필드명이 들어온 경우 매핑)
-    new_field = LEGACY_TO_NEW.get(permission_field, permission_field)
-    if hasattr(profile, new_field) and getattr(profile, new_field, False):
-        return True
-
-    # 2. 레거시 필드도 체크 (호환성)
-    if hasattr(profile, permission_field) and getattr(profile, permission_field, False):
-        return True
-
-    # 3. 폴백: 기존 role 기반 체크
-    role = _get_role(user)
-    allowed = ROLE_MENU_PERMS.get(role, set())
-    return permission_field in allowed
 
 def has_action_perm(user, action: str) -> bool:
     """
@@ -152,16 +119,9 @@ def require_action_perm(request, action: str):
     return redirect('order_list')
 
 def scope_qs_for_user(user, qs):
-    if _get_role(user) == 'VENDOR':
-        v = _get_user_vendor(user)
-        if not v:
-            return qs.none()
-        if hasattr(qs.model, 'vendor_id') or 'vendor' in [f.name for f in qs.model._meta.fields]:
-            try:
-                return qs.filter(vendor=v)
-            except Exception:
-                return qs.none()
-    return qs
+    from .access import scope_vendor_queryset
+    return scope_vendor_queryset(user, qs)
+
 
 def menu_permission_required(permission_field):
     def decorator(view_func):
@@ -169,10 +129,15 @@ def menu_permission_required(permission_field):
         def _wrapped_view(request, *args, **kwargs):
             if request.user.is_superuser:
                 return view_func(request, *args, **kwargs)
+            from .access import vendor_identity
+            restricted, vendor, org = vendor_identity(request.user)
+            if restricted and not vendor:
+                from django.http import HttpResponseForbidden
+                return HttpResponseForbidden('협력사 계정의 업체 연결을 확인해 주세요.')
             if role_has_menu_perm(request.user, permission_field):
                 return view_func(request, *args, **kwargs)
 
-            if request.resolver_match.url_name == 'order_list':
+            if getattr(request.resolver_match, 'url_name', None) == 'order_list':
                 messages.error(request, f"귀하의 계정은 '{permission_field}' 권한이 활성화되지 않았습니다. 관리자에게 문의하세요.")
                 return render(request, 'order_list.html', {'orders': [], 'vendor_name': '권한 없음'})
 
@@ -690,15 +655,7 @@ def order_approve(request, order_id):
 def order_export(request):
     user = request.user
 
-    user_vendor = _get_user_vendor(user)
-
-    # 관리자는 전체, 협력업체는 자신의 발주만
-    if user.is_superuser:
-        orders = Order.objects.all().order_by('-created_at')
-    elif user_vendor:
-        orders = Order.objects.filter(vendor=user_vendor).order_by('-created_at')
-    else:
-        orders = Order.objects.all().order_by('-created_at')
+    orders = scope_qs_for_user(user, Order.objects.all()).order_by('-created_at')
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -1740,6 +1697,24 @@ def create_delivery_order(request):
     order_ids = request.POST.getlist('order_ids[]')
     lot_nos = request.POST.getlist('lot_nos[]')
 
+    # 화면과 동일하게 품번 + LOT 기준으로 검증한다. 발주/SNP 차이는 예외가 아니다.
+    if not p_nos or not (len(p_nos) == len(snps) == len(b_counts) == len(lot_nos)):
+        messages.error(request, "납품 품목과 수량, LOT 정보를 다시 확인해주세요.")
+        return redirect('label_list')
+    p_nos = [p.strip() for p in p_nos]
+    try:
+        lot_nos = [date.fromisoformat(value.strip()) for value in lot_nos]
+    except (ValueError, TypeError):
+        messages.error(request, "LOT 번호(생산일)를 올바르게 입력해주세요.")
+        return redirect('label_list')
+    seen_items = set()
+    for part_no, lot_no in zip(p_nos, lot_nos):
+        key = (part_no, lot_no)
+        if key in seen_items:
+            messages.error(request, f"[{part_no} / {lot_no}] 같은 품번·LOT는 한 납품서에 한 번만 등록할 수 있습니다.")
+            return redirect('label_list')
+        seen_items.add(key)
+
     if _get_role(request.user) == 'VENDOR' and not request.user.is_superuser:
         user_vendor = _get_user_vendor(request.user)
         if not user_vendor:
@@ -1780,7 +1755,7 @@ def create_delivery_order(request):
             # LOT 정보 추출 (날짜 형식으로 통일)
             lot_no = lot_nos[i] if len(lot_nos) > i else None
 
-            DeliveryOrderItem.objects.create(
+            delivery_item = DeliveryOrderItem.objects.create(
                 order=do,
                 part_no=p_nos[i],
                 part_name=part.part_name,
@@ -1794,6 +1769,7 @@ def create_delivery_order(request):
             )
 
             LabelPrintLog.objects.create(
+                delivery_item=delivery_item,
                 vendor=part.vendor,
                 part=part,
                 part_no=p_nos[i],
@@ -1961,6 +1937,9 @@ def incoming_cancel(request):
     target_inc = get_object_or_404(Incoming, id=inc_id)
     do_no = target_inc.delivery_order_no
     do = DeliveryOrder.objects.filter(order_no=do_no).first()
+    if not do_no or do is None:
+        messages.error(request, "참조 납품서를 확인할 수 없어 취소를 중단했습니다.")
+        return redirect('incoming_list')
 
     # Incoming은 "무검사 직납" 품목에만 생성되는데, 그 품목은 WMS 쪽에도
     # MaterialTransaction + 실제 재고가 같이 생성돼 있다. 여기서 SCM
@@ -1974,31 +1953,37 @@ def incoming_cancel(request):
             if mode == 'item':
                 if MaterialTransaction is not None:
                     from material.views import _do_cancel_incoming
-                    for trx in MaterialTransaction.objects.filter(
+                    from material.cancellation import validate_cancel_scope
+                    transactions = list(MaterialTransaction.objects.filter(
                         ref_delivery_order=do_no, part=target_inc.part,
                         transaction_type__in=['IN_MANUAL', 'IN_SCM', 'IN_ERP']
-                    ):
+                    ))
+                    for trx in transactions:
+                        validate_cancel_scope(trx)
+                    for trx in transactions:
                         success, message = _do_cancel_incoming(trx, 'delete_all')
                         if not success:
                             raise Exception(message)
 
                 if do:
                     DeliveryOrderItem.objects.filter(
-                        order=do, part_no=target_inc.part.part_no, total_qty=target_inc.quantity
+                        order=do, part_no=target_inc.part.part_no
                     ).delete()
 
-                target_inc.delete()
+                Incoming.objects.filter(delivery_order_no=do_no, part=target_inc.part).delete()
                 messages.success(request, f"품목 {target_inc.part.part_no} 입고 취소 및 잔량이 복구되었습니다.")
 
             elif mode == 'all':
-                incomings = list(Incoming.objects.filter(delivery_order_no=do_no))
                 if MaterialTransaction is not None:
                     from material.views import _do_cancel_incoming
-                    part_ids = {inc.part_id for inc in incomings}
-                    for trx in MaterialTransaction.objects.filter(
-                        ref_delivery_order=do_no, part_id__in=part_ids,
+                    from material.cancellation import validate_cancel_scope
+                    transactions = list(MaterialTransaction.objects.filter(
+                        ref_delivery_order=do_no,
                         transaction_type__in=['IN_MANUAL', 'IN_SCM', 'IN_ERP']
-                    ):
+                    ))
+                    for trx in transactions:
+                        validate_cancel_scope(trx)
+                    for trx in transactions:
                         success, message = _do_cancel_incoming(trx, 'delete_all')
                         if not success:
                             raise Exception(message)
@@ -2253,34 +2238,12 @@ def receive_delivery_order_confirm(request):
                 # LOT 정보 포함하여 재고 저장
                 # select_for_update로 동시성 문제 방지
                 with db_transaction.atomic():
-                    # 중복 레코드가 있으면 첫 번째만 사용
-                    existing_stocks = MaterialStock.objects.filter(
-                        warehouse=target_wh,
-                        part=part,
-                        lot_no=item.lot_no
-                    ).select_for_update()
-
-                    if existing_stocks.exists():
-                        # 중복이 있으면 첫 번째만 남기고 나머지는 수량 합산 후 삭제
-                        stock = existing_stocks.first()
-                        if existing_stocks.count() > 1:
-                            total_qty = sum(s.quantity for s in existing_stocks)
-                            existing_stocks.exclude(id=stock.id).delete()
-                            stock.quantity = total_qty
-                            stock.save()
-
-                        # 입고 수량 추가
-                        stock.quantity = F('quantity') + item.total_qty
-                        stock.save()
-                        stock.refresh_from_db()
-                    else:
-                        # 신규 생성
-                        stock = MaterialStock.objects.create(
-                            warehouse=target_wh,
-                            part=part,
-                            lot_no=item.lot_no,
-                            quantity=item.total_qty
-                        )
+                    stock, _ = MaterialStock.objects.get_or_create(
+                        warehouse=target_wh, part=part, lot_no=item.lot_no,
+                        production_lot=None,
+                    )
+                    MaterialStock.objects.filter(pk=stock.pk).update(quantity=F('quantity') + item.total_qty)
+                    stock.refresh_from_db()
 
                 # ERP 발주 연결 여부로 발주입고/예외입고 구분
                 is_erp_order = bool(item.erp_order_no and item.erp_order_no.strip())
@@ -2299,6 +2262,7 @@ def receive_delivery_order_confirm(request):
                     vendor=part.vendor,
                     actor=request.user,
                     ref_delivery_order=do.order_no,
+                    delivery_item=item,
                     remark=remark_msg
                 )
 
@@ -2331,7 +2295,7 @@ def receive_delivery_order_confirm(request):
                         if erp_ok:
                             messages.info(request, f'ERP 입고등록 완료: {erp_no} ({item.part_no})')
                         elif erp_err:
-                            messages.warning(request, f'ERP 연동 실패: {erp_err} ({item.part_no})')
+                            (messages.info if erp_err.startswith('ERP 전송 대기') else messages.warning)(request, f'{erp_err} ({item.part_no})')
                     except Exception as e:
                         import logging
                         logging.getLogger(__name__).error(f'ERP 입고등록 예외(SCM): {e}')

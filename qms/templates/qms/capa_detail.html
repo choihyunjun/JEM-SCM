@@ -1,9 +1,11 @@
 {% extends 'qms/qms_base.html' %}
+{% load auth_extras %}
 {% load humanize %}
 
 {% block title %}시정조치 상세 - {{ capa.capa_no }}{% endblock %}
 
 {% block qms_content %}
+<style>.qms-readonly button {display:none}</style>
 <div class="dtl-wrap">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div class="d-flex align-items-center gap-2">
@@ -16,18 +18,18 @@
             </span>
         </div>
         <div class="d-flex gap-2 dtl-actions">
-            <a href="{% url 'qms:capa_edit' pk=capa.pk %}" class="btn btn-outline-secondary btn-sm">
+            {% if user|has_perm:'can_qms_nc_edit' %}<a href="{% url 'qms:capa_edit' pk=capa.pk %}" class="btn btn-outline-secondary btn-sm">
                 <i class="bi bi-pencil me-1"></i>수정
-            </a>
-            <button type="button" class="btn btn-outline-danger btn-sm" onclick="if(confirm('정말 삭제하시겠습니까?')) document.getElementById('deleteForm').submit();">
+            </a>{% endif %}
+            {% if user|has_perm:'can_qms_nc_edit' %}<button type="button" class="btn btn-outline-danger btn-sm" onclick="if(confirm('정말 삭제하시겠습니까?')) document.getElementById('deleteForm').submit();">
                 <i class="bi bi-trash me-1"></i>삭제
-            </button>
+            </button>{% endif %}
             <a href="{% url 'qms:capa_list' %}" class="btn btn-outline-secondary btn-sm">
                 <i class="bi bi-arrow-left me-1"></i>목록으로
             </a>
         </div>
     </div>
-    <form id="deleteForm" method="post" action="{% url 'qms:capa_delete' pk=capa.pk %}" style="display:none;">{% csrf_token %}</form>
+    <form id="deleteForm" method="post" action="{% url 'qms:capa_delete' pk=capa.pk %}" style="display:none;"><fieldset {% if not user|has_perm:'can_qms_nc_edit' %}disabled class="qms-readonly"{% endif %}>{% csrf_token %}</fieldset></form>
 
     {% if capa.is_overdue %}
     <div class="dtl-alert-overdue">
@@ -80,7 +82,7 @@
     <div class="dtl-card">
         <div class="dtl-card-header"><i class="bi bi-reply"></i>협력사 회신</div>
         <div class="dtl-card-body">
-            <form method="post" enctype="multipart/form-data">
+            <form method="post" enctype="multipart/form-data"><fieldset {% if not user|has_perm:'can_qms_nc_edit' %}disabled class="qms-readonly"{% endif %}>
                 {% csrf_token %}
                 <input type="hidden" name="action" value="vendor_response">
 
@@ -127,7 +129,7 @@
                 <div class="d-flex justify-content-end">
                     <button type="submit" class="dtl-btn-dark"><i class="bi bi-check-lg me-1"></i>회신 저장</button>
                 </div>
-            </form>
+            </fieldset></form>
         </div>
     </div>
 
@@ -135,7 +137,7 @@
     <div class="dtl-card">
         <div class="dtl-card-header"><i class="bi bi-clipboard-check"></i>효과 검증 (내부)</div>
         <div class="dtl-card-body">
-            <form method="post">
+            <form method="post"><fieldset {% if not user|has_perm:'can_qms_nc_edit' %}disabled class="qms-readonly"{% endif %}>
                 {% csrf_token %}
                 <input type="hidden" name="action" value="verify">
 
@@ -165,7 +167,7 @@
                 <div class="d-flex justify-content-end">
                     <button type="submit" class="dtl-btn-dark"><i class="bi bi-check-lg me-1"></i>검증 저장</button>
                 </div>
-            </form>
+            </fieldset></form>
         </div>
     </div>
 
@@ -173,7 +175,7 @@
     <div class="dtl-card mb-0">
         <div class="dtl-card-header"><i class="bi bi-gear"></i>상태 변경</div>
         <div class="dtl-card-body">
-            <form method="post" class="d-flex gap-3 align-items-center">
+            <form method="post" class="d-flex gap-3 align-items-center"><fieldset {% if not user|has_perm:'can_qms_nc_edit' %}disabled class="qms-readonly"{% endif %}>
                 {% csrf_token %}
                 <input type="hidden" name="action" value="update_status">
                 <label class="dtl-form-label mb-0">상태:</label>
@@ -183,7 +185,7 @@
                     {% endfor %}
                 </select>
                 <button type="submit" class="dtl-btn-dark"><i class="bi bi-check-lg me-1"></i>변경</button>
-            </form>
+            </fieldset></form>
         </div>
     </div>
 </div>

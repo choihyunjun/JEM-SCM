@@ -42,7 +42,8 @@ def permission_required(*permissions, redirect_url=None, message=None):
 
             # 권한 체크 (OR 조건: 하나라도 True면 통과)
             profile = user.profile
-            has_permission = any(getattr(profile, perm, False) for perm in permissions)
+            from .access import has_permission as check_permission
+            has_permission = any(check_permission(user, perm) for perm in permissions)
 
             if has_permission:
                 return view_func(request, *args, **kwargs)

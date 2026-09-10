@@ -5,4 +5,4 @@ class MaterialConfig(AppConfig):
     name = 'material'
 
     def ready(self):
-        pass
+        from . import signals  # noqa: F401

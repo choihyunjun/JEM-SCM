@@ -1,9 +1,11 @@
 {% extends 'qms/qms_base.html' %}
+{% load auth_extras %}
 {% load humanize %}
 
 {% block title %}협력사 평가 상세{% endblock %}
 
 {% block qms_content %}
+<style>.qms-readonly button {display:none}</style>
 <div class="dtl-wrap">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -13,22 +15,22 @@
             </span>
         </div>
         <div class="dtl-actions">
-            <form method="post" class="d-inline">
+            <form method="post" class="d-inline"><fieldset {% if not user|has_perm:'can_qms_rating_edit' %}disabled class="qms-readonly"{% endif %}>
                 {% csrf_token %}
                 <input type="hidden" name="action" value="recalculate">
                 <button type="submit" class="dtl-btn-outline btn-sm me-2">
                     <i class="bi bi-arrow-clockwise me-1"></i>재계산
                 </button>
-            </form>
-            <button type="button" class="btn btn-outline-danger btn-sm" onclick="if(confirm('정말 삭제하시겠습니까?')) document.getElementById('deleteForm').submit();">
+            </fieldset></form>
+            {% if user|has_perm:'can_qms_rating_edit' %}<button type="button" class="btn btn-outline-danger btn-sm" onclick="if(confirm('정말 삭제하시겠습니까?')) document.getElementById('deleteForm').submit();">
                 <i class="bi bi-trash me-1"></i>삭제
-            </button>
+            </button>{% endif %}
             <a href="{% url 'qms:rating_list' %}" class="btn btn-outline-secondary btn-sm">
                 <i class="bi bi-arrow-left me-1"></i>목록으로
             </a>
         </div>
     </div>
-    <form id="deleteForm" method="post" action="{% url 'qms:rating_delete' pk=rating.pk %}" style="display:none;">{% csrf_token %}</form>
+    <form id="deleteForm" method="post" action="{% url 'qms:rating_delete' pk=rating.pk %}" style="display:none;"><fieldset {% if not user|has_perm:'can_qms_rating_edit' %}disabled class="qms-readonly"{% endif %}>{% csrf_token %}</fieldset></form>
 
     <!-- 종합 점수 카드 -->
     <div class="row g-3 mb-4">
@@ -164,7 +166,7 @@
     <div class="dtl-card mb-0">
         <div class="dtl-card-header"><i class="bi bi-pencil"></i>점수 수동 조정</div>
         <div class="dtl-card-body">
-            <form method="post">
+            <form method="post"><fieldset {% if not user|has_perm:'can_qms_rating_edit' %}disabled class="qms-readonly"{% endif %}>
                 {% csrf_token %}
                 <input type="hidden" name="action" value="update">
 
@@ -198,7 +200,7 @@
                     </div>
                     <button type="submit" class="dtl-btn-dark"><i class="bi bi-check-lg me-1"></i>저장</button>
                 </div>
-            </form>
+            </fieldset></form>
         </div>
     </div>
 </div>

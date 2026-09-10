@@ -170,6 +170,10 @@ class Incoming(models.Model):
 
 # 6. 라벨 발행 이력 (LabelPrintLog)
 class LabelPrintLog(models.Model):
+    delivery_item = models.ForeignKey(
+        'DeliveryOrderItem', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='label_logs', verbose_name="원본 납품서 품목",
+    )
     vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, related_name='labels', verbose_name="협력사")
     part = models.ForeignKey(Part, on_delete=models.CASCADE, related_name='labels', verbose_name="품목")
     part_no = models.CharField(max_length=50, verbose_name="품번")
