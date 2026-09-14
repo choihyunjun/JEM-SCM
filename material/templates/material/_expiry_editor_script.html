@@ -5,9 +5,29 @@
     const notice = document.getElementById('expiryEditNotice');
     const close = document.getElementById('expiryEditClose');
     const forms = Array.from(document.querySelectorAll('.expiry-edit-form'));
+    const visibilityForms = Array.from(document.querySelectorAll('.expiry-visibility-form'));
+    const editOnly = Array.from(document.querySelectorAll('.expiry-edit-only'));
+    const rows = Array.from(document.querySelectorAll('.expiry-history-row'));
+    const showHidden = document.getElementById('expiryShowHidden');
     let clicks = [];
     let editing = false;
     let saving = false;
+
+    function updateRows() {
+        let visibleCount = 0;
+        let displayedCount = 0;
+        rows.forEach(row => {
+            const hidden = row.dataset.historyHidden === 'true';
+            const displayed = !hidden || (editing && showHidden.checked);
+            if (!hidden) visibleCount++;
+            if (displayed) displayedCount++;
+            row.classList.toggle('d-none', !displayed);
+            row.classList.toggle('table-secondary', hidden && displayed);
+        });
+        document.querySelectorAll('.expiry-visible-count').forEach(count => { count.textContent = visibleCount; });
+        const empty = document.getElementById('expiryHistoryEmpty');
+        if (empty) empty.classList.toggle('d-none', displayedCount !== 0);
+    }
 
     function setEditing(enabled) {
         if (saving) return;
@@ -15,14 +35,56 @@
         clicks = [];
         notice.classList.toggle('d-none', !enabled);
         forms.forEach(form => form.classList.toggle('d-none', !enabled));
+        editOnly.forEach(control => control.classList.toggle('d-none', !enabled));
+        if (!enabled) showHidden.checked = false;
+        updateRows();
     }
     trigger.addEventListener('click', () => {
         const now = performance.now();
         clicks = clicks.filter(time => now - time <= 900);
         clicks.push(now);
-        if (clicks.length >= 3) setEditing(true);
+        if (clicks.length >= 3) setEditing(!editing);
     });
     close.addEventListener('click', () => setEditing(false));
+    showHidden.addEventListener('change', updateRows);
+
+    async function saveVisibility(form) {
+        if (!editing || saving || form.dataset.blocked === 'true') return;
+        const row = form.closest('.expiry-history-row');
+        const button = form.querySelector('button');
+        const status = form.querySelector('.expiry-visibility-status');
+        const body = new FormData(form);
+        body.set('hidden', row.dataset.historyHidden === 'true' ? 'false' : 'true');
+        body.set('revision', form.dataset.revision);
+        saving = true;
+        button.disabled = true;
+        close.disabled = true;
+        status.textContent = '저장 중…';
+        try {
+            const response = await fetch(form.action, {
+                method: 'POST', body,
+                headers: {'X-CSRFToken': body.get('csrfmiddlewaretoken')},
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                status.textContent = data.error || '저장하지 못했습니다. 새로고침 후 확인해주세요.';
+                if (response.status === 409 || response.status >= 500) form.dataset.blocked = 'true';
+                return;
+            }
+            form.dataset.revision = data.revision;
+            row.dataset.historyHidden = data.hidden ? 'true' : 'false';
+            button.textContent = data.hidden ? '다시 표시' : '숨기기';
+            status.textContent = '';
+            updateRows();
+        } catch (error) {
+            form.dataset.blocked = 'true';
+            status.textContent = '저장 결과를 확인할 수 없습니다. 새로고침 후 확인해주세요.';
+        } finally {
+            saving = false;
+            close.disabled = false;
+            button.disabled = form.dataset.blocked === 'true';
+        }
+    }
 
     async function save(form, clear) {
         if (!editing || saving || form.dataset.blocked === 'true') return;
@@ -79,5 +141,9 @@
         form.addEventListener('submit', event => { event.preventDefault(); save(form, false); });
         form.querySelector('.expiry-clear').addEventListener('click', () => save(form, true));
     });
+    visibilityForms.forEach(form => {
+        form.addEventListener('submit', event => { event.preventDefault(); saveVisibility(form); });
+    });
+    updateRows();
 })();
 </script>

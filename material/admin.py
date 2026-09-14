@@ -3,7 +3,7 @@ from .models import (
     Warehouse, MaterialStock, MaterialTransaction, Product, BOMItem,
     InventoryCheck,
     ProcessTag, ProcessTagScanLog, InventoryCheckSession, InventoryCheckSessionItem,
-    WMSConfig, MovementExpiryEvent,
+    WMSConfig, MovementExpiryEvent, MovementVisibilityEvent,
 )
 
 
@@ -21,6 +21,12 @@ class MovementExpiryEventAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+@admin.register(MovementVisibilityEvent)
+class MovementVisibilityEventAdmin(MovementExpiryEventAdmin):
+    list_display = ('transaction_no', 'previous_hidden', 'hidden', 'actor', 'created_at')
+    readonly_fields = ('movement', 'transaction_no', 'previous_hidden', 'hidden', 'actor', 'created_at')
+
 
 @admin.register(Warehouse)
 class WarehouseAdmin(admin.ModelAdmin):

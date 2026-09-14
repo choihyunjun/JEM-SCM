@@ -180,6 +180,22 @@ class MovementExpiryEvent(models.Model):
         verbose_name_plural = '이동 유효기간 변경 이력'
 
 
+class MovementVisibilityEvent(models.Model):
+    """유효기간 이력 화면의 숨김/복원 기록. 원본 이동은 보존한다."""
+    movement = models.ForeignKey(MaterialTransaction, on_delete=models.SET_NULL,
+                                 null=True, related_name='visibility_events')
+    transaction_no = models.CharField('수불번호', max_length=30)
+    previous_hidden = models.BooleanField('이전 숨김 상태', default=False)
+    hidden = models.BooleanField('숨김', default=False)
+    actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    created_at = models.DateTimeField('변경일시', auto_now_add=True)
+
+    class Meta:
+        ordering = ['-pk']
+        verbose_name = '유효기간 이력 숨김 변경 기록'
+        verbose_name_plural = '유효기간 이력 숨김 변경 기록'
+
+
 class ERPIncomingOperation(models.Model):
     """Durable outgoing requests, committed together with the local stock change."""
     import uuid as _uuid

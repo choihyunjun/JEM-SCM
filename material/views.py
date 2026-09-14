@@ -7155,7 +7155,10 @@ def raw_material_expiry(request):
     used_start = request.GET.get('used_start', '')
     used_end = request.GET.get('used_end', '')
 
-    used_history = expiry_movement_history(settings_map, used_search, used_start, used_end)
+    can_edit_expiry = can_edit_movement_expiry(request.user)
+    used_history = expiry_movement_history(
+        settings_map, used_search, used_start, used_end, include_hidden=can_edit_expiry,
+    )
 
     context = {
         'labels': labels,
@@ -7168,8 +7171,8 @@ def raw_material_expiry(request):
         'count_total': count_expired + count_imminent + count_warning + count_safe,
         'active_tab': active_tab,
         'used_labels': used_history,
-        'can_edit_expiry': can_edit_movement_expiry(request.user),
-        'used_count': len(used_history),
+        'can_edit_expiry': can_edit_expiry,
+        'used_count': sum(not row['history_hidden'] for row in used_history),
         'used_search': used_search,
         'used_start': used_start,
         'used_end': used_end,
@@ -7227,6 +7230,39 @@ def edit_movement_expiry(request, trx_id):
             'used_d_day': (expiry_date - used_date).days if expiry_date else None,
             'revision': latest.pk if latest else 0,
         })
+
+
+@login_required
+def set_movement_visibility(request, trx_id):
+    from .expiry import can_edit_movement_expiry, expiry_transfers
+    from .models import MovementVisibilityEvent
+
+    if not can_edit_movement_expiry(request.user):
+        return JsonResponse({'success': False, 'error': '관리자만 수정할 수 있습니다.'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST 요청만 허용됩니다.'}, status=405)
+    hidden_value = request.POST.get('hidden')
+    try:
+        revision = int(request.POST.get('revision', ''))
+        if revision < 0 or hidden_value not in ('true', 'false'):
+            raise ValueError
+    except (ValueError, TypeError):
+        return JsonResponse({'success': False, 'error': '입력값이 올바르지 않습니다.'}, status=400)
+    hidden = hidden_value == 'true'
+    with transaction.atomic():
+        trx = MaterialTransaction.objects.select_for_update().filter(pk=trx_id).first()
+        if trx is None or not expiry_transfers().filter(pk=trx_id).exists():
+            return JsonResponse({'success': False, 'error': '대상 이동 이력이 없습니다.'}, status=404)
+        latest = MovementVisibilityEvent.objects.filter(movement=trx).order_by('-pk').first()
+        if revision != (latest.pk if latest else 0):
+            return JsonResponse({'success': False, 'error': '다른 변경이 있습니다. 새로고침 후 다시 확인해주세요.'}, status=409)
+        previous_hidden = latest.hidden if latest else False
+        if hidden != previous_hidden:
+            latest = MovementVisibilityEvent.objects.create(
+                movement=trx, transaction_no=trx.transaction_no,
+                previous_hidden=previous_hidden, hidden=hidden, actor=request.user,
+            )
+        return JsonResponse({'success': True, 'hidden': hidden, 'revision': latest.pk if latest else 0})
 
 
 @wms_permission_required('can_wms_incoming_label')

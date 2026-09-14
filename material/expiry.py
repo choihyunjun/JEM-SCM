@@ -4,7 +4,7 @@ from datetime import timedelta
 from django.db.models import OuterRef, Q, Subquery
 from django.utils import timezone
 
-from .models import MaterialTransaction, MovementExpiryEvent
+from .models import MaterialTransaction, MovementExpiryEvent, MovementVisibilityEvent
 
 
 def expiry_transfers():
@@ -24,15 +24,20 @@ def can_edit_movement_expiry(user):
     )
 
 
-def expiry_movement_history(settings_map, search='', start='', end=''):
+def expiry_movement_history(settings_map, search='', start='', end='', include_hidden=False):
     latest_event = MovementExpiryEvent.objects.filter(movement_id=OuterRef('pk')).order_by('-pk')
+    latest_visibility = MovementVisibilityEvent.objects.filter(movement_id=OuterRef('pk')).order_by('-pk')
     transfers = expiry_transfers().filter(part_id__in=settings_map).annotate(
         manual_expiry=Subquery(latest_event.values('expiry_date')[:1]),
         expiry_revision=Subquery(latest_event.values('pk')[:1]),
+        history_hidden=Subquery(latest_visibility.values('hidden')[:1]),
+        visibility_revision=Subquery(latest_visibility.values('pk')[:1]),
     ).select_related('part', 'actor', 'warehouse_from', 'warehouse_to').prefetch_related(
         'used_labels', 'used_tags',
     )
     # Label-only records have no reliable route, so they cannot match this view.
+    if not include_hidden:
+        transfers = transfers.filter(Q(history_hidden=False) | Q(history_hidden__isnull=True))
 
     if search:
         transfers = transfers.filter(
@@ -57,6 +62,8 @@ def expiry_movement_history(settings_map, search='', start='', end=''):
     for trx in transfers:
         rows.append({
             'id': trx.pk,
+            'history_hidden': bool(trx.history_hidden),
+            'visibility_revision': trx.visibility_revision or 0,
             'expiry_revision': trx.expiry_revision or 0,
             'expiry_editable': trx.lot_no is None,
             'expiry_manual': trx.lot_no is None and trx.manual_expiry is not None,
