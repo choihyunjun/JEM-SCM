@@ -164,12 +164,12 @@ class MaterialTransaction(models.Model):
 # 4. BOM 관리 (Bill of Materials)
 # -----------------------------------------------------------------------------
 class MovementExpiryEvent(models.Model):
-    """수불/재고를 변경하지 않는 유효기간 수동 지정 및 해제 이력."""
+    """수불/재고를 변경하지 않는 유효기간 계산용 제조일 지정 및 해제 이력."""
     movement = models.ForeignKey(MaterialTransaction, on_delete=models.SET_NULL,
                                  null=True, related_name='expiry_events')
     transaction_no = models.CharField('수불번호', max_length=30)
-    previous_date = models.DateField('이전 유효기간', null=True, blank=True)
-    expiry_date = models.DateField('지정 유효기간', null=True, blank=True)
+    previous_manufacturing_date = models.DateField('이전 제조일', null=True, blank=True)
+    manufacturing_date = models.DateField('지정 제조일', null=True, blank=True)
     note = models.CharField('변경 사유', max_length=200, blank=True)
     actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     created_at = models.DateTimeField('변경일시', auto_now_add=True)

@@ -24,11 +24,20 @@ def can_edit_movement_expiry(user):
     )
 
 
+def calculate_movement_expiry(reference_date, shelf_life_days):
+    if reference_date is None:
+        return None
+    try:
+        return reference_date + timedelta(days=shelf_life_days)
+    except OverflowError:
+        return None
+
+
 def expiry_movement_history(settings_map, search='', start='', end='', include_hidden=False):
     latest_event = MovementExpiryEvent.objects.filter(movement_id=OuterRef('pk')).order_by('-pk')
     latest_visibility = MovementVisibilityEvent.objects.filter(movement_id=OuterRef('pk')).order_by('-pk')
     transfers = expiry_transfers().filter(part_id__in=settings_map).annotate(
-        manual_expiry=Subquery(latest_event.values('expiry_date')[:1]),
+        manufacturing_date=Subquery(latest_event.values('manufacturing_date')[:1]),
         expiry_revision=Subquery(latest_event.values('pk')[:1]),
         history_hidden=Subquery(latest_visibility.values('hidden')[:1]),
         visibility_revision=Subquery(latest_visibility.values('pk')[:1]),
@@ -48,13 +57,13 @@ def expiry_movement_history(settings_map, search='', start='', end='', include_h
     if end:
         transfers = transfers.filter(date__date__lte=end)
 
-    def expiry_fields(part_id, lot_no, used_at, manual_expiry):
-        expiry_date = manual_expiry
-        if lot_no is not None:
-            expiry_date = lot_no + timedelta(days=settings_map[part_id].shelf_life_days)
+    def expiry_fields(part_id, lot_no, used_at, manufacturing_date):
+        reference_date = lot_no if lot_no is not None else manufacturing_date
+        expiry_date = calculate_movement_expiry(reference_date, settings_map[part_id].shelf_life_days)
         used_date = timezone.localdate(used_at) if timezone.is_aware(used_at) else used_at.date()
         return {
             'expiry_date': expiry_date,
+            'reference_date': reference_date,
             'used_d_day': (expiry_date - used_date).days if expiry_date else None,
         }
 
@@ -66,7 +75,8 @@ def expiry_movement_history(settings_map, search='', start='', end='', include_h
             'visibility_revision': trx.visibility_revision or 0,
             'expiry_revision': trx.expiry_revision or 0,
             'expiry_editable': trx.lot_no is None,
-            'expiry_manual': trx.lot_no is None and trx.manual_expiry is not None,
+            'expiry_manual': trx.lot_no is None and trx.manufacturing_date is not None,
+            'manufacturing_date': trx.manufacturing_date,
             'used_at': trx.date,
             'part_no': trx.part.part_no,
             'part_name': trx.part.part_name,
@@ -82,7 +92,7 @@ def expiry_movement_history(settings_map, search='', start='', end='', include_h
             'warehouse_to': trx.warehouse_to,
             'label_ids': [label.label_id for label in trx.used_labels.all()]
                          + [tag.tag_id for tag in trx.used_tags.all()],
-            **expiry_fields(trx.part_id, trx.lot_no, trx.date, trx.manual_expiry),
+            **expiry_fields(trx.part_id, trx.lot_no, trx.date, trx.manufacturing_date),
         })
     rows.sort(key=lambda row: row['used_at'], reverse=True)
     return rows

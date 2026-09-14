@@ -7184,22 +7184,22 @@ def raw_material_expiry(request):
 
 @login_required
 def edit_movement_expiry(request, trx_id):
-    """수동 유효기간만 보완한다. 재고/LOT/ERP는 변경하지 않는다."""
+    """입력한 제조일 + 품목별 보관기간으로 유효기간을 계산한다."""
     from datetime import date
-    from .expiry import can_edit_movement_expiry, expiry_transfers
+    from .expiry import calculate_movement_expiry, can_edit_movement_expiry, expiry_transfers
     from .models import MovementExpiryEvent
 
     if not can_edit_movement_expiry(request.user):
         return JsonResponse({'success': False, 'error': '관리자만 수정할 수 있습니다.'}, status=403)
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'POST 요청만 허용됩니다.'}, status=405)
-    if 'expiry_date' not in request.POST:
-        return JsonResponse({'success': False, 'error': '유효기간 입력값이 필요합니다.'}, status=400)
-    value = request.POST.get('expiry_date', '').strip()
+    if 'manufacturing_date' not in request.POST:
+        return JsonResponse({'success': False, 'error': '제조일 입력값이 필요합니다. 새로고침 후 입력해주세요.'}, status=400)
+    value = request.POST.get('manufacturing_date', '').strip()
     note = request.POST.get('note', '').strip()
     try:
-        expiry_date = date.fromisoformat(value) if value else None
-        if expiry_date and expiry_date.isoformat() != value:
+        manufacturing_date = date.fromisoformat(value) if value else None
+        if manufacturing_date and manufacturing_date.isoformat() != value:
             raise ValueError
         revision = int(request.POST.get('revision', ''))
         if revision < 0 or len(note) > 200:
@@ -7217,16 +7217,20 @@ def edit_movement_expiry(request, trx_id):
         latest = MovementExpiryEvent.objects.filter(movement=trx).order_by('-pk').first()
         if revision != (latest.pk if latest else 0):
             return JsonResponse({'success': False, 'error': '다른 변경이 있습니다. 새로고침 후 다시 확인해주세요.'}, status=409)
-        previous_date = latest.expiry_date if latest else None
-        if previous_date != expiry_date:
+        expiry_date = calculate_movement_expiry(manufacturing_date, trx.part.raw_material_setting.shelf_life_days)
+        if manufacturing_date and expiry_date is None:
+            return JsonResponse({'success': False, 'error': '유효기간을 계산할 수 없는 제조일입니다.'}, status=400)
+        previous_date = latest.manufacturing_date if latest else None
+        if previous_date != manufacturing_date:
             latest = MovementExpiryEvent.objects.create(
                 movement=trx, transaction_no=trx.transaction_no,
-                previous_date=previous_date, expiry_date=expiry_date,
+                previous_manufacturing_date=previous_date, manufacturing_date=manufacturing_date,
                 note=note, actor=request.user,
             )
         used_date = timezone.localdate(trx.date) if timezone.is_aware(trx.date) else trx.date.date()
         return JsonResponse({
             'success': True, 'expiry_date': expiry_date.isoformat() if expiry_date else '',
+            'manufacturing_date': manufacturing_date.isoformat() if manufacturing_date else '',
             'used_d_day': (expiry_date - used_date).days if expiry_date else None,
             'revision': latest.pk if latest else 0,
         })

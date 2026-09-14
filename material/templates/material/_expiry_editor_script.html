@@ -88,15 +88,15 @@
 
     async function save(form, clear) {
         if (!editing || saving || form.dataset.blocked === 'true') return;
-        const input = form.elements.expiry_date;
+        const input = form.elements.manufacturing_date;
         const status = form.querySelector('.expiry-edit-status');
         if (!clear && (!input.value || !form.reportValidity())) {
-            status.textContent = '유효기간을 선택해주세요.';
+            status.textContent = '제조일을 선택해주세요.';
             return;
         }
-        if (clear && !confirm('수동 지정한 유효기간을 해제하시겠습니까?')) return;
+        if (clear && !confirm('입력한 제조일을 해제하시겠습니까?')) return;
         const body = new FormData(form);
-        body.set('expiry_date', clear ? '' : input.value);
+        body.set('manufacturing_date', clear ? '' : input.value);
         body.set('revision', form.dataset.revision);
         saving = true;
         close.disabled = true;
@@ -115,9 +115,10 @@
                 return;
             }
             form.dataset.revision = data.revision;
-            input.value = data.expiry_date;
+            input.value = data.manufacturing_date;
             form.elements.note.value = '';
             const id = form.dataset.trxId;
+            document.getElementById(`expiryReference-${id}`).textContent = data.manufacturing_date || '미지정';
             document.getElementById(`expiryDate-${id}`).textContent = data.expiry_date || '확인 불가';
             const days = document.getElementById(`expiryDays-${id}`);
             const delta = data.used_d_day;
@@ -127,7 +128,7 @@
                 delta <= 0 ? 'd-day-expired' : delta <= 30 ? 'd-day-imminent' : delta <= 90 ? 'd-day-warning' : 'd-day-safe'
             );
             days.replaceChildren(badge);
-            status.textContent = clear ? '수동 지정 해제 완료' : '저장 완료';
+            status.textContent = clear ? '제조일 해제 완료' : '저장 완료';
         } catch (error) {
             form.dataset.blocked = 'true';
             status.textContent = '저장 결과를 확인할 수 없습니다. 새로고침 후 확인해주세요.';

@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 
 from django.contrib.auth.models import User
 from django.test import Client, TestCase
@@ -34,7 +34,7 @@ class MovementVisibilityTests(TestCase):
         stock = MaterialStock.objects.create(warehouse=self.target, part=self.part, quantity=90)
         expiry = MovementExpiryEvent.objects.create(
             movement=self.trx, transaction_no=self.trx.transaction_no,
-            expiry_date=date(2026, 11, 20), actor=self.user,
+            manufacturing_date=date(2026, 7, 10), actor=self.user,
         )
         original = MaterialTransaction.objects.filter(pk=self.trx.pk).values().get()
         response = self.hide()
@@ -44,7 +44,7 @@ class MovementVisibilityTests(TestCase):
         hidden_rows = expiry_movement_history({self.part.pk: self.setting}, include_hidden=True)
         self.assertEqual(len(hidden_rows), 1)
         self.assertTrue(hidden_rows[0]['history_hidden'])
-        self.assertEqual(hidden_rows[0]['expiry_date'], expiry.expiry_date)
+        self.assertEqual(hidden_rows[0]['expiry_date'], expiry.manufacturing_date + timedelta(days=90))
         self.assertEqual(hidden_rows[0]['visibility_revision'], revision)
         page = self.client.get(self.page)
         self.assertEqual(page.context['used_count'], 0)

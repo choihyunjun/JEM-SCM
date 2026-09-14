@@ -9,9 +9,9 @@ from .models import (
 
 @admin.register(MovementExpiryEvent)
 class MovementExpiryEventAdmin(admin.ModelAdmin):
-    list_display = ('transaction_no', 'previous_date', 'expiry_date', 'actor', 'created_at', 'note')
+    list_display = ('transaction_no', 'previous_manufacturing_date', 'manufacturing_date', 'actor', 'created_at', 'note')
     search_fields = ('transaction_no',)
-    readonly_fields = ('movement', 'transaction_no', 'previous_date', 'expiry_date', 'note', 'actor', 'created_at')
+    readonly_fields = ('movement', 'transaction_no', 'previous_manufacturing_date', 'manufacturing_date', 'note', 'actor', 'created_at')
 
     def has_add_permission(self, request):
         return False

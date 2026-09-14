@@ -726,8 +726,8 @@
             if (currentLotData.days_old < firstLotDays) {
                 const reason = prompt(
                     `⚠️ FIFO 위반 경고!\n\n` +
-                    `선입선출 원칙에 따라 가장 오래된 LOT(${firstLotNo}, ${firstLotDays}일 경과)를 먼저 사용해야 합니다.\n` +
-                    `선택한 LOT: ${currentLotData.lot_no} (${currentLotData.days_old}일 경과)\n\n` +
+                    `선입선출 원칙에 따라 가장 오래된 LOT(${firstLotNo})를 먼저 사용해야 합니다.\n` +
+                    `선택한 LOT: ${currentLotData.lot_no}\n\n` +
                     `예외로 이동을 처리하려면 사유를 입력하세요:`
                 );
                 if (reason === null || reason.trim() === '') {

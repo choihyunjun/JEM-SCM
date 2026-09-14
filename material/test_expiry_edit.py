@@ -1,9 +1,10 @@
-from datetime import date
+from datetime import date, datetime, timedelta
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.test import Client, TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from orders.models import Part
 from .expiry import expiry_movement_history
@@ -21,12 +22,13 @@ class MovementExpiryEditTests(TestCase):
         self.trx = MaterialTransaction.objects.create(
             transaction_no='EDIT-TRX', transaction_type='TRF_ERP', part=self.part,
             quantity=90, warehouse_from=self.source, warehouse_to=self.target,
+            date=timezone.make_aware(datetime(2026, 8, 26, 11, 3)),
         )
         self.url = reverse('material:edit_movement_expiry', args=[self.trx.pk])
         self.page = reverse('material:raw_material_expiry') + '?tab=used'
 
-    def save(self, value='2026-11-20', revision=0, **extra):
-        return self.client.post(self.url, {'expiry_date': value, 'revision': revision, **extra})
+    def save(self, value='2026-07-10', revision=0, **extra):
+        return self.client.post(self.url, {'manufacturing_date': value, 'revision': revision, **extra})
 
     def test_save_only_adds_manual_metadata_and_updates_display(self):
         stock = MaterialStock.objects.create(warehouse=self.target, part=self.part, quantity=90)
@@ -36,18 +38,23 @@ class MovementExpiryEditTests(TestCase):
         self.assertEqual(response.status_code, 200)
         event = MovementExpiryEvent.objects.get()
         self.assertEqual((event.actor, event.note, event.transaction_no), (self.user, '입고 자료 확인', 'EDIT-TRX'))
-        self.assertEqual(event.expiry_date, date(2026, 11, 20))
-        self.assertIsNone(event.previous_date)
+        self.assertEqual(event.manufacturing_date, date(2026, 7, 10))
+        self.assertIsNone(event.previous_manufacturing_date)
+        self.assertEqual(response.json()['expiry_date'], '2026-10-08')
+        self.assertEqual(response.json()['used_d_day'], 43)
         self.assertEqual(MaterialTransaction.objects.filter(pk=self.trx.pk).values().get(), original)
         stock.refresh_from_db()
         self.assertEqual(stock.quantity, 90)
         erp.assert_not_called()
         row = expiry_movement_history({self.part.pk: self.setting})[0]
         self.assertTrue(row['expiry_manual'])
-        self.assertEqual(row['expiry_date'], event.expiry_date)
+        self.assertEqual(row['expiry_date'], event.manufacturing_date + timedelta(days=90))
+        self.assertEqual(row['used_d_day'], 43)
         self.assertEqual(row['expiry_revision'], event.pk)
         page = self.client.get(self.page)
-        self.assertContains(page, '2026-11-20')
+        self.assertContains(page, '2026-07-10')
+        self.assertContains(page, '2026-10-08')
+        self.assertContains(page, 'D-43')
         self.assertNotContains(page, 'id="expiryManual-')
 
     def test_edit_clear_and_duplicate_submission_keep_audit_history(self):
@@ -59,9 +66,9 @@ class MovementExpiryEditTests(TestCase):
         self.assertIsNone(cleared['used_d_day'])
         events = list(MovementExpiryEvent.objects.order_by('pk'))
         self.assertEqual(len(events), 3)
-        self.assertEqual(events[1].previous_date, events[0].expiry_date)
-        self.assertEqual(events[2].previous_date, events[1].expiry_date)
-        self.assertIsNone(events[2].expiry_date)
+        self.assertEqual(events[1].previous_manufacturing_date, events[0].manufacturing_date)
+        self.assertEqual(events[2].previous_manufacturing_date, events[1].manufacturing_date)
+        self.assertIsNone(events[2].manufacturing_date)
         self.assertIsNone(expiry_movement_history({self.part.pk: self.setting})[0]['expiry_date'])
 
     def test_stale_revision_cannot_overwrite_another_edit(self):
@@ -70,11 +77,12 @@ class MovementExpiryEditTests(TestCase):
         self.assertEqual(MovementExpiryEvent.objects.count(), 1)
 
     def test_invalid_values_do_not_write(self):
-        for value, revision in [('bad', 0), ('2026-02-30', 0), ('20261120', 0), ('2026-11-20', -1), ('2026-11-20', 'bad')]:
+        for value, revision in [('bad', 0), ('2026-02-30', 0), ('20261120', 0), ('2026-11-20', -1), ('2026-11-20', 'bad'), ('9999-12-31', 0)]:
             with self.subTest(value=value, revision=revision):
                 self.assertEqual(self.save(value, revision).status_code, 400)
         self.assertEqual(self.save(note='x' * 201).status_code, 400)
         self.assertEqual(self.client.post(self.url, {'revision': 0}).status_code, 400)
+        self.assertEqual(self.client.post(self.url, {'expiry_date': '2026-07-10', 'revision': 0}).status_code, 400)
         self.assertFalse(MovementExpiryEvent.objects.exists())
 
     def test_computed_expiry_and_out_of_scope_records_cannot_be_edited(self):
@@ -107,11 +115,11 @@ class MovementExpiryEditTests(TestCase):
         self.assertEqual(self.save().status_code, 302)
         csrf_client = Client(enforce_csrf_checks=True)
         csrf_client.force_login(self.user)
-        self.assertEqual(csrf_client.post(self.url, {'expiry_date': '2026-11-20', 'revision': 0}).status_code, 403)
+        self.assertEqual(csrf_client.post(self.url, {'manufacturing_date': '2026-07-10', 'revision': 0}).status_code, 403)
         page = csrf_client.get(self.page)
         self.assertContains(page, 'id="expiryEditTrigger"')
         self.assertEqual(csrf_client.post(self.url, {
-            'expiry_date': '2026-11-20', 'revision': 0,
+            'manufacturing_date': '2026-07-10', 'revision': 0,
             'csrfmiddlewaretoken': csrf_client.cookies['csrftoken'].value,
         }).status_code, 200)
 
@@ -123,3 +131,15 @@ class MovementExpiryEditTests(TestCase):
         self.assertIsNone(event.movement_id)
         self.assertEqual(event.transaction_no, 'EDIT-TRX')
         self.assertEqual(expiry_movement_history({self.part.pk: self.setting}), [])
+
+    def test_uses_item_shelf_life_and_keeps_expired_dates_positive(self):
+        self.setting.shelf_life_days = 365
+        self.setting.save()
+        data = self.save().json()
+        self.assertEqual(data['expiry_date'], '2027-07-10')
+        self.assertEqual(data['used_d_day'], 318)
+        self.setting.shelf_life_days = 90
+        self.setting.save()
+        data = self.save('2026-01-01', data['revision']).json()
+        self.assertEqual(data['expiry_date'], '2026-04-01')
+        self.assertLess(data['used_d_day'], 0)

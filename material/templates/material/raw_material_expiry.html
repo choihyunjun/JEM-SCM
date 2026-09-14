@@ -233,6 +233,7 @@
     3공장 원재료창고 → 3공장 창고(3200 → 3000) 이동만 표시합니다.
     라벨 유무·현재 재고와 관계없이 이동 건별로 집계합니다.
     투입/이동시 잔여일은 해당 이동일과 유효기간의 차이입니다.
+    유효기간은 LOT 날짜 또는 입력한 제조일에 품목별 보관기간을 더해 계산합니다.
     유효기간 정보가 없는 건은 확인 불가로 표시합니다.
 </p>
 
@@ -274,7 +275,7 @@
     </div>
     {% if can_edit_expiry %}
     <div id="expiryEditNotice" class="d-none px-3 py-2 bg-light small">
-        <strong>이력 편집</strong> · 유효기간 수정 및 항목 숨김을 설정합니다. 변경 이력이 기록됩니다.
+        <strong>이력 편집</strong> · 제조일을 입력하면 보관기간을 더해 유효기간을 계산합니다. 변경 이력이 기록됩니다.
         <label class="ms-2"><input type="checkbox" id="expiryShowHidden" class="form-check-input me-1">숨긴 항목 보기</label>
         <button type="button" id="expiryEditClose" class="btn btn-sm btn-outline-secondary ms-2">편집 종료</button>
     </div>
@@ -290,7 +291,7 @@
                         <th style="width:11%;">품번</th>
                         <th>품명</th>
                         <th class="text-end" style="width:7%;">수량</th>
-                        <th class="text-center" style="width:8%;">LOT</th>
+                        <th class="text-center" style="width:8%;">LOT / 제조일</th>
                         <th class="text-center" style="width:8%;">유효기간</th>
                         <th class="text-center" style="width:9%;">투입/이동시 잔여일</th>
                         <th>보내는 곳 → 받는 곳</th>
@@ -311,7 +312,7 @@
                         <td class="small">{{ ul.part_name|truncatechars:25 }}</td>
                         <td class="text-end fw-bold">{{ ul.quantity|floatformat:"-2" }}{{ ul.unit_display }}</td>
                         <td class="text-center small">
-                            {{ ul.lot_no|date:"Y-m-d"|default:"미지정" }}
+                            <span id="expiryReference-{{ ul.id }}">{{ ul.reference_date|date:"Y-m-d"|default:"미지정" }}</span>
                             {% if ul.production_lot %}<div class="text-muted">{{ ul.production_lot }}</div>{% endif %}
                         </td>
                         <td class="text-center small">
@@ -320,8 +321,10 @@
                             <form class="expiry-edit-form d-none mt-2" data-trx-id="{{ ul.id }}"
                                   data-revision="{{ ul.expiry_revision }}" action="{% url 'material:edit_movement_expiry' ul.id %}" method="post">
                                 {% csrf_token %}
-                                <input type="date" name="expiry_date" class="form-control form-control-sm mb-1"
-                                       value="{{ ul.expiry_date|date:'Y-m-d' }}" aria-label="{{ ul.transaction_no }} 수동 유효기간">
+                                <label class="small">제조일
+                                    <input type="date" name="manufacturing_date" class="form-control form-control-sm mb-1"
+                                           value="{{ ul.manufacturing_date|date:'Y-m-d' }}" aria-label="{{ ul.transaction_no }} 제조일">
+                                </label>
                                 <input type="text" name="note" maxlength="200" class="form-control form-control-sm mb-1"
                                        placeholder="변경 사유 (선택)" aria-label="{{ ul.transaction_no }} 변경 사유">
                                 <div class="d-flex gap-1 justify-content-center">
