@@ -7148,7 +7148,7 @@ def raw_material_expiry(request):
     # 유효기간 순 정렬
     labels.sort(key=lambda x: x['expiry_date'])
 
-    # 지정 품목의 이동 전체 + 이동번호가 없는 과거 라벨 투입 기록
+    # 지정 품목의 현장 투입 이력 (4200→4300, 3200→3000)
     from .expiry import expiry_movement_history
     active_tab = request.GET.get('tab', 'stock')
     used_search = request.GET.get('used_search', '').strip()

@@ -21,7 +21,7 @@ class ExpiryMovementHistoryTests(TestCase):
         self.part = Part.objects.create(part_no='SEAL002', part_name='Seal test')
         self.setting = RawMaterialSetting.objects.create(part=self.part, shelf_life_days=90)
         self.settings_map = {self.part.pk: self.setting}
-        self.source = Warehouse.objects.create(code='2000', name='Material')
+        self.source = Warehouse.objects.create(code='3200', name='Material')
         self.target = Warehouse.objects.create(code='3000', name='Production', is_production=True)
         self.day = date(2026, 8, 22)
         self.moved_at = timezone.make_aware(datetime(2026, 9, 14, 17, 13))
@@ -47,15 +47,26 @@ class ExpiryMovementHistoryTests(TestCase):
     def rows(self, **filters):
         return expiry_movement_history(self.settings_map, **filters)
 
-    def test_label_free_movements_in_all_directions_and_erp_without_current_stock(self):
-        self.movement()
-        self.movement('RETURN', warehouse_from=self.target, warehouse_to=self.source)
-        self.movement('ERP', transaction_type='TRF_ERP')
-        other = Warehouse.objects.create(code='4000', name='Other storage')
-        self.movement('STORAGE', warehouse_to=other)
+    def test_only_requested_direction_pairs_for_scm_and_erp_without_current_stock(self):
+        fourth_source = Warehouse.objects.create(code='4200', name='Fourth material')
+        fourth_target = Warehouse.objects.create(code='4300', name='Fourth production')
+        other = Warehouse.objects.create(code='2000', name='Other storage')
+        expected = set()
+        for kind in ('TRANSFER', 'TRF_ERP'):
+            routes = [
+                (self.source, self.target), (fourth_source, fourth_target),
+                (self.target, self.source), (fourth_target, fourth_source),
+                (self.source, fourth_target), (fourth_source, self.target),
+                (other, self.target), (self.source, other), (None, self.target),
+            ]
+            for index, (source, target) in enumerate(routes):
+                number = f'{kind}-{index}'
+                self.movement(number, transaction_type=kind, warehouse_from=source, warehouse_to=target)
+                if index < 2:
+                    expected.add(number)
         self.movement('RECEIPT', transaction_type='IN_SCM')
         rows = self.rows()
-        self.assertEqual({r['transaction_no'] for r in rows}, {'MOVE-1', 'RETURN', 'ERP', 'STORAGE'})
+        self.assertEqual({r['transaction_no'] for r in rows}, expected)
         self.assertFalse(MaterialStock.objects.exists())
         self.assertTrue(all(r['expiry_date'] == date(2026, 11, 20) for r in rows))
         self.assertTrue(all(r['used_d_day'] == 67 for r in rows))
@@ -81,16 +92,14 @@ class ExpiryMovementHistoryTests(TestCase):
         self.assertEqual(rows[0]['quantity'], 20)
         self.assertCountEqual(rows[0]['label_ids'], ['RM-A', 'RM-B', 'TAG-A'])
 
-    def test_legacy_labels_keep_saved_expiry_or_fall_back_to_setting(self):
-        saved = self.label('SAVED', expiry_date=date(2026, 10, 1))
-        missing = self.label('MISSING')
+    def test_labels_without_a_route_are_excluded_without_changing_them(self):
+        self.label('SAVED', expiry_date=date(2026, 10, 1))
+        label = self.label('MISSING')
         self.label('CANCELLED', status='CANCELLED')
-        rows = {r['label_ids'][0]: r for r in self.rows()}
-        self.assertEqual(set(rows), {'SAVED', 'MISSING'})
-        self.assertEqual(rows['SAVED']['expiry_date'], saved.expiry_date)
-        self.assertEqual(rows['MISSING']['expiry_date'], date(2026, 11, 20))
-        missing.refresh_from_db()
-        self.assertIsNone(missing.expiry_date)  # Display only; no historical data rewrite.
+        self.assertEqual(self.rows(), [])
+        label.refresh_from_db()
+        self.assertEqual(label.status, 'USED')
+        self.assertIsNone(label.expiry_date)
 
     def test_missing_lot_is_not_guessed_from_current_stock(self):
         self.movement(transaction_type='TRF_ERP', lot_no=None)
@@ -108,7 +117,7 @@ class ExpiryMovementHistoryTests(TestCase):
         self.label(used_transaction=old, used_at=timestamp)
         self.label('LEGACY', used_at=timestamp)
         rows = self.rows(search='Seal test', start='2026-09-15', end='2026-09-15')
-        self.assertEqual(len(rows), 2)
+        self.assertEqual(len(rows), 1)
         self.assertTrue(all(r['used_d_day'] == 66 for r in rows))
         self.assertEqual(self.rows(search='unmatched'), [])
 
