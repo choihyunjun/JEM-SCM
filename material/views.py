@@ -7148,33 +7148,14 @@ def raw_material_expiry(request):
     # 유효기간 순 정렬
     labels.sort(key=lambda x: x['expiry_date'])
 
-    # 현장 투입 이력 (USED 라벨)
-    from django.db.models import Q
+    # 지정 품목의 이동 전체 + 이동번호가 없는 과거 라벨 투입 기록
+    from .expiry import expiry_movement_history
     active_tab = request.GET.get('tab', 'stock')
     used_search = request.GET.get('used_search', '').strip()
     used_start = request.GET.get('used_start', '')
     used_end = request.GET.get('used_end', '')
 
-    used_qs = RawMaterialLabel.objects.filter(
-        status='USED',
-        used_at__isnull=False,
-    ).select_related('part', 'vendor', 'used_by').order_by('-used_at')
-
-    if used_search:
-        used_qs = used_qs.filter(
-            Q(part_no__icontains=used_search) | Q(part_name__icontains=used_search)
-        )
-    if used_start:
-        used_qs = used_qs.filter(used_at__date__gte=used_start)
-    if used_end:
-        used_qs = used_qs.filter(used_at__date__lte=used_end)
-
-    # 투입 시점 잔여 D-DAY 계산 (고정값)
-    for ul in used_qs:
-        if ul.expiry_date and ul.used_at:
-            ul.used_d_day = (ul.expiry_date - ul.used_at.date()).days
-        else:
-            ul.used_d_day = None
+    used_history = expiry_movement_history(settings_map, used_search, used_start, used_end)
 
     context = {
         'labels': labels,
@@ -7186,8 +7167,8 @@ def raw_material_expiry(request):
         'count_safe': count_safe,
         'count_total': count_expired + count_imminent + count_warning + count_safe,
         'active_tab': active_tab,
-        'used_labels': used_qs,
-        'used_count': used_qs.count(),
+        'used_labels': used_history,
+        'used_count': len(used_history),
         'used_search': used_search,
         'used_start': used_start,
         'used_end': used_end,

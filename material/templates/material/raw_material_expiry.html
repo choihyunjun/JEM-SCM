@@ -76,7 +76,7 @@
     </li>
     <li class="nav-item">
         <a class="nav-link {% if active_tab == 'used' %}active{% endif %}" href="?tab=used">
-            <i class="bi bi-clock-history me-1"></i>현장 투입 이력
+            <i class="bi bi-clock-history me-1"></i>현장 투입 / 이동 이력
             <span class="dtl-pill amber ms-1">{{ used_count }}</span>
         </a>
     </li>
@@ -228,6 +228,12 @@
 {% else %}
 <!-- ============ 탭2: 현장 투입 이력 ============ -->
 
+<p class="small text-muted mb-3">
+    유효기간 설정 품목의 모든 창고 이동을 표시합니다. 라벨 유무·현재 재고와 관계없이 이동 건별로 집계합니다.
+    유효기간과 잔여일은 LOT 날짜와 현재 보관기간 설정으로 계산하며, LOT 날짜가 없으면 확인 불가로 표시합니다.
+    이동번호가 없는 과거 라벨 기록도 함께 표시하며, 저장된 유효기간이 있으면 해당 값을 사용합니다.
+</p>
+
 <!-- 필터 -->
 <div class="dtl-toolbar mb-3" style="padding:0.6rem 1rem;">
         <form method="get" class="row g-2 align-items-end">
@@ -238,11 +244,11 @@
                        value="{{ used_search }}" placeholder="품번 또는 품명">
             </div>
             <div class="col-md-2">
-                <label class="small fw-bold mb-1">투입일 (시작)</label>
+                <label class="small fw-bold mb-1">투입/이동일 (시작)</label>
                 <input type="date" name="used_start" class="form-control form-control-sm" value="{{ used_start }}">
             </div>
             <div class="col-md-2">
-                <label class="small fw-bold mb-1">투입일 (종료)</label>
+                <label class="small fw-bold mb-1">투입/이동일 (종료)</label>
                 <input type="date" name="used_end" class="form-control form-control-sm" value="{{ used_end }}">
             </div>
             <div class="col-md-2">
@@ -261,7 +267,7 @@
 <!-- 투입 이력 테이블 -->
 <div class="dtl-card mb-0">
     <div class="dtl-card-header d-flex justify-content-between align-items-center">
-        <span><i class="bi bi-clock-history"></i>현장 투입 이력</span>
+        <span><i class="bi bi-clock-history"></i>현장 투입 / 이동 이력</span>
         <span class="dtl-pill amber">{{ used_count }}건</span>
     </div>
     <div class="card-body p-0">
@@ -270,13 +276,15 @@
             <table class="table table-hover mb-0 align-middle">
                 <thead class="table-light">
                     <tr>
-                        <th class="ps-3" style="width:10%;">투입일</th>
+                        <th class="ps-3" style="width:10%;">투입/이동일</th>
+                        <th>구분 / 수불번호</th>
                         <th style="width:11%;">품번</th>
                         <th>품명</th>
                         <th class="text-end" style="width:7%;">수량</th>
                         <th class="text-center" style="width:8%;">LOT</th>
                         <th class="text-center" style="width:8%;">유효기간</th>
-                        <th class="text-center" style="width:9%;">투입시 잔여일</th>
+                        <th class="text-center" style="width:9%;">투입/이동시 잔여일</th>
+                        <th>보내는 곳 → 받는 곳</th>
                         <th style="width:7%;">처리자</th>
                         <th style="width:12%;">라벨ID</th>
                     </tr>
@@ -285,11 +293,18 @@
                     {% for ul in used_labels %}
                     <tr>
                         <td class="ps-3 small">{{ ul.used_at|date:"Y-m-d H:i" }}</td>
+                        <td class="small">
+                            <span class="dtl-pill slate">{{ ul.source }}</span>
+                            <div>{{ ul.transaction_no|default:"-" }}</div>
+                        </td>
                         <td class="fw-bold text-primary">{{ ul.part_no }}</td>
                         <td class="small">{{ ul.part_name|truncatechars:25 }}</td>
-                        <td class="text-end fw-bold">{{ ul.quantity|floatformat:0 }}{{ ul.get_unit_display }}</td>
-                        <td class="text-center small">{{ ul.lot_no|date:"Y-m-d" }}</td>
-                        <td class="text-center small">{{ ul.expiry_date|date:"Y-m-d"|default:"-" }}</td>
+                        <td class="text-end fw-bold">{{ ul.quantity|floatformat:"-2" }}{{ ul.unit_display }}</td>
+                        <td class="text-center small">
+                            {{ ul.lot_no|date:"Y-m-d"|default:"미지정" }}
+                            {% if ul.production_lot %}<div class="text-muted">{{ ul.production_lot }}</div>{% endif %}
+                        </td>
+                        <td class="text-center small">{{ ul.expiry_date|date:"Y-m-d"|default:"확인 불가" }}</td>
                         <td class="text-center">
                             {% if ul.used_d_day is not None %}
                                 {% if ul.used_d_day < 0 %}
@@ -307,9 +322,12 @@
                                 <span class="text-muted">-</span>
                             {% endif %}
                         </td>
+                        <td class="small">{{ ul.warehouse_from.name|default:"-" }} → {{ ul.warehouse_to.name|default:"-" }}</td>
                         <td class="small text-muted">{{ ul.used_by.username|default:"-" }}</td>
                         <td>
-                            <span class="text-muted" style="font-size:0.75rem; font-family:monospace;">{{ ul.label_id }}</span>
+                            {% for label_id in ul.label_ids %}
+                            <div class="text-muted" style="font-size:0.75rem; font-family:monospace;">{{ label_id }}</div>
+                            {% empty %}<span class="text-muted">-</span>{% endfor %}
                         </td>
                     </tr>
                     {% endfor %}
@@ -319,7 +337,7 @@
         {% else %}
         <div class="text-center py-5 text-muted">
             <i class="bi bi-clock-history d-block mb-2" style="font-size:3rem; opacity:0.3;"></i>
-            <p class="mb-0">현장 투입 이력이 없습니다</p>
+            <p class="mb-0">해당 조건의 현장 투입 / 이동 이력이 없습니다</p>
         </div>
         {% endif %}
     </div>
