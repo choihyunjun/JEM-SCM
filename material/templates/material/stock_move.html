@@ -142,7 +142,14 @@
     <div class="dtl-card mb-4">
         <div class="dtl-card-header d-flex justify-content-between align-items-center">
             <span><i class="bi bi-clock-history"></i> 이동 처리 내역</span>
-            <span class="dtl-pill green">{{ history_count }}건</span>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="small text-muted" id="transferSelectionStatus" role="status" aria-live="polite">현재 페이지에서 선택</span>
+                <button type="button" class="btn btn-sm btn-outline-danger" id="deleteSelectedTransfersBtn"
+                        onclick="deleteSelectedTransfers()" disabled>
+                    <i class="bi bi-trash"></i> 선택 삭제 (<span id="selectedTransferCount">0</span>)
+                </button>
+                <span class="dtl-pill green">{{ history_count }}건</span>
+            </div>
         </div>
         <div class="card-body" style="padding: 1.25rem 1.25rem 0.5rem;">
             <form method="get" class="row g-3 align-items-end mb-3">
@@ -182,6 +189,10 @@
             <table class="table table-hover mb-0 align-middle text-center">
                 <thead class="table-light">
                     <tr>
+                        <th style="width:36px;">
+                            <input type="checkbox" class="form-check-input" id="transferCheckAll"
+                                   aria-label="현재 페이지의 SCM 이동 내역 전체 선택" onchange="toggleAllTransfers(this.checked)">
+                        </th>
                         <th style="width:10%;">일시</th>
                         <th style="width:5%;">구분</th>
                         <th style="width:13%;">수불번호</th>
@@ -199,6 +210,13 @@
                 <tbody>
                     {% for trx in history %}
                     <tr style="cursor:pointer;" onclick="openTransferDetail({{ trx.pk }})">
+                        <td onclick="event.stopPropagation()">
+                            {% if trx.transaction_type == 'TRANSFER' %}
+                            <input type="checkbox" class="form-check-input transfer-history-check" value="{{ trx.pk }}"
+                                   data-transaction-no="{{ trx.transaction_no }}" aria-label="{{ trx.transaction_no }} 선택"
+                                   onchange="updateTransferSelection()">
+                            {% endif %}
+                        </td>
                         <td class="small">{{ trx.date|date:"Y-m-d H:i" }}</td>
                         <td>
                             {% if trx.transaction_type == 'TRF_ERP' %}
@@ -226,7 +244,7 @@
                         </td>
                         <td>
                             {% if trx.transaction_type == 'TRANSFER' %}
-                            <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1"
+                            <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1 transfer-history-delete"
                                     onclick="deleteTransfer({{ trx.pk }}, event)"
                                     title="이동 취소">
                                 <i class="bi bi-trash"></i>
@@ -236,7 +254,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="12" class="text-muted py-4">이동 처리 내역이 없습니다.</td>
+                        <td colspan="13" class="text-muted py-4">이동 처리 내역이 없습니다.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -943,6 +961,7 @@
     // 이동 내역 세부 조회
     // ============================================
     async function openTransferDetail(trxId) {
+        if (transferDeletionBusy) return;
         try {
             const url = `/wms/api/transfer-detail/${trxId}/`;
             const res = await fetch(url);
@@ -1035,12 +1054,92 @@
         }
     }
 
+    // 다중 삭제도 기존 취소 API를 순서대로 호출하여 건별 재고/마감 검증을 유지한다.
+    let transferDeletionBusy = false;
+
+    function updateTransferSelection() {
+        const checks = Array.from(document.querySelectorAll('.transfer-history-check'));
+        const count = checks.filter(check => check.checked).length;
+        const all = document.getElementById('transferCheckAll');
+        all.checked = checks.length > 0 && count === checks.length;
+        all.indeterminate = count > 0 && count < checks.length;
+        all.disabled = transferDeletionBusy || checks.length === 0;
+        document.getElementById('selectedTransferCount').textContent = count;
+        document.getElementById('deleteSelectedTransfersBtn').disabled = transferDeletionBusy || count === 0;
+    }
+
+    function toggleAllTransfers(checked) {
+        if (transferDeletionBusy) return;
+        document.querySelectorAll('.transfer-history-check').forEach(check => { check.checked = checked; });
+        updateTransferSelection();
+    }
+
+    function setTransferDeletionBusy(busy) {
+        transferDeletionBusy = busy;
+        document.querySelectorAll('.transfer-history-check, .transfer-history-delete, #cancelTransferBtn')
+            .forEach(control => { control.disabled = busy; });
+        updateTransferSelection();
+    }
+
+    async function deleteSelectedTransfers() {
+        if (transferDeletionBusy) return;
+        const selected = Array.from(document.querySelectorAll('.transfer-history-check:checked'));
+        if (!selected.length) return;
+        if (!confirm(`선택한 재고이동 ${selected.length}건을 취소하시겠습니까?\n재고가 원복되고 ERP 연동도 삭제됩니다.\n취소할 수 없는 건은 제외하고 나머지를 처리합니다.`)) return;
+
+        setTransferDeletionBusy(true);
+        const status = document.getElementById('transferSelectionStatus');
+        const results = [];
+        let succeeded = 0;
+        let failed = 0;
+        let uncertain = 0;
+        try {
+            for (const [index, check] of selected.entries()) {
+                status.textContent = `선택 삭제 처리 중 (${index + 1}/${selected.length})`;
+                try {
+                    const res = await fetch(`/wms/api/cancel-stock-move/${check.value}/`, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': '{{ csrf_token }}',
+                            'Content-Type': 'application/json',
+                        },
+                    });
+                    if (!res.ok) throw new Error(`서버 응답 오류 (${res.status})`);
+                    const data = await res.json();
+                    if (typeof data.success !== 'boolean') throw new Error('취소 결과를 확인할 수 없습니다.');
+                    if (data.success) {
+                        succeeded++;
+                        // ERP 삭제 실패 등 기존 API의 안내도 결과에 그대로 표시한다.
+                        results.push(`[완료] ${data.message || check.dataset.transactionNo}`);
+                    } else {
+                        failed++;
+                        results.push(`[실패] ${check.dataset.transactionNo}: ${data.error || '취소 불가'}`);
+                    }
+                } catch (e) {
+                    uncertain++;
+                    results.push(`[확인 필요] ${check.dataset.transactionNo}: ${e.message}\n처리 여부를 확인할 수 없어 나머지 요청을 중단했습니다. 새로고침 후 내역을 확인해주세요.`);
+                    break;
+                }
+            }
+            const remaining = selected.length - succeeded - failed - uncertain;
+            alert(`선택 삭제 결과: 완료 ${succeeded}건 / 실패 ${failed}건 / 확인 필요 ${uncertain}건 / 미처리 ${remaining}건\n\n${results.join('\n')}`);
+            if (succeeded || uncertain) location.reload();
+        } finally {
+            status.textContent = '현재 페이지에서 선택';
+            setTransferDeletionBusy(false);
+        }
+    }
+
+    updateTransferSelection();
+
     // 테이블에서 직접 삭제
     async function deleteTransfer(trxId, event) {
         event.stopPropagation();
+        if (transferDeletionBusy) return;
         if (!confirm('이 재고이동 건을 취소하시겠습니까?\n재고가 원복되고 ERP 연동도 삭제됩니다.')) return;
 
         const btn = event.currentTarget;
+        setTransferDeletionBusy(true);
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
 
@@ -1071,15 +1170,18 @@
             alert('취소 처리 중 오류가 발생했습니다: ' + e.message);
             btn.disabled = false;
             btn.innerHTML = '<i class="bi bi-trash"></i>';
+        } finally {
+            setTransferDeletionBusy(false);
         }
     }
 
     // 모달에서 재고이동 취소
     async function cancelTransfer() {
-        if (!currentDetailTrxId) return;
+        if (transferDeletionBusy || !currentDetailTrxId) return;
         if (!confirm('이 재고이동 건을 취소하시겠습니까?\n재고가 원복되고 ERP 연동도 삭제됩니다.')) return;
 
         const btn = document.getElementById('cancelTransferBtn');
+        setTransferDeletionBusy(true);
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>처리 중...';
 
@@ -1106,6 +1208,7 @@
         } catch (e) {
             alert('취소 처리 중 오류가 발생했습니다: ' + e.message);
         } finally {
+            setTransferDeletionBusy(false);
             btn.disabled = false;
             btn.innerHTML = '<i class="bi bi-x-circle me-1"></i>이동 취소';
         }
