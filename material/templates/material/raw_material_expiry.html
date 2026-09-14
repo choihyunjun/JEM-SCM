@@ -232,7 +232,8 @@
     유효기간 설정 품목의 4공장 3층 자재창고 → 4공장 제조현장(4200 → 4300),
     3공장 원재료창고 → 3공장 창고(3200 → 3000) 이동만 표시합니다.
     라벨 유무·현재 재고와 관계없이 이동 건별로 집계합니다.
-    유효기간과 잔여일은 LOT 날짜와 현재 보관기간 설정으로 계산하며, LOT 날짜가 없으면 확인 불가로 표시합니다.
+    투입/이동시 잔여일은 해당 이동일과 유효기간의 차이입니다.
+    유효기간 정보가 없는 건은 확인 불가로 표시합니다.
 </p>
 
 <!-- 필터 -->
@@ -269,8 +270,14 @@
 <div class="dtl-card mb-0">
     <div class="dtl-card-header d-flex justify-content-between align-items-center">
         <span><i class="bi bi-clock-history"></i>현장 투입 / 이동 이력</span>
-        <span class="dtl-pill amber">{{ used_count }}건</span>
+        <span class="dtl-pill amber" {% if can_edit_expiry %}id="expiryEditTrigger" style="user-select:none;"{% endif %}>{{ used_count }}건</span>
     </div>
+    {% if can_edit_expiry %}
+    <div id="expiryEditNotice" class="d-none px-3 py-2 bg-light small">
+        <strong>수동 유효기간 편집</strong> · 날짜를 선택하고 저장하세요. 변경 이력이 기록됩니다.
+        <button type="button" id="expiryEditClose" class="btn btn-sm btn-outline-secondary ms-2">편집 종료</button>
+    </div>
+    {% endif %}
     <div class="card-body p-0">
         {% if used_labels %}
         <div class="table-responsive">
@@ -305,8 +312,25 @@
                             {{ ul.lot_no|date:"Y-m-d"|default:"미지정" }}
                             {% if ul.production_lot %}<div class="text-muted">{{ ul.production_lot }}</div>{% endif %}
                         </td>
-                        <td class="text-center small">{{ ul.expiry_date|date:"Y-m-d"|default:"확인 불가" }}</td>
-                        <td class="text-center">
+                        <td class="text-center small">
+                            <span id="expiryDate-{{ ul.id }}">{{ ul.expiry_date|date:"Y-m-d"|default:"확인 불가" }}</span>
+                            {% if can_edit_expiry and ul.expiry_editable %}
+                            <form class="expiry-edit-form d-none mt-2" data-trx-id="{{ ul.id }}"
+                                  data-revision="{{ ul.expiry_revision }}" action="{% url 'material:edit_movement_expiry' ul.id %}" method="post">
+                                {% csrf_token %}
+                                <input type="date" name="expiry_date" class="form-control form-control-sm mb-1"
+                                       value="{{ ul.expiry_date|date:'Y-m-d' }}" aria-label="{{ ul.transaction_no }} 수동 유효기간">
+                                <input type="text" name="note" maxlength="200" class="form-control form-control-sm mb-1"
+                                       placeholder="변경 사유 (선택)" aria-label="{{ ul.transaction_no }} 변경 사유">
+                                <div class="d-flex gap-1 justify-content-center">
+                                    <button type="submit" class="btn btn-sm btn-dark">저장</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary expiry-clear">해제</button>
+                                </div>
+                                <div class="expiry-edit-status mt-1" role="status" aria-live="polite"></div>
+                            </form>
+                            {% endif %}
+                        </td>
+                        <td class="text-center" id="expiryDays-{{ ul.id }}">
                             {% if ul.used_d_day is not None %}
                                 {% if ul.used_d_day < 0 %}
                                     <span class="d-day-text d-day-expired">D+{{ ul.used_d_day|cut:"-" }}</span>
@@ -343,5 +367,6 @@
         {% endif %}
     </div>
 </div>
+{% if can_edit_expiry %}{% include 'material/_expiry_editor_script.html' %}{% endif %}
 {% endif %}
 {% endblock %}

@@ -1,0 +1,83 @@
+<script>
+(() => {
+    const trigger = document.getElementById('expiryEditTrigger');
+    if (!trigger) return;
+    const notice = document.getElementById('expiryEditNotice');
+    const close = document.getElementById('expiryEditClose');
+    const forms = Array.from(document.querySelectorAll('.expiry-edit-form'));
+    let clicks = [];
+    let editing = false;
+    let saving = false;
+
+    function setEditing(enabled) {
+        if (saving) return;
+        editing = enabled;
+        clicks = [];
+        notice.classList.toggle('d-none', !enabled);
+        forms.forEach(form => form.classList.toggle('d-none', !enabled));
+    }
+    trigger.addEventListener('click', () => {
+        const now = performance.now();
+        clicks = clicks.filter(time => now - time <= 900);
+        clicks.push(now);
+        if (clicks.length >= 3) setEditing(true);
+    });
+    close.addEventListener('click', () => setEditing(false));
+
+    async function save(form, clear) {
+        if (!editing || saving || form.dataset.blocked === 'true') return;
+        const input = form.elements.expiry_date;
+        const status = form.querySelector('.expiry-edit-status');
+        if (!clear && (!input.value || !form.reportValidity())) {
+            status.textContent = '유효기간을 선택해주세요.';
+            return;
+        }
+        if (clear && !confirm('수동 지정한 유효기간을 해제하시겠습니까?')) return;
+        const body = new FormData(form);
+        body.set('expiry_date', clear ? '' : input.value);
+        body.set('revision', form.dataset.revision);
+        saving = true;
+        close.disabled = true;
+        const controls = Array.from(form.querySelectorAll('input, button'));
+        controls.forEach(control => { control.disabled = true; });
+        status.textContent = '저장 중…';
+        try {
+            const response = await fetch(form.action, {
+                method: 'POST', body,
+                headers: {'X-CSRFToken': body.get('csrfmiddlewaretoken')},
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                status.textContent = data.error || '저장하지 못했습니다. 새로고침 후 확인해주세요.';
+                if (response.status === 409 || response.status >= 500) form.dataset.blocked = 'true';
+                return;
+            }
+            form.dataset.revision = data.revision;
+            input.value = data.expiry_date;
+            form.elements.note.value = '';
+            const id = form.dataset.trxId;
+            document.getElementById(`expiryDate-${id}`).textContent = data.expiry_date || '확인 불가';
+            const days = document.getElementById(`expiryDays-${id}`);
+            const delta = data.used_d_day;
+            const badge = document.createElement('span');
+            badge.textContent = delta === null ? '-' : delta < 0 ? `D+${-delta}` : delta === 0 ? 'D-Day' : `D-${delta}`;
+            badge.className = delta === null ? 'text-muted' : 'd-day-text ' + (
+                delta <= 0 ? 'd-day-expired' : delta <= 30 ? 'd-day-imminent' : delta <= 90 ? 'd-day-warning' : 'd-day-safe'
+            );
+            days.replaceChildren(badge);
+            status.textContent = clear ? '수동 지정 해제 완료' : '저장 완료';
+        } catch (error) {
+            form.dataset.blocked = 'true';
+            status.textContent = '저장 결과를 확인할 수 없습니다. 새로고침 후 확인해주세요.';
+        } finally {
+            saving = false;
+            close.disabled = false;
+            controls.forEach(control => { control.disabled = form.dataset.blocked === 'true'; });
+        }
+    }
+    forms.forEach(form => {
+        form.addEventListener('submit', event => { event.preventDefault(); save(form, false); });
+        form.querySelector('.expiry-clear').addEventListener('click', () => save(form, true));
+    });
+})();
+</script>

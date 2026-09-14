@@ -1,18 +1,34 @@
 """Read-only expiry history, using transfers as the quantity source of truth."""
 from datetime import timedelta
 
-from django.db.models import Q
+from django.db.models import OuterRef, Q, Subquery
 from django.utils import timezone
 
-from .models import MaterialTransaction
+from .models import MaterialTransaction, MovementExpiryEvent
+
+
+def expiry_transfers():
+    return MaterialTransaction.objects.filter(
+        Q(warehouse_from__code='4200', warehouse_to__code='4300')
+        | Q(warehouse_from__code='3200', warehouse_to__code='3000'),
+        transaction_type__in=['TRANSFER', 'TRF_ERP'],
+        part__raw_material_setting__isnull=False,
+    )
+
+
+def can_edit_movement_expiry(user):
+    from orders.access import has_permission
+    profile = getattr(user, 'profile', None)
+    return has_permission(user, 'can_wms_storage_expiry') and (
+        user.is_superuser or getattr(profile, 'role', None) == 'ADMIN'
+    )
 
 
 def expiry_movement_history(settings_map, search='', start='', end=''):
-    transfers = MaterialTransaction.objects.filter(
-        Q(warehouse_from__code='4200', warehouse_to__code='4300')
-        | Q(warehouse_from__code='3200', warehouse_to__code='3000'),
-        part_id__in=settings_map,
-        transaction_type__in=['TRANSFER', 'TRF_ERP'],
+    latest_event = MovementExpiryEvent.objects.filter(movement_id=OuterRef('pk')).order_by('-pk')
+    transfers = expiry_transfers().filter(part_id__in=settings_map).annotate(
+        manual_expiry=Subquery(latest_event.values('expiry_date')[:1]),
+        expiry_revision=Subquery(latest_event.values('pk')[:1]),
     ).select_related('part', 'actor', 'warehouse_from', 'warehouse_to').prefetch_related(
         'used_labels', 'used_tags',
     )
@@ -27,8 +43,8 @@ def expiry_movement_history(settings_map, search='', start='', end=''):
     if end:
         transfers = transfers.filter(date__date__lte=end)
 
-    def expiry_fields(part_id, lot_no, used_at):
-        expiry_date = None
+    def expiry_fields(part_id, lot_no, used_at, manual_expiry):
+        expiry_date = manual_expiry
         if lot_no is not None:
             expiry_date = lot_no + timedelta(days=settings_map[part_id].shelf_life_days)
         used_date = timezone.localdate(used_at) if timezone.is_aware(used_at) else used_at.date()
@@ -40,6 +56,10 @@ def expiry_movement_history(settings_map, search='', start='', end=''):
     rows = []
     for trx in transfers:
         rows.append({
+            'id': trx.pk,
+            'expiry_revision': trx.expiry_revision or 0,
+            'expiry_editable': trx.lot_no is None,
+            'expiry_manual': trx.lot_no is None and trx.manual_expiry is not None,
             'used_at': trx.date,
             'part_no': trx.part.part_no,
             'part_name': trx.part.part_name,
@@ -55,7 +75,7 @@ def expiry_movement_history(settings_map, search='', start='', end=''):
             'warehouse_to': trx.warehouse_to,
             'label_ids': [label.label_id for label in trx.used_labels.all()]
                          + [tag.tag_id for tag in trx.used_tags.all()],
-            **expiry_fields(trx.part_id, trx.lot_no, trx.date),
+            **expiry_fields(trx.part_id, trx.lot_no, trx.date, trx.manual_expiry),
         })
     rows.sort(key=lambda row: row['used_at'], reverse=True)
     return rows

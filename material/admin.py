@@ -3,8 +3,24 @@ from .models import (
     Warehouse, MaterialStock, MaterialTransaction, Product, BOMItem,
     InventoryCheck,
     ProcessTag, ProcessTagScanLog, InventoryCheckSession, InventoryCheckSessionItem,
-    WMSConfig,
+    WMSConfig, MovementExpiryEvent,
 )
+
+
+@admin.register(MovementExpiryEvent)
+class MovementExpiryEventAdmin(admin.ModelAdmin):
+    list_display = ('transaction_no', 'previous_date', 'expiry_date', 'actor', 'created_at', 'note')
+    search_fields = ('transaction_no',)
+    readonly_fields = ('movement', 'transaction_no', 'previous_date', 'expiry_date', 'note', 'actor', 'created_at')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 @admin.register(Warehouse)
 class WarehouseAdmin(admin.ModelAdmin):

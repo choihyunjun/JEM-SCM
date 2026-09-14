@@ -7149,7 +7149,7 @@ def raw_material_expiry(request):
     labels.sort(key=lambda x: x['expiry_date'])
 
     # 지정 품목의 현장 투입 이력 (4200→4300, 3200→3000)
-    from .expiry import expiry_movement_history
+    from .expiry import can_edit_movement_expiry, expiry_movement_history
     active_tab = request.GET.get('tab', 'stock')
     used_search = request.GET.get('used_search', '').strip()
     used_start = request.GET.get('used_start', '')
@@ -7168,6 +7168,7 @@ def raw_material_expiry(request):
         'count_total': count_expired + count_imminent + count_warning + count_safe,
         'active_tab': active_tab,
         'used_labels': used_history,
+        'can_edit_expiry': can_edit_movement_expiry(request.user),
         'used_count': len(used_history),
         'used_search': used_search,
         'used_start': used_start,
@@ -7176,6 +7177,56 @@ def raw_material_expiry(request):
     }
 
     return render(request, 'material/raw_material_expiry.html', context)
+
+
+@login_required
+def edit_movement_expiry(request, trx_id):
+    """수동 유효기간만 보완한다. 재고/LOT/ERP는 변경하지 않는다."""
+    from datetime import date
+    from .expiry import can_edit_movement_expiry, expiry_transfers
+    from .models import MovementExpiryEvent
+
+    if not can_edit_movement_expiry(request.user):
+        return JsonResponse({'success': False, 'error': '관리자만 수정할 수 있습니다.'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST 요청만 허용됩니다.'}, status=405)
+    if 'expiry_date' not in request.POST:
+        return JsonResponse({'success': False, 'error': '유효기간 입력값이 필요합니다.'}, status=400)
+    value = request.POST.get('expiry_date', '').strip()
+    note = request.POST.get('note', '').strip()
+    try:
+        expiry_date = date.fromisoformat(value) if value else None
+        if expiry_date and expiry_date.isoformat() != value:
+            raise ValueError
+        revision = int(request.POST.get('revision', ''))
+        if revision < 0 or len(note) > 200:
+            raise ValueError
+    except (ValueError, TypeError):
+        return JsonResponse({'success': False, 'error': '날짜 또는 입력값이 올바르지 않습니다.'}, status=400)
+
+    with transaction.atomic():
+        # Lock the parent even for a first edit; concurrent edits must not overwrite.
+        trx = MaterialTransaction.objects.select_for_update().filter(pk=trx_id).first()
+        if trx is None or not expiry_transfers().filter(pk=trx_id).exists():
+            return JsonResponse({'success': False, 'error': '대상 이동 이력이 없습니다.'}, status=404)
+        if trx.lot_no is not None:
+            return JsonResponse({'success': False, 'error': 'LOT로 계산되는 유효기간은 수정할 수 없습니다.'}, status=400)
+        latest = MovementExpiryEvent.objects.filter(movement=trx).order_by('-pk').first()
+        if revision != (latest.pk if latest else 0):
+            return JsonResponse({'success': False, 'error': '다른 변경이 있습니다. 새로고침 후 다시 확인해주세요.'}, status=409)
+        previous_date = latest.expiry_date if latest else None
+        if previous_date != expiry_date:
+            latest = MovementExpiryEvent.objects.create(
+                movement=trx, transaction_no=trx.transaction_no,
+                previous_date=previous_date, expiry_date=expiry_date,
+                note=note, actor=request.user,
+            )
+        used_date = timezone.localdate(trx.date) if timezone.is_aware(trx.date) else trx.date.date()
+        return JsonResponse({
+            'success': True, 'expiry_date': expiry_date.isoformat() if expiry_date else '',
+            'used_d_day': (expiry_date - used_date).days if expiry_date else None,
+            'revision': latest.pk if latest else 0,
+        })
 
 
 @wms_permission_required('can_wms_incoming_label')
