@@ -77,7 +77,7 @@
     <li class="nav-item">
         <a class="nav-link {% if active_tab == 'used' %}active{% endif %}" href="?tab=used">
             <i class="bi bi-clock-history me-1"></i>현장 투입 / 이동 이력
-            <span class="dtl-pill amber ms-1 expiry-visible-count">{{ used_count }}</span>
+            <span class="dtl-pill amber ms-1 expiry-visible-count">{{ grouped_count }}</span>
         </a>
     </li>
 </ul>
@@ -231,7 +231,7 @@
 <p class="small text-muted mb-3">
     유효기간 설정 품목의 4공장 3층 자재창고 → 4공장 제조현장(4200 → 4300),
     3공장 원재료창고 → 3공장 창고(3200 → 3000) 이동만 표시합니다.
-    라벨 유무·현재 재고와 관계없이 이동 건별로 집계합니다.
+    같은 이동일·품목·LOT/제조일·이동 경로는 수량을 합산합니다. 수불번호를 펼치면 개별 내역을 확인할 수 있습니다.
     투입/이동시 잔여일은 해당 이동일과 유효기간의 차이입니다.
     유효기간은 LOT 날짜 또는 입력한 제조일에 품목별 보관기간을 더해 계산합니다.
     유효기간 정보가 없는 건은 확인 불가로 표시합니다.
@@ -271,11 +271,12 @@
 <div class="dtl-card mb-0">
     <div class="dtl-card-header d-flex justify-content-between align-items-center">
         <span><i class="bi bi-clock-history"></i>현장 투입 / 이동 이력</span>
-        <span class="dtl-pill amber" {% if can_edit_expiry %}id="expiryEditTrigger" style="user-select:none;"{% endif %}><span class="expiry-visible-count">{{ used_count }}</span>건</span>
+        <span class="dtl-pill amber" {% if can_edit_expiry %}id="expiryEditTrigger" data-group-count="{{ grouped_count }}" style="user-select:none;"{% endif %}><span class="expiry-visible-count">{{ grouped_count }}</span>건</span>
     </div>
     {% if can_edit_expiry %}
     <div id="expiryEditNotice" class="d-none px-3 py-2 bg-light small">
         <strong>이력 편집</strong> · 제조일을 입력하면 보관기간을 더해 유효기간을 계산합니다. 변경 이력이 기록됩니다.
+        개별 이동 건을 표시하며, 저장 후 편집을 종료하면 합산 내역을 갱신합니다.
         <label class="ms-2"><input type="checkbox" id="expiryShowHidden" class="form-check-input me-1">숨긴 항목 보기</label>
         <button type="button" id="expiryEditClose" class="btn btn-sm btn-outline-secondary ms-2">편집 종료</button>
     </div>
@@ -300,7 +301,11 @@
                         {% if can_edit_expiry %}<th class="expiry-edit-only d-none">표시 설정</th>{% endif %}
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="expiryGroupedBody">
+                    {% include 'material/_expiry_history_groups.html' %}
+                </tbody>
+                {% if can_edit_expiry %}
+                <tbody id="expiryDetailBody" class="d-none">
                     {% for ul in used_labels %}
                     <tr class="expiry-history-row {% if ul.history_hidden %}d-none{% endif %}" data-history-hidden="{{ ul.history_hidden|yesno:'true,false' }}">
                         <td class="ps-3 small">{{ ul.used_at|date:"Y-m-d H:i" }}</td>
@@ -375,6 +380,7 @@
                         <td colspan="{% if can_edit_expiry %}12{% else %}11{% endif %}" class="text-center py-4 text-muted">표시할 이동 이력이 없습니다.</td>
                     </tr>
                 </tbody>
+                {% endif %}
             </table>
         </div>
         {% else %}

@@ -96,3 +96,32 @@ def expiry_movement_history(settings_map, search='', start='', end='', include_h
         })
     rows.sort(key=lambda row: row['used_at'], reverse=True)
     return rows
+
+
+def group_expiry_movements(rows):
+    """Aggregate visible rows for display only; keep originals for editing."""
+    groups = {}
+    for row in rows:
+        if row['history_hidden']:
+            continue
+        moved_day = timezone.localdate(row['used_at']) if timezone.is_aware(row['used_at']) else row['used_at'].date()
+        reference = row['reference_date']
+        # Missing LOTs are not evidence of the same batch.
+        lot_key = (reference, row['production_lot'] or '')
+        if reference is None and not row['production_lot']:
+            lot_key = ('unknown', row['id'])
+        key = (moved_day, row['part_no'], lot_key,
+               getattr(row['warehouse_from'], 'pk', None), getattr(row['warehouse_to'], 'pk', None),
+               row['expiry_date'], row['unit_display'])
+        if key not in groups:
+            groups[key] = {**row, 'moved_day': moved_day, 'quantity': 0,
+                           'members': [], 'sources': [], 'actors': [], 'label_ids': []}
+        group = groups[key]
+        group['quantity'] += row['quantity']
+        group['members'].append(row)
+        actor = row['used_by'].username if row['used_by'] else '-'
+        for field, values in (('sources', [row['source']]), ('actors', [actor]), ('label_ids', row['label_ids'])):
+            for value in values:
+                if value not in group[field]:
+                    group[field].append(value)
+    return sorted(groups.values(), key=lambda group: group['moved_day'], reverse=True)

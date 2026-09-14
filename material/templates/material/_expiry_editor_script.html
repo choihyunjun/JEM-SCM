@@ -9,9 +9,12 @@
     const editOnly = Array.from(document.querySelectorAll('.expiry-edit-only'));
     const rows = Array.from(document.querySelectorAll('.expiry-history-row'));
     const showHidden = document.getElementById('expiryShowHidden');
+    const groupedBody = document.getElementById('expiryGroupedBody');
+    const detailBody = document.getElementById('expiryDetailBody');
     let clicks = [];
     let editing = false;
     let saving = false;
+    let changed = false;
 
     function updateRows() {
         let visibleCount = 0;
@@ -24,18 +27,27 @@
             row.classList.toggle('d-none', !displayed);
             row.classList.toggle('table-secondary', hidden && displayed);
         });
-        document.querySelectorAll('.expiry-visible-count').forEach(count => { count.textContent = visibleCount; });
+        document.querySelectorAll('.expiry-visible-count').forEach(count => {
+            count.textContent = editing ? visibleCount : trigger.dataset.groupCount;
+        });
         const empty = document.getElementById('expiryHistoryEmpty');
         if (empty) empty.classList.toggle('d-none', displayedCount !== 0);
     }
 
     function setEditing(enabled) {
         if (saving) return;
+        if (!enabled && changed) {
+            // Reload the current filtered URL to regroup edited dates and hidden rows.
+            location.reload();
+            return;
+        }
         editing = enabled;
         clicks = [];
         notice.classList.toggle('d-none', !enabled);
         forms.forEach(form => form.classList.toggle('d-none', !enabled));
         editOnly.forEach(control => control.classList.toggle('d-none', !enabled));
+        if (groupedBody) groupedBody.classList.toggle('d-none', enabled);
+        if (detailBody) detailBody.classList.toggle('d-none', !enabled);
         if (!enabled) showHidden.checked = false;
         updateRows();
     }
@@ -72,6 +84,7 @@
                 return;
             }
             form.dataset.revision = data.revision;
+            changed = true;
             row.dataset.historyHidden = data.hidden ? 'true' : 'false';
             button.textContent = data.hidden ? '다시 표시' : '숨기기';
             status.textContent = '';
@@ -115,6 +128,7 @@
                 return;
             }
             form.dataset.revision = data.revision;
+            changed = true;
             input.value = data.manufacturing_date;
             form.elements.note.value = '';
             const id = form.dataset.trxId;

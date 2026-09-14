@@ -1,0 +1,43 @@
+{% for group in grouped_history %}
+<tr class="expiry-group-row">
+    <td class="ps-3 small">{{ group.moved_day|date:"Y-m-d" }}</td>
+    <td class="small">
+        <span class="dtl-pill slate">{{ group.sources|join:" / " }}</span>
+        {% if group.members|length > 1 %}
+        <details>
+            <summary class="text-primary">{{ group.members|length }}건 수불번호</summary>
+            {% for member in group.members %}
+            <div class="mt-1">{{ member.used_at|date:"H:i" }} · {{ member.transaction_no }} · {{ member.quantity|floatformat:"-2" }}</div>
+            {% endfor %}
+        </details>
+        {% else %}<div>{{ group.transaction_no }}</div>{% endif %}
+    </td>
+    <td class="fw-bold text-primary">{{ group.part_no }}</td>
+    <td class="small">{{ group.part_name|truncatechars:25 }}</td>
+    <td class="text-end fw-bold">{{ group.quantity|floatformat:"-2" }}{{ group.unit_display }}</td>
+    <td class="text-center small">
+        {{ group.reference_date|date:"Y-m-d"|default:"미지정" }}
+        {% if group.production_lot %}<div class="text-muted">{{ group.production_lot }}</div>{% endif %}
+    </td>
+    <td class="text-center small">{{ group.expiry_date|date:"Y-m-d"|default:"확인 불가" }}</td>
+    <td class="text-center">
+        {% if group.used_d_day is None %}<span class="text-muted">-</span>
+        {% elif group.used_d_day < 0 %}<span class="d-day-text d-day-expired">D+{{ group.used_d_day|cut:"-" }}</span>
+        {% elif group.used_d_day == 0 %}<span class="d-day-text d-day-expired">D-Day</span>
+        {% elif group.used_d_day <= 30 %}<span class="d-day-text d-day-imminent">D-{{ group.used_d_day }}</span>
+        {% elif group.used_d_day <= 90 %}<span class="d-day-text d-day-warning">D-{{ group.used_d_day }}</span>
+        {% else %}<span class="d-day-text d-day-safe">D-{{ group.used_d_day }}</span>{% endif %}
+    </td>
+    <td class="small">{{ group.warehouse_from.name|default:"-" }} → {{ group.warehouse_to.name|default:"-" }}</td>
+    <td class="small text-muted">{{ group.actors|join:", " }}</td>
+    <td class="small text-muted">
+        {% if group.label_ids %}
+        <details><summary>{{ group.label_ids|length }}장</summary>
+            {% for label_id in group.label_ids %}<div>{{ label_id }}</div>{% endfor %}
+        </details>
+        {% else %}-{% endif %}
+    </td>
+</tr>
+{% empty %}
+<tr><td colspan="11" class="text-center py-4 text-muted">표시할 이동 이력이 없습니다.</td></tr>
+{% endfor %}

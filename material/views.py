@@ -7149,7 +7149,7 @@ def raw_material_expiry(request):
     labels.sort(key=lambda x: x['expiry_date'])
 
     # 지정 품목의 현장 투입 이력 (4200→4300, 3200→3000)
-    from .expiry import can_edit_movement_expiry, expiry_movement_history
+    from .expiry import can_edit_movement_expiry, expiry_movement_history, group_expiry_movements
     active_tab = request.GET.get('tab', 'stock')
     used_search = request.GET.get('used_search', '').strip()
     used_start = request.GET.get('used_start', '')
@@ -7159,6 +7159,7 @@ def raw_material_expiry(request):
     used_history = expiry_movement_history(
         settings_map, used_search, used_start, used_end, include_hidden=can_edit_expiry,
     )
+    grouped_history = group_expiry_movements(used_history)
 
     context = {
         'labels': labels,
@@ -7171,6 +7172,8 @@ def raw_material_expiry(request):
         'count_total': count_expired + count_imminent + count_warning + count_safe,
         'active_tab': active_tab,
         'used_labels': used_history,
+        'grouped_history': grouped_history,
+        'grouped_count': len(grouped_history),
         'can_edit_expiry': can_edit_expiry,
         'used_count': sum(not row['history_hidden'] for row in used_history),
         'used_search': used_search,
