@@ -1,7 +1,8 @@
 {% for group in grouped_history %}
 <tr class="expiry-group-row">
     <td class="ps-3 small">{{ group.moved_day|date:"Y-m-d" }}</td>
-    <td class="small">
+    {% if show_expiry_references or can_edit_expiry %}
+    <td class="small expiry-reference-column {% if not show_expiry_references %}d-none{% endif %}">
         <span class="dtl-pill slate">{{ group.sources|join:" / " }}</span>
         {% if group.members|length > 1 %}
         <details>
@@ -12,6 +13,7 @@
         </details>
         {% else %}<div>{{ group.transaction_no }}</div>{% endif %}
     </td>
+    {% endif %}
     <td class="fw-bold text-primary">{{ group.part_no }}</td>
     <td class="small">{{ group.part_name|truncatechars:25 }}</td>
     <td class="text-end fw-bold">{{ group.quantity|floatformat:"-2" }}{{ group.unit_display }}</td>
@@ -39,5 +41,5 @@
     </td>
 </tr>
 {% empty %}
-<tr><td colspan="11" class="text-center py-4 text-muted">표시할 이동 이력이 없습니다.</td></tr>
+<tr><td colspan="{% if show_expiry_references %}11{% else %}10{% endif %}" class="text-center py-4 text-muted">표시할 이동 이력이 없습니다.</td></tr>
 {% endfor %}

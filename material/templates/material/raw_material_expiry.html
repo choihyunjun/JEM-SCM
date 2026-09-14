@@ -231,7 +231,8 @@
 <p class="small text-muted mb-3">
     유효기간 설정 품목의 4공장 3층 자재창고 → 4공장 제조현장(4200 → 4300),
     3공장 원재료창고 → 3공장 창고(3200 → 3000) 이동만 표시합니다.
-    같은 이동일·품목·LOT/제조일·이동 경로는 수량을 합산합니다. 수불번호를 펼치면 개별 내역을 확인할 수 있습니다.
+    같은 이동일·품목·LOT/제조일·이동 경로는 수량을 합산합니다.
+    {% if show_expiry_references %}수불번호를 펼치면 개별 내역을 확인할 수 있습니다.{% endif %}
     투입/이동시 잔여일은 해당 이동일과 유효기간의 차이입니다.
     유효기간은 LOT 날짜 또는 입력한 제조일에 품목별 보관기간을 더해 계산합니다.
     유효기간 정보가 없는 건은 확인 불가로 표시합니다.
@@ -279,6 +280,15 @@
         개별 이동 건을 표시하며, 저장 후 편집을 종료하면 합산 내역을 갱신합니다.
         <label class="ms-2"><input type="checkbox" id="expiryShowHidden" class="form-check-input me-1">숨긴 항목 보기</label>
         <button type="button" id="expiryEditClose" class="btn btn-sm btn-outline-secondary ms-2">편집 종료</button>
+        <form id="expiryDisplayForm" class="d-flex flex-wrap align-items-center gap-2 mt-2"
+              action="{% url 'material:set_expiry_display' %}" method="post"
+              data-revision="{{ expiry_display_revision }}" data-show-references="{{ show_expiry_references|yesno:'true,false' }}">
+            {% csrf_token %}
+            <label><input type="checkbox" name="show_references" class="form-check-input me-1" {% if show_expiry_references %}checked{% endif %}>ERP/SCM·수불번호 표시</label>
+            <button type="submit" class="btn btn-sm btn-dark">표시 설정 저장</button>
+            <span class="text-muted">이 화면 전체에 적용됩니다. 편집 모드에서는 개별 수불번호를 확인할 수 있습니다.</span>
+            <span id="expiryDisplayStatus" role="status" aria-live="polite"></span>
+        </form>
     </div>
     {% endif %}
     <div class="card-body p-0">
@@ -288,7 +298,7 @@
                 <thead class="table-light">
                     <tr>
                         <th class="ps-3" style="width:10%;">투입/이동일</th>
-                        <th>구분 / 수불번호</th>
+                        {% if show_expiry_references or can_edit_expiry %}<th class="expiry-reference-column {% if not show_expiry_references %}d-none{% endif %}">구분 / 수불번호</th>{% endif %}
                         <th style="width:11%;">품번</th>
                         <th>품명</th>
                         <th class="text-end" style="width:7%;">수량</th>

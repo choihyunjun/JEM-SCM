@@ -117,6 +117,7 @@ urlpatterns = [
     path('stock/production-lot-item/<int:item_id>/toggle/', views.production_lot_item_toggle, name='production_lot_item_toggle'),
     path('stock/production-lot-item/<int:item_id>/delete/', views.production_lot_item_delete, name='production_lot_item_delete'),
     path('raw-material/expiry/', views.raw_material_expiry, name='raw_material_expiry'),
+    path('raw-material/expiry/display/', views.set_expiry_display, name='set_expiry_display'),
     path('raw-material/expiry/<int:trx_id>/edit/', views.edit_movement_expiry, name='edit_movement_expiry'),
     path('raw-material/expiry/<int:trx_id>/visibility/', views.set_movement_visibility, name='set_movement_visibility'),
     path('raw-material/label-print/', views.raw_material_label_print, name='raw_material_label_print'),

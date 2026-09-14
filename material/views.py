@@ -7160,6 +7160,8 @@ def raw_material_expiry(request):
         settings_map, used_search, used_start, used_end, include_hidden=can_edit_expiry,
     )
     grouped_history = group_expiry_movements(used_history)
+    from .models import WMSConfig
+    display_config = WMSConfig.objects.filter(pk=1).first()
 
     context = {
         'labels': labels,
@@ -7174,6 +7176,8 @@ def raw_material_expiry(request):
         'used_labels': used_history,
         'grouped_history': grouped_history,
         'grouped_count': len(grouped_history),
+        'show_expiry_references': display_config.show_expiry_references if display_config else True,
+        'expiry_display_revision': display_config.expiry_display_revision if display_config else 0,
         'can_edit_expiry': can_edit_expiry,
         'used_count': sum(not row['history_hidden'] for row in used_history),
         'used_search': used_search,
@@ -7183,6 +7187,35 @@ def raw_material_expiry(request):
     }
 
     return render(request, 'material/raw_material_expiry.html', context)
+
+
+@login_required
+def set_expiry_display(request):
+    from .expiry import can_edit_movement_expiry
+    from .models import WMSConfig
+
+    if not can_edit_movement_expiry(request.user):
+        return JsonResponse({'success': False, 'error': '관리자만 수정할 수 있습니다.'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST 요청만 허용됩니다.'}, status=405)
+    show_value = request.POST.get('show_references')
+    try:
+        revision = int(request.POST.get('revision', ''))
+        if revision < 0 or show_value not in ('true', 'false'):
+            raise ValueError
+    except (ValueError, TypeError):
+        return JsonResponse({'success': False, 'error': '표시 설정값이 올바르지 않습니다.'}, status=400)
+    show = show_value == 'true'
+    with transaction.atomic():
+        WMSConfig.objects.get_or_create(pk=1)
+        config = WMSConfig.objects.select_for_update().get(pk=1)
+        if revision != config.expiry_display_revision:
+            return JsonResponse({'success': False, 'error': '다른 변경이 있습니다. 새로고침 후 다시 설정해주세요.'}, status=409)
+        if config.show_expiry_references != show:
+            config.show_expiry_references = show
+            config.expiry_display_revision += 1
+            config.save(update_fields=['show_expiry_references', 'expiry_display_revision'])
+        return JsonResponse({'success': True, 'show_references': show, 'revision': config.expiry_display_revision})
 
 
 @login_required

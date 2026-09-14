@@ -11,6 +11,9 @@
     const showHidden = document.getElementById('expiryShowHidden');
     const groupedBody = document.getElementById('expiryGroupedBody');
     const detailBody = document.getElementById('expiryDetailBody');
+    const displayForm = document.getElementById('expiryDisplayForm');
+    const referenceColumns = Array.from(document.querySelectorAll('.expiry-reference-column'));
+    let showReferences = displayForm.dataset.showReferences === 'true';
     let clicks = [];
     let editing = false;
     let saving = false;
@@ -48,6 +51,8 @@
         editOnly.forEach(control => control.classList.toggle('d-none', !enabled));
         if (groupedBody) groupedBody.classList.toggle('d-none', enabled);
         if (detailBody) detailBody.classList.toggle('d-none', !enabled);
+        referenceColumns.forEach(column => column.classList.toggle('d-none', !enabled && !showReferences));
+        displayForm.elements.show_references.checked = showReferences;
         if (!enabled) showHidden.checked = false;
         updateRows();
     }
@@ -59,6 +64,44 @@
     });
     close.addEventListener('click', () => setEditing(false));
     showHidden.addEventListener('change', updateRows);
+
+    displayForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        if (!editing || saving || displayForm.dataset.blocked === 'true') return;
+        const checkbox = displayForm.elements.show_references;
+        const button = displayForm.querySelector('button');
+        const status = document.getElementById('expiryDisplayStatus');
+        const body = new FormData(displayForm);
+        body.set('show_references', checkbox.checked ? 'true' : 'false');
+        body.set('revision', displayForm.dataset.revision);
+        saving = true;
+        checkbox.disabled = button.disabled = close.disabled = true;
+        status.textContent = '저장 중…';
+        try {
+            const response = await fetch(displayForm.action, {
+                method: 'POST', body,
+                headers: {'X-CSRFToken': body.get('csrfmiddlewaretoken')},
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                status.textContent = data.error || '저장하지 못했습니다. 새로고침 후 확인해주세요.';
+                if (response.status === 409 || response.status >= 500) displayForm.dataset.blocked = 'true';
+                return;
+            }
+            showReferences = data.show_references;
+            displayForm.dataset.showReferences = showReferences ? 'true' : 'false';
+            displayForm.dataset.revision = data.revision;
+            changed = true;
+            status.textContent = '저장 완료. 편집을 종료하면 적용됩니다.';
+        } catch (error) {
+            displayForm.dataset.blocked = 'true';
+            status.textContent = '저장 결과를 확인할 수 없습니다. 새로고침 후 확인해주세요.';
+        } finally {
+            saving = false;
+            close.disabled = false;
+            checkbox.disabled = button.disabled = displayForm.dataset.blocked === 'true';
+        }
+    });
 
     async function saveVisibility(form) {
         if (!editing || saving || form.dataset.blocked === 'true') return;

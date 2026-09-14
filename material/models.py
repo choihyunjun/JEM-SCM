@@ -929,6 +929,9 @@ class WMSConfig(models.Model):
     [WMS] 전역 설정 - 싱글톤 (pk=1 고정)
     감사모드 등 시스템 전역 설정
     """
+    show_expiry_references = models.BooleanField('유효기간 이력 ERP/SCM·수불번호 표시', default=True)
+    expiry_display_revision = models.PositiveIntegerField('유효기간 표시 설정 버전', default=0)
+
     audit_mode = models.BooleanField("감사모드", default=False,
                                       help_text="ON이면 레이아웃에 오버라이드 수량 표시")
     audit_mode_changed_at = models.DateTimeField("감사모드 변경일시", null=True, blank=True)
