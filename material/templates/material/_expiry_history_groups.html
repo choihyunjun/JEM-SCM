@@ -31,15 +31,17 @@
         {% else %}<span class="d-day-text d-day-safe">D-{{ group.used_d_day }}</span>{% endif %}
     </td>
     <td class="small">{{ group.warehouse_from.name|default:"-" }} → {{ group.warehouse_to.name|default:"-" }}</td>
-    <td class="small text-muted">{{ group.actors|join:", " }}</td>
-    <td class="small text-muted">
+    {% if show_expiry_references or can_edit_expiry %}
+    <td class="small text-muted expiry-reference-column {% if not show_expiry_references %}d-none{% endif %}">{{ group.actors|join:", " }}</td>
+    <td class="small text-muted expiry-reference-column {% if not show_expiry_references %}d-none{% endif %}">
         {% if group.label_ids %}
         <details><summary>{{ group.label_ids|length }}장</summary>
             {% for label_id in group.label_ids %}<div>{{ label_id }}</div>{% endfor %}
         </details>
         {% else %}-{% endif %}
     </td>
+    {% endif %}
 </tr>
 {% empty %}
-<tr><td colspan="{% if show_expiry_references %}11{% else %}10{% endif %}" class="text-center py-4 text-muted">표시할 이동 이력이 없습니다.</td></tr>
+<tr><td colspan="{% if show_expiry_references %}11{% else %}8{% endif %}" class="text-center py-4 text-muted">표시할 이동 이력이 없습니다.</td></tr>
 {% endfor %}

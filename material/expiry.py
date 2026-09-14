@@ -10,7 +10,7 @@ from .models import MaterialTransaction, MovementExpiryEvent, MovementVisibility
 def expiry_transfers():
     return MaterialTransaction.objects.filter(
         Q(warehouse_from__code='4200', warehouse_to__code='4300')
-        | Q(warehouse_from__code='3200', warehouse_to__code='3000'),
+        | Q(warehouse_from__code__in=['2000', '3200'], warehouse_to__code='3000'),
         transaction_type__in=['TRANSFER', 'TRF_ERP'],
         part__raw_material_setting__isnull=False,
     )

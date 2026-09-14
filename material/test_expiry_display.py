@@ -5,7 +5,7 @@ from django.test import Client, TestCase
 from django.urls import reverse
 
 from orders.models import Part
-from .models import MaterialTransaction, RawMaterialSetting, Warehouse, WMSConfig
+from .models import MaterialTransaction, RawMaterialLabel, RawMaterialSetting, Warehouse, WMSConfig
 
 
 class ExpiryDisplayTests(TestCase):
@@ -19,11 +19,17 @@ class ExpiryDisplayTests(TestCase):
         RawMaterialSetting.objects.create(part=part, shelf_life_days=90)
         source = Warehouse.objects.create(code='4200', name='From')
         target = Warehouse.objects.create(code='4300', name='To')
+        actor = User.objects.create_user(username='row-operator')
         for kind in ('TRANSFER', 'TRF_ERP'):
-            MaterialTransaction.objects.create(
+            trx = MaterialTransaction.objects.create(
                 transaction_no=f'PRIVATE-{kind}', transaction_type=kind,
                 part=part, warehouse_from=source, warehouse_to=target,
-                quantity=5, lot_no=date(2026, 8, 22),
+                quantity=5, lot_no=date(2026, 8, 22), actor=actor,
+            )
+            RawMaterialLabel.objects.create(
+                label_id=f'INTERNAL-LABEL-{kind}', part=part, part_no=part.part_no,
+                part_name=part.part_name, lot_no=trx.lot_no, quantity=5,
+                status='USED', used_at=trx.date, used_transaction=trx,
             )
         self.client.force_login(self.admin)
         self.url = reverse('material:set_expiry_display')
@@ -38,6 +44,8 @@ class ExpiryDisplayTests(TestCase):
         self.assertContains(response, '구분 / 수불번호')
         self.assertContains(response, 'PRIVATE-TRANSFER')
         self.assertContains(response, '2건 수불번호')
+        self.assertContains(response, 'row-operator')
+        self.assertContains(response, 'INTERNAL-LABEL-TRANSFER')
         self.assertFalse(WMSConfig.objects.exists())
 
     def test_hide_omits_badges_numbers_and_expander_from_regular_html(self):
@@ -50,6 +58,10 @@ class ExpiryDisplayTests(TestCase):
         self.assertNotContains(response, '2건 수불번호')
         self.assertNotContains(response, 'expiry-reference-column')
         self.assertNotContains(response, 'expiryDisplayForm')
+        self.assertNotContains(response, 'row-operator')
+        self.assertNotContains(response, 'INTERNAL-LABEL-')
+        self.assertNotContains(response, '>처리자</th>')
+        self.assertNotContains(response, '>라벨ID</th>')
         self.assertContains(response, 'DISPLAY-PART')
         self.assertEqual(response.context['grouped_count'], 1)
         self.assertEqual(response.context['grouped_history'][0]['quantity'], 10)
@@ -64,7 +76,10 @@ class ExpiryDisplayTests(TestCase):
         self.assertContains(response, 'expiry-reference-column d-none')
         self.assertEqual(self.save('true', revision).status_code, 200)
         self.client.force_login(self.staff)
-        self.assertContains(self.client.get(self.page), 'PRIVATE-TRANSFER')
+        restored = self.client.get(self.page)
+        self.assertContains(restored, 'PRIVATE-TRANSFER')
+        self.assertContains(restored, 'row-operator')
+        self.assertContains(restored, 'INTERNAL-LABEL-TRANSFER')
 
     def test_only_permitted_admin_can_save(self):
         self.client.force_login(self.staff)

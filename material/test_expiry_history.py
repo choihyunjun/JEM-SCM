@@ -54,15 +54,15 @@ class ExpiryMovementHistoryTests(TestCase):
         expected = set()
         for kind in ('TRANSFER', 'TRF_ERP'):
             routes = [
-                (self.source, self.target), (fourth_source, fourth_target),
+                (self.source, self.target), (fourth_source, fourth_target), (other, self.target),
                 (self.target, self.source), (fourth_target, fourth_source),
                 (self.source, fourth_target), (fourth_source, self.target),
-                (other, self.target), (self.source, other), (None, self.target),
+                (self.target, other), (other, fourth_target), (self.source, other), (None, self.target),
             ]
             for index, (source, target) in enumerate(routes):
                 number = f'{kind}-{index}'
                 self.movement(number, transaction_type=kind, warehouse_from=source, warehouse_to=target)
-                if index < 2:
+                if index < 3:
                     expected.add(number)
         self.movement('RECEIPT', transaction_type='IN_SCM')
         rows = self.rows()
