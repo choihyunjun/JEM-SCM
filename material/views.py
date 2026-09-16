@@ -5347,6 +5347,8 @@ def bom_calc_batch_export(request):
         for col, width in enumerate(widths, 1):
             ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = width
 
+        from .bom_excel_style import format_structured_bom
+        format_structured_bom(ws)
         filename = "bom_calc_batch_structured.xlsx"
     else:
         ws.title = "일괄소요량계산결과"
