@@ -1,6 +1,7 @@
 from django.urls import path
 from . import views
 from . import erp_recovery
+from . import bom_jobs
 
 app_name = 'material'
 
@@ -93,6 +94,8 @@ urlpatterns = [
     path('bom/upload/', views.bom_upload, name='bom_upload'),
     path('bom/delete-all/', views.bom_delete_all, name='bom_delete_all'),
     path('bom/calculate/', views.bom_calculate, name='bom_calculate'),
+    path('bom/calculate/jobs/', bom_jobs.start, name='bom_job_start'),
+    path('bom/calculate/jobs/<uuid:job_id>/step/', bom_jobs.step, name='bom_job_step'),
     path('bom/calculate/template/', views.bom_calc_template, name='bom_calc_template'),
     path('bom/calculate/export/', views.bom_calc_export, name='bom_calc_export'),
     path('bom/calculate/batch-export/', views.bom_calc_batch_export, name='bom_calc_batch_export'),

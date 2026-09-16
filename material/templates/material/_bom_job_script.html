@@ -1,0 +1,90 @@
+{{ job_config|json_script:"bom-job-config" }}
+{{ batch_metadata|json_script:"bom-job-metadata" }}
+{{ part_group_map|json_script:"bom-part-groups" }}
+<script>
+const bomJob = JSON.parse(document.getElementById('bom-job-config').textContent) || null;
+const bomMetadata = JSON.parse(document.getElementById('bom-job-metadata').textContent) || {};
+function navigateBomPage(changes) {
+    const url = new URL(window.location.href);
+    Object.entries(changes).forEach(([key, value]) => url.searchParams.set(key, value));
+    window.location.assign(url);
+}
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('batchForm');
+    const panel = document.getElementById('bomJobProgress');
+    const message = document.getElementById('bomJobMessage');
+    const bar = document.getElementById('bomJobBar');
+    const retry = document.getElementById('bomJobRetry');
+    const button = document.getElementById('batchSubmitBtn');
+    let busy = false;
+    const csrf = form.querySelector('[name=csrfmiddlewaretoken]').value;
+    async function post(url, body) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 90000);
+        try {
+            const response = await fetch(url, {method:'POST', body, headers:{'X-CSRFToken':csrf}, signal:controller.signal});
+            if (response.redirected) throw new Error('로그인 상태 또는 메뉴 권한을 확인한 뒤 다시 시도해주세요.');
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || '요청 처리에 실패했습니다.');
+            return data;
+        } finally { clearTimeout(timeout); }
+    }
+    function showProgress(done, total) {
+        const pct = total ? Math.floor(done * 100 / total) : 0;
+        panel.classList.remove('d-none');
+        message.textContent = `BOM 계산 ${done.toLocaleString()} / ${total.toLocaleString()}건 (${pct}%)`;
+        bar.style.width = pct + '%';
+        bar.textContent = pct + '%';
+        bar.setAttribute('aria-valuenow', pct);
+    }
+    async function resume() {
+        if (busy || !bomJob || bomJob.complete) return;
+        busy = true;
+        button.disabled = true;
+        retry.classList.add('d-none');
+        showProgress(bomJob.completed, bomJob.total);
+        try {
+            while (true) {
+                const data = await post(bomJob.step_url);
+                bomJob.completed = data.completed;
+                showProgress(data.completed, data.total);
+                if (data.status === 'complete') {
+                    message.textContent = '계산 완료. 결과를 불러옵니다…';
+                    window.location.replace(bomJob.result_url);
+                    return;
+                }
+                if (data.status === 'failed') throw new Error(data.error);
+                await new Promise(resolve => setTimeout(resolve, data.status === 'running' ? 1500 : 100));
+            }
+        } catch (error) {
+            message.textContent = `계산을 이어가지 못했습니다. ${error.name === 'AbortError' ? '서버 응답 시간이 초과되었습니다.' : error.message} (작업: ${bomJob.id})`;
+            retry.classList.remove('d-none');
+        } finally { busy = false; button.disabled = false; }
+    }
+    retry.addEventListener('click', resume);
+    form.addEventListener('submit', async function(event) {
+        event.preventDefault();
+        if (busy) return;
+        busy = true;
+        button.disabled = true;
+        panel.classList.remove('d-none');
+        retry.classList.add('d-none');
+        message.textContent = '파일 분석 및 BOM·재고 준비 중…';
+        bar.style.width = '0%';
+        bar.textContent = '';
+        try {
+            const data = await post('{% url "material:bom_job_start" %}', new FormData(form));
+            window.location.assign(data.url);
+        } catch (error) {
+            message.textContent = error.name === 'AbortError' ? '파일 분석 응답 시간이 초과되었습니다. 파일 크기와 서버 상태를 확인해주세요.' : error.message;
+            button.disabled = false;
+            busy = false;
+        }
+    });
+    if (bomJob) {
+        const tab = document.getElementById('batch-tab');
+        if (tab && window.bootstrap) bootstrap.Tab.getOrCreateInstance(tab).show();
+        if (!bomJob.complete) resume();
+    }
+});
+</script>

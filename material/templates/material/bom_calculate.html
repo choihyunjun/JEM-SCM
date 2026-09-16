@@ -296,6 +296,8 @@
     </div>
 
     <!-- 계산 결과 (단일) -->
+    {% include 'material/_bom_job_progress.html' %}
+
     {% if result and calc_type == 'single' %}
     <div class="card">
         <div class="card-header bg-white d-flex justify-content-between align-items-center">
@@ -402,11 +404,11 @@
                     <strong class="ms-2">{{ result|length }}종</strong>
                 </div>
                 <div class="col-md-4">
-                    <span class="text-muted">부족 자재:</span>
+                    <span class="text-muted">부족:</span>
                     <strong class="ms-2 text-danger">{{ shortage_count }}종</strong>
                 </div>
                 <div class="col-md-4">
-                    <span class="text-muted">충족 자재:</span>
+                    <span class="text-muted">충족:</span>
                     <strong class="ms-2 text-success">{{ sufficient_count }}종</strong>
                 </div>
             </div>
@@ -415,13 +417,13 @@
     {% endif %}
 
     <!-- 일괄 계산 결과 -->
-    {% if batch_results %}
+    {% if batch_results or bom_job.status == 'complete' %}
     <div class="card">
         <div class="card-header bg-white d-flex justify-content-between align-items-center">
             <span>
                 <i class="bi bi-list-check me-2"></i>
                 일괄 소요량 계산 결과
-                <span class="dtl-pill slate ms-2">{{ batch_results|length }}개 제품</span>
+                <span class="dtl-pill slate ms-2">{% if bom_job %}{{ batch_total }}{% else %}{{ batch_results|length }}{% endif %}건 계획</span>
             </span>
             <div>
                 <button type="button" class="btn btn-sm btn-outline-light me-2" data-bs-toggle="modal" data-bs-target="#excelExportModal">
@@ -443,7 +445,7 @@
         <div class="card-body border-bottom py-2 d-flex justify-content-between align-items-center" id="batchPaginationTop">
             <div class="d-flex align-items-center gap-2">
                 <button class="btn btn-sm btn-outline-secondary batch-filter-btn active" data-filter="all" onclick="setBatchFilter('all')">
-                    전체 <span class="dtl-pill slate ms-1">{{ batch_results|length }}</span>
+                    전체 <span class="dtl-pill slate ms-1">{% if bom_job %}{{ batch_total }}{% else %}{{ batch_results|length }}{% endif %}</span>
                 </button>
                 <button class="btn btn-sm btn-outline-warning batch-filter-btn" data-filter="missing" onclick="setBatchFilter('missing')" style="display:none;" id="btnFilterMissing">
                     <i class="bi bi-exclamation-triangle me-1"></i>BOM 없음 <span class="dtl-pill amber ms-1" id="missingFilterCount">0</span>
@@ -476,7 +478,7 @@
                             <th style="width:12%">자품번</th>
                             <th style="width:15%">자품명</th>
                             <th style="width:8%">필요수량</th>
-                            <th style="width:8%">현재고</th>
+                            <th style="width:8%">배분 전 가용재고</th>
                             <th style="width:8%">부족수량</th>
                             <th style="width:10%">거래처</th>
                         </tr>
@@ -588,20 +590,20 @@
         <div class="card-footer">
             <div class="row text-center">
                 <div class="col-md-3">
-                    <span class="text-muted">총 제품:</span>
-                    <strong class="ms-2">{{ batch_results|length }}종</strong>
+                    <span class="text-muted">총 계획:</span>
+                    <strong class="ms-2">{% if bom_job %}{{ batch_total }}{% else %}{{ batch_results|length }}{% endif %}건</strong>
                 </div>
                 <div class="col-md-3">
-                    <span class="text-muted">총 자재:</span>
-                    <strong class="ms-2">{{ total_material_count }}종</strong>
+                    <span class="text-muted">자재 계산:</span>
+                    <strong class="ms-2">{{ total_material_count }}건</strong>
                 </div>
                 <div class="col-md-3">
-                    <span class="text-muted">부족 자재:</span>
-                    <strong class="ms-2 text-danger">{{ total_shortage_count }}종</strong>
+                    <span class="text-muted">부족:</span>
+                    <strong class="ms-2 text-danger">{{ total_shortage_count }}건</strong>
                 </div>
                 <div class="col-md-3">
-                    <span class="text-muted">충족 자재:</span>
-                    <strong class="ms-2 text-success">{{ total_sufficient_count }}종</strong>
+                    <span class="text-muted">충족:</span>
+                    <strong class="ms-2 text-success">{{ total_sufficient_count }}건</strong>
                 </div>
             </div>
         </div>
@@ -696,7 +698,7 @@
     </div>
     {% endif %}
 
-    {% if not result and not batch_results and request.method != 'POST' %}
+    {% if not result and not batch_results and not bom_job and request.method != 'POST' %}
     <!-- 사용 안내 -->
     <div class="dtl-card mb-0">
         <div class="card-body text-center py-5">
@@ -785,6 +787,7 @@
 }
 </style>
 
+{% include 'material/_bom_job_script.html' %}
 <script>
 // 제품 데이터 (서버에서 전달)
 const products = [
@@ -895,13 +898,6 @@ document.getElementById('calcFile').addEventListener('change', function(e) {
     }
 });
 
-// 폼 제출 시 로딩 표시
-document.getElementById('batchForm').addEventListener('submit', function() {
-    const btn = document.getElementById('batchSubmitBtn');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>계산 중...';
-});
-
 // ── 페이지네이션 ──
 var batchGroups = [];      // 전체 batch-group 목록
 var filteredGroups = [];   // 현재 필터 적용된 목록
@@ -910,6 +906,18 @@ var pageSize = 50;
 var currentFilter = 'all'; // 'all' | 'missing'
 
 function initPagination() {
+    if (bomJob) {
+        document.getElementById('pageInfo').textContent = bomJob.page + ' / ' + bomJob.pages;
+        document.getElementById('btnPrevPage').disabled = bomJob.page <= 1;
+        document.getElementById('btnNextPage').disabled = bomJob.page >= bomJob.pages;
+        document.getElementById('pageSizeSelect').value = bomJob.size;
+        document.querySelectorAll('.batch-filter-btn').forEach(b => b.classList.toggle('active', b.dataset.filter === bomJob.filter));
+        if (bomMetadata.missing_count) {
+            document.getElementById('btnFilterMissing').style.display = '';
+            document.getElementById('missingFilterCount').textContent = bomMetadata.missing_count;
+        }
+        return;
+    }
     batchGroups = Array.from(document.querySelectorAll('.batch-group'));
     // BOM 없음 필터 버튼 표시
     var missingCount = batchGroups.filter(function(g) { return g.dataset.hasBom === 'false'; }).length;
@@ -951,6 +959,7 @@ function renderPage() {
 }
 
 function changeBatchPage(delta) {
+    if (bomJob) return navigateBomPage({page:bomJob.page + delta});
     var totalPages = Math.max(1, Math.ceil(filteredGroups.length / pageSize));
     var newPage = currentPage + delta;
     if (newPage >= 0 && newPage < totalPages) {
@@ -960,12 +969,14 @@ function changeBatchPage(delta) {
 }
 
 function changePageSize(val) {
+    if (bomJob) return navigateBomPage({size:val, page:1});
     pageSize = parseInt(val) || 50;
     currentPage = 0;
     renderPage();
 }
 
 function setBatchFilter(filter) {
+    if (bomJob) return navigateBomPage({filter:filter, page:1});
     currentFilter = filter;
     document.querySelectorAll('.batch-filter-btn').forEach(function(btn) {
         btn.classList.toggle('active', btn.dataset.filter === filter);
@@ -976,14 +987,14 @@ function setBatchFilter(filter) {
 // BOM 누락 품번 감지 및 동기화
 document.addEventListener('DOMContentLoaded', function() {
     // 페이지네이션 초기화
-    if (document.querySelector('.batch-group')) {
+    if (document.querySelector('.batch-group') || (bomJob && bomJob.complete)) {
         initPagination();
     }
 
     var missingRows = document.querySelectorAll('#batchResultTable tr[data-missing-partno]');
-    if (missingRows.length > 0) {
+    if ((bomJob && bomJob.complete && bomMetadata.missing.length) || missingRows.length > 0) {
         document.getElementById('bomSyncArea').style.display = '';
-        document.getElementById('missingBomCount').textContent = missingRows.length;
+        document.getElementById('missingBomCount').textContent = bomJob ? bomMetadata.missing.length : missingRows.length;
     }
 });
 
@@ -994,6 +1005,7 @@ async function syncMissingBom() {
         partNos.push(tr.dataset.missingPartno);
     });
 
+    if (bomJob) partNos = bomMetadata.missing.slice();
     if (partNos.length === 0) { alert('동기화할 품번이 없습니다.'); return; }
 
     var btn = document.getElementById('btnSyncMissingBom');
@@ -1101,7 +1113,7 @@ async function syncSingleMissingBom(btn) {
 }
 
 // ── 거래처 미연결 품목 목록 (서버 렌더링) ──
-var _partGroupMap = {{ part_group_map|default:"{}"|safe }};
+var _partGroupMap = JSON.parse(document.getElementById('bom-part-groups').textContent) || {};
 var _rawUnlinked = [
     {% if batch_results %}
     {% for batch in batch_results %}
@@ -1114,6 +1126,7 @@ var _rawUnlinked = [
     {% endfor %}
     {% endif %}
 ];
+if (bomJob) _rawUnlinked = bomMetadata.unlinked || [];
 var _seenPN = new Set();
 var uniqueUnlinkedParts = _rawUnlinked.filter(function(p) {
     if (_seenPN.has(p.part_no)) return false;
@@ -1340,8 +1353,8 @@ function skipAndRegister() {
 }
 
 function showVendorSelectModal() {
-    var vendorSet = {};
-    document.querySelectorAll('#batchResultTable .batch-group tr td:last-child').forEach(function(td) {
+    var vendorSet = bomJob ? Object.assign({}, bomMetadata.vendors) : {};
+    if (!bomJob) document.querySelectorAll('#batchResultTable .batch-group tr td:last-child').forEach(function(td) {
         var name = td.textContent.trim();
         if (name && name !== '-') vendorSet[name] = (vendorSet[name] || 0) + 1;
     });

@@ -1,0 +1,13 @@
+<div class="dtl-card mb-4 {% if not bom_job or bom_job.status == 'complete' %}d-none{% endif %}" id="bomJobProgress">
+    <div class="dtl-card-body">
+        <div id="bomJobMessage" role="status" aria-live="polite">계산 준비 중…</div>
+        <div class="progress mt-2" style="height:22px">
+            <div class="progress-bar" id="bomJobBar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" style="width:0%">0%</div>
+        </div>
+        <div class="small text-muted mt-2">이 화면을 열어두면 계산이 진행됩니다. 새로고침해도 저장된 지점부터 이어집니다.</div>
+        <button type="button" class="btn btn-sm btn-outline-primary mt-2 d-none" id="bomJobRetry">이어서 계산</button>
+    </div>
+</div>
+{% if bom_job.status == 'complete' %}
+<p class="small text-muted">계산 시점의 재고를 필요일자순으로 배분한 결과입니다. 날짜가 없는 계획은 마지막에 배분합니다. 실제 재고는 변경되지 않습니다. 결과는 7일간 보관됩니다.</p>
+{% endif %}

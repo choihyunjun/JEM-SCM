@@ -5004,135 +5004,20 @@ def bom_calculate(request):
                     messages.warning(request, f"품번 '{part_no}'에 해당하는 BOM이 없습니다.")
 
         elif calc_type == 'batch':
-            # 일괄 계산 (엑셀 업로드)
-            upload_file = request.FILES.get('calc_file')
-
-            if not upload_file:
-                messages.error(request, "파일을 선택해주세요.")
-            else:
-                file_name = upload_file.name.lower()
-                if not (file_name.endswith('.csv') or file_name.endswith('.xlsx')):
-                    messages.error(request, "CSV 또는 XLSX 파일만 업로드 가능합니다.")
-                else:
-                    try:
-                        rows = []
-
-                        if file_name.endswith('.csv'):
-                            decoded_file = upload_file.read().decode('utf-8-sig')
-                            lines = decoded_file.strip().split('\n')
-                            if len(lines) > 1:
-                                headers = [h.strip() for h in lines[0].split(',')]
-                                for line in lines[1:]:
-                                    values = [v.strip().strip('"') for v in line.split(',')]
-                                    if len(values) >= 2:
-                                        rows.append(dict(zip(headers, values)))
-                        else:
-                            wb = openpyxl.load_workbook(upload_file, read_only=True)
-                            ws = wb.active
-                            headers = [cell.value or '' for cell in next(ws.iter_rows(min_row=1, max_row=1))]
-                            headers = [str(h).strip() for h in headers]
-
-                            # 피벗 형태 감지: 헤더에 날짜 패턴(YYYY-MM-DD)이 있으면 피벗
-                            import re
-                            date_pattern = re.compile(r'^(\d{4}-\d{2}-\d{2})')
-                            date_columns = []  # (col_index, date_str)
-                            part_no_col = None
-
-                            for idx, h in enumerate(headers):
-                                m = date_pattern.match(h)
-                                if m:
-                                    date_columns.append((idx, m.group(1)))
-                                elif h in ('\ud488\ubc88', '품번'):
-                                    part_no_col = idx
-
-                            if date_columns and part_no_col is not None:
-                                # 피벗 형태 → unpivot (품번 × 날짜 → 행)
-                                for row_data in ws.iter_rows(min_row=2, values_only=True):
-                                    values = list(row_data)
-                                    if len(values) <= part_no_col:
-                                        continue
-                                    pno = str(values[part_no_col] or '').strip()
-                                    if not pno or not re.search(r'[A-Za-z0-9]', pno):
-                                        continue  # 합계 행 등 제외
-                                    for col_idx, date_str in date_columns:
-                                        if col_idx < len(values):
-                                            qty_val = values[col_idx]
-                                            try:
-                                                qty_num = int(float(str(qty_val).replace(',', '')))
-                                            except (ValueError, TypeError):
-                                                qty_num = 0
-                                            if qty_num > 0:
-                                                rows.append({
-                                                    '\ud488\ubc88': pno,
-                                                    '\uacc4\ud68d\uc218\ub7c9': qty_num,
-                                                    '\ub0a0\uc9dc': date_str,
-                                                })
-                            else:
-                                # 기존 행 단위 형태
-                                for row in ws.iter_rows(min_row=2, values_only=True):
-                                    values = [v if v is not None else '' for v in row]
-                                    if len(values) >= 2:
-                                        rows.append(dict(zip(headers, values)))
-
-                        # 일괄 계산 수행
-                        batch_results = []
-                        for row in rows:
-                            # 새 형식: 날짜/품번/계획수량  |  구 형식: 품번/수량/필요일자
-                            part_no = str(row.get('품번', '')).strip()
-                            qty = row.get('계획수량', None) or row.get('수량', 0)
-                            need_date = row.get('날짜', None) or row.get('필요일자', '')
-
-                            # need_date 정규화 → 'YYYY-MM-DD' 문자열로 통일
-                            if need_date and hasattr(need_date, 'strftime'):
-                                need_date = need_date.strftime('%Y-%m-%d')
-                            elif need_date:
-                                need_date = str(need_date).strip()
-                                need_date = need_date.replace('.0', '')
-                                if len(need_date) == 8 and need_date.isdigit():
-                                    need_date = f'{need_date[:4]}-{need_date[4:6]}-{need_date[6:8]}'
-                            else:
-                                need_date = ''
-
-                            if not part_no:
-                                continue
-
-                            try:
-                                qty = int(float(str(qty).replace(',', '')))
-                            except (ValueError, TypeError):
-                                qty = 0
-
-                            if qty <= 0:
-                                continue
-
-                            product_obj, part_name, items, structured_batch = _calculate_bom_requirements(part_no, qty)
-
-                            batch_results.append({
-                                'part_no': part_no,
-                                'part_name': part_name or '-',
-                                'qty': qty,
-                                'need_date': need_date,
-                                'items': items,
-                                'structured_items': structured_batch,
-                            })
-
-                            # 통계
-                            total_material_count += len(items)
-                            total_shortage_count += sum(1 for item in items if item['shortage'] > 0)
-                            total_sufficient_count += sum(1 for item in items if item['shortage'] == 0)
-
-                        if batch_results:
-                            # 세션에 결과 저장 (엑셀 다운로드용)
-                            import uuid
-                            session_key = str(uuid.uuid4())
-                            request.session[f'batch_calc_{session_key}'] = batch_results
-                            messages.success(request, f"{len(batch_results)}개 제품의 소요량 계산이 완료되었습니다.")
-                        else:
-                            messages.warning(request, "유효한 데이터가 없습니다. 파일 형식을 확인해주세요.")
-
-                    except Exception as e:
-                        import traceback
-                        print(f"[BOM CALC ERROR] {traceback.format_exc()}", flush=True)
-                        messages.error(request, f"파일 처리 중 오류: {str(e)}")
+            # Ordinary form submission also creates the same resumable job.
+            from .bom_jobs import create_job
+            try:
+                upload = request.FILES.get('calc_file')
+                if not upload:
+                    raise ValueError('파일을 선택해주세요.')
+                job = create_job(request.user, upload)
+                from django.urls import reverse
+                return redirect(reverse('material:bom_calculate') + '?job=' + str(job.pk))
+            except (ValueError, UnicodeError) as exc:
+                messages.error(request, str(exc))
+            except Exception:
+                logger.exception('BOM upload failed')
+                messages.error(request, '파일 분석에 실패했습니다. 파일 형식과 서버 상태를 확인해주세요.')
 
     # 제품 목록 (자동완성용)
     products = Product.objects.filter(is_active=True, is_bom_registered=True).order_by('part_no')
@@ -5189,6 +5074,9 @@ def bom_calculate(request):
         'part_groups_json': _part_groups_json,
         'part_group_product_map': _pg_product_map_json,
     }
+    if request.method == 'GET' and request.GET.get('job'):
+        from .bom_jobs import owned_job, job_context
+        context.update(job_context(request, owned_job(request, request.GET['job'])))
     return render(request, 'material/bom_calculate.html', context)
 
 
@@ -5355,12 +5243,14 @@ def bom_calc_batch_export(request):
     """
     session_key = request.GET.get('session_key', '')
     mode = request.GET.get('mode', 'flat')
-    batch_results = request.session.get(f'batch_calc_{session_key}')
+    from .bom_jobs import get_results
+    batch_results = get_results(request, session_key)
 
     if not batch_results:
         messages.error(request, "계산 결과가 없습니다. 다시 계산해주세요.")
         return redirect('material:bom_calculate')
 
+    stock_heading = '배분 전 가용재고' if session_key.startswith('job:') else '현재고'
     wb = openpyxl.Workbook()
     ws = wb.active
     header_fill = openpyxl.styles.PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
@@ -5372,7 +5262,7 @@ def bom_calc_batch_export(request):
 
     if mode == 'structured':
         ws.title = "일괄소요량(BOM구조)"
-        headers = ['모품번', '모품명', '생산수량', '필요일자', 'LEVEL', '자품번', '자품명', '단위', '정미수량', '필요수량', '현재고', '부족수량', '거래처']
+        headers = ['모품번', '모품명', '생산수량', '필요일자', 'LEVEL', '자품번', '자품명', '단위', '정미수량', '필요수량', stock_heading, '부족수량', '거래처']
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=1, column=col, value=header)
             cell.font = header_font
@@ -5460,7 +5350,7 @@ def bom_calc_batch_export(request):
         filename = "bom_calc_batch_structured.xlsx"
     else:
         ws.title = "일괄소요량계산결과"
-        headers = ['모품번', '모품명', '생산수량', '필요일자', '자품번', '자품명', '필요수량', '현재고', '부족수량', '거래처']
+        headers = ['모품번', '모품명', '생산수량', '필요일자', '자품번', '자품명', '필요수량', stock_heading, '부족수량', '거래처']
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=1, column=col, value=header)
             cell.font = header_font
@@ -5518,7 +5408,8 @@ def bom_calc_demand_export(request):
     - 동일 필요일자+자품번은 수량 합산
     """
     session_key = request.GET.get('session_key', '')
-    batch_results = request.session.get(f'batch_calc_{session_key}')
+    from .bom_jobs import get_results
+    batch_results = get_results(request, session_key)
 
     if not batch_results:
         messages.error(request, "계산 결과가 없습니다. 다시 계산해주세요.")
@@ -5757,7 +5648,8 @@ def bom_register_demand(request):
         return redirect('material:bom_calculate')
 
     session_key = request.POST.get('session_key', '')
-    batch_results = request.session.get(f'batch_calc_{session_key}')
+    from .bom_jobs import get_results
+    batch_results = get_results(request, session_key)
 
     if not batch_results:
         messages.error(request, "계산 결과가 없습니다. 다시 계산해주세요.")

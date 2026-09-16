@@ -1,6 +1,35 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
+import uuid
+
+
+class BOMCalculationJob(models.Model):
+    """Temporary, user-owned calculation snapshot; never changes actual stock."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(User, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    status = models.CharField(max_length=12, default='pending')
+    revision = models.PositiveIntegerField(default=0)
+    total = models.PositiveIntegerField(default=0)
+    completed = models.PositiveIntegerField(default=0)
+    snapshot = models.JSONField(default=dict)
+    remaining = models.JSONField(default=dict)
+    summary = models.JSONField(default=dict)
+    error = models.CharField(max_length=300, blank=True)
+
+
+class BOMCalculationRow(models.Model):
+    job = models.ForeignKey(BOMCalculationJob, on_delete=models.CASCADE, related_name='rows')
+    sequence = models.PositiveIntegerField()
+    payload = models.JSONField(default=dict)
+    has_bom = models.BooleanField(default=False)
+    ready = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['sequence']
+        constraints = [models.UniqueConstraint(fields=['job', 'sequence'], name='bom_job_row_sequence')]
 
 # SCM(Orders) 앱의 마스터 데이터 참조
 from orders.models import Part, Vendor
