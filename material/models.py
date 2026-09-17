@@ -4,6 +4,17 @@ from django.utils import timezone
 import uuid
 
 
+class StockSyncRun(models.Model):
+    started_at = models.DateTimeField(default=timezone.now)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=12, default='running')
+    summary = models.JSONField(default=dict)
+    error = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-id']
+
+
 class BOMCalculationJob(models.Model):
     """Temporary, user-owned calculation snapshot; never changes actual stock."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

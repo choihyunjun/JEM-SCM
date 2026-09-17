@@ -15,12 +15,9 @@ ERP 과거 수불 변경 감지 커맨드
 """
 
 import time
-import fcntl
 from datetime import datetime, timedelta
-from django.core.management.base import BaseCommand
-
-ERP_SYNC_LOCK_FILE = '/tmp/erp_sync.lock'
-
+from material.erp_sync_lock import serialized_erp_sync
+from django.core.management.base import BaseCommand, CommandError
 
 class Command(BaseCommand):
     help = '최근 N일간 ERP 수불 변경을 감지하고 SCM 이력을 보정합니다'
@@ -33,27 +30,13 @@ class Command(BaseCommand):
             help='검사할 기간 (일, 기본: 30)',
         )
 
+    @serialized_erp_sync
     def handle(self, *args, **options):
-        # ── 파일 기반 lock (동시 실행 방지) ──
-        fp = open(ERP_SYNC_LOCK_FILE, 'w')
-        try:
-            fcntl.flock(fp, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except (IOError, OSError):
-            self.stderr.write(self.style.WARNING(
-                '다른 ERP 동기화가 진행 중입니다. 건너뜁니다.'
-            ))
-            fp.close()
-            return
-
-        try:
-            self._run(options)
-        finally:
-            fp.close()
+        self._run(options)
 
     def _run(self, options):
         from material.erp_api import (
             sync_erp_adjustments,
-            sync_stock_from_erp,
             fetch_erp_incoming_headers, fetch_erp_incoming_detail,
             fetch_erp_issue_headers, fetch_erp_issue_details,
             fetch_erp_receipt_list,
@@ -71,6 +54,7 @@ class Command(BaseCommand):
         total_updated = 0
         total_deleted = 0
         total_new = 0
+        detection_errors = []
 
         self.stdout.write(self.style.WARNING(
             f'\n=== ERP 과거 수불 변경 감지 ===\n'
@@ -108,6 +92,7 @@ class Command(BaseCommand):
                 self._print_result(updated, deleted, new, elapsed)
 
             except Exception as e:
+                detection_errors.append(str(e))
                 self.stderr.write(self.style.ERROR(f'  -> 오류: {e}'))
 
             self.stdout.write('')
@@ -128,6 +113,7 @@ class Command(BaseCommand):
             self._print_result(updated, deleted, new, elapsed)
 
         except Exception as e:
+            detection_errors.append(str(e))
             self.stderr.write(self.style.ERROR(f'  -> 오류: {e}'))
         self.stdout.write('')
 
@@ -137,27 +123,31 @@ class Command(BaseCommand):
         try:
             synced, skipped, errors, _ = sync_erp_adjustments(date_from, date_to)
             elapsed = time.time() - start
+            if errors:
+                detection_errors.append(f'재고조정 오류 {errors}건')
             if synced > 0:
                 total_new += synced
                 self.stdout.write(f'  -> {self.style.SUCCESS(f"신규 {synced}건")}, 건너뜀 {skipped}건 ({elapsed:.1f}초)')
             else:
                 self.stdout.write(f'  -> 변경 없음 ({elapsed:.1f}초)')
         except Exception as e:
+            detection_errors.append(str(e))
             self.stderr.write(self.style.ERROR(f'  -> 오류: {e}'))
         self.stdout.write('')
 
-        # ── 재고 보정 ──
-        if total_updated > 0 or total_deleted > 0 or total_new > 0:
-            self.stdout.write(self.style.WARNING('[마무리] ERP 현재고 기준 재고 보정...'))
-            try:
-                result = sync_stock_from_erp()
-                adj = result.get('adjusted', 0)
-                if adj > 0:
-                    self.stdout.write(f'  -> 재고 조정 {adj}건')
-                else:
-                    self.stdout.write(f'  -> 재고 차이 없음')
-            except Exception as e:
-                self.stderr.write(self.style.ERROR(f'  -> 재고 보정 오류: {e}'))
+        if detection_errors:
+            from material.erp_sync_pipeline import record_sync_failure
+            message = '과거 수불 확인 오류: ' + '; '.join(detection_errors[:5])
+            record_sync_failure(message)
+            raise CommandError(message)
+
+        # 감지한 신규 수불도 먼저 반영한 후 총량을 보정한다.
+        if total_updated or total_deleted or total_new:
+            from material.erp_sync_pipeline import sync_inventory
+            result = sync_inventory(date_from=date_from, date_to=date_to)
+            if result['errors']:
+                raise CommandError('; '.join(result['error_list']))
+            self.stdout.write(f"  -> 재고 조정 {result['stock']['adjusted']}건")
         else:
             self.stdout.write('변경 사항 없음 - 재고 보정 생략')
 
@@ -192,7 +182,9 @@ class Command(BaseCommand):
         erp_map = {}
 
         ok, headers, err = fetch_headers(date_from, date_to)
-        if not ok or not headers:
+        if not ok:
+            raise ValueError(err or 'ERP 헤더 조회 실패')
+        if not headers:
             return 0, 0, 0
 
         for header in headers:
@@ -202,7 +194,7 @@ class Command(BaseCommand):
 
             ok2, details, err2 = fetch_detail(nb)
             if not ok2 or not details:
-                continue
+                raise ValueError(err2 or f'{nb}: 상세 조회 실패/응답 누락 — 삭제 판정 보류')
 
             for detail in details:
                 sq = detail.get(sq_key, 1)
@@ -237,7 +229,9 @@ class Command(BaseCommand):
         erp_map = {}
 
         ok, items, err = fetch_receipt_list(date_from, date_to)
-        if not ok or not items:
+        if not ok:
+            raise ValueError(err or 'ERP 생산입고 조회 실패')
+        if not items:
             return 0, 0, 0
 
         for item in items:

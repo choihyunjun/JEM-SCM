@@ -28,23 +28,9 @@ ERP 전체 수불 이력 동기화 커맨드
 
 import sys
 import time
-import fcntl
 from datetime import datetime
-from django.core.management.base import BaseCommand
-
-ERP_SYNC_LOCK_FILE = '/tmp/erp_sync.lock'
-
-
-def acquire_sync_lock():
-    """파일 기반 프로세스 간 lock. 성공 시 file object, 실패 시 None."""
-    fp = open(ERP_SYNC_LOCK_FILE, 'w')
-    try:
-        fcntl.flock(fp, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        return fp
-    except (IOError, OSError):
-        fp.close()
-        return None
-
+from material.erp_sync_lock import serialized_erp_sync
+from django.core.management.base import BaseCommand, CommandError
 
 class Command(BaseCommand):
     help = 'ERP 전체 수불 이력을 동기화하고 재고를 ERP에 맞춥니다'
@@ -77,19 +63,9 @@ class Command(BaseCommand):
             help='전체 초기화: 모든 수불/재고 삭제 후 ERP 기준 재시작 (서버 배포용)',
         )
 
+    @serialized_erp_sync
     def handle(self, *args, **options):
-        # ── 파일 기반 lock (동시 실행 방지) ──
-        lock = acquire_sync_lock()
-        if not lock:
-            self.stderr.write(self.style.WARNING(
-                '다른 ERP 동기화가 진행 중입니다. 건너뜁니다.'
-            ))
-            return
-
-        try:
-            self._run(options)
-        finally:
-            lock.close()
+        self._run(options)
 
     def _run(self, options):
         from material.erp_api import (
@@ -228,6 +204,12 @@ class Command(BaseCommand):
 
             self.stdout.write('')
 
+        if grand_total['errors']:
+            from material.erp_sync_pipeline import record_sync_failure
+            message = f"수불 오류 {grand_total['errors']}건: 총량 보정을 보류했습니다."
+            record_sync_failure(message)
+            raise CommandError(message)
+
         # 최종 재고 보정 (ERP 현재고와 SCM 재고 동기화)
         self.stdout.write(self.style.WARNING('[마무리] ERP 현재고 기준 재고 동기화 (sync_stock_from_erp)...'))
         start = time.time()
@@ -237,14 +219,14 @@ class Command(BaseCommand):
             elapsed = time.time() - start
 
             if result.get('error'):
-                self.stderr.write(self.style.ERROR(f'  -> 실패: {result["error"]}'))
+                raise CommandError(result['error'])
             else:
                 self.stdout.write(
                     f'  -> 조정: {result["adjusted"]}건 '
                     f'(증가 {result["increased"]}, 감소 {result["decreased"]}) ({elapsed:.1f}초)'
                 )
         except Exception as e:
-            self.stderr.write(self.style.ERROR(f'  -> 실패: {e}'))
+            raise CommandError(str(e)) from e
 
         total_elapsed = time.time() - total_start
 

@@ -1,5 +1,6 @@
 # material/views.py
 import logging
+from .stock_safety import deduct_stock
 import re
 
 from django.shortcuts import render, redirect, get_object_or_404
@@ -853,20 +854,14 @@ def _do_cancel_incoming(trx, cancel_action):
                             raise Exception(f'ERP 입고 삭제 실패: {erp_err} (ERP번호: {erp_trx.erp_incoming_no})')
 
                     if good_stock:
-                        MaterialStock.objects.filter(pk=good_stock.pk).update(
-                            quantity=F('quantity') - inspection.qty_good
-                        )
+                        deduct_stock(good_stock, inspection.qty_good)
 
                     if inspection.qty_bad > 0:
-                        wh_bad = Warehouse.objects.filter(code='8200').first()
-                        if wh_bad:
-                            bad_stock = MaterialStock.objects.filter(
-                                warehouse=wh_bad, part=part, lot_no=lot_no, production_lot=trx.production_lot
-                            ).first()
-                            if bad_stock and bad_stock.quantity >= inspection.qty_bad:
-                                MaterialStock.objects.filter(pk=bad_stock.pk).update(
-                                    quantity=F('quantity') - inspection.qty_bad
-                                )
+                        bad_stock = MaterialStock.objects.filter(
+                            warehouse__code='8200', part=part, lot_no=lot_no,
+                            production_lot=trx.production_lot,
+                        ).first()
+                        deduct_stock(bad_stock, inspection.qty_bad)
 
                     # 양품/불량 이동 트랜잭션 삭제
                     inspection_transfers.delete()
@@ -938,22 +933,16 @@ def _do_cancel_incoming(trx, cancel_action):
                             warehouse=wh_good, part=part, lot_no=lot_no, production_lot=trx.production_lot
                         ).first()
                         if good_stock and good_stock.quantity >= inspection.qty_good:
-                            MaterialStock.objects.filter(pk=good_stock.pk).update(
-                                quantity=F('quantity') - inspection.qty_good
-                            )
+                            deduct_stock(good_stock, inspection.qty_good)
                         else:
                             raise Exception(f"목표 창고({target_code}) 양품 재고가 부족하여 삭제할 수 없습니다.")
 
                 if inspection.qty_bad > 0:
-                    wh_bad = Warehouse.objects.filter(code='8200').first()
-                    if wh_bad:
-                        bad_stock = MaterialStock.objects.filter(
-                            warehouse=wh_bad, part=part, lot_no=lot_no, production_lot=trx.production_lot
-                        ).first()
-                        if bad_stock and bad_stock.quantity >= inspection.qty_bad:
-                            MaterialStock.objects.filter(pk=bad_stock.pk).update(
-                                quantity=F('quantity') - inspection.qty_bad
-                            )
+                    bad_stock = MaterialStock.objects.filter(
+                        warehouse__code='8200', part=part, lot_no=lot_no,
+                        production_lot=trx.production_lot,
+                    ).first()
+                    deduct_stock(bad_stock, inspection.qty_bad)
 
                 # 판정 시 생성된 ERP 입고 삭제
                 from material.erp_api import delete_erp_incoming as del_erp_insp
@@ -982,9 +971,7 @@ def _do_cancel_incoming(trx, cancel_action):
                 if stock.quantity < trx.quantity:
                     raise Exception(f"현재 재고({stock.quantity})가 입고 수량({trx.quantity})보다 적어 삭제할 수 없습니다.")
 
-                MaterialStock.objects.filter(pk=stock.pk).update(
-                    quantity=F('quantity') - trx.quantity
-                )
+                deduct_stock(stock, trx.quantity)
 
             # ERP 입고 삭제 (실패 시 전체 롤백)
             erp_no = getattr(trx, 'erp_incoming_no', None)
@@ -1235,9 +1222,7 @@ def edit_manual_incoming(request, trx_id):
                         'error': f'현재 재고({current})가 기존 입고 수량({old_qty})보다 적어 수정할 수 없습니다.'
                     })
 
-                MaterialStock.objects.filter(pk=old_stock.pk).update(
-                    quantity=F('quantity') - old_qty
-                )
+                deduct_stock(old_stock, old_qty)
 
                 # (B) 새 재고 증가
                 new_stock, _ = MaterialStock.objects.get_or_create(
@@ -2234,27 +2219,19 @@ def api_process_tag_scan(request):
                 # LOT 재고 우선 차감
                 if lot_no and src_stock and src_stock.quantity > 0:
                     deduct_lot = min(src_stock.quantity, remaining)
-                    MaterialStock.objects.filter(pk=src_stock.pk).update(
-                        quantity=_F('quantity') - deduct_lot
-                    )
+                    deduct_stock(src_stock, deduct_lot)
                     remaining -= deduct_lot
                 # NULL LOT 차감
                 if remaining > 0 and null_stock and null_stock.quantity > 0:
                     deduct_null = min(null_stock.quantity, remaining)
-                    MaterialStock.objects.filter(pk=null_stock.pk).update(
-                        quantity=_F('quantity') - deduct_null
-                    )
+                    deduct_stock(null_stock, deduct_null)
                     remaining -= deduct_null
-                # NULL LOT 부족분도 강제 차감 (마이너스 가능)
+                # 조회 이후 재고가 바뀌었으면 전체 이동을 취소한다.
                 if remaining > 0:
                     if null_stock:
-                        MaterialStock.objects.filter(pk=null_stock.pk).update(
-                            quantity=_F('quantity') - remaining
-                        )
+                        deduct_stock(null_stock, remaining)
                     else:
-                        MaterialStock.objects.create(
-                            warehouse=wh_from, part=rm_label.part, lot_no=None, quantity=-remaining
-                        )
+                        raise ValueError('라벨 LOT 재고가 부족합니다. 다시 조회해 주세요.')
 
                 # 3000 창고에 추가 (LOT 유지)
                 tgt_stock, _created = MaterialStock.objects.get_or_create(
@@ -2381,14 +2358,9 @@ def api_process_tag_scan(request):
                     warehouse=wh_to_cancel, part=tag.part, lot_no=lot_no_tag
                 ).first()
                 if src_t:
-                    MaterialStock.objects.filter(pk=src_t.pk).update(
-                        quantity=_F('quantity') - cancel_qty_t
-                    )
+                    deduct_stock(src_t, cancel_qty_t)
                 else:
-                    MaterialStock.objects.create(
-                        warehouse=wh_to_cancel, part=tag.part, lot_no=lot_no_tag,
-                        quantity=-cancel_qty_t
-                    )
+                    raise ValueError('투입처 LOT 재고가 부족하여 취소할 수 없습니다.')
 
                 # 3200 재고 복구
                 tgt_t, _c = MaterialStock.objects.get_or_create(
@@ -2554,25 +2526,17 @@ def api_process_tag_scan(request):
             remaining = move_qty_t
             if lot_no_t and src_stock_t and src_stock_t.quantity > 0:
                 deduct_lot = min(src_stock_t.quantity, remaining)
-                MaterialStock.objects.filter(pk=src_stock_t.pk).update(
-                    quantity=_F('quantity') - deduct_lot
-                )
+                deduct_stock(src_stock_t, deduct_lot)
                 remaining -= deduct_lot
             if remaining > 0 and null_stock_t and null_stock_t.quantity > 0:
                 deduct_null = min(null_stock_t.quantity, remaining)
-                MaterialStock.objects.filter(pk=null_stock_t.pk).update(
-                    quantity=_F('quantity') - deduct_null
-                )
+                deduct_stock(null_stock_t, deduct_null)
                 remaining -= deduct_null
             if remaining > 0:
                 if null_stock_t:
-                    MaterialStock.objects.filter(pk=null_stock_t.pk).update(
-                        quantity=_F('quantity') - remaining
-                    )
+                    deduct_stock(null_stock_t, remaining)
                 else:
-                    MaterialStock.objects.create(
-                        warehouse=wh_from_tag, part=tag.part, lot_no=None, quantity=-remaining
-                    )
+                    raise ValueError('태그 LOT 재고가 부족합니다. 다시 조회해 주세요.')
 
             # 도착창고 재고 추가
             tgt_stock_t, _c = MaterialStock.objects.get_or_create(
@@ -2880,11 +2844,9 @@ def api_process_tag_cancel_scan(request):
                     warehouse=wh_3000, part=rm_label.part, lot_no=lot_no_cancel
                 ).first()
                 if src_3000:
-                    MaterialStock.objects.filter(pk=src_3000.pk).update(quantity=_F('quantity') - cancel_qty)
+                    deduct_stock(src_3000, cancel_qty)
                 else:
-                    MaterialStock.objects.create(
-                        warehouse=wh_3000, part=rm_label.part, lot_no=lot_no_cancel, quantity=-cancel_qty
-                    )
+                    raise ValueError('투입처 LOT 재고가 부족하여 취소할 수 없습니다.')
 
                 tgt_3200, _ = MaterialStock.objects.get_or_create(
                     warehouse=wh_3200, part=rm_label.part, lot_no=lot_no_cancel, defaults={'quantity': 0}
@@ -3364,8 +3326,7 @@ def stock_return(request):
                     return redirect('material:stock_return')
 
                 # (1) 재고 차감
-                stock.quantity = F('quantity') - return_qty
-                stock.save()
+                deduct_stock(stock, return_qty)
 
                 # (2) 반품 이력 남기기
                 trx_no = f"RET-{timezone.now().strftime('%y%m%d%H%M%S')}-{request.user.id}"
@@ -3565,9 +3526,7 @@ def stock_move(request):
                     production_lot = source_stock.production_lot
 
                     # 출고 창고 재고 차감
-                    MaterialStock.objects.filter(pk=source_stock.pk).update(
-                        quantity=F('quantity') - qty
-                    )
+                    deduct_stock(source_stock, qty)
 
                     # 2-2. 받는 창고에 동일 LOT/배치로 재고 증가
                     target_stock, _ = MaterialStock.objects.select_for_update().get_or_create(
@@ -3751,15 +3710,10 @@ def get_lot_details(request, part_no):
         if warehouse_code:
             base_qs = base_qs.filter(warehouse__code=warehouse_code)
 
-        # 전체 재고 합계 (음수 NULL 포함)
-        total_qty = base_qs.aggregate(total=Sum('quantity'))['total'] or 0
-
-        # 표시용: quantity > 0인 LOT만 (NULL 제외, LOT만 보여줌)
-        # LOT 관리품목: 실제 생산 LOT번호(production_lot)가 LOT이자 FIFO 1순위 (파싱 정렬).
+        stocks = list(base_qs.exclude(quantity=0))
+        total_qty = sum(stock.quantity for stock in stocks)
         from material.erp_api import fifo_sort_key
-        lot_stocks = sorted(
-            base_qs.filter(lot_no__isnull=False, quantity__gt=0), key=fifo_sort_key
-        )
+        lot_stocks = sorted((stock for stock in stocks if stock.lot_no is not None), key=fifo_sort_key)
 
         lot_data = []
         lot_total = 0
@@ -3784,28 +3738,24 @@ def get_lot_details(request, part_no):
             lot_total += stock.quantity
 
             # 가장 오래된 LOT 추적 (FIFO 경고용)
-            if oldest_lot is None or stock.lot_no < oldest_lot:
+            if stock.quantity > 0 and (oldest_lot is None or stock.lot_no < oldest_lot):
                 oldest_lot = stock.lot_no
 
-        # LOT이 없는 "실제" 재고만 표시 (lot_no=NULL, 수량 > 0).
-        # 음수/0 NULL 레코드는 허수(sync_stock_from_erp가 차액을 떠넘긴 잔재)이므로
-        # 절대 화면에 행으로 노출하지 않는다.
+        # 미지정/날짜 없는 배치도 음수를 포함하여 표시한다.
         null_shown_total = 0
-        for ns in base_qs.filter(lot_no__isnull=True, quantity__gt=0):
+        for ns in (stock for stock in stocks if stock.lot_no is None):
             lot_data.insert(0, {
                 'warehouse': ns.warehouse.name,
                 'warehouse_code': ns.warehouse.code,
                 'lot_no': 'LOT 미지정',
-                'production_lot': '',
-                'lot_label': 'LOT 미지정',
+                'production_lot': ns.production_lot or '',
+                'lot_label': ns.production_lot or 'LOT 미지정',
                 'quantity': ns.quantity,
                 'days_old': None,
                 'is_null_lot': True,
             })
             null_shown_total += ns.quantity
 
-        # 화면에 표시된 재고 합계가 전체(ERP) 합계와 다르면 = 허수 LOT/음수 NULL 이 있다는 뜻.
-        # 행으로 보여주는 대신 상단에 "재고동기화 필요" 안내만 띄운다.
         shown_total = lot_total + null_shown_total
         sync_gap = total_qty - shown_total
 
@@ -3824,6 +3774,7 @@ def get_lot_details(request, part_no):
             'shown_total': shown_total,
             'sync_gap': sync_gap,
             'sync_needed': sync_gap != 0,
+            'negative_count': sum(stock.quantity < 0 for stock in stocks),
             'lot_details': lot_data,
             'fifo_warning': fifo_warning,
             'oldest_lot': oldest_lot.strftime('%Y-%m-%d') if oldest_lot else None,
@@ -8302,6 +8253,7 @@ def cancel_stock_move(request, trx_id):
 
     try:
         with transaction.atomic():
+            trx = MaterialTransaction.objects.select_for_update().get(pk=trx.pk)
             from .models import RawMaterialLabel, ProcessTag
 
             # 1. 받는 창고 재고 차감 (LOT 관리품목은 배치까지 일치해야 정확한 행을 찾음)
@@ -8319,9 +8271,7 @@ def cancel_stock_move(request, trx_id):
                     'error': f'받는 창고 재고({current})가 이동 수량({int(trx.quantity)})보다 적어 취소할 수 없습니다.'
                 })
 
-            MaterialStock.objects.filter(pk=target_stock.pk).update(
-                quantity=F('quantity') - trx.quantity
-            )
+            deduct_stock(target_stock, trx.quantity)
 
             # 2. 보내는 창고 재고 복구
             source_stock, _ = MaterialStock.objects.get_or_create(
@@ -8445,73 +8395,33 @@ def erp_stock_manage(request):
     from django.conf import settings as django_settings
     from django.core.cache import cache
     from datetime import date
+    from .erp_sync_lock import erp_sync_is_running
 
     context = {
         'erp_enabled': getattr(django_settings, 'ERP_ENABLED', False),
         'today': date.today().isoformat(),
-        'stock_sync_running': bool(cache.get('erp_stock_sync_running')),
+        'stock_sync_running': erp_sync_is_running(),
     }
 
     action = request.POST.get('action', '') if request.method == 'POST' else ''
 
-    # ── ERP 재고 동기화 (비활성화: sync_erp_incoming이 직접 재고 반영) ──
-    if action == 'sync_stock':
-        messages.warning(request, '재고 총량 동기화는 비활성화되었습니다. 수불 동기화(입고)를 실행하면 재고가 자동 반영됩니다.')
-        return redirect('material:erp_stock_manage')
+    from .models import StockSyncRun
+    context['stock_sync_latest'] = StockSyncRun.objects.first()
+    context['stock_sync_success'] = StockSyncRun.objects.filter(status='success').first()
 
-    # ── 수불 동기화 (입고/출고/생산출고/생산입고/재고이동) ──
-    if action == 'sync_transactions':
-        from material.erp_api import (
-            sync_erp_incoming, sync_erp_issue, sync_erp_receipt,
-            sync_erp_stock_transfer, sync_erp_adjustments, sync_erp_outgoing
-        )
-
-        sync_jobs = [
-            ('구매입고', sync_erp_incoming),
-            ('고객출고', sync_erp_outgoing),
-            ('생산출고', sync_erp_issue),
-            ('생산입고', sync_erp_receipt),
-            ('재고이동', sync_erp_stock_transfer),
-            ('재고조정', sync_erp_adjustments),
-        ]
-
-        total_synced = 0
-        total_skipped = 0
-        total_errors = 0
-        details = []
-
-        for idx, (label, func) in enumerate(sync_jobs):
-            cache.set('erp_sync_progress', {
-                'stage': f'{label} 동기화 중...',
-                'percent': int((idx / len(sync_jobs)) * 100),
-                'detail': f'{idx}/{len(sync_jobs)} 완료',
-            }, timeout=300)
-
-            try:
-                synced, skipped, errs, err_list = func()
-                total_synced += synced
-                total_skipped += skipped
-                total_errors += errs
-                if synced > 0 or errs > 0:
-                    details.append(f'{label}: 반영 {synced}건')
-                for e in err_list[:2]:
-                    messages.warning(request, f'[{label}] {e}')
-            except Exception as e:
-                total_errors += 1
-                messages.warning(request, f'[{label}] 오류: {str(e)[:100]}')
-
-        cache.set('erp_sync_progress', {
-            'stage': '완료',
-            'percent': 100,
-            'detail': f'총 반영 {total_synced}건',
-        }, timeout=300)
-
-        if total_synced > 0:
-            detail_str = ' / '.join(details) if details else ''
-            messages.success(request, f'수불 동기화 완료: 반영 {total_synced}건, 건너뜀 {total_skipped}건 ({detail_str})')
-        else:
-            messages.info(request, f'수불 동기화: 신규 건 없음 (건너뜀 {total_skipped}건)')
-
+    if action in ('sync_stock', 'sync_transactions'):
+        if not context['erp_enabled']:
+            messages.warning(request, 'ERP 연동이 비활성화 상태입니다.')
+            return redirect('material:erp_stock_manage')
+        from .erp_sync_pipeline import sync_inventory
+        try:
+            result = sync_inventory()
+            if result['errors']:
+                messages.warning(request, '동기화 확인 필요: ' + '; '.join(result['error_list'][:5]))
+            else:
+                messages.success(request, f"수불·재고 동기화 완료: 수불 {result['synced']}건, 재고 조정 {result['stock']['adjusted']}건")
+        except Exception as exc:
+            messages.error(request, f'동기화 실패: {exc}')
         return redirect('material:erp_stock_manage')
 
     # ── ERP vs SCM 비교 ──
@@ -8735,15 +8645,7 @@ def manual_outgoing(request):
                             defaults={'quantity': 0}
                         )
 
-                    if stock.quantity < qty:
-                        messages.warning(
-                            request,
-                            f"재고 부족: {part.part_no} (현재고 {stock.quantity}, 출고요청 {qty}) - 가용수량만큼 출고됩니다."
-                        )
-
-                    MaterialStock.objects.filter(pk=stock.pk).update(
-                        quantity=Greatest(F('quantity') - qty, Value(0))
-                    )
+                    deduct_stock(stock, qty)
                     stock.refresh_from_db()
 
                     # (2) 수불 이력 생성
@@ -12464,6 +12366,7 @@ def transfer_request_revoke(request, pk):
 
     try:
         with transaction.atomic():
+            req = MaterialTransferRequest.objects.select_for_update().get(pk=req.pk, status='APPROVED')
             for trx in trxs:
                 # 재고 역산: from_wh +=, to_wh -= (LOT 관리품목은 배치까지 일치)
                 from_stock, _ = MaterialStock.objects.get_or_create(
@@ -12478,10 +12381,7 @@ def transfer_request_revoke(request, pk):
                     warehouse=trx.warehouse_to, part=trx.part, lot_no=trx.lot_no,
                     production_lot=trx.production_lot
                 ).first()
-                if to_stock:
-                    MaterialStock.objects.filter(pk=to_stock.pk).update(
-                        quantity=F('quantity') - trx.quantity
-                    )
+                deduct_stock(to_stock, trx.quantity)
                 trx.delete()
 
             # 라인 초기화

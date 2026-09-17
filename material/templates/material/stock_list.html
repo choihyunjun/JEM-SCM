@@ -281,10 +281,14 @@ function showLotDetails(partNo, warehouseCode) {
                 html += '<div class="alert alert-danger border-danger">';
                 html += '  <i class="bi bi-exclamation-octagon-fill me-2"></i>';
                 html += '  <strong>재고 정합 필요.</strong> 아래 LOT 재고 합계(' + Number(data.shown_total).toLocaleString() + ')가 ';
-                html += '  ERP 현재고(' + Number(data.total_quantity).toLocaleString() + ')와 ';
+                html += '  SCM 전체 재고(' + Number(data.total_quantity).toLocaleString() + ')와 ';
                 html += '  <strong>' + Math.abs(gap).toLocaleString() + ' ' + (data.weight_unit || 'EA') + '</strong> ';
-                html += (gap < 0 ? '많습니다' : '적습니다') + '. ERP 재고동기화를 실행하세요.';
+                html += (gap < 0 ? '많습니다' : '적습니다') + '. 재고를 다시 조회해 주세요.';
                 html += '</div>';
+            }
+
+            if (data.negative_count > 0) {
+                html += '<div class="alert alert-warning">음수 재고 ' + Number(data.negative_count) + '건이 포함되어 있습니다. 음수는 출고 가능 수량이 아니며, ERP 재고 관리에서 최근 보정 결과를 확인해 주세요.</div>';
             }
 
             if (data.lot_details.length === 0) {
@@ -324,7 +328,7 @@ function showLotDetails(partNo, warehouseCode) {
                     if (lot.production_lot && lot.lot_no && lot.lot_no !== lot.lot_label) {
                         lotCell += '<br><span class="text-muted" style="font-size:0.8em;">입고 ' + escapeHtml(lot.lot_no) + '</span>';
                     }
-                    html += '<tr>';
+                    html += Number(lot.quantity) < 0 ? '<tr class="table-danger text-danger">' : '<tr>';
                     html += '  <td><span class="badge bg-secondary me-1">' + escapeHtml(lot.warehouse_code) + '</span>' + escapeHtml(lot.warehouse) + '</td>';
                     html += '  <td class="text-center">' + lotCell + '</td>';
                     html += '  <td class="text-end fw-bold">' + Number(lot.quantity).toLocaleString() + ' ' + (data.weight_unit || 'EA') + '</td>';
