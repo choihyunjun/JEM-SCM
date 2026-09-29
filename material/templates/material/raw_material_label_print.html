@@ -41,6 +41,7 @@
 
         .toolbar-options {
             display: flex;
+            flex-wrap: wrap;
             gap: 20px;
             align-items: center;
             background: rgba(255,255,255,0.1);
@@ -92,6 +93,31 @@
             font-size: 9pt;
             font-weight: bold;
             cursor: pointer;
+        }
+
+        .offset-input { width: 75px; }
+        .calibration-options { flex-wrap: wrap; margin-top: 10px; }
+        .calibration-options[hidden] { display: none; }
+        .calibration-help { font-size: 9pt; color: #bdc3c7; }
+
+        @media screen {
+            #preview-container.roll-mode .label-page {
+                position: relative;
+                width: var(--paper-width, 80mm);
+                height: var(--paper-height, 50mm);
+                background: white;
+                outline: 1px dashed #bbb;
+                overflow: hidden;
+            }
+            #preview-container.roll-mode .label {
+                position: absolute;
+                left: var(--print-left, 3.5mm);
+                top: var(--print-top, 1mm);
+                width: calc(var(--paper-width, 80mm) - 7mm);
+                height: calc(var(--paper-height, 50mm) - 2mm);
+                box-shadow: none;
+            }
+            #preview-container.sheet-mode .label-page { display: contents; }
         }
 
         .btn {
@@ -290,14 +316,24 @@
                 padding: 0;
                 margin: 0;
             }
+            .label-page {
+                position: relative;
+                width: 80mm;
+                height: 50mm;
+                overflow: hidden;
+                break-inside: avoid;
+                page-break-after: always;
+            }
             .label {
+                position: absolute;
+                left: 3.5mm;
+                top: 1mm;
                 width: 73mm !important;
                 height: 48mm !important;
                 box-shadow: none;
-                page-break-after: always;
                 margin: 0;
             }
-            .label:last-child { page-break-after: auto; }
+            .label-page:last-child { page-break-after: auto; }
         }
     </style>
 </head>
@@ -334,11 +370,24 @@
                 <span style="font-size: 9pt; color: #f39c12;">📋 A4 1페이지당 <strong id="perPageCount">10</strong>장</span>
             </div>
         </div>
+        <div class="toolbar-options calibration-options" id="calibrationOptions">
+            <div class="option-group">
+                <label for="offsetX">좌우 보정 (mm)</label>
+                <input type="number" class="size-select offset-input" id="offsetX" min="-10" max="10" step="0.5" value="0" onchange="saveCalibration()">
+            </div>
+            <div class="option-group">
+                <label for="offsetY">상하 보정 (mm)</label>
+                <input type="number" class="size-select offset-input" id="offsetY" min="-10" max="10" step="0.5" value="0" onchange="saveCalibration()">
+            </div>
+            <button type="button" class="mode-btn" onclick="resetCalibration()">보정 초기화</button>
+            <span class="calibration-help">+값: 오른쪽 / 아래쪽 · -값: 왼쪽 / 위쪽 · 0: 기본 중앙 배치<br>라벨 크기별로 이 브라우저에 저장됩니다. 미리보기 테두리가 용지 끝이며, 밖으로 나간 내용은 잘립니다.</span>
+        </div>
     </div>
 
     <!-- 라벨 미리보기 -->
-    <div id="preview-container">
+    <div id="preview-container" class="roll-mode">
         {% for label in labels %}
+        <div class="label-page">
         <div class="label size-medium">
             <div class="label-title">현 품 표</div>
             <div class="label-body">
@@ -376,6 +425,7 @@
             </div>
             <div class="stamp-approved"><span>합격</span></div>
         </div>
+        </div>
         {% empty %}
         <div class="empty-state">
             <p>출력할 라벨이 없습니다.</p>
@@ -394,6 +444,42 @@
 
         let currentMode = 'roll';
         let currentSize = 'medium';
+        let calibration = { x: 0, y: 0 };
+        const CALIBRATION_KEY = 'rm-label-calibration-v1-';
+
+        function normalizeOffset(value) {
+            const number = Number(value);
+            return Number.isFinite(number) ? Math.round(Math.max(-10, Math.min(10, number)) * 2) / 2 : 0;
+        }
+
+        function loadCalibration() {
+            let saved = null;
+            try {
+                saved = JSON.parse(localStorage.getItem(CALIBRATION_KEY + currentSize));
+            } catch (e) { /* 저장소 사용 불가 또는 잘못된 값이면 기본값 사용 */ }
+            calibration = { x: normalizeOffset(saved?.x ?? 0), y: normalizeOffset(saved?.y ?? 0) };
+            document.getElementById('offsetX').value = calibration.x;
+            document.getElementById('offsetY').value = calibration.y;
+        }
+
+        function saveCalibration() {
+            calibration = {
+                x: normalizeOffset(document.getElementById('offsetX').value),
+                y: normalizeOffset(document.getElementById('offsetY').value)
+            };
+            document.getElementById('offsetX').value = calibration.x;
+            document.getElementById('offsetY').value = calibration.y;
+            try {
+                localStorage.setItem(CALIBRATION_KEY + currentSize, JSON.stringify(calibration));
+            } catch (e) { /* 저장소 사용 불가 시에도 현재 출력에는 적용 */ }
+            updatePrintStyle();
+        }
+
+        function resetCalibration() {
+            document.getElementById('offsetX').value = 0;
+            document.getElementById('offsetY').value = 0;
+            saveCalibration();
+        }
 
         // ===== 프린터 모드 변경 =====
         function setPrintMode(mode) {
@@ -402,7 +488,9 @@
                 btn.classList.toggle('active', btn.dataset.mode === mode);
             });
             document.getElementById('sheetInfo').style.display = (mode === 'sheet') ? '' : 'none';
+            document.getElementById('calibrationOptions').hidden = mode === 'sheet';
             document.getElementById('preview-container').classList.toggle('sheet-mode', mode === 'sheet');
+            document.getElementById('preview-container').classList.toggle('roll-mode', mode === 'roll');
             updatePrintStyle();
         }
 
@@ -419,15 +507,23 @@
             // 크기 정보 표시
             document.getElementById('sizeInfo').textContent = s.display;
 
+            loadCalibration();
+            updatePrintStyle();
             // QR 재생성
             regenerateQR(s.qr);
-            updatePrintStyle();
         }
 
         // ===== 동적 인쇄 스타일 업데이트 =====
         function updatePrintStyle() {
             const s = SIZES[currentSize];
             const styleEl = document.getElementById('dynamic-print-style');
+            const preview = document.getElementById('preview-container');
+            const left = 3.5 + calibration.x;
+            const top = 1 + calibration.y;
+            preview.style.setProperty('--paper-width', s.w + 'mm');
+            preview.style.setProperty('--paper-height', s.h + 'mm');
+            preview.style.setProperty('--print-left', left + 'mm');
+            preview.style.setProperty('--print-top', top + 'mm');
             let css = '';
 
             if (currentMode === 'sheet') {
@@ -448,6 +544,7 @@
                         margin: 0 !important;
                         width: 100% !important;
                     }
+                    .label-page { display: contents !important; }
                     .label {
                         width: ${s.w}mm !important;
                         height: ${s.h}mm !important;
@@ -457,7 +554,7 @@
                     }
                 }`;
             } else {
-                // 라벨 프린터 - 1장씩 (라벨보다 7mm 작게 인쇄하여 잘림 방지)
+                // 고정 크기 용지 안에서 내용만 이동하여 보정값이 페이지 수에 영향을 주지 않도록 함
                 const pw = s.w - 7;
                 const ph = s.h - 2;
                 css = `
@@ -468,14 +565,24 @@
                         padding: 0 !important;
                         margin: 0 !important;
                     }
+                    .label-page {
+                        position: relative;
+                        width: ${s.w}mm;
+                        height: ${s.h}mm;
+                        overflow: hidden;
+                        break-inside: avoid;
+                        page-break-after: always;
+                    }
                     .label {
+                        position: absolute;
+                        left: ${left}mm;
+                        top: ${top}mm;
                         width: ${pw}mm !important;
                         height: ${ph}mm !important;
                         box-shadow: none !important;
-                        page-break-after: always !important;
                         margin: 0 !important;
                     }
-                    .label:last-child {
+                    .label-page:last-child {
                         page-break-after: auto !important;
                     }
                 }`;
@@ -516,6 +623,10 @@
             }{% if not forloop.last %},{% endif %}
             {% endfor %}
         ];
+
+        loadCalibration();
+        updatePrintStyle();
+        window.addEventListener('beforeprint', saveCalibration);
 
         // 초기 QR 생성
         regenerateQR(SIZES[currentSize].qr);
