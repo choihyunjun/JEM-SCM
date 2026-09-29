@@ -10725,9 +10725,9 @@ def api_molding_master_detail(request, pk):
 def mold_mt_dashboard(request):
     """금형 MT 대시보드 - 금형 유지보수/MT 현황"""
     import json as _json
-    from django.db.models import Sum, Value, IntegerField
+    from django.db.models import Sum, Value, IntegerField, OuterRef, Subquery
     from django.db.models.functions import Coalesce
-    from .models import MoldMaster as MoldMasterModel, MoldMTSetting
+    from .models import MoldMaster as MoldMasterModel, MoldMTSetting, MoldMTLog
 
     # MT 기준을 DB에서 캐싱 (구분 → 숏트수)
     MT_INTERVAL_MAP = {}
@@ -10736,9 +10736,12 @@ def mold_mt_dashboard(request):
     if not MT_INTERVAL_MAP:
         MT_INTERVAL_MAP = {'A': 50000, 'B': 30000}
 
-    # annotate로 월별 숏트 합계를 DB에서 한번에 계산
+    latest_mt = MoldMTLog.objects.filter(mold_id=OuterRef('pk')).order_by('-mt_date')
+
+    # MT 날짜는 서브쿼리로 조회하여 월별 숏트 합계의 중복 집계를 방지
     qs = MoldMasterModel.objects.filter(is_active=True).annotate(
-        _monthly_shots=Coalesce(Sum('shot_records__shots'), Value(0), output_field=IntegerField())
+        _monthly_shots=Coalesce(Sum('shot_records__shots'), Value(0), output_field=IntegerField()),
+        c_last_mt_date=Subquery(latest_mt.values('mt_date')[:1]),
     )
 
     # 필터 (다중 선택 지원: getlist)
@@ -10760,7 +10763,6 @@ def mold_mt_dashboard(request):
         qs = qs.filter(material_type__in=materials_filter)
 
     # MT 년도/월 필터: 해당 년월에 최종 MT 이력이 있는 금형만
-    from .models import MoldMTLog
     if mt_year_filter or mt_month_filter:
         mt_log_qs = MoldMTLog.objects.all()
         if mt_year_filter:

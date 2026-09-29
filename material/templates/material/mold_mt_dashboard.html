@@ -290,15 +290,16 @@
                         <th class="sortable" data-col="2">기종 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th class="sortable" data-col="3">부품번호 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th>금형명</th>
-                        <th class="sortable" data-col="5">구분 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
+                        <th>최종 MT일</th>
+                        <th class="sortable" data-col="6">구분 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th>재료</th>
-                        <th class="sortable" data-col="7">누적숏트 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
+                        <th class="sortable" data-col="8">누적숏트 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th>이전MT</th>
-                        <th class="sortable" data-col="9">MT후 누적 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
+                        <th class="sortable" data-col="10">MT후 누적 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th>MT기준</th>
-                        <th class="sortable" data-col="11">MT진행률 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
-                        <th class="sortable" data-col="12">보증 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
-                        <th class="sortable" data-col="13">상태 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
+                        <th class="sortable" data-col="12">MT진행률 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
+                        <th class="sortable" data-col="13">보증 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
+                        <th class="sortable" data-col="14">상태 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th style="width:40px">MT</th>
                     </tr>
                 </thead>
@@ -310,6 +311,7 @@
                         <td class="text-start">{{ m.item_group }}</td>
                         <td class="fw-bold text-primary">{{ m.part_no }}</td>
                         <td class="text-start" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;">{{ m.mold_name }}</td>
+                        <td>{{ m.c_last_mt_date|date:"Y-m-d"|default:"-" }}</td>
                         <td><span class="badge bg-secondary" style="font-size:0.65rem;">{{ m.grade|default:'-' }}</span></td>
                         <td>{{ m.material_type|default:'-' }}</td>
                         <td class="fw-bold" data-value="{{ m.c_total_shots }}">{{ m.c_total_shots|intcomma }}</td>
@@ -356,7 +358,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="15" class="text-center text-muted py-5">
+                        <td colspan="16" class="text-center text-muted py-5">
                             <i class="bi bi-inbox" style="font-size: 2rem;"></i>
                             <p class="mt-2">등록된 금형 데이터가 없습니다.</p>
                             <p class="small">엑셀 업로드로 금형 데이터를 등록해주세요.</p>
