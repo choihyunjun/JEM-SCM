@@ -2697,7 +2697,11 @@ def api_scan_history_by_part(request):
     def visible_history(qs, date_field='used_at'):
         # 건수 제한 전에 기간을 제외해야 숨기지 않은 과거 이력이 정상 조회된다.
         if hidden_range:
-            return qs.exclude(**{f'{date_field}__range': hidden_range})
+            # 투입일시가 없는 이력은 기간을 판별할 수 없으므로 숨김 ON 동안 함께 제외한다.
+            return qs.exclude(
+                Q(**{f'{date_field}__range': hidden_range})
+                | Q(**{f'{date_field}__isnull': True})
+            )
         return qs
 
     part_no = request.GET.get('part_no', '').strip()

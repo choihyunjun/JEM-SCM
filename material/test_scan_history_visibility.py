@@ -68,7 +68,6 @@ class ScanHistoryVisibilityTests(TestCase):
             hidden.add(self.create_history(kind, 'START', self.start))
             hidden.add(self.create_history(kind, 'END', self.end))
             visible.add(self.create_history(kind, 'AFTER', self.end + timedelta(microseconds=1)))
-        visible.add(self.create_history('RM', 'UNKNOWN', None))
         self.assertEqual(self.save_setting().status_code, 200)
         for part_no in ('', self.part.part_no):
             with self.subTest(part_no=part_no):
@@ -80,6 +79,25 @@ class ScanHistoryVisibilityTests(TestCase):
         self.assertEqual(set(self.history_ids()), visible | hidden)
         config = WMSConfig.objects.get()
         self.assertEqual(config.scan_history_hide_from, date(2026, 5, 1))
+
+    def test_undated_history_is_hidden_only_while_enabled_and_never_modified(self):
+        undated = {
+            self.create_history(kind, 'UNKNOWN', None)
+            for kind in ('TAG', 'RM', 'PLT')
+        }
+        recent = self.create_history('RM', 'RECENT', self.end + timedelta(days=1))
+        models = (ProcessTag, RawMaterialLabel)
+        before = {model: list(model.objects.order_by('pk').values()) for model in models}
+        for part_no in ('', self.part.part_no):
+            self.assertEqual(set(self.history_ids(part_no)), undated | {recent})
+        self.save_setting()
+        for part_no in ('', self.part.part_no):
+            self.assertEqual(self.history_ids(part_no), [recent])
+        self.save_setting(False)
+        for part_no in ('', self.part.part_no):
+            self.assertEqual(set(self.history_ids(part_no)), undated | {recent})
+        for model in models:
+            self.assertEqual(list(model.objects.order_by('pk').values()), before[model])
 
     def test_filter_runs_before_each_source_limit(self):
         visible = set()

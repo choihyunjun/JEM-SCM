@@ -856,7 +856,7 @@
                         <label class="form-label small" for="historyHideTo">종료일</label>
                         <input type="date" class="form-control form-control-sm mb-2" id="historyHideTo"
                                value="{{ scan_history_hide_to|date:'Y-m-d' }}">
-                        <small class="text-muted">투입일시 기준으로 시작일과 종료일을 포함합니다.</small>
+                        <small class="text-muted">투입일시 기준으로 시작일과 종료일을 포함합니다. 투입일시가 없는 이력(-)도 ON 동안 함께 숨깁니다.</small>
                     </div>
                     <small class="d-block text-muted my-2">모든 사용자에게 적용됩니다. 원본 이력과 재고는 유지되며, OFF로 저장하면 다시 표시됩니다.</small>
                     <div id="historyVisibilityResult" class="small text-danger mb-2" role="alert" hidden></div>
