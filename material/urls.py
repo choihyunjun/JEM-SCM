@@ -141,6 +141,7 @@ urlpatterns = [
     path('api/audit-mode/toggle/', views.api_audit_mode_toggle, name='api_audit_mode_toggle'),
     path('api/audit-mode/set-override/', views.api_audit_mode_set_override, name='api_audit_mode_set_override'),
     path('api/audit-mode/clear-all/', views.api_audit_mode_clear_all, name='api_audit_mode_clear_all'),
+    path('api/scan-history/visibility/', views.api_scan_history_visibility, name='api_scan_history_visibility'),
 
     # 성형 가동률
     path('production/', views.production_main, name='production_main'),

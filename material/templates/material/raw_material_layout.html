@@ -842,6 +842,26 @@
                     <i class="bi bi-{% if audit_mode %}shield-fill-check{% else %}shield{% endif %} me-1"></i>
                     감사모드 {% if audit_mode %}OFF로 전환{% else %}ON으로 전환{% endif %}
                 </button>
+                <hr style="margin:16px 0;">
+                <form id="historyVisibilityForm" class="text-start" onsubmit="saveHistoryVisibility(event)">
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" role="switch" id="hideScanHistory"
+                               {% if hide_scan_history %}checked{% endif %} onchange="toggleHistoryVisibilityFields()">
+                        <label class="form-check-label fw-bold" for="hideScanHistory">투입이력 숨기기</label>
+                    </div>
+                    <div id="historyVisibilityDates" {% if not hide_scan_history %}hidden{% endif %}>
+                        <label class="form-label small" for="historyHideFrom">시작일</label>
+                        <input type="date" class="form-control form-control-sm mb-2" id="historyHideFrom"
+                               value="{{ scan_history_hide_from|date:'Y-m-d' }}">
+                        <label class="form-label small" for="historyHideTo">종료일</label>
+                        <input type="date" class="form-control form-control-sm mb-2" id="historyHideTo"
+                               value="{{ scan_history_hide_to|date:'Y-m-d' }}">
+                        <small class="text-muted">투입일시 기준으로 시작일과 종료일을 포함합니다.</small>
+                    </div>
+                    <small class="d-block text-muted my-2">모든 사용자에게 적용됩니다. 원본 이력과 재고는 유지되며, OFF로 저장하면 다시 표시됩니다.</small>
+                    <div id="historyVisibilityResult" class="small text-danger mb-2" role="alert" hidden></div>
+                    <button type="submit" id="historyVisibilitySave" class="btn btn-primary btn-sm w-100">설정 저장</button>
+                </form>
                 {% if audit_mode %}
                 <hr style="margin:16px 0;">
                 <button class="btn btn-outline-danger btn-sm w-100" onclick="clearAllOverrides()" style="border-radius:8px;">
@@ -1641,6 +1661,52 @@ document.getElementById('scanHistoryModal').addEventListener('hidden.bs.modal', 
 })();
 
 // === 감사모드 기능 ===
+function toggleHistoryVisibilityFields() {
+    const toggle = document.getElementById('hideScanHistory');
+    if (!toggle) return;
+    document.getElementById('historyVisibilityDates').hidden = !toggle.checked;
+    ['historyHideFrom', 'historyHideTo'].forEach(id => {
+        const input = document.getElementById(id);
+        input.disabled = !toggle.checked;
+        input.required = toggle.checked;
+    });
+}
+toggleHistoryVisibilityFields();
+
+async function saveHistoryVisibility(event) {
+    event.preventDefault();
+    const enabled = document.getElementById('hideScanHistory').checked;
+    const dateFrom = document.getElementById('historyHideFrom').value;
+    const dateTo = document.getElementById('historyHideTo').value;
+    const result = document.getElementById('historyVisibilityResult');
+    result.hidden = true;
+    if (enabled && (!dateFrom || !dateTo || dateFrom > dateTo)) {
+        result.textContent = '시작일과 종료일을 확인해주세요. 시작일은 종료일보다 늦을 수 없습니다.';
+        result.hidden = false;
+        return;
+    }
+
+    const button = document.getElementById('historyVisibilitySave');
+    button.disabled = true;
+    button.textContent = '저장 중...';
+    try {
+        const response = await fetch('{% url "material:api_scan_history_visibility" %}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+            body: JSON.stringify({ enabled, date_from: dateFrom, date_to: dateTo })
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.error || '설정을 저장하지 못했습니다.');
+        location.reload();
+    } catch (error) {
+        result.textContent = error.message || '설정을 저장하지 못했습니다.';
+        result.hidden = false;
+    } finally {
+        button.disabled = false;
+        button.textContent = '설정 저장';
+    }
+}
+
 function toggleAuditMode() {
     if (!confirm('감사모드를 변경하시겠습니까?')) return;
     fetch('{% url "material:api_audit_mode_toggle" %}', {

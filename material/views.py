@@ -2681,15 +2681,32 @@ def api_scan_history_by_part(request):
     - 원재료 레이아웃에서 랙 셀 클릭 시 사용
     GET ?part_no=11630-06360
     """
-    from .models import ProcessTag, RawMaterialLabel
+    from datetime import datetime, time
+    from .models import ProcessTag, RawMaterialLabel, WMSConfig
+
+    config = WMSConfig.objects.filter(pk=1).first()
+    hidden_range = None
+    if (config and config.hide_scan_history
+            and config.scan_history_hide_from and config.scan_history_hide_to):
+        tz = timezone.get_default_timezone()
+        hidden_range = (
+            timezone.make_aware(datetime.combine(config.scan_history_hide_from, time.min), tz),
+            timezone.make_aware(datetime.combine(config.scan_history_hide_to, time.max), tz),
+        )
+
+    def visible_history(qs, date_field='used_at'):
+        # 건수 제한 전에 기간을 제외해야 숨기지 않은 과거 이력이 정상 조회된다.
+        if hidden_range:
+            return qs.exclude(**{f'{date_field}__range': hidden_range})
+        return qs
 
     part_no = request.GET.get('part_no', '').strip()
     # part_no 비어있으면 전체 품목 조회
     if not part_no:
         # 전체 모드: 모든 USED 라벨/태그 (최근 50건)
-        tags_all = ProcessTag.objects.filter(
+        tags_all = visible_history(ProcessTag.objects.filter(
             status='USED', used_warehouse__code='3000', stock_reflected=False
-        ).select_related('used_by').order_by('-used_at')[:50]
+        )).select_related('used_by').order_by('-used_at')[:50]
         items_all = []
         for t in tags_all:
             items_all.append({
@@ -2703,9 +2720,9 @@ def api_scan_history_by_part(request):
                 'used_by': t.used_by.username if t.used_by else '-',
                 'stock_reflected': False,
             })
-        used_labels_all = RawMaterialLabel.objects.filter(
+        used_labels_all = visible_history(RawMaterialLabel.objects.filter(
             status='USED'
-        ).select_related('used_by').order_by('-used_at')[:50]
+        )).select_related('used_by').order_by('-used_at')[:50]
         for lbl in used_labels_all:
             items_all.append({
                 'tag_id': lbl.label_id,
@@ -2719,10 +2736,10 @@ def api_scan_history_by_part(request):
                 'stock_reflected': False,
             })
         # ERP 수기반영 전체 이력
-        erp_trxs_all = MaterialTransaction.objects.filter(
+        erp_trxs_all = visible_history(MaterialTransaction.objects.filter(
             transaction_type='TRF_ERP',
             remark__icontains='수기반영',
-        ).select_related('part', 'actor').order_by('-date')[:50]
+        ), 'date').select_related('part', 'actor').order_by('-date')[:50]
         for trx in erp_trxs_all:
             items_all.append({
                 'tag_id': f'ERP-{trx.erp_incoming_no or trx.transaction_no}',
@@ -2742,9 +2759,9 @@ def api_scan_history_by_part(request):
     items = []
 
     # 1) ProcessTag - 현재 USED 상태만 표시 (취소된 건 자동 제외)
-    tags = ProcessTag.objects.filter(
+    tags = visible_history(ProcessTag.objects.filter(
         part_no=part_no, status='USED', used_warehouse__code='3000', stock_reflected=False
-    ).select_related('used_by').order_by('-used_at')[:30]
+    )).select_related('used_by').order_by('-used_at')[:30]
     for t in tags:
         items.append({
             'tag_id': t.tag_id,
@@ -2757,9 +2774,9 @@ def api_scan_history_by_part(request):
         })
 
     # 2) RM/PLT 라벨 - 현재 USED 상태만 표시 (취소되어 INSTOCK 복구된 건 자동 제외)
-    used_labels = RawMaterialLabel.objects.filter(
+    used_labels = visible_history(RawMaterialLabel.objects.filter(
         part_no=part_no, status='USED'
-    ).select_related('used_by', 'part').order_by('-used_at')[:30]
+    )).select_related('used_by', 'part').order_by('-used_at')[:30]
     for lbl in used_labels:
         items.append({
             'tag_id': lbl.label_id,
@@ -2774,11 +2791,11 @@ def api_scan_history_by_part(request):
     # 3) ERP 수기반영 이력 (TRF_ERP + remark에 '수기반영' 포함)
     part_obj = Part.objects.filter(part_no=part_no).first()
     if part_obj:
-        erp_trxs = MaterialTransaction.objects.filter(
+        erp_trxs = visible_history(MaterialTransaction.objects.filter(
             part=part_obj,
             transaction_type='TRF_ERP',
             remark__icontains='수기반영',
-        ).order_by('-date')[:30]
+        ), 'date').order_by('-date')[:30]
         for trx in erp_trxs:
             items.append({
                 'tag_id': f'ERP-{trx.erp_incoming_no or trx.transaction_no}',
@@ -6579,9 +6596,9 @@ def raw_material_layout(request):
         status__in=['INSTOCK', 'PRINTED']
     ).count()
 
-    # 편집 권한 확인
-    profile = getattr(request.user, 'userprofile', None)
-    can_edit = request.user.is_superuser or (profile and getattr(profile, 'can_wms_stock_edit', False))
+    # 설정 화면과 저장 API에 동일한 편집 권한을 적용한다.
+    from orders.access import has_permission
+    can_edit = has_permission(request.user, 'can_wms_stock_edit')
 
     # 도착 창고 목록 (3200 출발용 - 기본 3000)
     target_warehouses = Warehouse.objects.filter(
@@ -6599,6 +6616,9 @@ def raw_material_layout(request):
         'expiry_imminent': expiry_imminent,
         'expiry_warning': expiry_warning,
         'audit_mode': audit_mode_on,
+        'hide_scan_history': config.hide_scan_history,
+        'scan_history_hide_from': config.scan_history_hide_from,
+        'scan_history_hide_to': config.scan_history_hide_to,
         'can_edit': can_edit,
         'target_warehouses': target_warehouses,
     }
@@ -6845,6 +6865,43 @@ def api_erp_transfer_apply(request):
 # =============================================================================
 # 감사모드 API
 # =============================================================================
+@login_required
+@require_POST
+def api_scan_history_visibility(request):
+    """투입이력 조회에서만 적용할 전역 숨김 기간을 저장한다."""
+    from datetime import date
+    from orders.access import has_permission
+    from .models import WMSConfig
+
+    if not has_permission(request.user, 'can_wms_stock_edit'):
+        return JsonResponse({'success': False, 'error': '설정 변경 권한이 없습니다.'}, status=403)
+
+    try:
+        data = json.loads(request.body)
+        if not isinstance(data, dict) or type(data.get('enabled')) is not bool:
+            raise ValueError
+        enabled = data['enabled']
+        if enabled:
+            date_from = date.fromisoformat(data.get('date_from', ''))
+            date_to = date.fromisoformat(data.get('date_to', ''))
+            if date_from > date_to:
+                raise ValueError
+    except (ValueError, TypeError, UnicodeDecodeError):
+        return JsonResponse({
+            'success': False, 'error': '올바른 시작일과 종료일을 입력해주세요. 시작일은 종료일보다 늦을 수 없습니다.',
+        }, status=400)
+
+    config = WMSConfig.get_config()
+    config.hide_scan_history = enabled
+    fields = ['hide_scan_history']
+    if enabled:
+        config.scan_history_hide_from = date_from
+        config.scan_history_hide_to = date_to
+        fields += ['scan_history_hide_from', 'scan_history_hide_to']
+    config.save(update_fields=fields)
+    return JsonResponse({'success': True})
+
+
 @wms_permission_required('can_wms_stock_edit')
 def api_audit_mode_toggle(request):
     """감사모드 ON/OFF 토글"""

@@ -972,6 +972,10 @@ class WMSConfig(models.Model):
     show_expiry_references = models.BooleanField('유효기간 이력 ERP/SCM·수불번호 표시', default=True)
     expiry_display_revision = models.PositiveIntegerField('유효기간 표시 설정 버전', default=0)
 
+    hide_scan_history = models.BooleanField('기간별 투입이력 숨기기', default=False)
+    scan_history_hide_from = models.DateField('투입이력 숨김 시작일', null=True, blank=True)
+    scan_history_hide_to = models.DateField('투입이력 숨김 종료일', null=True, blank=True)
+
     audit_mode = models.BooleanField("감사모드", default=False,
                                       help_text="ON이면 레이아웃에 오버라이드 수량 표시")
     audit_mode_changed_at = models.DateTimeField("감사모드 변경일시", null=True, blank=True)
