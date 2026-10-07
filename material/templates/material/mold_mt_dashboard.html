@@ -490,8 +490,9 @@
                             <label class="form-label small fw-bold mb-1">구분</label>
                             <select name="grade" class="form-select form-select-sm">
                                 <option value="">-</option>
-                                <option value="A">A (MT 50,000)</option>
-                                <option value="B">B (MT 30,000)</option>
+                                {% for setting in mt_settings %}
+                                <option value="{{ setting.grade }}">{{ setting.grade }} (MT {{ setting.interval|intcomma }})</option>
+                                {% endfor %}
                             </select>
                         </div>
                         <div class="col-3 mb-2">
@@ -565,7 +566,7 @@
             <div class="modal-body">
                 <div class="alert alert-info small mb-2">
                     <strong>엑셀 형식 (1행 헤더):</strong><br>
-                    <code>기종 | 부품번호 | 금형명 | 구분(A/B) | 보증수량 | 누적숏트 | 이전MT | MT기준</code>
+                    <code>기종 | 부품번호 | 금형명 | 구분 | 보증수량 | 누적숏트 | 이전MT | MT기준</code>
                 </div>
                 <table class="table table-sm table-bordered small mb-2" style="font-size:0.75rem;">
                     <thead class="table-light">
@@ -575,7 +576,7 @@
                         <tr><td>A</td><td>기종</td><td>기종(전체)</td></tr>
                         <tr><td>B</td><td>부품번호</td><td>필수</td></tr>
                         <tr><td>C</td><td>금형명</td><td>금형 이름</td></tr>
-                        <tr><td>D</td><td>구분</td><td>A 또는 B</td></tr>
+                        <tr><td>D</td><td>구분</td><td>MT 기준 설정에 등록된 구분</td></tr>
                         <tr><td>E</td><td>보증수량</td><td>보증수명(숏트)</td></tr>
                         <tr><td>F</td><td>누적숏트</td><td>현재까지 총 숏트수</td></tr>
                         <tr><td>G</td><td>이전MT</td><td>최근 MT시점 누적숏트</td></tr>
@@ -784,7 +785,39 @@
     </div>
 </div>
 
+{{ mt_settings|json_script:"mold-mt-grade-settings" }}
 <script>
+let moldGradeSettings = JSON.parse(document.getElementById('mold-mt-grade-settings').textContent);
+
+function moldGradeOptions(selectedGrade = '') {
+    const grades = moldGradeSettings.length ? moldGradeSettings : [
+        {grade: 'A', interval: 50000}, {grade: 'B', interval: 30000}
+    ];
+    const select = document.createElement('select');
+    select.appendChild(new Option('-', '', false, !selectedGrade));
+    grades.forEach(setting => {
+        const grade = setting.grade.trim().toUpperCase();
+        if (!grade || Array.from(select.options).some(option => option.value === grade)) return;
+        select.appendChild(new Option(
+            grade + ' (MT ' + Number(setting.interval).toLocaleString('ko-KR') + ')',
+            grade, false, grade === selectedGrade
+        ));
+    });
+    // 기준이 삭제되거나 변경되어도 기존 금형의 구분을 임의로 비우지 않는다.
+    if (selectedGrade && !Array.from(select.options).some(option => option.value === selectedGrade)) {
+        select.appendChild(new Option(selectedGrade, selectedGrade, false, true));
+    }
+    // innerHTML로 전달할 때도 selected 상태를 유지한다.
+    Array.from(select.options).forEach(option => { option.defaultSelected = option.selected; });
+    return select.innerHTML;
+}
+
+function refreshMoldGradeOptions(settings) {
+    moldGradeSettings = settings;
+    document.querySelectorAll('#addMoldForm select[name="grade"], #editMoldForm select[name="grade"]').forEach(select => {
+        select.innerHTML = moldGradeOptions(select.value);
+    });
+}
 // ─── 품번/품명 자동완성 ───
 (function() {
     var partNos = {{ part_nos_json|safe }};
@@ -973,8 +1006,7 @@ document.querySelectorAll('.clickable-row').forEach(row => {
                                     <th>구분</th>
                                     <td>
                                         <select class="form-select form-select-sm" name="grade">
-                                            <option value="">-</option>
-                                            ${['A','B'].map(g => '<option value="'+g+'"'+(data.grade===g?' selected':'')+'>'+g+'</option>').join('')}
+                                            ${moldGradeOptions(data.grade || '')}
                                         </select>
                                     </td>
                                 </tr>
@@ -1359,12 +1391,15 @@ function loadSettings() {
     fetch('{% url "material:mold_mt_settings" %}')
         .then(r => r.json())
         .then(res => {
+            if (!res.success) throw new Error(res.error || 'MT 기준을 불러오지 못했습니다.');
+            refreshMoldGradeOptions(res.data || []);
             const tbody = document.getElementById('settingsBody');
             tbody.innerHTML = '';
             if (res.data && res.data.length) {
                 res.data.forEach(s => addSettingRowData(s));
             }
-        });
+        })
+        .catch(err => alert('MT 기준 조회 오류: ' + err.message));
 }
 
 function addSettingRow() {
