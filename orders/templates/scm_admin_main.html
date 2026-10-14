@@ -53,7 +53,7 @@
                                 <th>입고일</th>
                                 <th>협력사</th>
                                 <th>품번</th>
-                                <th>수량</th>
+                                <th class="erp-number">수량</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -62,7 +62,7 @@
                                 <td>{{ in_item.in_date }}</td>
                                 <td>{{ in_item.part.vendor.name }}</td>
                                 <td>{{ in_item.part.part_no }}</td>
-                                <td class="fw-bold">{{ in_item.quantity|intcomma }}</td>
+                                <td class="fw-bold erp-number">{{ in_item.quantity|intcomma }}</td>
                             </tr>
                             {% empty %}
                             <tr><td colspan="4" class="text-center py-4">최근 입고 내역이 없습니다.</td></tr>

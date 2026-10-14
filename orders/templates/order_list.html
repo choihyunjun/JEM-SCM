@@ -28,8 +28,8 @@
                         <th style="width: 12%;">납기일</th>
                         <th style="width: 18%;">협력사</th>
                         <th>품번</th>
-                        <th style="width: 12%;">발주수량</th>
-                        <th style="width: 12%;">입고수량</th>
+                        <th style="width: 12%;" class="erp-number">발주수량</th>
+                        <th style="width: 12%;" class="erp-number">입고수량</th>
                         <th style="width: 15%;">미납 잔량</th>
                     </tr>
                 </thead>
@@ -40,8 +40,8 @@
                         <td class="text-muted">{{ o.vendor_name }}</td>
                         <td class="fw-bold text-dark">{{ o.part_no }}</td>
                         <td class="text-end">{{ o.order_qty|intcomma }}</td>
-                        <td class="text-end text-success">{{ o.incoming_qty|intcomma }}</td>
-                        <td class="text-end pe-3 fw-bold text-danger">{{ o.remain_qty|intcomma }}</td>
+                        <td class="text-end text-success erp-number">{{ o.incoming_qty|intcomma }}</td>
+                        <td class="text-end pe-3 fw-bold text-danger erp-number">{{ o.remain_qty|intcomma }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -220,7 +220,7 @@
                                 <td class="text-center small">{{ order.part_group|default:"" }}</td>
                                 <td>{{ order.part_no }}</td>
                                 <td>{{ order.part_name }}</td>
-                                <td class="text-end fw-bold">{{ order.quantity|intcomma }}</td>
+                                <td class="text-end fw-bold erp-number">{{ order.quantity|intcomma }}</td>
                                 <td class="text-center fw-bold">{{ order.due_date|date:"Y-m-d" }}</td>
                             </tr>
                             {% empty %}

@@ -4,14 +4,14 @@
 {% block title %}QMS 대시보드{% endblock %}
 
 {% block qms_content %}
-<div class="dtl-wrap" style="max-width:1400px;">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <span class="dtl-title">QMS 대시보드</span>
-        <span class="text-muted small">품질관리시스템</span>
+<div class="dtl-wrap erp-dashboard" style="max-width:1400px;">
+    <div class="d-flex justify-content-between align-items-center mb-4 erp-dashboard-heading">
+        <h1 class="dtl-title">QMS 대시보드</h1>
+
     </div>
 
     <!-- 주요 지표 카드 -->
-    <div class="row g-3 mb-3">
+    <div class="row g-3 mb-3 erp-kpi-strip">
         <!-- 수입검사 -->
         <div class="col-md-3 col-sm-6">
             <div class="dtl-card h-100 mb-0">
@@ -19,7 +19,7 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">수입검사 대기</div>
-                            <div class="h3 fw-bold mb-0" style="color:#4338ca;">{{ import_stats.pending }}</div>
+                            <div class="h3 fw-bold mb-0 erp-kpi-neutral" style="color:#4338ca;">{{ import_stats.pending }}</div>
                         </div>
                         <div class="p-3 rounded" style="background:#eef2ff;">
                             <i class="bi bi-clipboard-check fs-4" style="color:#4338ca;"></i>
@@ -37,7 +37,7 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">출하검사 대기</div>
-                            <div class="h3 fw-bold mb-0" style="color:#0e7490;">{{ outgoing_stats.pending }}</div>
+                            <div class="h3 fw-bold mb-0 erp-kpi-neutral" style="color:#0e7490;">{{ outgoing_stats.pending }}</div>
                         </div>
                         <div class="p-3 rounded" style="background:#ecfeff;">
                             <i class="bi bi-truck fs-4" style="color:#0e7490;"></i>
@@ -92,14 +92,14 @@
     </div>
 
     <!-- 2행: 클레임, 4M 변경, ISIR -->
-    <div class="row g-3 mb-3">
+    <div class="row g-3 mb-3 erp-kpi-strip erp-kpi-strip--secondary">
         <div class="col-md-3">
             <div class="dtl-card h-100 mb-0">
                 <div class="dtl-card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">클레임 처리중</div>
-                            <div class="h3 fw-bold mb-0" style="color:#4b5563;">{{ claim_stats.processing }}</div>
+                            <div class="h3 fw-bold mb-0 erp-kpi-neutral" style="color:#4b5563;">{{ claim_stats.processing }}</div>
                         </div>
                         <div class="p-3 rounded" style="background:#f3f4f6;">
                             <i class="bi bi-file-earmark-x fs-4" style="color:#4b5563;"></i>
@@ -116,7 +116,7 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">4M 검토중</div>
-                            <div class="h3 fw-bold mb-0" style="color:#6d28d9;">{{ change_stats.review }}</div>
+                            <div class="h3 fw-bold mb-0 erp-kpi-neutral" style="color:#6d28d9;">{{ change_stats.review }}</div>
                         </div>
                         <div class="p-3 rounded" style="background:#f5f3ff;">
                             <i class="bi bi-arrow-repeat fs-4" style="color:#6d28d9;"></i>
@@ -133,7 +133,7 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">ISIR 승인대기</div>
-                            <div class="h3 fw-bold mb-0" style="color:#0e7490;">{{ isir_stats.pending_approval }}</div>
+                            <div class="h3 fw-bold mb-0 erp-kpi-neutral" style="color:#0e7490;">{{ isir_stats.pending_approval }}</div>
                         </div>
                         <div class="p-3 rounded" style="background:#ecfeff;">
                             <i class="bi bi-file-earmark-check fs-4" style="color:#0e7490;"></i>

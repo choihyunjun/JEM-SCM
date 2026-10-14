@@ -337,7 +337,7 @@
                             <th style="width:5%">단위</th>
                             <th style="width:9%">정미수량</th>
                             <th style="width:10%">필요수량</th>
-                            <th style="width:10%">현재고</th>
+                            <th style="width:10%" class="erp-number">현재고</th>
                             <th style="width:10%">부족수량</th>
                             <th style="width:15%">주거래처</th>
                         </tr>
@@ -492,7 +492,7 @@
                                 {% if forloop.first %}
                                 <td rowspan="{{ batch.structured_items|length }}" class="align-middle fw-bold">{{ batch.part_no }}</td>
                                 <td rowspan="{{ batch.structured_items|length }}" class="align-middle">{{ batch.part_name }}</td>
-                                <td rowspan="{{ batch.structured_items|length }}" class="align-middle text-center">{{ batch.qty }}</td>
+                                <td rowspan="{{ batch.structured_items|length }}" class="align-middle text-center erp-number">{{ batch.qty }}</td>
                                 <td rowspan="{{ batch.structured_items|length }}" class="align-middle">{{ batch.need_date|default:"-" }}</td>
                                 {% endif %}
                                 <td class="fw-bold">
@@ -510,7 +510,7 @@
                                 {% if forloop.first %}
                                 <td rowspan="{{ batch.structured_items|length }}" class="align-middle fw-bold">{{ batch.part_no }}</td>
                                 <td rowspan="{{ batch.structured_items|length }}" class="align-middle">{{ batch.part_name }}</td>
-                                <td rowspan="{{ batch.structured_items|length }}" class="align-middle text-center">{{ batch.qty }}</td>
+                                <td rowspan="{{ batch.structured_items|length }}" class="align-middle text-center erp-number">{{ batch.qty }}</td>
                                 <td rowspan="{{ batch.structured_items|length }}" class="align-middle">{{ batch.need_date|default:"-" }}</td>
                                 {% endif %}
                                 <td>
@@ -519,7 +519,7 @@
                                 </td>
                                 <td>{{ item.child_part_name }}</td>
                                 <td class="text-end">{{ item.required_qty|floatformat:2 }}</td>
-                                <td class="text-end">{{ item.stock_qty }}</td>
+                                <td class="text-end erp-number">{{ item.stock_qty }}</td>
                                 <td class="text-end">
                                     {% if item.shortage > 0 %}
                                     <span class="dtl-pill red">{{ item.shortage|floatformat:0 }}</span>
@@ -537,13 +537,13 @@
                                 {% if forloop.first %}
                                 <td rowspan="{{ batch.items|length }}" class="align-middle fw-bold">{{ batch.part_no }}</td>
                                 <td rowspan="{{ batch.items|length }}" class="align-middle">{{ batch.part_name }}</td>
-                                <td rowspan="{{ batch.items|length }}" class="align-middle text-center">{{ batch.qty }}</td>
+                                <td rowspan="{{ batch.items|length }}" class="align-middle text-center erp-number">{{ batch.qty }}</td>
                                 <td rowspan="{{ batch.items|length }}" class="align-middle">{{ batch.need_date|default:"-" }}</td>
                                 {% endif %}
                                 <td>{{ item.child_part_no }}</td>
                                 <td>{{ item.child_part_name }}</td>
                                 <td class="text-end">{{ item.required_qty|floatformat:2 }}</td>
-                                <td class="text-end">{{ item.stock_qty }}</td>
+                                <td class="text-end erp-number">{{ item.stock_qty }}</td>
                                 <td class="text-end">
                                     {% if item.shortage > 0 %}
                                     <span class="dtl-pill red">{{ item.shortage|floatformat:0 }}</span>
@@ -558,7 +558,7 @@
                             <tr class="table-warning" data-missing-partno="{{ batch.part_no }}">
                                 <td class="fw-bold">{{ batch.part_no }}</td>
                                 <td>-</td>
-                                <td class="text-center">{{ batch.qty }}</td>
+                                <td class="text-center erp-number">{{ batch.qty }}</td>
                                 <td>{{ batch.need_date|default:"-" }}</td>
                                 <td colspan="6" class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>BOM 데이터 없음</td>
                             </tr>

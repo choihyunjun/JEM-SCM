@@ -131,7 +131,6 @@
 <div class="mt-header d-flex justify-content-between align-items-center flex-wrap gap-2">
     <div>
         <h2><i class="bi bi-wrench me-2"></i>금형 유지보수 관리</h2>
-        <div class="subtitle">금형 MT(정비) 현황 및 수명 관리 대시보드</div>
     </div>
     <div class="d-flex gap-2 flex-wrap">
         <button class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#addMoldModal">
@@ -294,9 +293,9 @@
                         <th class="sortable" data-col="6">구분 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th>재료</th>
                         <th class="sortable" data-col="8">누적숏트 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
-                        <th>이전MT</th>
+                        <th class="erp-number">이전MT</th>
                         <th class="sortable" data-col="10">MT후 누적 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
-                        <th>MT기준</th>
+                        <th class="erp-number">MT기준</th>
                         <th class="sortable" data-col="12">MT진행률 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th class="sortable" data-col="13">보증 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th class="sortable" data-col="14">상태 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
@@ -314,10 +313,10 @@
                         <td>{{ m.c_last_mt_date|date:"Y-m-d"|default:"-" }}</td>
                         <td><span class="badge bg-secondary" style="font-size:0.65rem;">{{ m.grade|default:'-' }}</span></td>
                         <td>{{ m.material_type|default:'-' }}</td>
-                        <td class="fw-bold" data-value="{{ m.c_total_shots }}">{{ m.c_total_shots|intcomma }}</td>
-                        <td style="color:#888;">{{ m.last_mt_shots|intcomma }}</td>
+                        <td class="fw-bold erp-number" data-value="{{ m.c_total_shots }}">{{ m.c_total_shots|intcomma }}</td>
+                        <td style="color:#888;" class="erp-number">{{ m.last_mt_shots|intcomma }}</td>
                         <td class="fw-bold" data-value="{{ m.c_shots_since_mt }}" style="color:{% if m.c_mt_pct >= 100 %}#e53e3e{% elif m.c_mt_pct >= 80 %}#dd6b20{% else %}#2d3748{% endif %};">{{ m.c_shots_since_mt|intcomma }}</td>
-                        <td>{{ m.c_mt_interval|intcomma }}</td>
+                        <td class="erp-number">{{ m.c_mt_interval|intcomma }}</td>
                         <td data-value="{{ m.c_mt_pct }}">
                             <div class="progress-bar-mt">
                                 <div class="bar {% if m.c_mt_pct >= 80 %}bar-red{% elif m.c_mt_pct >= 60 %}bar-yellow{% else %}bar-green{% endif %}"

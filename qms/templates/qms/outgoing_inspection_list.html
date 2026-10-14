@@ -100,7 +100,7 @@
                         <td>{{ oi.inspection_date }}</td>
                         <td>{{ oi.part_no }}</td>
                         <td>{{ oi.part_name }}</td>
-                        <td class="text-end">{{ oi.total_qty|intcomma }}</td>
+                        <td class="text-end erp-number">{{ oi.total_qty|intcomma }}</td>
                         <td class="text-end text-success">{{ oi.pass_qty|intcomma }}</td>
                         <td class="text-end text-danger">{{ oi.fail_qty|intcomma }}</td>
                         <td>{{ oi.customer_name|default:'-' }}</td>

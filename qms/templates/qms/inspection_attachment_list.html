@@ -56,7 +56,7 @@
                         <th style="width: 14%;">품번</th>
                         <th>품명</th>
                         <th style="width: 12%;">공급처</th>
-                        <th style="width: 10%;">수량</th>
+                        <th style="width: 10%;" class="erp-number">수량</th>
                         <th style="width: 10%;">판정</th>
                         <th style="width: 12%;">성적서</th>
                     </tr>
@@ -69,7 +69,7 @@
                         <td class="fw-semibold text-primary">{{ item.inbound_transaction.part.part_no }}</td>
                         <td>{{ item.inbound_transaction.part.part_name|truncatechars:30 }}</td>
                         <td class="small">{{ item.inbound_transaction.vendor.name|default:"-"|truncatechars:10 }}</td>
-                        <td class="text-end">{{ item.inbound_transaction.quantity|intcomma }}</td>
+                        <td class="text-end erp-number">{{ item.inbound_transaction.quantity|intcomma }}</td>
                         <td class="text-center">
                             {% if item.status == 'APPROVED' %}
                             <span class="dtl-pill green">합격</span>

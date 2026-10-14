@@ -116,7 +116,7 @@
                             <th width="20%">보내는 곳 (From)</th>
                             <th width="5%">➡</th>
                             <th width="20%">받는 곳 (To)</th>
-                            <th width="10%">수량</th>
+                            <th width="10%" class="erp-number">수량</th>
                             <th width="10%">삭제</th>
                         </tr>
                     </thead>
@@ -198,7 +198,7 @@
                         <th style="width:13%;">수불번호</th>
                         <th style="width:9%;">품번</th>
                         <th>품명</th>
-                        <th style="width:6%;">수량</th>
+                        <th style="width:6%;" class="erp-number">수량</th>
                         <th style="width:7%;">LOT</th>
                         <th style="width:11%;">From</th>
                         <th style="width:3%;">→</th>
@@ -230,7 +230,7 @@
                         </td>
                         <td class="fw-bold">{{ trx.part.part_no }}</td>
                         <td class="small text-start">{{ trx.part.part_name|truncatechars:20 }}</td>
-                        <td class="fw-bold text-end">{{ trx.quantity|floatformat:0 }}</td>
+                        <td class="fw-bold text-end erp-number">{{ trx.quantity|floatformat:0 }}</td>
                         <td class="small">{{ trx.lot_no|date:"Y-m-d"|default:"-" }}</td>
                         <td class="small">{{ trx.warehouse_from.name|default:"-"|truncatechars:12 }}</td>
                         <td class="text-muted">→</td>
@@ -322,7 +322,7 @@
                                     <input type="checkbox" id="labelCheckAll" class="form-check-input" onchange="toggleAllLabels(this)">
                                 </th>
                                 <th>라벨ID</th>
-                                <th class="text-end">수량</th>
+                                <th class="text-end erp-number">수량</th>
                                 <th class="text-center">유효기간</th>
                                 <th class="text-center">D-Day</th>
                                 <th class="text-center">발행일</th>
@@ -417,7 +417,7 @@
                         <thead class="table-light">
                             <tr>
                                 <th>라벨ID</th>
-                                <th>수량</th>
+                                <th class="erp-number">수량</th>
                                 <th>유효기간</th>
                                 <th>투입시 잔여일</th>
                             </tr>

@@ -114,7 +114,7 @@
                             <th style="width: 12%;">보낸 창고</th>
                             <th style="width: 3%;"><i class="bi bi-arrow-right"></i></th>
                             <th style="width: 12%;">받은 창고</th>
-                            <th style="width: 7%;">수량</th>
+                            <th style="width: 7%;" class="erp-number">수량</th>
                             <th style="width: 7%;">처리자</th>
                         </tr>
                     </thead>
@@ -148,7 +148,7 @@
                                     <span class="text-muted">-</span>
                                 {% endif %}
                             </td>
-                            <td class="fw-bold">{{ trx.quantity|intcomma }}</td>
+                            <td class="fw-bold erp-number">{{ trx.quantity|intcomma }}</td>
                             <td class="small text-muted">
                                 {% if trx.actor %}{{ trx.actor.username }}{% else %}-{% endif %}
                             </td>

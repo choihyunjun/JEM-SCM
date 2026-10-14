@@ -64,7 +64,7 @@
                                 <th style="min-width: 180px;">품명 <small class="text-muted">(자동)</small></th>
                                 <th style="width: 140px;">협력사 <small class="text-muted">(자동)</small></th>
                                 <th style="width: 90px;">품목군</th>
-                                <th style="width: 100px;">수량</th>
+                                <th style="width: 100px;" class="erp-number">수량</th>
                                 <th style="width: 120px;">납기일</th>
                                 <th style="width: 180px;">상태</th>
                             </tr>
@@ -89,7 +89,7 @@
                                     {% endif %}
                                 </td>
                                 <td>{{ row.part_group|default:"-" }}</td>
-                                <td class="fw-bold text-end pe-3">{{ row.quantity|intcomma }}</td>
+                                <td class="fw-bold text-end pe-3 erp-number">{{ row.quantity|intcomma }}</td>
                                 <td>{{ row.due_date }}</td>
                                 <td class="status-cell">
                                     {% if row.is_valid %}

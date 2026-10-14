@@ -3,23 +3,23 @@
 {% block title %}SCM 대시보드{% endblock %}
 
 {% block content %}
-<div class="container-fluid px-4">
+<div class="container-fluid px-4 erp-dashboard erp-dashboard--scm">
 
     <!-- 헤더 -->
-    <div class="d-flex justify-content-between align-items-center mb-4 pt-2">
-        <h3 class="fw-bold">SCM 대시보드</h3>
+    <div class="d-flex justify-content-between align-items-center mb-4 pt-2 erp-dashboard-heading">
+        <h1>SCM 대시보드</h1>
         <span class="text-muted small">{{ today|date:"Y-m-d" }} · {% if user_vendor %}{{ user_vendor.name }}{% else %}SCM v2.0{% endif %}</span>
     </div>
 
     <!-- 1행: 핵심 KPI 카드 -->
-    <div class="row g-3 mb-4">
+    <div class="row g-3 mb-4 erp-kpi-strip">
         <div class="col-md-3 col-sm-6">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">금일 발주</div>
-                            <div class="h3 fw-bold mb-0 text-primary">{{ today_order_count }}</div>
+                            <div class="h3 fw-bold mb-0 text-primary erp-kpi-neutral">{{ today_order_count }}</div>
                         </div>
                         <div class="bg-primary bg-opacity-10 p-3 rounded">
                             <i class="bi bi-cart-plus text-primary fs-4"></i>
@@ -36,7 +36,7 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">금일 입고</div>
-                            <div class="h3 fw-bold mb-0 text-success">{{ today_incoming_count }}</div>
+                            <div class="h3 fw-bold mb-0 text-success erp-kpi-neutral">{{ today_incoming_count }}</div>
                         </div>
                         <div class="bg-success bg-opacity-10 p-3 rounded">
                             <i class="bi bi-box-arrow-in-down text-success fs-4"></i>
@@ -59,7 +59,7 @@
                             <i class="bi bi-hourglass-split {% if pending_approval > 0 %}text-warning{% else %}text-secondary{% endif %} fs-4"></i>
                         </div>
                     </div>
-                    <div class="small text-muted mt-2">발주 승인 필요</div>
+                    <div class="small text-muted mt-2">협력사 발주 승인 대기</div>
                 </div>
             </div>
         </div>
@@ -83,7 +83,7 @@
     </div>
 
     <!-- 2행: 알림 현황 카드 -->
-    <div class="row g-3 mb-4">
+    <div class="row g-3 mb-4 erp-kpi-strip erp-kpi-strip--secondary">
         <div class="col-md-3 col-sm-6">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-body">
@@ -141,7 +141,7 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">진행중 발주</div>
-                            <div class="h3 fw-bold mb-0" style="color: teal;">{{ open_orders }}</div>
+                            <div class="h3 fw-bold mb-0 erp-kpi-neutral" style="color: teal;">{{ open_orders }}</div>
                         </div>
                         <div class="p-3 rounded" style="background: rgba(0,128,128,0.1);">
                             <i class="bi bi-clipboard-check fs-4" style="color: teal;"></i>
@@ -153,7 +153,7 @@
         </div>
     </div>
 
-    <div class="row g-4 align-items-stretch">
+    <div class="row g-4 align-items-stretch erp-dashboard-content">
         <!-- 좌측: 알림 테이블 -->
         <div class="col-lg-8 d-flex flex-column">
             <!-- 재고 부족 -->
@@ -163,17 +163,17 @@
                     <span class="badge bg-light text-danger">{{ shortage_count }}건</span>
                 </div>
                 <div class="card-body p-0">
-                    <div class="table-responsive" style="max-height: 220px; overflow-y: auto;">
+                    <div class="table-responsive erp-dashboard-table" style="max-height: 220px; overflow-y: auto;">
                         <table class="table table-hover table-sm mb-0 text-center align-middle" style="font-size: 0.85rem;">
                             <thead class="table-light sticky-top">
                                 <tr>
                                     <th>협력사</th>
                                     <th>품번</th>
                                     <th>품명</th>
-                                    <th>현재고</th>
-                                    <th>D+7 소요</th>
-                                    <th>입고 예정</th>
-                                    <th>예상 부족</th>
+                                    <th class="erp-number">현재고</th>
+                                    <th class="erp-number">D+7 소요</th>
+                                    <th class="erp-number">입고 예정</th>
+                                    <th class="erp-number">예상 부족</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -182,9 +182,9 @@
                                     <td class="small">{{ item.part.vendor.name|default:'-'|truncatechars:8 }}</td>
                                     <td class="fw-bold text-primary small">{{ item.part.part_no }}</td>
                                     <td class="text-start small">{{ item.part.part_name|truncatechars:18 }}</td>
-                                    <td class="small">{{ item.current_stock|intcomma }}</td>
-                                    <td class="text-muted small">{{ item.future_demand|intcomma }}</td>
-                                    <td class="text-success small">{{ item.pending_incoming|intcomma }}</td>
+                                    <td class="small erp-number">{{ item.current_stock|intcomma }}</td>
+                                    <td class="text-muted small erp-number">{{ item.future_demand|intcomma }}</td>
+                                    <td class="text-success small erp-number">{{ item.pending_incoming|intcomma }}</td>
                                     <td class="fw-bold text-danger">-{{ item.expected_shortage|intcomma }}</td>
                                 </tr>
                                 {% empty %}
@@ -223,7 +223,7 @@
                     <div class="tab-content">
                         <!-- 납기 임박 탭 -->
                         <div class="tab-pane fade show active" id="due-soon-pane" role="tabpanel">
-                            <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+                            <div class="table-responsive erp-dashboard-table" style="max-height: 250px; overflow-y: auto;">
                                 <table class="table table-hover table-sm mb-0 text-center align-middle" style="font-size: 0.85rem;">
                                     <thead class="table-warning sticky-top">
                                         <tr>
@@ -231,9 +231,9 @@
                                             <th>납기일</th>
                                             <th>협력사</th>
                                             <th>품번</th>
-                                            <th>발주</th>
-                                            <th>입고</th>
-                                            <th>미납</th>
+                                            <th class="erp-number">발주</th>
+                                            <th class="erp-number">입고</th>
+                                            <th class="erp-number">미납</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -251,9 +251,9 @@
                                             <td class="fw-bold small">{{ item.order.due_date|date:"m/d" }}</td>
                                             <td class="small">{{ item.order.vendor.name|truncatechars:8 }}</td>
                                             <td class="fw-bold text-primary small">{{ item.part.part_no }}</td>
-                                            <td class="small">{{ item.order.quantity|intcomma }}</td>
-                                            <td class="text-success small">{{ item.incoming_qty|intcomma }}</td>
-                                            <td class="fw-bold text-danger">{{ item.remain_qty|intcomma }}</td>
+                                            <td class="small erp-number">{{ item.order.quantity|intcomma }}</td>
+                                            <td class="text-success small erp-number">{{ item.incoming_qty|intcomma }}</td>
+                                            <td class="fw-bold text-danger erp-number">{{ item.remain_qty|intcomma }}</td>
                                         </tr>
                                         {% empty %}
                                         <tr>
@@ -270,7 +270,7 @@
 
                         <!-- 미납 탭 -->
                         <div class="tab-pane fade" id="overdue-pane" role="tabpanel">
-                            <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+                            <div class="table-responsive erp-dashboard-table" style="max-height: 250px; overflow-y: auto;">
                                 <table class="table table-hover table-sm mb-0 text-center align-middle" style="font-size: 0.85rem;">
                                     <thead class="table-danger sticky-top">
                                         <tr>
@@ -278,9 +278,9 @@
                                             <th>납기일</th>
                                             <th>협력사</th>
                                             <th>품번</th>
-                                            <th>발주</th>
-                                            <th>입고</th>
-                                            <th>미납</th>
+                                            <th class="erp-number">발주</th>
+                                            <th class="erp-number">입고</th>
+                                            <th class="erp-number">미납</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -296,9 +296,9 @@
                                             <td class="text-muted small">{{ item.order.due_date|date:"m/d" }}</td>
                                             <td class="small">{{ item.order.vendor.name|truncatechars:8 }}</td>
                                             <td class="fw-bold text-primary small">{{ item.part.part_no }}</td>
-                                            <td class="small">{{ item.order.quantity|intcomma }}</td>
-                                            <td class="text-success small">{{ item.incoming_qty|intcomma }}</td>
-                                            <td class="fw-bold text-danger">{{ item.remain_qty|intcomma }}</td>
+                                            <td class="small erp-number">{{ item.order.quantity|intcomma }}</td>
+                                            <td class="text-success small erp-number">{{ item.incoming_qty|intcomma }}</td>
+                                            <td class="fw-bold text-danger erp-number">{{ item.remain_qty|intcomma }}</td>
                                         </tr>
                                         {% empty %}
                                         <tr>

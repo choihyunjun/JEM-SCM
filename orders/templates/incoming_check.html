@@ -27,7 +27,7 @@
                             <th>품번</th>
                             <th>품명</th>
                             <th>LOT 번호</th>
-                            <th>수량</th>
+                            <th class="erp-number">수량</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -42,7 +42,7 @@
                                     <span class="text-muted">-</span>
                                 {% endif %}
                             </td>
-                            <td class="fw-bold">{{ item.total_qty|intcomma }}</td>
+                            <td class="fw-bold erp-number">{{ item.total_qty|intcomma }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>

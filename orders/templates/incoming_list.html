@@ -147,10 +147,10 @@
                         <th>협력사</th>
                         <th>품번</th>
                         <th>품명</th>
-                        <th>납품수량</th>
+                        <th class="erp-number">납품수량</th>
 
-                        <th style="width: 100px;">입고수량</th>
-                        <th style="width: 100px;">불량수량</th>
+                        <th style="width: 100px;" class="erp-number">입고수량</th>
+                        <th style="width: 100px;" class="erp-number">불량수량</th>
 
                         <th>처리일시</th>
                         <th>관리</th>
@@ -163,7 +163,7 @@
                         <td class="text-start ps-4">{{ item.part.vendor.name }}</td>
                         <td class="fw-bold text-primary">{{ item.part.part_no }}</td>
                         <td class="text-start">{{ item.part.part_name }}</td>
-                        <td class="fw-bold text-end pe-4">{{ item.quantity|intcomma }}</td>
+                        <td class="fw-bold text-end pe-4 erp-number">{{ item.quantity|intcomma }}</td>
 
                         <td class="fw-bold text-end pe-4">
                             {% if item.confirmed_qty is not None %}

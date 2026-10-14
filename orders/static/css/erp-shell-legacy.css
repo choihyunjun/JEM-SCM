@@ -1,0 +1,480 @@
+/* [Global] 폰트 설정 */
+body {
+    font-family: "Pretendard Variable", Pretendard, sans-serif;
+    background-color: #f5f6fa;
+}
+
+/* [Navbar] 상단바 */
+.sb-topnav {
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* 로고 가시성 확보 */
+.navbar-brand img {
+    filter: brightness(0) invert(1);
+    opacity: 0.95;
+}
+
+.navbar-brand {
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+}
+
+/* [Theme Colors] 배경색 */
+body.is-scm .sb-topnav { background: linear-gradient(135deg, #a00000 0%, #6e0000 100%) !important; }
+body.is-qms .sb-topnav { background: linear-gradient(135deg, #2c3e50 0%, #1a252f 100%) !important; }
+body.is-wms .sb-topnav { background: linear-gradient(135deg, #134E5E 0%, #71B280 100%) !important; }
+body.is-admin .sb-topnav { background: linear-gradient(135deg, #37474f 0%, #263238 100%) !important; }
+body.is-production .sb-topnav { background: linear-gradient(135deg, #a00000 0%, #6e0000 100%) !important; }
+
+/* [Nav Links] 상단 메뉴 탭 */
+.navbar-nav .nav-link {
+    color: rgba(255, 255, 255, 0.8) !important;
+    font-weight: 500;
+    padding: 0.5rem 1rem !important;
+    border-radius: 50px;
+    margin: 0 4px;
+}
+.navbar-nav .nav-link:hover {
+    color: #fff !important;
+    background-color: rgba(255, 255, 255, 0.15);
+}
+.nav-link.active-system {
+    color: #fff !important;
+    font-weight: 700;
+    background-color: rgba(255, 255, 255, 0.25);
+}
+
+/* [Sidebar] 사이드바 디자인 */
+.sb-sidenav-dark {
+    background-color: #212529;
+    background: #2b3035;
+}
+
+.sb-sidenav-dark .sb-sidenav-menu-heading {
+    color: #ced4da !important;
+    opacity: 1 !important;
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+    margin-top: 1.5rem;
+}
+
+/* 기본 링크 스타일 */
+.sb-sidenav-dark .nav-link {
+    color: #f8f9fa !important;
+    font-size: 0.95rem;
+    font-weight: 500;
+    transition: all 0.2s;
+    border-left: 4px solid transparent;
+}
+
+.sb-sidenav-dark .nav-link .sb-nav-link-icon {
+    color: #adb5bd !important;
+    transition: color 0.2s;
+}
+
+.sb-sidenav-dark .nav-link:hover {
+    color: #fff !important;
+    background-color: rgba(255, 255, 255, 0.05);
+}
+.sb-sidenav-dark .nav-link:hover .sb-nav-link-icon {
+    color: #fff !important;
+}
+
+/* ★★★ [Active Menu] 대메뉴(Parent) 활성화 효과 ★★★ */
+body.is-scm .sb-sidenav-dark .nav-link.active {
+    background: linear-gradient(90deg, rgba(220, 53, 69, 0.2) 0%, transparent 100%);
+    border-left-color: #ff6b6b;
+    color: #ffcccc !important;
+    font-weight: 700;
+}
+body.is-scm .sb-sidenav-dark .nav-link.active .sb-nav-link-icon { color: #ff6b6b !important; }
+
+body.is-qms .sb-sidenav-dark .nav-link.active {
+    background: linear-gradient(90deg, rgba(52, 152, 219, 0.2) 0%, transparent 100%);
+    border-left-color: #3498db;
+    color: #d1ecf1 !important;
+    font-weight: 700;
+}
+body.is-qms .sb-sidenav-dark .nav-link.active .sb-nav-link-icon { color: #3498db !important; }
+
+body.is-wms .sb-sidenav-dark .nav-link.active {
+    background: linear-gradient(90deg, rgba(46, 204, 113, 0.2) 0%, transparent 100%);
+    border-left-color: #2ecc71;
+    color: #d4edda !important;
+    font-weight: 700;
+}
+body.is-wms .sb-sidenav-dark .nav-link.active .sb-nav-link-icon { color: #2ecc71 !important; }
+
+/* ★★★ [Nested Menu] 소메뉴 스타일 - 심플 버전 ★★★ */
+.sb-sidenav-menu-nested {
+    padding-left: 1rem;
+}
+.sb-sidenav-menu-nested .nav-link {
+    font-size: 0.88rem !important;
+    padding: 0.4rem 1rem !important;
+    color: #9ca3af !important;
+    border-left: none !important;
+}
+.sb-sidenav-menu-nested .nav-link:hover {
+    color: #fff !important;
+    background: transparent;
+}
+
+/* ★★★ [Nested Active] 소메뉴(Child) 활성화 효과 ★★★ */
+body.is-scm .sb-sidenav-menu-nested .nav-link.active { color: #ff8a8a !important; }
+body.is-qms .sb-sidenav-menu-nested .nav-link.active { color: #7ec8e3 !important; }
+body.is-wms .sb-sidenav-menu-nested .nav-link.active { color: #7ee8a5 !important; }
+
+.sb-sidenav-menu-nested .nav-link.active {
+    font-weight: 600;
+    background: transparent !important;
+}
+
+footer.bg-light { background-color: #fff !important; border-top: 1px solid #e3e6f0; }
+
+/* ========================================
+   SCM 공통 스타일 (폰트/간격 미세 조정만)
+   ======================================== */
+
+/* =============================================
+   SCM 통합 디자인 시스템 v2
+   ============================================= */
+
+/* [컨테이너] 본문 최대 너비 통일 */
+#layoutSidenav_content .container-fluid {
+    max-width: 1800px;
+}
+
+/* [카드] 공통 카드 스타일 */
+#layoutSidenav_content .card {
+    border-radius: 10px;
+    border-color: #e3e8ef;
+}
+#layoutSidenav_content .card .card-header:first-child {
+    border-radius: 10px 10px 0 0;
+}
+#layoutSidenav_content .card .card-body .table-responsive:last-child {
+    border-radius: 0 0 10px 10px;
+    overflow: hidden;
+}
+/* SB Admin 테마 기본 카드 여백이 좁아서 넉넉하게 보정 (p-0/py-* 유틸리티는 !important라 그대로 우선 적용됨) */
+#layoutSidenav_content .card > .card-body, #layoutSidenav_content .card > .card-footer {
+    padding: 1.25rem;
+}
+
+/* [테이블] 통합 테이블 스타일 */
+#layoutSidenav_content .table {
+    font-size: 0.85rem;
+    margin-bottom: 0;
+}
+#layoutSidenav_content .table th {
+    white-space: nowrap;
+    font-weight: 600;
+    font-size: 0.84rem;
+    letter-spacing: 0.01em;
+    vertical-align: middle;
+}
+#layoutSidenav_content .table td {
+    vertical-align: middle;
+}
+
+/* [테이블 헤더] 밝은 톤으로 통일 (table-dark 오버라이드) */
+#layoutSidenav_content .table > thead.table-dark th {
+    background-color: #f1f3f5 !important;
+    color: #495057 !important;
+    border-bottom: 2px solid #dee2e6;
+    border-color: #dee2e6;
+}
+#layoutSidenav_content .table > thead.table-dark {
+    --bs-table-bg: #f1f3f5;
+}
+
+/* table-light 헤더 보강 */
+#layoutSidenav_content .table > thead.table-light th {
+    background-color: #f8f9fb;
+    color: #5a6370;
+    border-bottom: 2px solid #dee2e6;
+}
+
+/* [테이블 행] 호버 효과 통일 */
+#layoutSidenav_content .table > tbody > tr:hover {
+    --bs-table-hover-bg: #f0f7ff;
+}
+
+/* [카드 헤더] 원색 카드헤더(bg-dark/primary/success/danger/info/secondary) → 밝은 톤으로 통일 */
+#layoutSidenav_content .card > .card-header.bg-dark,
+#layoutSidenav_content .card > .card-header.bg-primary,
+#layoutSidenav_content .card > .card-header.bg-success,
+#layoutSidenav_content .card > .card-header.bg-danger,
+#layoutSidenav_content .card > .card-header.bg-info,
+#layoutSidenav_content .card > .card-header.bg-secondary {
+    background: #f1f3f5 !important;
+    color: #374151 !important;
+    border-bottom: 1px solid #e3e8ef;
+}
+#layoutSidenav_content .card > .card-header.bg-dark .badge.bg-secondary {
+    background-color: #6c757d !important;
+}
+
+/* [필터 영역] 통일 */
+.scm-filter-bar {
+    background: #f8f9fb;
+    border: 1px solid #e3e8ef;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+}
+
+/* [페이지 제목] 통일 */
+.scm-page-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #1f2937;
+    margin-bottom: 0.25rem;
+}
+.scm-page-subtitle {
+    font-size: 0.88rem;
+    color: #6b7280;
+}
+
+/* [버튼] 필터 영역 버튼 통일 */
+.scm-filter .btn-sm, .scm-filter-bar .btn-sm {
+    font-size: 0.84rem;
+    padding: 5px 14px;
+    border-radius: 6px;
+    font-weight: 500;
+}
+.scm-filter .form-select-sm,
+.scm-filter .form-control-sm,
+.scm-filter-bar .form-select-sm,
+.scm-filter-bar .form-control-sm {
+    font-size: 0.85rem;
+    border-radius: 6px;
+}
+
+/* [빈 상태] 데이터 없을 때 표시 통일 */
+#layoutSidenav_content .table tbody td[colspan] {
+    padding: 3rem 0;
+    color: #9ca3af;
+}
+
+/* [뱃지] 상태 뱃지 통일 */
+#layoutSidenav_content .badge {
+    font-weight: 500;
+    font-size: 0.78rem;
+    padding: 4px 10px;
+    border-radius: 6px;
+}
+/* [뱃지 색상] 진한 원색 → 파스텔톤 (QMS/WMS dtl-pill과 동일 팔레트, 색상 의미는 유지) */
+#layoutSidenav_content .badge.bg-primary { background: #eef2ff !important; color: #4338ca !important; }
+#layoutSidenav_content .badge.bg-secondary { background: #f3f4f6 !important; color: #4b5563 !important; }
+#layoutSidenav_content .badge.bg-success { background: #ecfdf5 !important; color: #047857 !important; }
+#layoutSidenav_content .badge.bg-warning { background: #fffbeb !important; color: #b45309 !important; }
+#layoutSidenav_content .badge.bg-danger { background: #fef2f2 !important; color: #b91c1c !important; }
+#layoutSidenav_content .badge.bg-info { background: #ecfeff !important; color: #0e7490 !important; }
+
+/* [기존] scm-table 호환 */
+.scm-table { font-size: 0.85rem; }
+.scm-table th { white-space: nowrap; }
+.scm-table td { vertical-align: middle; }
+
+/* 최근 방문 탭 */
+#recentTabsBar {
+    background: #f1f3f5;
+    border-bottom: 1px solid #dee2e6;
+    padding: 4px 16px;
+    display: flex;
+    gap: 4px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    align-items: center;
+    min-height: 32px;
+}
+#recentTabsBar::-webkit-scrollbar { display: none; }
+.recent-tab {
+    display: inline-flex;
+    align-items: center;
+    background: #fff;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.76rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: border-color 0.15s;
+}
+.recent-tab:hover { border-color: #adb5bd; }
+.recent-tab a {
+    padding: 3px 8px 3px 10px;
+    color: #495057;
+    text-decoration: none;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.recent-tab.active { border-color: #9b2c2c; background: #fff5f5; }
+body.is-wms .recent-tab.active { border-color: #134E5E; background: #f0f9f0; }
+body.is-qms .recent-tab.active { border-color: #2c3e50; background: #f5f7fa; }
+.recent-tab.active a { color: #9b2c2c; font-weight: 600; }
+body.is-wms .recent-tab.active a { color: #134E5E; }
+body.is-qms .recent-tab.active a { color: #2c3e50; }
+.recent-tab .tab-close {
+    padding: 2px 6px;
+    background: none;
+    border: none;
+    color: #adb5bd;
+    cursor: pointer;
+    font-size: 0.9rem;
+    line-height: 1;
+}
+.recent-tab .tab-close:hover { color: #495057; }
+
+/* [모바일] 시스템 탭 바 */
+@media (max-width: 767.98px) {
+    #mobileSystemNav {
+        position: fixed;
+        top: 57px;
+        left: 0;
+        right: 0;
+        z-index: 1029;
+        background: #2b3035;
+        display: flex;
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        height: 40px;
+        align-items: center;
+        border-bottom: 1px solid rgba(255,255,255,0.12);
+    }
+    #mobileSystemNav::-webkit-scrollbar { display: none; }
+    body.is-scm #mobileSystemNav { background: linear-gradient(135deg, #a00000 0%, #6e0000 100%); }
+    body.is-qms #mobileSystemNav { background: linear-gradient(135deg, #2c3e50 0%, #1a252f 100%); }
+    body.is-wms #mobileSystemNav { background: linear-gradient(135deg, #134E5E 0%, #71B280 100%); }
+    body.is-production #mobileSystemNav { background: linear-gradient(135deg, #a00000 0%, #6e0000 100%); }
+    body.is-admin #mobileSystemNav { background: linear-gradient(135deg, #37474f 0%, #263238 100%); }
+    .mobile-system-tab {
+        display: inline-flex;
+        align-items: center;
+        color: rgba(255,255,255,0.8);
+        text-decoration: none;
+        padding: 0 14px;
+        height: 100%;
+        font-size: 0.8rem;
+        font-weight: 500;
+        white-space: nowrap;
+        border-bottom: 2px solid transparent;
+        transition: all 0.15s;
+    }
+    .mobile-system-tab:hover { color: #fff; background: rgba(255,255,255,0.1); }
+    .mobile-system-tab.active-system {
+        color: #fff;
+        font-weight: 700;
+        border-bottom-color: rgba(255,255,255,0.7);
+        background: rgba(255,255,255,0.15);
+    }
+    body.sb-nav-fixed #layoutSidenav { margin-top: 96px; }
+}
+
+/* ======================================================
+   전체 모바일 반응형 최적화  (max-width: 767.98px)
+   PC 레이아웃에 영향 없음
+   ====================================================== */
+@media (max-width: 767.98px) {
+
+    /* ─── 1. form.row 필터폼: col-auto → 100% 세로 스택 ─── */
+    form.row > .col-auto {
+        width: 100% !important;
+        flex: 0 0 100% !important;
+        max-width: 100% !important;
+    }
+    /* col-md-2/3 필터 컬럼 → 모바일 2열 레이아웃 */
+    form.row > .col-md-2,
+    form.row > .col-md-3 {
+        flex: 0 0 50% !important;
+        max-width: 50% !important;
+        width: 50% !important;
+    }
+    /* 폼 컨트롤 전체 너비 (인라인 style="width:Xpx" 재정의) */
+    form.row .form-control,
+    form.row .form-select,
+    form.row .input-group {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+    }
+
+    /* ─── 2. d-inline-flex 폼 → flex-wrap (QMS 필터 등) ─── */
+    form.d-inline-flex {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 0.5rem !important;
+    }
+    form.d-inline-flex .form-select { flex: 1 1 130px; min-width: 0 !important; }
+    form.d-inline-flex .input-group {
+        flex: 1 1 200px;
+        width: auto !important;
+        min-width: 0 !important;
+    }
+    form.d-inline-flex .btn,
+    form.d-inline-flex a.btn { flex-shrink: 0; }
+
+    /* ─── 3. .scm-filter 내 d-flex 폼 래핑 (라벨목록 등) ─── */
+    .scm-filter { flex-wrap: wrap !important; }
+    .scm-filter form {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        width: 100%;
+        gap: 0.5rem;
+    }
+    .scm-filter .form-select,
+    .scm-filter .form-control { width: 100% !important; min-width: 0 !important; }
+    .scm-filter .input-group { width: 100% !important; min-width: 0 !important; }
+
+    /* ─── 4. input-group 내부 form-control: 위 1/3번 규칙이 개별 100%로
+       덮어써서 두 input이 서로 밀어내던 문제 -> flex로 균등 배분되게 재정의
+       (form.row .form-control / .scm-filter .form-control 보다 더 구체적인
+       선택자라 우선 적용됨) ─── */
+    form.row .input-group .form-control,
+    form.row .input-group .form-select,
+    .scm-filter .input-group .form-control,
+    .scm-filter .input-group .form-select {
+        width: 1% !important;
+        min-width: 0 !important;
+        flex: 1 1 auto !important;
+    }
+
+    /* ─── 5. 버튼 그룹 줄바꿈 ─── */
+    .btn-group { flex-wrap: wrap; }
+
+    /* ─── 6. 상단 헤더 / 카드 헤더 줄바꿈 ─── */
+    .d-flex.justify-content-between.align-items-center {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .card-header.d-flex { flex-wrap: wrap; gap: 0.5rem; }
+
+    /* ─── 7. inventory_list 커스텀 영역 ─── */
+    .top-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; width: 100%; }
+    .control-block { display: flex; flex-wrap: wrap; gap: 0.5rem; width: 100%; }
+    .search-group { width: 100% !important; }
+
+    /* ─── 8. QMS 필터 상단 줄 (col-lg 비율 조정) ─── */
+    .col-lg-4, .col-lg-8 { width: 100%; }
+    .col-lg-8.text-end { text-align: left !important; }
+
+    /* ─── 9. 최근 방문 탭 바: 가로 스크롤 가능함을 알리는 페이드 힌트 ─── */
+    #recentTabsBar { position: relative; }
+    #recentTabsBar::after {
+        content: '';
+        position: absolute;
+        top: 0; right: 0; bottom: 0;
+        width: 28px;
+        background: linear-gradient(to right, rgba(241,243,245,0), rgba(241,243,245,0.95));
+        pointer-events: none;
+    }
+}

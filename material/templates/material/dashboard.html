@@ -3,21 +3,21 @@
 {% block title %}WMS 대시보드{% endblock %}
 
 {% block material_content %}
-<div class="dtl-wrap" style="max-width:1400px;">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <span class="dtl-title">WMS 대시보드</span>
+<div class="dtl-wrap erp-dashboard" style="max-width:1400px;">
+    <div class="d-flex justify-content-between align-items-center mb-4 erp-dashboard-heading">
+        <h1 class="dtl-title">WMS 대시보드</h1>
         <span class="text-muted small">{{ today }} · WMS v2.0</span>
     </div>
 
     <!-- 1행: 핵심 KPI 카드 -->
-    <div class="row g-3 mb-3">
+    <div class="row g-3 mb-3 erp-kpi-strip">
         <div class="col-md-3 col-sm-6">
             <div class="dtl-card h-100 mb-0">
                 <div class="dtl-card-body card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">총 재고 품목</div>
-                            <div class="h3 fw-bold mb-0" style="color:#047857;">{{ total_parts|intcomma }}</div>
+                            <div class="h3 fw-bold mb-0 erp-kpi-neutral" style="color:#047857;">{{ total_parts|intcomma }}</div>
                         </div>
                         <div class="p-3 rounded" style="background:#ecfdf5;">
                             <i class="bi bi-box-seam fs-4" style="color:#047857;"></i>
@@ -34,7 +34,7 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">금일 입고</div>
-                            <div class="h3 fw-bold mb-0" style="color:#4338ca;">{{ today_in_count }}</div>
+                            <div class="h3 fw-bold mb-0 erp-kpi-neutral" style="color:#4338ca;">{{ today_in_count }}</div>
                         </div>
                         <div class="p-3 rounded" style="background:#eef2ff;">
                             <i class="bi bi-arrow-down-square fs-4" style="color:#4338ca;"></i>
@@ -51,7 +51,7 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">금일 출고</div>
-                            <div class="h3 fw-bold mb-0" style="color:#b91c1c;">{{ today_out_count }}</div>
+                            <div class="h3 fw-bold mb-0 erp-kpi-neutral" style="color:#b91c1c;">{{ today_out_count }}</div>
                         </div>
                         <div class="p-3 rounded" style="background:#fef2f2;">
                             <i class="bi bi-arrow-up-square fs-4" style="color:#b91c1c;"></i>
@@ -81,14 +81,14 @@
     </div>
 
     <!-- 2행: 월간 통계, BOM, 현품표 -->
-    <div class="row g-3 mb-3">
+    <div class="row g-3 mb-3 erp-kpi-strip erp-kpi-strip--secondary">
         <div class="col-md-3 col-sm-6">
             <div class="dtl-card h-100 mb-0">
                 <div class="dtl-card-body card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">이번달 입고</div>
-                            <div class="h3 fw-bold mb-0" style="color:#0e7490;">{{ month_in_count }}</div>
+                            <div class="h3 fw-bold mb-0 erp-kpi-neutral" style="color:#0e7490;">{{ month_in_count }}</div>
                         </div>
                         <div class="p-3 rounded" style="background:#ecfeff;">
                             <i class="bi bi-calendar-check fs-4" style="color:#0e7490;"></i>
@@ -105,7 +105,7 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">이번달 출고</div>
-                            <div class="h3 fw-bold mb-0" style="color:#b45309;">{{ month_out_count }}</div>
+                            <div class="h3 fw-bold mb-0 erp-kpi-neutral" style="color:#b45309;">{{ month_out_count }}</div>
                         </div>
                         <div class="p-3 rounded" style="background:#fffbeb;">
                             <i class="bi bi-calendar-x fs-4" style="color:#b45309;"></i>
@@ -122,7 +122,7 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">BOM 등록</div>
-                            <div class="h3 fw-bold mb-0" style="color:#4b5563;">{{ bom_stats.product_count }}</div>
+                            <div class="h3 fw-bold mb-0 erp-kpi-neutral" style="color:#4b5563;">{{ bom_stats.product_count }}</div>
                         </div>
                         <div class="p-3 rounded" style="background:#f3f4f6;">
                             <i class="bi bi-diagram-3 fs-4" style="color:#4b5563;"></i>
@@ -139,7 +139,7 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="small text-muted mb-1">현품표 발행</div>
-                            <div class="h3 fw-bold mb-0" style="color:#0e7490;">{{ tag_stats.today_printed }}</div>
+                            <div class="h3 fw-bold mb-0 erp-kpi-neutral" style="color:#0e7490;">{{ tag_stats.today_printed }}</div>
                         </div>
                         <div class="p-3 rounded" style="background:#ecfeff;">
                             <i class="bi bi-qr-code fs-4" style="color:#0e7490;"></i>
@@ -168,7 +168,7 @@
                                 <th>구분</th>
                                 <th>품번</th>
                                 <th>입고창고</th>
-                                <th class="text-end">수량</th>
+                                <th class="text-end erp-number">수량</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -209,7 +209,7 @@
                                 <th>품번</th>
                                 <th>출고창고</th>
                                 <th>거래처</th>
-                                <th class="text-end">수량</th>
+                                <th class="text-end erp-number">수량</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -252,7 +252,7 @@
                                 <th>품번</th>
                                 <th>LOT</th>
                                 <th>창고</th>
-                                <th class="text-end">수량</th>
+                                <th class="text-end erp-number">수량</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -261,7 +261,7 @@
                                 <td>{{ stock.part.part_no }}</td>
                                 <td><span class="dtl-pill amber">{{ stock.lot_no }}</span></td>
                                 <td>{{ stock.warehouse.name|default:"-" }}</td>
-                                <td class="text-end fw-bold">{{ stock.quantity|intcomma }}</td>
+                                <td class="text-end fw-bold erp-number">{{ stock.quantity|intcomma }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>

@@ -95,7 +95,7 @@
                         <th>품번</th>
                         <th>품명</th>
                         <th>협력사</th>
-                        <th class="text-end">불량수량</th>
+                        <th class="text-end erp-number">불량수량</th>
                         <th>불량유형</th>
                         <th>상태</th>
                         <th>담당자</th>
@@ -116,7 +116,7 @@
                         <td>{{ nc.part_no }}</td>
                         <td>{{ nc.part_name }}</td>
                         <td>{{ nc.vendor.name|default:'-' }}</td>
-                        <td class="text-end fw-bold" style="color:#b91c1c;">{{ nc.defect_qty|intcomma }}</td>
+                        <td class="text-end fw-bold erp-number" style="color:#b91c1c;">{{ nc.defect_qty|intcomma }}</td>
                         <td>{{ nc.defect_type }}</td>
                         <td>
                             <span class="dtl-pill {% if nc.status == 'OPEN' %}red{% elif nc.status == 'CLOSED' %}green{% else %}amber{% endif %}">

@@ -167,8 +167,8 @@
                         <tr class="text-center">
                             <th style="width: 4%;">순위</th>
                             <th style="width: 14%;" class="text-start">협력사</th>
-                            <th style="width: 10%;">발주수량</th>
-                            <th style="width: 10%;">입고수량</th>
+                            <th style="width: 10%;" class="erp-number">발주수량</th>
+                            <th style="width: 10%;" class="erp-number">입고수량</th>
                             <th style="width: 8%;">입고율</th>
                             <th style="width: 10%;">납기준수</th>
                             <th style="width: 10%;">납기지연</th>
@@ -183,7 +183,7 @@
                             <td class="text-muted">{{ forloop.counter }}</td>
                             <td class="text-start fw-bold">{{ stat.vendor.name }}</td>
                             <td>{{ stat.order_qty|intcomma }}</td>
-                            <td class="fw-bold">{{ stat.incoming_qty|intcomma }}</td>
+                            <td class="fw-bold erp-number">{{ stat.incoming_qty|intcomma }}</td>
                             <td>
                                 <span class="{% if stat.incoming_rate >= 100 %}text-success{% elif stat.incoming_rate >= 80 %}text-warning{% else %}text-danger{% endif %}">
                                     {{ stat.incoming_rate }}%

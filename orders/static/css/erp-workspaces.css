@@ -1,0 +1,132 @@
+/* Dashboard and manufacturing-specific presentation. State calculations stay server-side. */
+@media screen {
+  body.erp-ui .erp-dashboard { width: 100%; max-width: 1680px !important; margin: 0 auto; }
+  body.erp-ui .erp-dashboard-heading { margin-bottom: 24px !important; padding-top: 0 !important; }
+  body.erp-ui .erp-dashboard-heading :is(h1, h3) { margin: 0; }
+  body.erp-ui .erp-kpi-strip {
+    --bs-gutter-x: 0;
+    --bs-gutter-y: 0;
+    margin: 0 0 18px !important;
+    border: 1px solid var(--erp-line);
+    border-radius: 5px;
+    background: #fff;
+    padding: 18px 0;
+  }
+  body.erp-ui .erp-kpi-strip > div { border-right: 1px solid var(--erp-line); }
+  body.erp-ui .erp-kpi-strip > div:last-child { border-right: 0; }
+  body.erp-ui #layoutSidenav_content .erp-kpi-strip :is(.card, .dtl-card) { border: 0 !important; border-radius: 0; background: transparent; }
+  body.erp-ui #layoutSidenav_content .erp-kpi-strip :is(.card-body, .dtl-card-body) { padding: 0 22px; }
+  body.erp-ui .erp-kpi-strip .p-3.rounded { display: none; }
+  body.erp-ui .erp-kpi-strip .h3 { font-size: 1.875rem; font-weight: 600 !important; line-height: 1.25; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
+  body.erp-ui .erp-kpi-strip .small { font-size: 0.75rem; }
+  body.erp-ui .erp-kpi-strip .mt-2 { font-size: 0.6875rem; }
+  body.erp-ui .erp-kpi-strip--secondary { padding: 14px 0; background: #fafbfc; }
+  body.erp-ui .erp-kpi-strip--secondary .h3 { font-size: 1.5rem; }
+  body.erp-ui .erp-kpi-strip .erp-kpi-neutral { color: var(--erp-ink) !important; }
+  body.erp-ui .erp-kpi-strip .h3.text-info { color: var(--erp-ink) !important; }
+  body.erp-ui .erp-kpi-strip .text-warning { color: var(--erp-warning) !important; }
+  body.erp-ui .erp-kpi-strip .text-danger { color: var(--erp-danger) !important; }
+  body.erp-ui .erp-dashboard .card .h4 { color: var(--erp-ink) !important; font-weight: 600; }
+  body.erp-ui .erp-dashboard .card-header > span > i { display: none; }
+  body.erp-ui .erp-dashboard :is(.btn-outline-primary, .btn-outline-success, .btn-outline-info, .btn-outline-secondary) {
+    color: #58626e; border-color: #d4d9e0; --bs-btn-hover-bg: #f3eef0; --bs-btn-hover-color: #752b40; --bs-btn-hover-border-color: #c5a8b2;
+  }
+  body.erp-ui .erp-dashboard .dtl-btn-outline.w-100.py-3 { padding: 12px !important; text-align: left !important; }
+  body.erp-ui .erp-dashboard .dtl-btn-outline.w-100.py-3 > i.d-block { display: inline-block !important; font-size: 0.875rem !important; margin: 0 8px 0 0 !important; }
+  body.erp-ui .erp-dashboard :is(.card-header, .dtl-card-header) > i { display: none; }
+  body.erp-ui .erp-dashboard-content { --bs-gutter-x: 20px; --bs-gutter-y: 20px; }
+  body.erp-ui .erp-dashboard .btn.w-100.py-3 { padding: 10px 12px !important; text-align: left; font-size: 0.8125rem; }
+  body.erp-ui .erp-dashboard .btn.w-100.py-3 > i.d-block { display: inline-block !important; font-size: 0.875rem !important; margin: 0 8px 0 0 !important; }
+  body.erp-ui .erp-dashboard .erp-dashboard-table { max-height: 310px !important; }
+  body.erp-ui[data-erp-page="scm_alert_dashboard"] .erp-dashboard .card.flex-grow-1 { flex-grow: 0 !important; }
+
+  /* Production headers are page headings rather than colored hero banners. */
+  body.erp-ui :is(.prod-header, .mt-header, .repair-header, .analytics-header) {
+    background: transparent;
+    color: var(--erp-ink);
+    padding: 0 0 20px;
+    border-radius: 0;
+    border-bottom: 1px solid var(--erp-line);
+    margin-bottom: 22px;
+    box-shadow: none;
+  }
+  body.erp-ui :is(.prod-header, .mt-header, .repair-header, .analytics-header) :is(h2, h3, h4) {
+    color: var(--erp-ink); font-size: 1.5rem; font-weight: 650; letter-spacing: -0.045em;
+  }
+  body.erp-ui :is(.prod-header, .mt-header, .repair-header, .analytics-header) :is(h2, h3, h4) > i { display: none; }
+  body.erp-ui .prod-header .date-badge { background: transparent; color: var(--erp-muted); border-radius: 0; font-size: 0.75rem; font-weight: 400; }
+  body.erp-ui :is(.prod-header, .mt-header, .repair-header, .analytics-header) .btn-outline-light {
+    --bs-btn-color: #555e68; --bs-btn-border-color: #ccd2d9;
+    --bs-btn-hover-color: #292b31; --bs-btn-hover-bg: #fff; --bs-btn-hover-border-color: #b7bec8;
+    color: #555e68; background: #fff;
+  }
+  body.erp-ui :is(.prod-header, .mt-header, .repair-header, .analytics-header) .btn-outline-warning { color: #876019; border-color: #d8c6a1; background: #fff; }
+  body.erp-ui :is(.summary-card, .kpi-card, .chart-card, .qa-card, .shortcut-card) {
+    background: #fff; border: 1px solid var(--erp-line); border-radius: 5px; box-shadow: none;
+    color: var(--erp-ink); padding: 18px 20px;
+  }
+  body.erp-ui :is(.summary-card, .shortcut-card):hover { transform: none; box-shadow: none; border-color: #c8aab5; color: var(--erp-brand); }
+  body.erp-ui .summary-card { text-align: left; }
+  body.erp-ui .summary-card:is(.bg-total, .bg-danger-mt, .bg-warning-mt, .bg-success-mt) { background: #fff; }
+  body.erp-ui .summary-card .card-number, body.erp-ui .summary-value { font-size: 1.875rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  body.erp-ui .summary-card .card-label, body.erp-ui .summary-label { font-size: 0.75rem; color: var(--erp-muted); font-weight: 500; opacity: 1; }
+  body.erp-ui .summary-card.bg-danger-mt .card-number { color: var(--erp-danger); }
+  body.erp-ui .summary-card.bg-warning-mt .card-number { color: var(--erp-warning); }
+  body.erp-ui .summary-card.bg-success-mt .card-number { color: var(--erp-success); }
+  body.erp-ui .summary-sub { color: var(--erp-muted); font-size: 0.6875rem; }
+  body.erp-ui .shortcut-icon { width: 28px; height: 28px; font-size: 1.1rem; background: transparent !important; color: var(--erp-brand) !important; margin-bottom: 10px; }
+  body.erp-ui .shortcut-title { font-size: 0.875rem; font-weight: 600; }
+  body.erp-ui .shortcut-desc { font-size: 0.75rem; color: var(--erp-muted); }
+  body.erp-ui .section-title { font-size: 0.9375rem; font-weight: 600; border-bottom: 1px solid var(--erp-line); }
+  body.erp-ui .section-title > i { display: none; }
+  body.erp-ui .filter-toggle { border-radius: 4px; }
+  body.erp-ui .filter-toggle.active { background: var(--erp-brand); border-color: var(--erp-brand); }
+  body.erp-ui .filter-toggle:hover { border-color: #bf99a6; color: var(--erp-brand); background: var(--erp-brand-soft); }
+  body.erp-ui .filter-toggle.active:hover { color: white; background: var(--erp-brand-dark); }
+  body.erp-ui #layoutSidenav_content .table-mt tbody tr:hover { background: #faf6f8 !important; }
+  body.erp-ui #layoutSidenav_content .table-mt :is(th, td) { padding: 8px; }
+  body.erp-ui .progress-bar-mt, body.erp-ui .progress-bar-mt .bar { border-radius: 3px; }
+
+  /* Warehouse geometry, rack order and status class names are unchanged. */
+  body.erp-ui .warehouse-area { background: #fff; border-radius: 5px; box-shadow: none; border: 1px solid var(--erp-line); padding: 24px; justify-content: flex-start; min-width: 0; }
+  body.erp-ui .warehouse-inner { margin-inline: auto; flex-shrink: 0; }
+  body.erp-ui .wall-box { background: #fff; border-radius: 4px; box-shadow: none; border: 1px solid var(--erp-line); padding: 18px; }
+  body.erp-ui .wall-title { background: #f3f0f2; color: var(--erp-brand); box-shadow: none; border-radius: 3px; font-size: 0.9375rem; letter-spacing: 0; }
+  body.erp-ui .wall-title:is(.wall-a, .wall-b, .wall-2f) { background: #f3f0f2; box-shadow: none; }
+  body.erp-ui .rack-cell { border-radius: 5px; transition: border-color 0.15s; box-shadow: none; }
+  body.erp-ui .rack-cell:hover { transform: none; box-shadow: none; outline: 2px solid #bb9ba7; outline-offset: 2px; }
+  body.erp-ui .rack-cell.safe { background: #eef6f0; border: 1px solid #c6ddcd; box-shadow: none; }
+  body.erp-ui .rack-cell.warning { background: #fcf5e7; border: 1px solid #e5d1a7; box-shadow: none; }
+  body.erp-ui .rack-cell.danger { background: #fbeced; border: 1px solid #e7bec5; box-shadow: none; }
+  body.erp-ui .rack-cell.safe :is(.rack-position, .rack-part-no, .rack-part-name, .rack-stock) { color: #326649; opacity: 1; }
+  body.erp-ui .rack-cell.warning :is(.rack-position, .rack-part-no, .rack-part-name, .rack-stock) { color: #795619; opacity: 1; }
+  body.erp-ui .rack-cell.danger :is(.rack-position, .rack-part-no, .rack-part-name, .rack-stock) { color: #973849; opacity: 1; }
+  body.erp-ui .rack-part-no { font-family: inherit; font-size: 0.9375rem; font-weight: 650; }
+  body.erp-ui .rack-position { letter-spacing: 0; }
+  body.erp-ui .sidebar-card { background: #fff; border: 1px solid var(--erp-line); border-radius: 5px; box-shadow: none; }
+  body.erp-ui .sidebar-header { background-image: none !important; background-color: #f8f9fa; border-bottom-color: var(--erp-line); }
+  body.erp-ui .quick-links .btn { background-image: none; box-shadow: none; border-radius: 4px; }
+  body.erp-ui .quick-links .btn:hover { transform: none; box-shadow: none; }
+  body.erp-ui .quick-links .btn-success { background: var(--erp-brand); }
+  body.erp-ui .quick-links .btn-success:hover { background: var(--erp-brand-dark); }
+  body.erp-ui .section-tabs .btn-primary { background: var(--erp-brand); border-color: var(--erp-brand); box-shadow: none; }
+  body.erp-ui .section-tabs .btn-warning { background: #946c2c; box-shadow: none; }
+  body.erp-ui .legend-dot.safe { background: #eef6f0; border: 1px solid #c6ddcd; }
+  body.erp-ui .legend-dot.warning { background: #fcf5e7; border: 1px solid #e5d1a7; }
+  body.erp-ui .legend-dot.danger { background: #fbeced; border: 1px solid #e7bec5; }
+  body.erp-ui .summary-card.active-filter { border-color: var(--erp-brand); box-shadow: none; }
+
+  @media (max-width: 767.98px) {
+    body.erp-ui .erp-kpi-strip { padding: 0; }
+    body.erp-ui .erp-kpi-strip > div { flex: 0 0 50%; width: 50%; padding: 16px 0; }
+    body.erp-ui .erp-kpi-strip > div:nth-child(even) { border-right: 0; }
+    body.erp-ui .erp-kpi-strip > div:nth-child(n+3) { border-top: 1px solid var(--erp-line); }
+    body.erp-ui #layoutSidenav_content .erp-kpi-strip :is(.card-body, .dtl-card-body) { padding: 0 14px; }
+    body.erp-ui .erp-kpi-strip .h3 { font-size: 1.625rem; }
+    body.erp-ui :is(.prod-header, .mt-header, .repair-header, .analytics-header) { gap: 12px; }
+    body.erp-ui .main-container { flex-direction: column; min-width: 0; }
+    body.erp-ui .warehouse-area { min-width: 0; padding: 16px; }
+    body.erp-ui .warehouse-inner { flex-shrink: 0; }
+    body.erp-ui .warehouse-area + .sidebar { width: 100%; }
+  }
+}

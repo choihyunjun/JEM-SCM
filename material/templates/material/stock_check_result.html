@@ -38,7 +38,7 @@
                         <td class="fw-bold">{{ stock.part.part_no }}</td>
                         <td>{{ stock.part.part_name|truncatechars:30 }}</td>
                         <td class="small">{{ stock.lot_no|date:"Y-m-d"|default:"-" }}</td>
-                        <td class="text-end">{{ stock.quantity|intcomma }}</td>
+                        <td class="text-end erp-number">{{ stock.quantity|intcomma }}</td>
                         <td class="text-end">
                             <input type="number" class="form-control form-control-sm text-end actual-qty"
                                    data-stock-id="{{ stock.id }}"

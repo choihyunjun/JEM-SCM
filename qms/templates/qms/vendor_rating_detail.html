@@ -79,7 +79,7 @@
 
                     <table class="table table-borderless dtl-info-table">
                         <tr><th>총 입고수량</th><td class="text-end">{{ rating.total_incoming_qty|intcomma }}</td></tr>
-                        <tr><th>불량수량</th><td class="text-end" style="color:#b91c1c;">{{ rating.defect_qty|intcomma }}</td></tr>
+                        <tr><th>불량수량</th><td class="text-end erp-number" style="color:#b91c1c;">{{ rating.defect_qty|intcomma }}</td></tr>
                         <tr>
                             <th>PPM</th>
                             <td class="text-end h5 fw-bold mb-0 {% if rating.ppm <= 100 %}text-success{% elif rating.ppm <= 500 %}text-warning{% else %}text-danger{% endif %}">
@@ -132,7 +132,7 @@
                         <th>유형</th>
                         <th>품번</th>
                         <th>품명</th>
-                        <th class="text-end">수량</th>
+                        <th class="text-end erp-number">수량</th>
                         <th class="text-end">클레임금액</th>
                         <th>상태</th>
                     </tr>
