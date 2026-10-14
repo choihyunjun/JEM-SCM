@@ -1495,12 +1495,16 @@ def label_list(request):
 
         do_qs = do_qs.filter(id__in=do_ids).distinct()
     # 2. 상태별 리스트 분리
-    recent_orders = do_qs.exclude(status='REJECTED')
+    recent_orders = do_qs
 
     if status_filter == 'registered':
         recent_orders = recent_orders.filter(status='PENDING')
+    elif status_filter == 'inspection':
+        recent_orders = recent_orders.filter(status='RECEIVED')
+    elif status_filter == 'rejected':
+        recent_orders = recent_orders.filter(status='REJECTED')
     elif status_filter == 'received':
-        recent_orders = recent_orders.filter(status__in=['RECEIVED', 'APPROVED'])
+        recent_orders = recent_orders.filter(status='APPROVED')
 
     recent_orders = recent_orders[:20]
 
@@ -1524,19 +1528,22 @@ def label_list(request):
             '-created_at'
         )
 
-    # 🔴 미확인 건수 (뱃지용)
-    return_pending_count = return_logs_qs.filter(
-        is_confirmed=False
-    ).count()
+    if not is_staff_or_admin and not user_vendor:
+        return_logs_qs = return_logs_qs.none()
+    elif selected_v and is_staff_or_admin:
+        return_logs_qs = return_logs_qs.filter(part__vendor_id=selected_v)
+    return_logs = return_logs_qs.select_related('source_incoming', 'delivery_item').prefetch_related('shipments__movement')
+    return_pending_count = return_logs_qs.filter(shipments__confirmed_at__isnull=True,
+                                               shipments__isnull=False).distinct().count()
+    from .returns import restored_quantities
+    returned_by_order, returned_by_part = restored_quantities(return_logs_qs)
 
-    return_logs = return_logs_qs
-        
     # 3. 라벨 발행 데이터 (잔량 계산 로직)
     label_data = []
     
     order_q = Order.objects.filter(is_closed=False, approved_at__isnull=False)
-    if not is_staff_or_admin and user_vendor:
-        order_q = order_q.filter(vendor=user_vendor)
+    if not is_staff_or_admin:
+        order_q = order_q.filter(vendor=user_vendor) if user_vendor else order_q.none()
     elif selected_v:
         order_q = order_q.filter(vendor_id=selected_v)
 
@@ -1548,12 +1555,7 @@ def label_list(request):
     for o in erp_orders:
         printed = LabelPrintLog.objects.filter(order=o).aggregate(Sum('printed_qty'))['printed_qty__sum'] or 0
         
-        # 반출 확인 수량 (ERP 번호 매칭)
-        returned = ReturnLog.objects.filter(
-            part__part_no=o.part_no,
-            is_confirmed=True,
-            delivery_order__items__erp_order_no=o.erp_order_no
-        ).distinct().aggregate(Sum('quantity'))['quantity__sum'] or 0
+        returned = returned_by_order[o.pk]
 
         valid_printed = printed - returned
         remain = o.quantity - valid_printed
@@ -1584,11 +1586,7 @@ def label_list(request):
         
         printed = LabelPrintLog.objects.filter(part_no=p_no, order__isnull=True).aggregate(Sum('printed_qty'))['printed_qty__sum'] or 0
         
-        returned = ReturnLog.objects.filter(
-            part__part_no=p_no,
-            is_confirmed=True,
-            delivery_order__items__erp_order_no=''
-        ).distinct().aggregate(Sum('quantity'))['quantity__sum'] or 0
+        returned = returned_by_part[p_no]
 
         remain = total_qty - (printed - returned)
 
@@ -2314,37 +2312,17 @@ def receive_delivery_order_confirm(request):
 @login_required
 @require_POST
 def confirm_return(request, pk):
-    """
-    [협력사 액션] 부적합 반출 확인 (단순 확인용)
-    - WMS 재고 차감은 관리자가 이미 수행했다고 가정함.
-    - 여기서는 협력사가 '확인' 버튼을 누르면 납품 가능 수량(Remain)만 복구해줌.
-    """
-    return_log = get_object_or_404(ReturnLog, pk=pk)
-    
-    # 1. 권한 체크 (본인 회사 물건인지)
-    if not request.user.is_superuser:
-        user_vendor = _get_user_vendor(request.user)
-        if (not user_vendor) or (user_vendor != return_log.part.vendor):
-            messages.error(request, "권한이 없습니다.")
-            return redirect('label_list')
-
-    # 2. 중복 체크
-    if return_log.is_confirmed:
-        messages.warning(request, "이미 확인 처리된 건입니다.")
-        return redirect('label_list')
-
+    from .returns import acknowledge_return
+    case = get_object_or_404(ReturnLog, pk=pk)
     try:
-        # 3. 상태 업데이트 (단순 마킹)
-        # 재고 로직(WMS)은 일절 개입하지 않음
-        return_log.is_confirmed = True
-        return_log.confirmed_at = timezone.now()
-        return_log.save()
-
-        messages.success(request, f"반출 확인 완료. ({return_log.quantity}ea 만큼 납품 가능 수량이 복구되었습니다.)")
-
-    except Exception as e:
-        messages.error(request, f"처리 중 오류 발생: {str(e)}")
-
+        quantity = acknowledge_return(pk, request.POST.get('shipment_id'), request.user)
+        if quantity:
+            suffix = ' 해당 발주의 납품 가능 수량에 반영됩니다.' if case.delivery_order_id else ''
+            messages.success(request, f"반출 {quantity}개 인수 확인 완료.{suffix}")
+        else:
+            messages.info(request, "이미 인수 확인된 반출입니다.")
+    except (ValueError, TypeError) as exc:
+        messages.error(request, str(exc))
     return redirect('label_list')
 # ==========================================
 # [LOT 관리] LOT별 재고 상세 조회 API

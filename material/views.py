@@ -781,7 +781,7 @@ def manual_incoming(request):
     return render(request, 'material/manual_incoming.html', context)
 
 
-def _do_cancel_incoming(trx, cancel_action):
+def _do_cancel_incoming(trx, cancel_action, correction_reason='', correction_actor=None):
     """[WMS] 입고 건 취소/삭제 공용 처리 (단건/일괄 공용)
     Returns: (success: bool, message: str)
     """
@@ -821,6 +821,9 @@ def _do_cancel_incoming(trx, cancel_action):
             with transaction.atomic():
                 from .erp_outbox import guard_receipt_change
                 guard_receipt_change(trx)
+                from orders.returns import guard_return_cancellation, reverse_inspection_summary
+                return_cases = guard_return_cancellation(trx)
+                inspection.refresh_from_db()
                 part = trx.part
                 lot_no = trx.lot_no
 
@@ -828,6 +831,8 @@ def _do_cancel_incoming(trx, cancel_action):
                     inspection_transfers = inspection_transfers_for_cancel(trx, inspection)
                     for transfer in inspection_transfers:
                         guard_receipt_change(transfer)
+                    from orders.returns import guard_inspection_stock_usage
+                    guard_inspection_stock_usage(trx, inspection_transfers)
                     # 판정 완료 상태 → 목표 창고/부적합 창고 재고 원복 + 검사대기 복원
 
                     # 재고 충분한지 먼저 검증 (ERP 삭제 등 외부 부작용 실행 전에 확인해야
@@ -873,6 +878,15 @@ def _do_cancel_incoming(trx, cancel_action):
                     MaterialStock.objects.filter(pk=inspect_stock.pk).update(
                         quantity=F('quantity') + trx.quantity
                     )
+                    reverse_inspection_summary(trx, inspection)
+                    return_cases.delete()
+                    inspection.correction_history.append({
+                        'at': timezone.now().isoformat(),
+                        'actor': correction_actor.get_username() if correction_actor else '',
+                        'reason': correction_reason or 'WMS 입고 취소',
+                        'qty_good': inspection.qty_good, 'qty_bad': inspection.qty_bad,
+                        'remark': inspection.remark or '',
+                    })
 
                 # PENDING이든 APPROVED이든 → 검사 판정 초기화
                 inspection.status = 'PENDING'
@@ -885,6 +899,11 @@ def _do_cancel_incoming(trx, cancel_action):
                 inspection.check_dimension = False
                 inspection.remark = ''
                 inspection.save()
+                from orders.models import DeliveryOrder
+                from orders.returns import refresh_delivery_status
+                delivery = DeliveryOrder.objects.filter(order_no=trx.ref_delivery_order).first()
+                if delivery:
+                    refresh_delivery_status(delivery)
 
             msg = f"[{trx_no}] 입고만 취소 완료 — 수입검사가 대기 상태로 초기화되었습니다."
             if erp_notices:
@@ -899,17 +918,12 @@ def _do_cancel_incoming(trx, cancel_action):
         with transaction.atomic():
             from .erp_outbox import guard_receipt_change
             guard_receipt_change(trx)
+            from orders.returns import guard_return_cancellation, reverse_inspection_summary
+            return_cases = guard_return_cancellation(trx)
             part = trx.part
             lot_no = trx.lot_no
 
-            # 같은 납품서에 연결된 다른 입고 건이 남아있는지 확인 (전부 취소된 경우에만 납품서를 재처리 가능 상태로 되돌림)
             ref_do_no = trx.ref_delivery_order
-            other_items_exist = False
-            if ref_do_no:
-                other_items_exist = MaterialTransaction.objects.filter(
-                    ref_delivery_order=ref_do_no,
-                    transaction_type__in=['IN_MANUAL', 'IN_SCM', 'IN_ERP']
-                ).exclude(pk=trx.pk).exists()
 
             # 수입검사 판정 완료 상태면 → 목표/부적합 창고 재고도 원복
             inspection = None
@@ -925,6 +939,8 @@ def _do_cancel_incoming(trx, cancel_action):
                 inspection_transfers = inspection_transfers_for_cancel(trx, inspection)
                 for transfer in inspection_transfers:
                     guard_receipt_change(transfer)
+                from orders.returns import guard_inspection_stock_usage
+                guard_inspection_stock_usage(trx, inspection_transfers)
                 if inspection.qty_good > 0:
                     target_code = inspection.target_warehouse_code or '2000'
                     wh_good = Warehouse.objects.filter(code=target_code).first()
@@ -957,6 +973,7 @@ def _do_cancel_incoming(trx, cancel_action):
 
                 # 양품/불량 이동 트랜잭션 삭제
                 inspection_transfers.delete()
+                reverse_inspection_summary(trx, inspection)
             else:
                 # PENDING 또는 검사 없음 → 검사대기(또는 입고) 창고에서 차감
                 stock = MaterialStock.objects.filter(
@@ -984,6 +1001,7 @@ def _do_cancel_incoming(trx, cancel_action):
                     raise Exception(f'ERP 입고 삭제 실패: {erp_err} (ERP번호: {erp_no})')
 
             # ImportInspection 삭제
+            return_cases.delete()
             if ImportInspection:
                 try:
                     trx.inspection.delete()
@@ -993,40 +1011,26 @@ def _do_cancel_incoming(trx, cancel_action):
             # 트랜잭션 삭제
             trx.delete()
 
-            # SCM 라벨 발행 이력(PO 잔량) 복구.
-            # 이 트랜잭션 수량(trx_qty) 중 이미 반출(ReturnLog)로 복구된
-            # 수량은 빼고, 나머지(=이번에 새로 재고에서 빠지는 수량)만 복구한다.
-            # (예: 100개 중 양품80/불량20으로 판정, 불량 20은 이미 반출 확인
-            #  완료된 상태에서 남은 양품 80까지 취소하는 경우 -> 80만 복구.
-            #  100 전체를 복구하면 이미 반출로 복구된 20이 중복 복구되고,
-            #  반대로 건너뛰면 80이 영원히 복구 안 됨)
+            # 실제 반출된 입고는 앞에서 차단하므로 이 입고의 발행 수량만 복구한다.
             label_restored_qty = 0
-            if ref_do_no:
-                from orders.models import LabelPrintLog, ReturnLog
-                already_returned_qty = ReturnLog.objects.filter(
-                    delivery_order__order_no=ref_do_no, part=part
-                ).aggregate(total=Sum('quantity'))['total'] or 0
-
-                restore_qty = trx_qty - already_returned_qty
-                if restore_qty > 0:
-                    if label:
-                        if restore_qty >= label.printed_qty:
-                            label.delete()
-                        else:
-                            label.printed_qty = label.printed_qty - restore_qty
-                            label.save(update_fields=['printed_qty'])
-                        label_restored_qty = restore_qty
+            if ref_do_no and label:
+                restore_qty = min(trx_qty, label.printed_qty)
+                if restore_qty >= label.printed_qty:
+                    label.delete()
+                else:
+                    label.printed_qty -= restore_qty
+                    label.save(update_fields=['printed_qty'])
+                label_restored_qty = restore_qty
 
             # 납품서에 남은 입고 건이 없으면 재처리 가능하도록 납품서 상태 리셋
             do_reset = False
-            if ref_do_no and not other_items_exist:
+            if ref_do_no:
                 from orders.models import DeliveryOrder
+                from orders.returns import refresh_delivery_status
                 do = DeliveryOrder.objects.filter(order_no=ref_do_no).first()
                 if do:
-                    do.is_received = False
-                    do.status = 'PENDING'
-                    do.save()
-                    do_reset = True
+                    refresh_delivery_status(do)
+                    do_reset = not do.is_received
 
         if do_reset:
             msg = f"입고 건 [{trx_no}] 삭제 완료 (재고 {trx_qty}개 차감). 납품서 [{ref_do_no}]가 재처리 가능 상태로 초기화되었습니다."
@@ -1056,7 +1060,7 @@ def cancel_manual_incoming(request, trx_id):
     trx = get_object_or_404(MaterialTransaction, pk=trx_id, transaction_type__in=['IN_MANUAL', 'IN_SCM', 'IN_ERP'])
     cancel_action = request.POST.get('cancel_action', 'delete_all')
 
-    success, message = _do_cancel_incoming(trx, cancel_action)
+    success, message = _do_cancel_incoming(trx, cancel_action, correction_actor=request.user)
     if success:
         messages.success(request, message)
     else:
@@ -1096,7 +1100,7 @@ def bulk_cancel_manual_incoming(request):
             continue
 
         trx_label = trx.transaction_no
-        success, message = _do_cancel_incoming(trx, cancel_action)
+        success, message = _do_cancel_incoming(trx, cancel_action, correction_actor=request.user)
         if success:
             success_count += 1
         else:
@@ -3323,61 +3327,52 @@ def stock_check_result(request):
 
 @wms_permission_required('can_wms_stock_return')
 def stock_return(request):
-    """
-    [WMS] 불량 반품 처리
-    """
-    ng_wh = Warehouse.objects.filter(code='8200').first()
-    if not ng_wh:
-        ng_wh = Warehouse.objects.filter(name__contains='부적합').first()
-
+    import uuid
+    from orders.models import ReturnLog
+    from orders.returns import ship_return
     if request.method == 'POST':
         try:
-            stock_id = request.POST.get('stock_id')
-            return_qty = int(request.POST.get('quantity', 0))
-            remark = request.POST.get('remark', '')
-
+            case_ids = sorted(set(int(value) for value in request.POST.getlist('case_ids')))
+            if not case_ids:
+                raise ValueError('반출할 항목을 선택해 주세요.')
             with transaction.atomic():
-                stock = get_object_or_404(MaterialStock, id=stock_id)
+                for case_id in case_ids:
+                    ship_return(case_id, int(request.POST.get(f'quantity_{case_id}', 0)),
+                                request.user, request.POST.get('request_key', ''))
+            messages.success(request, f'{len(case_ids)}건 반출 처리 완료. 아래 반출 이력에서 반출증을 인쇄할 수 있습니다.')
+        except (ValueError, TypeError) as exc:
+            messages.error(request, str(exc))
+        return redirect('material:stock_return')
 
-                if return_qty <= 0:
-                    messages.error(request, "반품 수량은 1개 이상이어야 합니다.")
-                    return redirect('material:stock_return')
-                if stock.quantity < return_qty:
-                    messages.error(request, "재고 수량보다 많이 반품할 수 없습니다.")
-                    return redirect('material:stock_return')
-
-                # (1) 재고 차감
-                deduct_stock(stock, return_qty)
-
-                # (2) 반품 이력 남기기
-                trx_no = f"RET-{timezone.now().strftime('%y%m%d%H%M%S')}-{request.user.id}"
-                trx = MaterialTransaction.objects.create(
-                    transaction_no=trx_no,
-                    transaction_type='OUT_RETURN',
-                    date=timezone.now(),
-                    part=stock.part,
-                    quantity=return_qty,
-                    warehouse_from=stock.warehouse,
-                    vendor=stock.part.vendor,
-                    actor=request.user,
-                    remark=f"[반품] {remark}"
-                )
-
-            messages.success(request, f"[{stock.part.part_name}] {return_qty}개 반품 처리 완료.")
-            return redirect('material:print_return_note', trx_id=trx.id)
-
-        except Exception as e:
-            messages.error(request, f"오류 발생: {str(e)}")
-            return redirect('material:stock_return')
-
-    ng_stocks = []
-    if ng_wh:
-        ng_stocks = MaterialStock.objects.filter(
-            warehouse=ng_wh, quantity__gt=0
-        ).select_related('part', 'part__vendor').order_by('part__part_no')
-
+    q = request.GET.get('q', '').strip()
+    cases = ReturnLog.objects.select_related('part__vendor', 'source_incoming', 'delivery_order').prefetch_related('shipments__movement').order_by('created_at', 'pk')
+    history = MaterialTransaction.objects.filter(transaction_type='OUT_RETURN').select_related('part__vendor', 'return_shipment').order_by('-date', '-pk')
+    if q:
+        cases = cases.filter(Q(part__part_no__icontains=q) | Q(part__part_name__icontains=q) |
+                             Q(delivery_order__order_no__icontains=q) | Q(part__vendor__name__icontains=q))
+        history = history.filter(Q(part__part_no__icontains=q) | Q(part__part_name__icontains=q) |
+                                 Q(ref_delivery_order__icontains=q) | Q(vendor__name__icontains=q))
+    pending_cases = [case for case in cases if case.remaining_quantity > 0]
+    from collections import defaultdict
+    linked_quantities = defaultdict(int)
+    for case in pending_cases:
+        if case.source_incoming_id:
+            origin = case.source_incoming
+            linked_quantities[(case.part_id, origin.lot_no, origin.production_lot)] += case.remaining_quantity
+    stocks = MaterialStock.objects.filter(warehouse__code='8200', quantity__gt=0).select_related('part__vendor')
+    if q:
+        stocks = stocks.filter(Q(part__part_no__icontains=q) | Q(part__part_name__icontains=q) |
+                               Q(part__vendor__name__icontains=q))
+    unlinked_stocks = []
+    for stock in stocks:
+        stock.unlinked_quantity = stock.quantity - linked_quantities[(stock.part_id, stock.lot_no, stock.production_lot)]
+        if stock.unlinked_quantity > 0:
+            unlinked_stocks.append(stock)
+    from django.core.paginator import Paginator
     return render(request, 'material/stock_return.html', {
-        'ng_stocks': ng_stocks
+        'return_cases': pending_cases, 'unlinked_stocks': unlinked_stocks,
+        'history_page': Paginator(history, 30).get_page(request.GET.get('page')),
+        'request_key': str(uuid.uuid4()), 'q': q,
     })
 
 
@@ -3386,7 +3381,7 @@ def print_return_note(request, trx_id):
     """
     [WMS] 반출증(Gate Pass) 인쇄 화면
     """
-    trx = get_object_or_404(MaterialTransaction, pk=trx_id)
+    trx = get_object_or_404(MaterialTransaction, pk=trx_id, transaction_type='OUT_RETURN')
     return render(request, 'material/print_return_note.html', {
         'trx': trx,
         'today': timezone.now()

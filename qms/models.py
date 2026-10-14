@@ -588,6 +588,8 @@ class ImportInspection(models.Model):
     qty_good = models.IntegerField("양품 수량", default=0)
     qty_bad = models.IntegerField("불량 수량", default=0)
 
+    correction_history = models.JSONField("판정 정정 이력", default=list, blank=True)
+
     remark = models.TextField("검사 의견", blank=True, null=True)
     attachment = models.FileField("검사 성적서/사진", upload_to="qms/inspection/", blank=True, null=True)
 

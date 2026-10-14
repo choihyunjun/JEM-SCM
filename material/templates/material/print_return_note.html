@@ -86,6 +86,9 @@
                 <th>반출 사유</th>
                 <td colspan="3" class="text-left">{{ trx.remark }}</td>
             </tr>
+            <tr><th>원본 납품서</th><td colspan="3" class="text-left">{{ trx.ref_delivery_order|default:"수기 입고" }}</td></tr>
+            <tr><th>LOT / 제조 LOT</th><td colspan="3" class="text-left">{{ trx.lot_no|date:"Y-m-d"|default:"-" }} / {{ trx.production_lot|default:"-" }}</td></tr>
+            <tr><th>반출일</th><td colspan="3" class="text-left">{{ trx.date|date:"Y-m-d H:i" }}</td></tr>
         </table>
 
         <table>

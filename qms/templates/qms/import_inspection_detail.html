@@ -1,5 +1,5 @@
 {% extends 'qms/qms_base.html' %}
-{% load humanize %}
+{% load humanize auth_extras %}
 {% block title %}수입검사 상세 및 판정{% endblock %}
 
 {% block qms_content %}
@@ -165,6 +165,22 @@
         </div>
     </div>
 
+    {% if inspection.status != 'PENDING' %}
+    <div class="card mt-3"><div class="card-body">
+        <h6>판정 정정</h6>
+        <p class="small text-muted">입력 오류가 있으면 검사대기로 되돌린 뒤 다시 판정할 수 있습니다. 이미 반출·이동·사용된 LOT은 정정할 수 없습니다.</p>
+        <form method="post" class="d-flex gap-2">{% csrf_token %}
+            <input name="correction_reason" class="form-control" placeholder="정정 사유" aria-label="정정 사유" required>
+            <button name="decision" value="CANCEL" class="btn btn-outline-danger text-nowrap" onclick="return confirm('판정을 검사대기로 되돌리시겠습니까?')">판정 되돌리기</button>
+        </form>
+        {% if inspection.qty_bad and user|has_perm:'can_wms_stock_return' %}<a class="btn btn-outline-secondary mt-3" href="{% url 'material:stock_return' %}?q={{ inspection.inbound_transaction.part.part_no|urlencode }}">불량 반출 처리로 이동</a>{% endif %}
+    </div></div>
+    {% endif %}
+    {% if inspection.correction_history %}
+    <details class="mt-3"><summary>판정 정정 이력</summary>
+    {% for entry in inspection.correction_history %}<div class="small py-2">{{ entry.at }} / {{ entry.actor }} · 양품 {{ entry.qty_good }}, 불량 {{ entry.qty_bad }} → 검사대기<br>{{ entry.reason }}</div>{% endfor %}
+    </details>
+    {% endif %}
     <div class="text-center mt-4">
         <a href="{% url 'qms:import_inspection_list' %}" class="dtl-back-link"><i class="bi bi-arrow-left me-1"></i>목록으로 돌아가기</a>
     </div>

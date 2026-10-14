@@ -199,7 +199,7 @@ class DeliveryOrder(models.Model):
     is_received = models.BooleanField(default=False, verbose_name="입고완료여부")
 
     STATUS_CHOICES = [
-        ('PENDING', '배송중/대기'),
+        ('PENDING', '납품서 발행'),
         ('RECEIVED', '입고완료(검사대기)'),
         ('APPROVED', '검사합격(입고확정)'),
         ('REJECTED', '검사불합격(반려)'),
@@ -444,9 +444,14 @@ class ReturnLog(models.Model):
     """
     부적합 반출(반품) 관리 테이블
     - 수입검사 불량 시 데이터 생성 (is_confirmed=False)
-    - 협력사 확인 시 (is_confirmed=True) -> 재고 차감 및 납품가능수량 복구
+    - 실제 반출 시 재고 차감, 협력사 인수 확인 수량만 납품 가능 수량 복구
     """
-    delivery_order = models.ForeignKey('DeliveryOrder', on_delete=models.CASCADE, related_name='return_logs', verbose_name="관련 납품서")
+    delivery_order = models.ForeignKey('DeliveryOrder', on_delete=models.CASCADE, related_name='return_logs', verbose_name="관련 납품서", null=True, blank=True)
+    source_incoming = models.OneToOneField('material.MaterialTransaction', on_delete=models.PROTECT,
+        null=True, blank=True, related_name='return_case', verbose_name='원본 입고')
+    delivery_item = models.ForeignKey('DeliveryOrderItem', on_delete=models.PROTECT,
+        null=True, blank=True, related_name='return_cases', verbose_name='원본 납품 품목')
+    legacy_confirmed_quantity = models.PositiveIntegerField('기존 확인 수량', default=0)
     part = models.ForeignKey('Part', on_delete=models.CASCADE, related_name='return_logs', verbose_name="품목")
     quantity = models.IntegerField("반출 대상 수량")
     
@@ -459,9 +464,34 @@ class ReturnLog(models.Model):
     is_confirmed = models.BooleanField("반출 확인 여부", default=False)
     confirmed_at = models.DateTimeField("반출 확인 일시", null=True, blank=True)
 
+    @property
+    def shipped_quantity(self):
+        return self.legacy_confirmed_quantity + sum(s.movement.quantity for s in self.shipments.all())
+
+    @property
+    def confirmed_quantity(self):
+        return self.legacy_confirmed_quantity + sum(s.movement.quantity for s in self.shipments.all() if s.confirmed_at)
+
+    @property
+    def remaining_quantity(self):
+        return max(0, self.quantity - self.shipped_quantity)
+
     def __str__(self):
         status = "확인완료" if self.is_confirmed else "미확인"
         return f"[{status}] {self.part.part_name} - {self.quantity}ea"
+
+
+class ReturnShipment(models.Model):
+    """실제로 출고한 수량별 인수 확인. 검사 불량 수량과 반출 수량을 분리한다."""
+    return_log = models.ForeignKey(ReturnLog, on_delete=models.PROTECT, related_name='shipments')
+    request_key = models.CharField(max_length=80, unique=True)
+    movement = models.OneToOneField('material.MaterialTransaction', on_delete=models.PROTECT,
+        related_name='return_shipment')
+    confirmed_at = models.DateTimeField('협력사 확인 일시', null=True, blank=True)
+    confirmed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+
+    class Meta:
+        ordering = ['-pk']
 
 
 class VendorMonthlyPerformance(models.Model):

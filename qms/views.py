@@ -1302,11 +1302,18 @@ def import_inspection_detail(request, pk):
         try:
             with transaction.atomic():
                 # [A] 판정 취소
+                MaterialTransaction.objects.filter(pk=origin_trx.pk).update(quantity=F('quantity'))
                 if decision == "CANCEL":
                     if inspection.status == "PENDING":
                         messages.warning(request, "아직 판정되지 않은 건입니다.")
                     else:
-                        messages.error(request, "분할 판정된 건은 시스템 관리자를 통해 재고를 수동 조정해야 합니다.")
+                        reason = request.POST.get('correction_reason', '').strip()
+                        if not reason:
+                            raise ValueError('판정 정정 사유를 입력해 주세요.')
+                        from material.views import _do_cancel_incoming
+                        ok, message = _do_cancel_incoming(origin_trx, 'cancel_incoming_only',
+                            correction_reason=reason, correction_actor=request.user)
+                        (messages.success if ok else messages.error)(request, message)
                     return redirect("qms:import_inspection_detail", pk=pk)
 
                 # [B] 이미 판정 완료면 중단
@@ -1516,45 +1523,16 @@ def import_inspection_detail(request, pk):
                         scm_inv.base_stock = F('base_stock') + qty_good
                         scm_inv.save()
 
-                    target_do = DeliveryOrder.objects.filter(order_no=ref_do_no).first()
-                    if target_do:
-                        if qty_good > 0:
-                            target_do.status = "APPROVED"
-                            target_do.save()
-                        elif qty_bad == total_input:
-                            # 전수불량 - 같은 납품서의 다른 품목(입고 건)들이 전부 판정 완료 & 전부 불량인지 확인
-                            other_trx_qs = MaterialTransaction.objects.filter(
-                                ref_delivery_order=ref_do_no,
-                                transaction_type__in=['IN_MANUAL', 'IN_SCM', 'IN_ERP']
-                            ).exclude(pk=origin_trx.pk)
-
-                            all_others_all_bad = True
-                            for ot in other_trx_qs:
-                                try:
-                                    ot_insp = ot.inspection
-                                except Exception:
-                                    ot_insp = None
-                                if ot_insp is None or ot_insp.status == 'PENDING' or ot_insp.qty_good > 0:
-                                    all_others_all_bad = False
-                                    break
-
-                            if all_others_all_bad:
-                                # 이 납품서의 모든 품목이 전량 불량(또는 유일 품목이 전량 불량)
-                                # -> 사실상 취소와 같으므로 재처리 가능 상태로 리셋
-                                target_do.status = 'PENDING'
-                                target_do.is_received = False
-                            elif target_do.status != "APPROVED":
-                                target_do.status = "REJECTED"
-                            target_do.save()
-
-                    if qty_bad > 0:
-                        ReturnLog.objects.create(
-                            delivery_order=target_do,
-                            part=part,
-                            quantity=qty_bad,
-                            reason=request.POST.get("remark", "수입검사 불량"),
-                            is_confirmed=False,
-                        )
+                target_do = DeliveryOrder.objects.filter(order_no=ref_do_no).first() if ref_do_no else None
+                if qty_bad > 0:
+                    ReturnLog.objects.create(
+                        delivery_order=target_do, delivery_item=delivery_item,
+                        source_incoming=origin_trx, part=part, quantity=qty_bad,
+                        reason=(inspection.remark or '수입검사 불량')[:255],
+                    )
+                if target_do:
+                    from orders.returns import refresh_delivery_status
+                    refresh_delivery_status(target_do)
 
             messages.success(request, f"판정 완료. (양품: {qty_good} / 불량: {qty_bad})")
             return redirect("qms:import_inspection_list")

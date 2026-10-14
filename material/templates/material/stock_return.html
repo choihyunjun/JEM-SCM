@@ -1,55 +1,57 @@
 {% extends 'material/material_base.html' %}
-{% block title %}불량 자재 반품 처리{% endblock %}
-
+{% block title %}불량 자재 반출 처리{% endblock %}
 {% block material_content %}
 <div class="container-fluid">
-    <span class="dtl-title d-block mb-3">불량 자재 반품 처리</span>
-
-    <div class="dtl-card mb-0">
-        <div class="dtl-card-header"><i class="bi bi-exclamation-triangle" style="color:#b91c1c;"></i>부적합 창고 보유 현황</div>
-        <div class="dtl-card-body">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle">
-                    <thead class="table-light">
-                        <tr>
-                            <th>품번</th>
-                            <th>품명</th>
-                            <th>공급처</th>
-                            <th>현재고 (불량)</th>
-                            <th width="30%">반품 처리</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for stock in ng_stocks %}
-                        <tr>
-                            <td class="fw-bold">{{ stock.part.part_no }}</td>
-                            <td>{{ stock.part.part_name }}</td>
-                            <td>{{ stock.part.vendor.name }}</td>
-                            <td class="text-danger fw-bold">{{ stock.quantity }} {{ stock.part.weight_unit|default:"EA" }}</td>
-                            <td>
-                                <form method="post" class="d-flex gap-2">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="stock_id" value="{{ stock.id }}">
-                                    <input type="number" name="quantity" class="form-control form-control-sm" placeholder="수량" max="{{ stock.quantity }}" min="1" required style="width: 100px;">
-                                    <input type="text" name="remark" class="form-control form-control-sm" placeholder="사유 (예: 치수불량)" required>
-                                    <button type="submit" class="btn btn-sm btn-outline-danger text-nowrap" onclick="return confirm('이 자재를 반품 처리하시겠습니까?\n재고에서 차감됩니다.')">
-                                        반품확정
-                                    </button>
-                                </form>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="5" class="text-center py-5 text-muted">
-                                <i class="bi bi-check-circle fs-1 d-block mb-3 text-success"></i>
-                                현재 반품 대상(부적합 재고)이 없습니다.
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+    <h4 class="mb-3">불량 자재 반출 처리</h4>
+    <p class="text-muted">검사 불량 건의 LOT와 수량을 확인하고 선택해 반출하세요. 불량 사유는 검사 결과에서 가져옵니다.</p>
+    <form method="get" class="d-flex gap-2 mb-3">
+        <input class="form-control" name="q" value="{{ q }}" placeholder="품번 · 품명 · 공급처 · 납품서 번호" aria-label="반출 검색">
+        <button class="btn btn-outline-primary text-nowrap">검색</button>
+        <a href="{% url 'material:stock_return' %}" class="btn btn-outline-secondary text-nowrap">초기화</a>
+    </form>
+    <div class="card mb-4"><div class="card-header fw-bold">반출 대기</div><div class="card-body">
+        <form method="post" onsubmit="return confirm('선택한 항목을 입력 수량만큼 반출하시겠습니까? 부적합 재고에서 차감됩니다.')">
+            {% csrf_token %}<input type="hidden" name="request_key" value="{{ request_key }}">
+            <div class="table-responsive"><table class="table align-middle">
+                <thead><tr><th><input type="checkbox" aria-label="전체 선택" id="selectAll"></th><th>품번 / 공급처</th><th>납품서 / LOT / 제조 LOT</th><th>불량 사유</th><th>불량</th><th>반출 완료</th><th>반출 대기</th><th>이번 반출 수량</th></tr></thead>
+                <tbody>{% for case in return_cases %}<tr>
+                    <td>{% if case.source_incoming_id %}<input type="checkbox" name="case_ids" value="{{ case.pk }}" aria-label="{{ case.part.part_no }} 선택">{% endif %}</td>
+                    <td><strong>{{ case.part.part_no }}</strong><div class="small">{{ case.part.part_name }}<br>{{ case.part.vendor.name }}</div></td>
+                    <td>{{ case.delivery_order.order_no|default:"수기 입고" }}<div class="small">{{ case.source_incoming.lot_no|date:"Y-m-d"|default:"-" }} / {{ case.source_incoming.production_lot|default:"-" }}<br>{{ case.source_incoming.transaction_no|default:"원본 입고 연결 확인 필요" }}</div></td>
+                    <td>{{ case.reason }}</td><td>{{ case.quantity }}</td><td>{{ case.shipped_quantity }}</td><td>{{ case.remaining_quantity }}</td>
+                    <td>{% if case.source_incoming_id %}<input class="form-control" style="min-width:100px" type="number" name="quantity_{{ case.pk }}" value="{{ case.remaining_quantity }}" min="1" max="{{ case.remaining_quantity }}" aria-label="{{ case.part.part_no }} 반출 수량">{% else %}<span class="text-warning">과거 내역 확인 필요</span>{% endif %}</td>
+                </tr>{% empty %}<tr><td colspan="8" class="text-center text-muted py-4">반출 대기 건이 없습니다.</td></tr>{% endfor %}</tbody>
+            </table></div>
+            {% if return_cases %}<div class="text-end"><button class="btn btn-danger">선택 항목 반출 확정</button></div>{% endif %}
+        </form>
+    </div></div>
+    {% if unlinked_stocks %}
+    <div class="alert alert-warning">
+        <strong>검사·반출 이력 연결 확인이 필요한 재고</strong>
+        <p class="small mb-2">아래 수량은 반출 대기 건과 연결되지 않은 부적합 재고입니다. 담당자가 원본 검사와 과거 반출 여부를 확인해야 합니다.</p>
+        {% for stock in unlinked_stocks %}<div class="small">{{ stock.part.part_no }} · LOT {{ stock.lot_no|date:"Y-m-d"|default:"-" }} / {{ stock.production_lot|default:"-" }} · {{ stock.unlinked_quantity }}개</div>{% endfor %}
     </div>
+    {% endif %}
+    <div class="card"><div class="card-header fw-bold">반출 이력 · 반출증 인쇄</div><div class="card-body">
+        <div class="table-responsive"><table class="table align-middle">
+            <thead><tr><th>반출일</th><th>반출 번호 / 납품서</th><th>품번</th><th>LOT / 제조 LOT</th><th>수량</th><th>협력사 인수</th><th>반출증</th></tr></thead>
+            <tbody>{% for trx in history_page %}<tr>
+                <td>{{ trx.date|date:"Y-m-d H:i" }}</td><td>{{ trx.transaction_no }}<div class="small">{{ trx.ref_delivery_order|default:"-" }}</div></td>
+                <td>{{ trx.part.part_no }}</td><td>{{ trx.lot_no|date:"Y-m-d"|default:"-" }} / {{ trx.production_lot|default:"-" }}</td><td>{{ trx.quantity }}</td>
+                <td>{% if trx.return_shipment.confirmed_at %}<span class="badge bg-success">확인 완료</span>{% elif trx.return_shipment %}<span class="badge bg-secondary">확인 대기</span>{% else %}과거 내역{% endif %}</td>
+                <td><a class="btn btn-sm btn-outline-primary" href="{% url 'material:print_return_note' trx.pk %}" target="_blank" rel="noopener">인쇄 / 재인쇄</a></td>
+            </tr>{% empty %}<tr><td colspan="7" class="text-center text-muted">반출 이력이 없습니다.</td></tr>{% endfor %}</tbody>
+        </table></div>
+        <div class="d-flex gap-3 justify-content-center">
+            {% if history_page.has_previous %}<a href="?q={{ q|urlencode }}&page={{ history_page.previous_page_number }}">이전</a>{% endif %}
+            <span>{{ history_page.number }} / {{ history_page.paginator.num_pages }}</span>
+            {% if history_page.has_next %}<a href="?q={{ q|urlencode }}&page={{ history_page.next_page_number }}">다음</a>{% endif %}
+        </div>
+    </div></div>
 </div>
+<script>
+document.getElementById('selectAll').addEventListener('change', function () {
+    document.querySelectorAll('input[name="case_ids"]').forEach(input => { input.checked = this.checked; });
+});
+</script>
 {% endblock %}

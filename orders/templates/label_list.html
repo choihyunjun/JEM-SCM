@@ -37,8 +37,10 @@
             <input type="hidden" name="q" value="{{ q|default:'' }}">
             <select name="status" class="form-select form-select-sm shadow-sm" onchange="this.form.submit()" style="width: 120px; border-color: #0d6efd;">
                 <option value="">== 전체 상태 ==</option>
-                <option value="registered" {% if status_filter == 'registered' %}selected{% endif %}>등록완료</option>
+                <option value="registered" {% if status_filter == 'registered' %}selected{% endif %}>납품서 발행</option>
+                <option value="inspection" {% if status_filter == 'inspection' %}selected{% endif %}>검사대기</option>
                 <option value="received" {% if status_filter == 'received' %}selected{% endif %}>입고완료</option>
+                <option value="rejected" {% if status_filter == 'rejected' %}selected{% endif %}>전량 부적합</option>
             </select>
         </form>
     </div>
@@ -90,13 +92,13 @@
                                 <td>{{ order.items.count }} 품목</td>
                                 <td>
                                     {% if order.status == 'PENDING' %}
-                                        <span class="badge bg-secondary">배송중</span>
+                                        <span class="badge bg-secondary">납품서 발행</span>
                                     {% elif order.status == 'RECEIVED' %}
                                         <span class="badge bg-warning text-dark">검사대기</span>
                                     {% elif order.status == 'APPROVED' %}
                                         <span class="badge bg-success">입고완료</span>
                                     {% elif order.status == 'REJECTED' %}
-                                        <span class="badge bg-danger">반려(전수불량)</span>
+                                        <span class="badge bg-danger">전량 부적합</span>
                                     {% endif %}
                                 </td>
                                 <td>
@@ -130,7 +132,7 @@
                     <i class="bi bi-exclamation-circle-fill fs-4 me-3"></i>
                     <div>
                         <strong>수입검사 불합격(부적합) 내역입니다.</strong><br>
-                        반출증을 수령하신 후 <strong>[반출 확인]</strong> 버튼을 눌러주세요, 해당 수량만큼 <u>납품 가능 수량이 복구</u>되어 납품서를 추가 발행할 수 있습니다.
+                        실제 반출된 제품을 받으면 <strong>[인수 확인]</strong>을 눌러주세요. 확인한 수량만큼 원본 발주의 납품 가능 수량이 복구됩니다. 반출 전에는 확인할 수 없습니다.
                     </div>
                 </div>
 
@@ -141,7 +143,7 @@
                                 <th style="width: 20%;">납품서 번호</th>
                                 <th style="width: 15%;">판정 일자</th>
                                 <th style="width: 20%;">품번</th>
-                                <th style="width: 15%;">불량 수량</th>
+                                <th>불량 / 반출 / 확인 수량</th>
                                 <th style="width: 15%;">불량 사유</th>
                                 <th style="width: 15%;">조치</th>
                             </tr>
@@ -149,24 +151,31 @@
                         <tbody>
                             {% for log in return_logs %}
                             <tr class="{% if log.is_confirmed %}table-light text-muted{% endif %}">
-                                <td class="fw-bold text-danger">{{ log.delivery_order.order_no }}</td>
+                                <td class="fw-bold text-danger">{{ log.delivery_order.order_no|default:"수기 입고" }}<div class="small text-muted">LOT {{ log.source_incoming.lot_no|date:"Y-m-d"|default:"미확인" }} / {{ log.source_incoming.production_lot|default:"-" }}</div></td>
                                 <td>{{ log.created_at|date:"Y-m-d" }}</td>
                                 <td class="fw-bold">{{ log.part.part_no }}</td>
-                                <td class="fw-bold text-danger">{{ log.quantity|intcomma }}</td>
+                                <td class="fw-bold text-danger">{{ log.quantity|intcomma }} / {{ log.shipped_quantity|intcomma }} / {{ log.confirmed_quantity|intcomma }}</td>
                                 <td>{{ log.reason|default:"-" }}</td>
                                 <td>
-                                    {% if log.is_confirmed %}
-                                        <span class="badge bg-secondary">확인 완료</span>
-                                        <div class="small text-muted">{{ log.confirmed_at|date:"m/d H:i" }}</div>
-                                    {% else %}
-                                        <form action="{% url 'confirm_return' log.id %}" method="post" style="display:inline;">
-                                            {% csrf_token %}
-                                            <button type="submit" class="btn btn-sm btn-danger"
-                                                    onclick="return confirm('부적합 내용을 확인하였으며, 반출 처리에 동의하시겠습니까?\n\n(확인 시 해당 수량만큼 납품 가능 수량이 즉시 복구됩니다)')">
-                                                <i class="bi bi-check2-circle"></i> 반출 확인
-                                            </button>
-                                        </form>
+                                    {% if not log.source_incoming_id or not log.delivery_item_id %}
+                                        <span class="text-warning">과거 내역 연결 확인 필요 · 담당자 문의</span>
                                     {% endif %}
+                                    {% if log.legacy_confirmed_quantity %}<div class="small">기존 확인 {{ log.legacy_confirmed_quantity }}개</div>{% endif %}
+                                    {% for shipment in log.shipments.all %}
+                                        <div class="mb-2 small">
+                                            {{ shipment.movement.date|date:"Y-m-d" }} · {{ shipment.movement.quantity }}개
+                                            {% if shipment.confirmed_at %}<span class="badge bg-success">인수 확인 완료</span>
+                                            {% else %}
+                                            <form action="{% url 'confirm_return' log.id %}" method="post" class="d-inline">
+                                                {% csrf_token %}<input type="hidden" name="shipment_id" value="{{ shipment.pk }}">
+                                                <button class="btn btn-sm btn-outline-danger" onclick="return confirm('반출된 {{ shipment.movement.quantity }}개를 실제로 인수하셨습니까?')">인수 확인</button>
+                                            </form>
+                                            {% endif %}
+                                        </div>
+                                    {% empty %}
+                                        {% if not log.is_confirmed %}<span class="badge bg-secondary">반출 대기</span>{% endif %}
+                                    {% endfor %}
+                                    {% if log.remaining_quantity %}<div class="small text-muted">반출 대기 {{ log.remaining_quantity }}개</div>{% endif %}
                                 </td>
                             </tr>
                             {% empty %}
