@@ -17,23 +17,34 @@ def _schedule(job):
         transaction.on_commit(partial(dispatch, job.pk), robust=True)
 
 
-def enqueue_registration(trx, body):
+def enqueue_registration(trx, body, *, kind='REGISTER'):
+    if kind not in ('REGISTER', 'MOVE'):
+        raise ValueError('Unsupported registration kind')
     with transaction.atomic():
         # A write locks the receipt on SQLite as well as row-locking databases.
         MaterialTransaction.objects.filter(pk=trx.pk).update(erp_sync_status=F('erp_sync_status'))
         trx.refresh_from_db(fields=['erp_incoming_no', 'erp_sync_status'])
         if trx.erp_incoming_no:
             return True, trx.erp_incoming_no, None
-        existing = Operation.objects.filter(transaction=trx, kind='REGISTER').exclude(
-            status__in=['SUCCESS', 'CANCELLED']).first()
+        existing = Operation.objects.filter(transaction=trx, kind=kind)
+        if kind == 'REGISTER':
+            existing = existing.exclude(status__in=['SUCCESS', 'CANCELLED'])
+        existing = existing.first()
         if existing:
+            if existing.status == 'SUCCESS':
+                return True, existing.erp_no, None
             if existing.status in ('REVIEW', 'RUNNING'):
                 return False, None, 'ERP 처리 여부 확인이 필요한 요청입니다. ERP 연동 관리에서 확인해 주세요.'
             return False, None, 'ERP 전송 대기 중입니다. ERP 연동 관리에서 상태를 확인해 주세요.'
-        dependency = Operation.objects.filter(transaction_no=trx.transaction_no, kind='DELETE').exclude(
-            status='SUCCESS').order_by('-created_at').first()
-        job = Operation(kind='REGISTER', transaction=trx, transaction_no=trx.transaction_no,
+        dependency = (Operation.objects.filter(transaction_no=trx.transaction_no, kind='DELETE').exclude(
+            status='SUCCESS').order_by('-created_at').first()) if kind == 'REGISTER' else None
+        job = Operation(kind=kind, transaction=trx, transaction_no=trx.transaction_no,
                         payload=body, depends_on=dependency)
+        # Old direct writes marked FAILED may already exist remotely after a timeout.
+        legacy_uncertain = kind == 'MOVE' and trx.erp_sync_status == 'FAILED'
+        if legacy_uncertain:
+            job.status = 'REVIEW'
+            job.message = '기존 재고이동 전송 결과가 불명확합니다. ERP 전표를 먼저 확인해주세요.'
         marker = f'[SCM:{job.pk.hex}]'
         body['remarkDc'] = f"{body.get('remarkDc', '')} {marker}".strip()
         for detail in body.get('detail', []):
@@ -41,8 +52,10 @@ def enqueue_registration(trx, body):
         job.save()
         ERPIncomingEvent.objects.create(operation=job, action='QUEUED', actor=trx.actor)
         MaterialTransaction.objects.filter(pk=trx.pk).update(
-            erp_sync_status='PENDING', erp_sync_message='ERP 전송 대기')
-        _schedule(job)
+            erp_sync_status='FAILED' if legacy_uncertain else 'PENDING',
+            erp_sync_message=job.message if legacy_uncertain else 'ERP 전송 대기')
+        if not legacy_uncertain:
+            _schedule(job)
     job.refresh_from_db()
     if job.status == 'SUCCESS':
         trx.refresh_from_db(fields=['erp_incoming_no', 'erp_sync_status', 'erp_sync_message'])
@@ -85,7 +98,7 @@ def _finish(job, status, message='', erp_no=''):
         Operation.objects.filter(pk=job.pk).update(
             status=status, message=message, erp_no=erp_no or job.erp_no, updated_at=timezone.now())
         ERPIncomingEvent.objects.create(operation=job, action=status, message=message)
-        if job.kind == 'REGISTER' and job.transaction_id:
+        if job.kind in ('REGISTER', 'MOVE') and job.transaction_id:
             values = {'erp_sync_status': 'SUCCESS' if status == 'SUCCESS' else 'FAILED',
                       'erp_sync_message': message[:200]}
             if status == 'SUCCESS':
@@ -113,17 +126,19 @@ def dispatch(job_id):
         if job.depends_on and job.depends_on.status != 'SUCCESS':
             Operation.objects.filter(pk=job_id).update(status='PENDING', attempts=F('attempts') - 1)
             return
-        if job.kind == 'REGISTER' and not job.transaction_id:
+        if job.kind in ('REGISTER', 'MOVE') and not job.transaction_id:
             Operation.objects.filter(pk=job_id).update(status='CANCELLED')
             return
         ERPIncomingEvent.objects.create(operation=job, action='DISPATCH')
     # No stock transaction is open while talking to ERP.
-    endpoint = '/apiproxy/api20A02I00201' if job.kind == 'REGISTER' else '/apiproxy/api20A02D00201'
+    endpoints = {'REGISTER': '/apiproxy/api20A02I00201', 'DELETE': '/apiproxy/api20A02D00201',
+                 'MOVE': '/apiproxy/api20A02I01101'}
+    endpoint = endpoints[job.kind]
     try:
         success, data, error = call_erp_api(endpoint, job.payload)
         erp_no = data.get('resultData') if success and isinstance(data, dict) else None
         if success and (job.kind == 'DELETE' or isinstance(erp_no, str) and erp_no.strip()):
-            _finish(job, 'SUCCESS', 'ERP 처리 완료', erp_no if job.kind == 'REGISTER' else job.erp_no)
+            _finish(job, 'SUCCESS', 'ERP 처리 완료', erp_no if job.kind != 'DELETE' else job.erp_no)
         else:
             _finish(job, 'REVIEW', error or 'ERP 처리 결과가 불명확합니다. 전표를 확인해 주세요.')
     except Exception:
@@ -145,6 +160,8 @@ def reconcile(job_id):
         return False, '전송 중입니다. 잠시 후 다시 확인해 주세요.'
     if job.status == 'RUNNING':
         _finish(job, 'REVIEW', '중단된 전송의 ERP 처리 여부를 확인해야 합니다.')
+    if job.kind == 'MOVE':
+        return _reconcile_move(job)
     if job.kind == 'DELETE':
         ok, rows, error = fetch_erp_incoming_detail(job.erp_no)
         if ok and isinstance(rows, list) and not rows:
@@ -173,6 +190,45 @@ def reconcile(job_id):
         _finish(job, 'SUCCESS', 'ERP 조회로 등록 완료 확인', found[0])
         return True, '등록 완료를 확인했습니다.'
     return False, '일치하는 전표를 확정하지 못했습니다. 임의로 재전송하지 않았습니다.'
+
+
+def _reconcile_move(job):
+    from decimal import Decimal, InvalidOperation
+    from .erp_api import fetch_erp_transfer_headers, fetch_erp_transfer_details
+    dt = job.payload['keyDt']
+    ok, headers, error = fetch_erp_transfer_headers(dt, dt)
+    if not ok or not isinstance(headers, list):
+        return False, error or 'ERP 재고이동 조회에 실패했습니다.'
+    marker = f'[SCM:{job.pk.hex}]'
+    expected = job.payload['detail'][0]
+    found = []
+    for header in headers:
+        no = header.get('moveNb')
+        if not no:
+            continue
+        ok, rows, error = fetch_erp_transfer_details(no)
+        if not ok or not isinstance(rows, list):
+            return False, error or 'ERP 재고이동 상세 조회가 불완전합니다.'
+        if marker not in str(header.get('remarkDc', '')) and not any(
+                marker in str(row.get('remarkDc', '')) for row in rows):
+            continue
+        if len(rows) != 1:
+            return False, 'ERP 재고이동 상세 건수가 일치하지 않습니다.'
+        row = rows[0]
+        try:
+            matches = (row.get('itemCd') == expected['itemCd']
+                and Decimal(str(row.get('moveQt'))) == Decimal(str(expected['moveQt']))
+                and str(row.get('fwhCd', header.get('fwhCd', ''))) == str(expected['fwhCd'])
+                and str(row.get('twhCd', header.get('twhCd', ''))) == str(expected['twhCd']))
+        except (InvalidOperation, ValueError, TypeError):
+            matches = False
+        if not matches:
+            return False, 'ERP 재고이동 품번·수량·창고가 일치하지 않습니다.'
+        found.append(no)
+    if len(found) == 1:
+        _finish(job, 'SUCCESS', 'ERP 조회로 재고이동 완료 확인', found[0])
+        return True, '재고이동 완료를 확인했습니다.'
+    return False, '일치하는 이동 전표를 확정하지 못했습니다. 임의로 재전송하지 않았습니다.'
 
 
 def retry_after_verification(job_id, actor, note):

@@ -4,7 +4,7 @@
 </style></head><body><header><div class="eyebrow">JEM · SCM / QMS / WMS · WORKFLOW REVIEW</div><h1>업무 흐름 검증 보고서</h1>
 <div class="meta">검토일 2026-10-14 · 기준 커밋 c6083fb · 업무 코드 수정 없이 검증 · 합성 데이터</div>
 <p class="lead">검사·반출의 수량 처리와 기존 회귀 경로는 대체로 보호되어 있지만, 협력사 접근 범위와 납품서 등록·취소, 스캔 중복 처리에 수정이 필요한 경로가 확인됐습니다.</p></header>
-<main><div class="callout"><strong>협력사 확대 운영 전에 먼저 처리할 항목</strong><p>A01–A03 타사 자료 접근·발주 연결, R06 취소 시 다른 납품서 발행 이력 삭제를 최우선으로 수정하십시오. 이어서 F01–F03 승인·잔량 검증과 W04–W05 / E04 중복 처리 보호를 보강하는 순서를 권장합니다.</p></div>
+<main><div class="callout"><strong>이 표는 수정 전 검증 기록입니다.</strong><p>오류 12개 항목의 수정 및 재검증 결과는 <a href="workflow_fixes.html">오류 수정 결과 보고서</a>에서 확인하세요. 업무 기준 확인 필요·미검증 항목은 검토 대기 상태로 유지했습니다.</p></div><div class="callout"><strong>협력사 확대 운영 전에 먼저 처리할 항목</strong><p>A01–A03 타사 자료 접근·발주 연결, R06 취소 시 다른 납품서 발행 이력 삭제를 최우선으로 수정하십시오. 이어서 F01–F03 승인·잔량 검증과 W04–W05 / E04 중복 처리 보호를 보강하는 순서를 권장합니다.</p></div>
 <div class="stats"><div><strong>15</strong><span>정상</span></div><div><strong>12</strong><span>오류</span></div><div><strong>5</strong><span>업무 기준 확인 필요</span></div><div><strong>5</strong><span>미검증</span></div></div><p class="note">위 숫자는 검증 표의 항목 수입니다. 테스트 수나 독립된 결함 개수와 다릅니다.</p>
 <h2>검증 범위와 근거</h2><div class="scope"><ul>
 <li>기존 회귀 테스트 <strong>190개 통과</strong>. 신규 표적 시나리오 <strong>23개 중 6개 통과, 17개 기대 조건 미충족</strong>. 실행 오류·건너뜀은 0개입니다.</li>

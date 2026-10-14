@@ -26,7 +26,7 @@ from django.test.runner import DiscoverRunner
 assert settings.DATABASES['default']['NAME'] == ':memory:'
 assert settings.ERP_ENABLED is False
 phase = sys.argv[1] if len(sys.argv) > 1 else 'baseline'
-assert phase in ('baseline', 'focused')
+assert phase in ('baseline', 'focused', 'fixes')
 records = []
 summary = {}
 blocked_network = []
@@ -73,7 +73,7 @@ def deny_network(*args, **kwargs):
     raise AssertionError('Audit forbids outbound network connections')
 
 
-labels = ['orders', 'qms', 'material'] if phase == 'baseline' else ['docs.validation.workflow_cases']
+labels = ['docs.validation.workflow_cases'] if phase == 'focused' else ['orders', 'qms', 'material']
 stream = io.StringIO()
 with contextlib.redirect_stdout(stream), contextlib.redirect_stderr(stream), patch.object(socket.socket, 'connect', deny_network), patch.object(socket.socket, 'connect_ex', deny_network):
     result_code = Runner(verbosity=2, interactive=False).run_tests(labels)

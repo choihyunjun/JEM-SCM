@@ -1,0 +1,138 @@
+[
+  {
+    "code": "F01",
+    "feature": "협력사의 자사 발주 승인",
+    "expected": "앞서 합의한 프로세스대로 협력사가 자신의 발주를 승인하고 납품서를 등록한다.",
+    "actual": "협력사 자사 발주 승인 권한을 등록·수정 권한과 분리했습니다. 단건·전체 승인 모두 업체 범위를 제한하고 POST/CSRF를 적용했습니다.",
+    "evidence": [
+      "orders.test_workflow_fixes.WorkflowFixTests.test_supplier_can_approve_own_order"
+    ],
+    "verdict": "정상",
+    "priority": "높음"
+  },
+  {
+    "code": "F02",
+    "feature": "승인 전·마감 발주 납품서 등록",
+    "expected": "미승인·마감 발주는 목록뿐 아니라 저장 요청에서도 등록을 차단한다.",
+    "actual": "저장 직전 원본 발주의 승인·마감 상태를 검증합니다. 빈 발주 ID로 우회해도 승인된 수기 발주 잔량이 없으면 차단합니다.",
+    "evidence": [
+      "orders.test_workflow_fixes.WorkflowFixTests.test_unapproved_order_cannot_register_delivery",
+      "orders.test_workflow_fixes.WorkflowFixTests.test_closed_order_cannot_register_delivery"
+    ],
+    "verdict": "정상",
+    "priority": "높음"
+  },
+  {
+    "code": "F03",
+    "feature": "발주 잔량 초과·다른 LOT 합산",
+    "expected": "화면의 “납품가능 수량 초과 차단” 규칙을 서버에도 적용하고 같은 발주의 여러 LOT 수량을 합산한다.",
+    "actual": "같은 발주의 모든 LOT 수량을 합산합니다. 품번·발주 잠금 안에서 기존 발행량과 확인된 반출 복구량을 반영하여 서버에서 잔량을 검증합니다.",
+    "evidence": [
+      "orders.test_workflow_fixes.WorkflowFixTests.test_delivery_must_not_exceed_remaining_order_quantity",
+      "orders.test_workflow_fixes.WorkflowFixTests.test_multiple_lots_must_not_exceed_combined_remaining_quantity"
+    ],
+    "verdict": "정상",
+    "priority": "높음"
+  },
+  {
+    "code": "F05",
+    "feature": "SNP·포장 수 입력 검증",
+    "expected": "각 값이 양의 정수인지 검증하고 잘못된 입력은 안내 메시지로 반환한다.",
+    "actual": "SNP·박스 수·총수량의 양수·정수·범위와 배열 길이, 날짜를 검증합니다. 하나라도 잘못되면 전체 등록을 중단합니다.",
+    "evidence": [
+      "orders.test_workflow_fixes.WorkflowFixTests.test_non_numeric_packaging_is_rejected_without_server_error",
+      "orders.test_workflow_fixes.WorkflowFixTests.test_negative_packaging_factors_are_rejected"
+    ],
+    "verdict": "정상",
+    "priority": "높음"
+  },
+  {
+    "code": "F06",
+    "feature": "동일 초 납품서 번호 충돌",
+    "expected": "같은 초에 들어온 서로 유효한 등록 요청도 고유 납품서 번호를 받는다.",
+    "actual": "납품서 번호에 UUID 식별자를 추가하여 같은 초에 등록되는 서로 다른 납품서 번호 충돌을 방지했습니다.",
+    "evidence": [
+      "orders.test_workflow_fixes.WorkflowFixTests.test_two_valid_deliveries_in_same_second_both_succeed"
+    ],
+    "verdict": "정상",
+    "priority": "높음"
+  },
+  {
+    "code": "A01",
+    "feature": "다른 업체 납품서·라벨 직접 출력",
+    "expected": "목록에서 숨기는 것과 별개로, 직접 URL의 납품서 ID가 자사 것인지 확인한다.",
+    "actual": "납품서 출력·라벨 발행 시 모든 품목의 업체 소유권을 검사합니다. 타사/혼합 소유 납품서는 404로 차단하며 태그도 생성하지 않습니다.",
+    "evidence": [
+      "orders.test_workflow_fixes.WorkflowFixTests.test_other_supplier_delivery_note_is_not_readable",
+      "orders.test_workflow_fixes.WorkflowFixTests.test_other_supplier_labels_are_not_printable"
+    ],
+    "verdict": "정상",
+    "priority": "긴급"
+  },
+  {
+    "code": "A02",
+    "feature": "자사 품번에 타사 발주 연결",
+    "expected": "품번과 연결 발주가 같은 업체·같은 품목에 속해야 한다.",
+    "actual": "선택한 품번·발주·협력사가 모두 일치해야 저장됩니다. 잘못된 원본 발주 연결을 차단합니다.",
+    "evidence": [
+      "orders.test_workflow_fixes.WorkflowFixTests.test_other_supplier_order_cannot_be_linked_to_own_part"
+    ],
+    "verdict": "정상",
+    "priority": "긴급"
+  },
+  {
+    "code": "A03",
+    "feature": "타사 품목 LOT 재고 API",
+    "expected": "협력사는 자사 품목의 LOT 재고만 조회한다.",
+    "actual": "LOT 재고 조회 API의 품목 검색에 협력사 범위를 적용했습니다.",
+    "evidence": [
+      "orders.test_workflow_fixes.WorkflowFixTests.test_other_supplier_lot_stock_is_not_readable"
+    ],
+    "verdict": "정상",
+    "priority": "긴급"
+  },
+  {
+    "code": "R06",
+    "feature": "미입고 납품서 취소의 발행 이력 삭제 범위",
+    "expected": "취소 대상 납품 품목에 연결된 LabelPrintLog만 삭제하고 다른 납품서의 잔량 계산 근거는 보존한다.",
+    "actual": "취소 대상 품목 FK에 연결된 발행 이력만 삭제합니다. 미사용 출력 태그는 취소 처리하며, 원본 연결이 없는 과거 이력은 자동 추정 삭제하지 않습니다.",
+    "evidence": [
+      "orders.test_workflow_fixes.WorkflowFixTests.test_cancel_delivery_keeps_other_delivery_label_history"
+    ],
+    "verdict": "정상",
+    "priority": "긴급"
+  },
+  {
+    "code": "W04",
+    "feature": "오래된 라벨 상태로 중복 스캔",
+    "expected": "두 요청이 모두 INSTOCK을 읽었더라도 같은 라벨의 재고 이동은 한 번만 성공해야 한다.",
+    "actual": "현재 DB 상태를 조건부 갱신하여 라벨을 선점합니다. 오래된 상태를 읽은 요청은 다시 차감할 수 없고, 재고 처리 실패 시 선점도 롤백됩니다.",
+    "evidence": [
+      "orders.test_workflow_fixes.ScanAndERPWriterFixTests.test_stale_label_read_should_not_allow_second_stock_move"
+    ],
+    "verdict": "정상",
+    "priority": "높음"
+  },
+  {
+    "code": "W05",
+    "feature": "3000 이외 창고로 같은 라벨 반복 이동",
+    "expected": "같은 실물 라벨을 동일 목적지로 재전송해도 출발 재고가 반복 차감되지 않는다.",
+    "actual": "현장 이외 창고로 이동해도 사용 상태와 원본 이동 FK를 저장합니다. 중복 이동을 차단하고 취소 시 실제 도착 창고에서 복구하며 이후 재스캔이 가능합니다.",
+    "evidence": [
+      "orders.test_workflow_fixes.ScanAndERPWriterFixTests.test_raw_label_nonproduction_repeat_move_should_be_blocked"
+    ],
+    "verdict": "정상",
+    "priority": "높음"
+  },
+  {
+    "code": "E04",
+    "feature": "재고이동 쓰기 재호출 중복",
+    "expected": "같은 로컬 재고이동 거래가 이미 성공했다면 다시 ERP 쓰기 요청을 보내지 않는다.",
+    "actual": "ERP 재고이동을 기존 영속 전송 대기열에 통합했습니다. 동일 이동은 하나의 요청으로 처리하고 타임아웃·결과 불명확 시 확인 대기 상태로 유지합니다.",
+    "evidence": [
+      "orders.test_workflow_fixes.ScanAndERPWriterFixTests.test_same_erp_stock_move_is_not_sent_twice"
+    ],
+    "verdict": "정상",
+    "priority": "높음"
+  }
+]

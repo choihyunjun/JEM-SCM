@@ -25,6 +25,11 @@ def has_permission(user, permission):
     permission = LEGACY_PERMISSIONS.get(permission, permission)
     if not profile:
         return False
+    if permission == 'can_scm_order_approve':
+        restricted, vendor, _ = vendor_identity(user)
+        if restricted:
+            return bool(vendor and profile.can_scm_order_view)
+        return has_permission(user, 'can_scm_order_edit')
     if profile.role == 'VENDOR' and permission in VENDOR_BLOCKED:
         return False
     return bool(getattr(profile, permission, False))
@@ -64,3 +69,15 @@ def validate_vendor_assignment(user, vendor_id):
     restricted, vendor, org = vendor_identity(user)
     if restricted and (not org or str(vendor_id) != str(org.pk)):
         raise PermissionDenied('다른 협력사의 자료를 등록하거나 변경할 수 없습니다.')
+
+
+def visible_delivery(user, delivery):
+    """Every line must belong to the caller; mixed/unknown legacy owners fail closed."""
+    from .models import Part
+    restricted, vendor, _ = vendor_identity(user)
+    if not restricted:
+        return True
+    if not vendor or not delivery.items.exists():
+        return False
+    owned = Part.objects.filter(vendor=vendor).values_list('part_no', flat=True)
+    return not delivery.items.exclude(part_no__in=owned).exists()

@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.http import HttpResponse, JsonResponse
 from django.contrib import messages
 from django.views.decorators.http import require_POST
-from django.db import transaction
+from django.db import transaction, OperationalError
 from functools import wraps
 import openpyxl
 import datetime
@@ -627,27 +627,20 @@ def order_close_action(request):
     return redirect('order_list')
 
 @login_required
-@menu_permission_required('can_scm_order_edit')
+@menu_permission_required('can_scm_order_approve')
+@require_POST
 def order_approve_all(request):
-    user = request.user
-    q = Order.objects.filter(approved_at__isnull=True, is_closed=False)
-
-    user_vendor = _get_user_vendor(user)
-
-    # 협력업체 사용자는 자신의 발주만 승인 가능
-    if not user.is_superuser and user_vendor:
-        q = q.filter(vendor=user_vendor)
+    q = scope_qs_for_user(request.user, Order.objects.filter(approved_at__isnull=True, is_closed=False))
 
     q.update(approved_at=timezone.now())
     return redirect('order_list')
 
 @login_required
-@menu_permission_required('can_scm_order_edit')
+@menu_permission_required('can_scm_order_approve')
+@require_POST
 def order_approve(request, order_id):
-    order = get_object_or_404(Order, pk=order_id)
-    if not order.approved_at and not order.is_closed:
-        order.approved_at = timezone.now()
-        order.save()
+    order = get_object_or_404(scope_qs_for_user(request.user, Order.objects.all()), pk=order_id)
+    Order.objects.filter(pk=order.pk, approved_at__isnull=True, is_closed=False).update(approved_at=timezone.now())
     return redirect('order_list')
 
 @login_required
@@ -1638,40 +1631,31 @@ def delete_delivery_order(request, order_id):
     if resp:
         return resp
 
-    order = get_object_or_404(DeliveryOrder, pk=order_id)
-
-    # 권한 체크 (items를 통해 vendor 확인)
-    first_item = order.items.first()
-    part = Part.objects.filter(part_no=first_item.part_no).first() if first_item else None
-    item_vendor = part.vendor if part else None
-
-    # 사용자의 협력사 정보 가져오기
-    user_vendor = _get_user_vendor(request.user)
-
-    # 관리자가 아니고, 협력사 계정인 경우 본인 납품서만 삭제 가능
-    if not request.user.is_superuser and user_vendor and user_vendor != item_vendor:
-        messages.error(request, "삭제 권한이 없습니다.")
-        return redirect('label_list')
-
-    if MaterialTransaction is not None and MaterialTransaction.objects.filter(
-        ref_delivery_order=order.order_no
-    ).exists():
-        messages.error(
-            request,
-            "이 납품서는 이미 스캔되어 WMS에 입고 이력(실물 재고)이 남아있어 여기서 바로 취소할 수 없습니다. "
-            "WMS 입고 관리 화면에서 해당 품목을 먼저 개별적으로 취소한 뒤 다시 시도하세요."
-        )
-        return redirect('label_list')
-
+    from .access import visible_delivery
+    from django.http import Http404
     with transaction.atomic():
-        for item in order.items.all():
-            LabelPrintLog.objects.filter(
-                part_no=item.part_no,
-                printed_qty=item.total_qty,
-                printed_at__date=order.created_at.date()
-            ).delete()
+        order = get_object_or_404(DeliveryOrder.objects.select_for_update(), pk=order_id)
+        if not visible_delivery(request.user, order):
+            raise Http404
+        if order.is_received or (MaterialTransaction is not None and MaterialTransaction.objects.filter(
+                ref_delivery_order=order.order_no).exists()):
+            messages.error(request, '이미 입고된 납품서입니다. WMS 입고 관리에서 원본 입고를 확인해주세요.')
+            return redirect('label_list')
+        # Never infer ownership from quantity/date: identical deliveries are legitimate.
+        # Unlinked legacy logs require reconciliation, not a broad delete.
+        items = list(order.items.all())
+        if any(not LabelPrintLog.objects.filter(delivery_item=item).exists() for item in items):
+            messages.error(request, '과거 납품서의 발행 이력 연결을 확인한 뒤 취소해주세요.')
+            return redirect('label_list')
+        from material.models import ProcessTag
+        tags = ProcessTag.objects.filter(tag_id__startswith=f'DLV-{order.pk:05d}-')
+        if tags.exclude(status__in=['PRINTED', 'CANCELLED']).exists() or tags.filter(stock_reflected=True).exists():
+            messages.error(request, '이미 사용된 라벨이 있어 납품서를 취소할 수 없습니다.')
+            return redirect('label_list')
+        tags.update(status='CANCELLED')
+        LabelPrintLog.objects.filter(delivery_item__order=order).delete()
         order.delete()
-        messages.success(request, "납품서가 취소되었습니다.")
+        messages.success(request, '납품서가 취소되었습니다.')
 
     return redirect('label_list')
 
@@ -1689,103 +1673,31 @@ def create_delivery_order(request):
     if resp:
         return resp
 
-    p_nos = request.POST.getlist('part_nos[]')
-    snps = request.POST.getlist('snps[]')
-    b_counts = request.POST.getlist('box_counts[]')
-    order_ids = request.POST.getlist('order_ids[]')
-    lot_nos = request.POST.getlist('lot_nos[]')
-
-    # 화면과 동일하게 품번 + LOT 기준으로 검증한다. 발주/SNP 차이는 예외가 아니다.
-    if not p_nos or not (len(p_nos) == len(snps) == len(b_counts) == len(lot_nos)):
-        messages.error(request, "납품 품목과 수량, LOT 정보를 다시 확인해주세요.")
-        return redirect('label_list')
-    p_nos = [p.strip() for p in p_nos]
+    from .deliveries import register_delivery
     try:
-        lot_nos = [date.fromisoformat(value.strip()) for value in lot_nos]
-    except (ValueError, TypeError):
-        messages.error(request, "LOT 번호(생산일)를 올바르게 입력해주세요.")
-        return redirect('label_list')
-    seen_items = set()
-    for part_no, lot_no in zip(p_nos, lot_nos):
-        key = (part_no, lot_no)
-        if key in seen_items:
-            messages.error(request, f"[{part_no} / {lot_no}] 같은 품번·LOT는 한 납품서에 한 번만 등록할 수 있습니다.")
-            return redirect('label_list')
-        seen_items.add(key)
-
-    if _get_role(request.user) == 'VENDOR' and not request.user.is_superuser:
-        user_vendor = _get_user_vendor(request.user)
-        if not user_vendor:
-            messages.error(request, "협력사 정보가 연결되어 있지 않습니다.")
-            return redirect('label_list')
-
-        allowed_pnos = set(Part.objects.filter(vendor=user_vendor).values_list('part_no', flat=True))
-        bad = [p for p in p_nos if p not in allowed_pnos]
-        if bad:
-            messages.error(request, f"권한이 없는 품번이 포함되어 있습니다.")
-            return redirect('label_list')
-
-    with transaction.atomic():
-        # [수정] vendor 필드 제거 (DeliveryOrder에 vendor가 없다면)
-        do = DeliveryOrder.objects.create(order_no="DO-"+timezone.now().strftime("%Y%m%d-%H%M%S"))
-
-        for i in range(len(p_nos)):
-            part = Part.objects.filter(part_no=p_nos[i]).first()
-            if not part:
-                continue
-
-            qty = int(snps[i]) * int(b_counts[i])
-            if qty <= 0:
-                continue
-
-            linked_order = None
-            erp_no = ''
-            erp_seq = ''
-
-            if len(order_ids) > i and order_ids[i] and order_ids[i] != 'None':
-                try:
-                    linked_order = Order.objects.get(id=order_ids[i])
-                    erp_no = linked_order.erp_order_no
-                    erp_seq = linked_order.erp_order_seq
-                except Order.DoesNotExist:
-                    linked_order = None
-
-            # LOT 정보 추출 (날짜 형식으로 통일)
-            lot_no = lot_nos[i] if len(lot_nos) > i else None
-
-            delivery_item = DeliveryOrderItem.objects.create(
-                order=do,
-                part_no=p_nos[i],
-                part_name=part.part_name,
-                snp=int(snps[i]),
-                box_count=int(b_counts[i]),
-                total_qty=qty,
-                linked_order=linked_order,
-                erp_order_no=erp_no,
-                erp_order_seq=erp_seq,
-                lot_no=lot_no
-            )
-
-            LabelPrintLog.objects.create(
-                delivery_item=delivery_item,
-                vendor=part.vendor,
-                part=part,
-                part_no=p_nos[i],
-                printed_qty=qty,
-                snp=int(snps[i]),
-                order=linked_order
-            )
-
+        register_delivery(request.user, request.POST)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+    except OperationalError as exc:
+        if not any(token in str(exc).lower() for token in ('locked', 'deadlock', 'lock wait timeout')):
+            raise
+        messages.error(request, '다른 사용자가 같은 발주를 처리 중입니다. 다시 조회 후 등록해주세요.')
     return redirect('label_list')
 
 @login_required
 @menu_permission_required('can_scm_label_view')
+@transaction.atomic
 def label_print(request, order_id):
     resp = require_action_perm(request, 'label.print')
     if resp:
         return resp
 
-    order = get_object_or_404(DeliveryOrder, pk=order_id)
+    order = get_object_or_404(DeliveryOrder.objects.select_for_update(), pk=order_id)
+    from .access import visible_delivery
+    from django.http import Http404
+    if not visible_delivery(request.user, order):
+        raise Http404
+
     queue = []
     first_item = order.items.first()
     part = Part.objects.filter(part_no=first_item.part_no).first() if first_item else None
@@ -1839,6 +1751,11 @@ def delivery_note_print(request, order_id):
         return resp
 
     do = get_object_or_404(DeliveryOrder, pk=order_id)
+    from .access import visible_delivery
+    from django.http import Http404
+    if not visible_delivery(request.user, do):
+        raise Http404
+
     items = do.items.all()
     first_item = items.first()
     part = Part.objects.filter(part_no=first_item.part_no).first() if first_item else None
@@ -2301,7 +2218,7 @@ def get_lot_details(request, part_no):
     특정 품목의 LOT별 재고 상세 정보를 JSON으로 반환
     """
     try:
-        part = Part.objects.filter(part_no=part_no).first()
+        part = scope_qs_for_user(request.user, Part.objects.filter(part_no=part_no)).first()
         if not part:
             return JsonResponse({'error': '품목을 찾을 수 없습니다.'}, status=404)
 

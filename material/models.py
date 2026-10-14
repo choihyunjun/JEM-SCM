@@ -241,7 +241,7 @@ class ERPIncomingOperation(models.Model):
     import uuid as _uuid
 
     id = models.UUIDField(primary_key=True, default=_uuid.uuid4, editable=False)
-    kind = models.CharField(max_length=10, choices=[('REGISTER', '입고 등록'), ('DELETE', '입고 삭제')])
+    kind = models.CharField(max_length=10, choices=[('REGISTER', '입고 등록'), ('DELETE', '입고 삭제'), ('MOVE', '재고이동 등록')])
     transaction = models.ForeignKey(MaterialTransaction, on_delete=models.SET_NULL, null=True, blank=True,
                                     related_name='erp_operations')
     transaction_no = models.CharField(max_length=30, blank=True)

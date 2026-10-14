@@ -1,0 +1,948 @@
+{
+  "generated_at_utc": "2026-10-14T05:00:41.751355+00:00",
+  "phase": "fixes",
+  "database": "isolated SQLite in-memory",
+  "erp": "disabled / mocked",
+  "historical_migrations": "disabled by config.test_settings; not migration verification",
+  "blocked_network_attempts": 0,
+  "summary": {
+    "tests": 233,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "tests": [
+    {
+      "test": "orders.test_access_safety.AccessSafetyTests.test_editor_can_still_update_inspection",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_access_safety.AccessSafetyTests.test_erp_recovery_requires_incoming_edit_permission",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_access_safety.AccessSafetyTests.test_internal_excel_still_includes_all_vendors",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_access_safety.AccessSafetyTests.test_missing_vendor_link_blocks_qms",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_access_safety.AccessSafetyTests.test_other_vendor_detail_and_write_are_not_found",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_access_safety.AccessSafetyTests.test_own_vendor_list_and_detail_work",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_access_safety.AccessSafetyTests.test_qms_legacy_flag_cannot_restore_edit_permission",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_access_safety.AccessSafetyTests.test_readonly_account_can_view_but_cannot_save_detail_forms",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_access_safety.AccessSafetyTests.test_readonly_template_has_disabled_forms_and_no_edit_link",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_access_safety.AccessSafetyTests.test_revoked_permission_does_not_fall_back_to_role_or_legacy",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_access_safety.AccessSafetyTests.test_vendor_cannot_assign_record_to_another_vendor",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_access_safety.AccessSafetyTests.test_vendor_excel_is_scoped_and_unlinked_vendor_is_empty",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_delivery_safety.DeliveryRegistrationTests.test_different_lots_register_and_receive_both_quantities",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_delivery_safety.DeliveryRegistrationTests.test_different_parts_with_same_lot_are_allowed",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_delivery_safety.DeliveryRegistrationTests.test_invalid_or_missing_lot_is_rejected_before_writes",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_delivery_safety.DeliveryRegistrationTests.test_same_part_lot_in_another_delivery_is_allowed",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_delivery_safety.DeliveryRegistrationTests.test_same_part_lot_with_different_purchase_orders_is_rejected",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_delivery_safety.DeliveryRegistrationTests.test_same_part_lot_with_different_snp_is_rejected_before_writes",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_deployment_check.DeploymentCheckTests.test_matching_schema_passes_without_writes",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_deployment_check.DeploymentCheckTests.test_missing_inspection_column_is_reported",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_deployment_check.DeploymentCheckTests.test_missing_return_shipment_table_is_reported",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_incoming_history.IncomingHistoryTests.test_download_has_header_stripes_filter_panes_and_defect_highlighting",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_incoming_history.IncomingHistoryTests.test_empty_download_and_missing_vendor_still_work",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_incoming_history.IncomingHistoryTests.test_export_preserves_numeric_dates_local_time_and_text_identifiers",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_incoming_history.IncomingHistoryTests.test_formula_like_names_are_exported_as_literal_text",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_incoming_history.IncomingHistoryTests.test_good_bad_and_unconfirmed_quantities_match_screen_and_export",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_incoming_history.IncomingHistoryTests.test_supplier_scope_cannot_be_overridden_by_vendor_filter",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_incoming_history.IncomingHistoryTests.test_vendor_period_and_search_filters_match_between_list_and_export",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_return_process.ReturnProcessTests.test_all_bad_delivery_remains_received_and_cannot_be_rescanned",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_return_process.ReturnProcessTests.test_all_partial_shipments_confirm_case_only_after_last_ack",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_return_process.ReturnProcessTests.test_ambiguous_legacy_cases_are_not_assigned_to_arbitrary_lots",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_return_process.ReturnProcessTests.test_batch_shipment_rolls_back_when_one_quantity_is_invalid",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_return_process.ReturnProcessTests.test_cannot_confirm_before_actual_shipment",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_return_process.ReturnProcessTests.test_correction_blocks_used_lot_even_when_stock_was_replenished",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_return_process.ReturnProcessTests.test_correction_requires_reason_and_blocks_after_shipment",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_return_process.ReturnProcessTests.test_correction_restores_stock_summary_and_redecision_does_not_duplicate",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_return_process.ReturnProcessTests.test_historical_linked_shipment_does_not_double_count_legacy_ack",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_return_process.ReturnProcessTests.test_legacy_unique_case_links_and_preserves_prior_confirmation",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_return_process.ReturnProcessTests.test_original_order_must_be_identified_before_supplier_ack",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_return_process.ReturnProcessTests.test_other_supplier_cannot_acknowledge",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_return_process.ReturnProcessTests.test_partial_shipment_restores_only_exact_order_sequence",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_return_process.ReturnProcessTests.test_pending_second_line_keeps_delivery_in_inspection",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_return_process.ReturnProcessTests.test_repeat_shipment_and_ack_are_idempotent",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_return_process.ReturnProcessTests.test_screens_and_reprint_render_with_new_labels",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_return_process.ReturnProcessTests.test_shipment_preserves_origin_and_lot_without_touching_other_batch",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_return_process.ReturnProcessTests.test_unlinked_bad_stock_remains_visible_for_review",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_return_process.ReturnProcessTests.test_unlinked_historical_shipment_blocks_duplicate_return",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_ui_pages.MenuPageRenderingTests.test_inspection_pages_with_real_rows",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_ui_pages.MenuPageRenderingTests.test_menu_destinations_render",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_ui_pages.MenuPageRenderingTests.test_quality_detail_and_edit_pages_render",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_ui_pages.MenuPageRenderingTests.test_quality_registration_forms_render",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_ui_pages.MenuPageRenderingTests.test_supplier_delivery_registration_redirect_and_print_pages",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_ui_pages.MenuPageRenderingTests.test_wms_incoming_history_system_filters_with_inspected_transfer",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_ui_pages.MenuPageRenderingTests.test_wms_incoming_label_issue_and_print_with_approved_inspection",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.ScanAndERPWriterFixTests.test_cancel_cannot_restore_same_movement_twice",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.ScanAndERPWriterFixTests.test_debit_failure_rolls_back_label_claim",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.ScanAndERPWriterFixTests.test_nonproduction_cancel_restores_actual_destination_and_allows_rescan",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.ScanAndERPWriterFixTests.test_raw_label_nonproduction_repeat_move_should_be_blocked",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.ScanAndERPWriterFixTests.test_raw_label_older_lot_blocks_newer_lot",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.ScanAndERPWriterFixTests.test_raw_label_sequential_duplicate_scan_is_blocked",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.ScanAndERPWriterFixTests.test_same_erp_stock_move_is_not_sent_twice",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.ScanAndERPWriterFixTests.test_stale_label_read_should_not_allow_second_stock_move",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.WorkflowFixTests.test_approval_forms_have_csrf_and_post_targets",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.WorkflowFixTests.test_approval_is_post_only_and_does_not_grant_order_edit",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.WorkflowFixTests.test_cancel_delivery_keeps_other_delivery_label_history",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.WorkflowFixTests.test_cancel_restores_only_own_capacity_and_invalidates_labels",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.WorkflowFixTests.test_closed_order_cannot_register_delivery",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.WorkflowFixTests.test_delivery_must_not_exceed_remaining_order_quantity",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.WorkflowFixTests.test_invalid_second_line_rolls_back_every_line",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.WorkflowFixTests.test_legacy_unlinked_log_is_preserved_and_cancellation_is_blocked",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.WorkflowFixTests.test_manual_capacity_requires_approved_orders_and_checks_aggregate",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.WorkflowFixTests.test_mixed_owner_delivery_is_not_printable_or_deletable",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.WorkflowFixTests.test_multiple_lots_must_not_exceed_combined_remaining_quantity",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.WorkflowFixTests.test_negative_packaging_factors_are_rejected",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.WorkflowFixTests.test_non_numeric_packaging_is_rejected_without_server_error",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.WorkflowFixTests.test_order_id_cannot_be_omitted_to_bypass_erp_order_capacity",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.WorkflowFixTests.test_other_supplier_delivery_cannot_be_deleted",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.WorkflowFixTests.test_other_supplier_delivery_note_is_not_readable",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.WorkflowFixTests.test_other_supplier_labels_are_not_printable",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.WorkflowFixTests.test_other_supplier_lot_stock_is_not_readable",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.WorkflowFixTests.test_other_supplier_order_cannot_be_linked_to_own_part",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.WorkflowFixTests.test_other_supplier_part_is_rejected",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.WorkflowFixTests.test_partial_deliveries_reduce_remaining_quantity",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.WorkflowFixTests.test_readonly_staff_cannot_approve",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.WorkflowFixTests.test_receipt_inspection_partial_return_and_acknowledgement_chain",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.WorkflowFixTests.test_supplier_approval_is_scoped_for_single_and_all",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.WorkflowFixTests.test_supplier_can_approve_own_order",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.WorkflowFixTests.test_two_valid_deliveries_in_same_second_both_succeed",
+      "status": "pass"
+    },
+    {
+      "test": "orders.test_workflow_fixes.WorkflowFixTests.test_unapproved_order_cannot_register_delivery",
+      "status": "pass"
+    },
+    {
+      "test": "qms.test_inspection_links.InspectionSourceLinkTests.test_scm_good_and_bad_movements_keep_source_and_delivery",
+      "status": "pass"
+    },
+    {
+      "test": "qms.test_inspection_links.InspectionSourceLinkTests.test_standalone_good_and_bad_movements_keep_source",
+      "status": "pass"
+    },
+    {
+      "test": "qms.test_inspection_safety.InspectionSafetyTests.test_all_rejected_is_still_allowed",
+      "status": "pass"
+    },
+    {
+      "test": "qms.test_inspection_safety.InspectionSafetyTests.test_ambiguous_legacy_line_blocks_without_stock_or_erp_changes",
+      "status": "pass"
+    },
+    {
+      "test": "qms.test_inspection_safety.InspectionSafetyTests.test_batch_preserved_and_repeat_decision_does_not_duplicate",
+      "status": "pass"
+    },
+    {
+      "test": "qms.test_inspection_safety.InspectionSafetyTests.test_correct_lot_selects_correct_erp_order",
+      "status": "pass"
+    },
+    {
+      "test": "qms.test_inspection_safety.InspectionSafetyTests.test_invalid_quantities_leave_everything_unchanged",
+      "status": "pass"
+    },
+    {
+      "test": "qms.test_inspection_safety.InspectionSafetyTests.test_stale_pending_object_cannot_process_already_completed_inspection",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_bom_jobs.BOMJobTests.test_cycle_rejected_without_partial_job",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_bom_jobs.BOMJobTests.test_dates_sorted_cumulative_shortage_and_no_stock_mutation",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_bom_jobs.BOMJobTests.test_failed_chunk_rolls_back_results_and_can_retry",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_bom_jobs.BOMJobTests.test_legacy_session_export_and_normal_form_submission",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_bom_jobs.BOMJobTests.test_live_lease_waits_stale_lease_can_resume",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_bom_jobs.BOMJobTests.test_missing_date_allocated_last_and_shared_material_between_products",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_bom_jobs.BOMJobTests.test_ninety_days_resume_and_repeat_step_do_not_double_allocate",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_bom_jobs.BOMJobTests.test_pagination_all_metadata_exports_and_demand_use_entire_job",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_bom_jobs.BOMJobTests.test_permissions_ownership_csrf_and_pending_exports",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_bom_jobs.BOMJobTests.test_pivot_xlsx_and_quoted_csv",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_bom_jobs.BOMJobTests.test_snapshot_is_stable_after_stock_and_bom_change",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_bom_jobs.BOMJobTests.test_snapshot_queries_constant_and_nested_bom_matches_original",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_bom_jobs.BOMJobTests.test_upload_replaces_large_legacy_session_and_progress_endpoint",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_display.ExpiryDisplayTests.test_admin_can_restore_after_hidden_reload",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_display.ExpiryDisplayTests.test_csrf_is_required",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_display.ExpiryDisplayTests.test_default_is_visible_and_read_does_not_create_config",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_display.ExpiryDisplayTests.test_get_invalid_input_and_anonymous_cannot_save",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_display.ExpiryDisplayTests.test_hide_omits_badges_numbers_and_expander_from_regular_html",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_display.ExpiryDisplayTests.test_only_permitted_admin_can_save",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_display.ExpiryDisplayTests.test_stale_edits_and_repeated_saves_preserve_other_settings",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_edit.MovementExpiryEditTests.test_admin_role_requires_expiry_permission_and_staff_cannot_edit",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_edit.MovementExpiryEditTests.test_anonymous_get_and_missing_csrf_cannot_write",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_edit.MovementExpiryEditTests.test_computed_expiry_and_out_of_scope_records_cannot_be_edited",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_edit.MovementExpiryEditTests.test_deleted_movement_is_not_editable_and_audit_record_survives",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_edit.MovementExpiryEditTests.test_edit_clear_and_duplicate_submission_keep_audit_history",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_edit.MovementExpiryEditTests.test_invalid_values_do_not_write",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_edit.MovementExpiryEditTests.test_save_only_adds_manual_metadata_and_updates_display",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_edit.MovementExpiryEditTests.test_stale_revision_cannot_overwrite_another_edit",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_edit.MovementExpiryEditTests.test_uses_item_shelf_life_and_keeps_expired_dates_positive",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_grouping.ExpiryGroupingTests.test_different_day_lot_route_and_batch_stay_separate",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_grouping.ExpiryGroupingTests.test_different_parts_are_never_combined",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_grouping.ExpiryGroupingTests.test_eleven_same_day_lot_transfers_sum_to_55_and_keep_originals",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_grouping.ExpiryGroupingTests.test_grouping_uses_korean_calendar_day_and_preserves_filters",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_grouping.ExpiryGroupingTests.test_hidden_member_is_excluded_and_restore_rejoins_group",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_grouping.ExpiryGroupingTests.test_regular_view_has_only_grouped_rows_and_no_edit_controls",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_grouping.ExpiryGroupingTests.test_unknown_dates_are_separate_and_entered_manufacturing_dates_can_group",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_history.ExpiryMovementHistoryTests.test_cancellation_removes_movement_and_restores_label_without_ghost_history",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_history.ExpiryMovementHistoryTests.test_filters_use_local_movement_day_and_do_not_reintroduce_linked_labels",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_history.ExpiryMovementHistoryTests.test_labels_without_a_route_are_excluded_without_changing_them",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_history.ExpiryMovementHistoryTests.test_missing_lot_is_not_guessed_from_current_stock",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_history.ExpiryMovementHistoryTests.test_multiple_labels_and_tag_do_not_multiply_movement_quantity",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_history.ExpiryMovementHistoryTests.test_only_expiry_configured_parts_are_included",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_history.ExpiryMovementHistoryTests.test_only_requested_direction_pairs_for_scm_and_erp_without_current_stock",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_history.ExpiryMovementHistoryTests.test_page_renders_movement_number_direction_batch_and_unknown_expiry",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_visibility.MovementVisibilityTests.test_admin_requires_expiry_permission",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_visibility.MovementVisibilityTests.test_audit_survives_movement_deletion_and_deleted_record_cannot_be_restored",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_visibility.MovementVisibilityTests.test_bad_input_and_missing_csrf_cannot_write",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_visibility.MovementVisibilityTests.test_computed_lot_is_hideable_but_other_routes_are_not",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_visibility.MovementVisibilityTests.test_hide_and_restore_persist_without_changing_stock_or_expiry",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_visibility.MovementVisibilityTests.test_only_selected_movement_is_hidden_even_with_same_part_and_lot",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_visibility.MovementVisibilityTests.test_staff_does_not_receive_hidden_records_even_with_query_parameter",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_expiry_visibility.MovementVisibilityTests.test_stale_revision_and_retries_do_not_duplicate_history",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_incoming_cancellation.IncomingCancellationTests.test_delete_only_selected_receipt_preserves_other_delivery_and_label",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_incoming_cancellation.IncomingCancellationTests.test_erp_failure_does_not_delete_local_records",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_incoming_cancellation.IncomingCancellationTests.test_legacy_scoped_good_transfer_still_cancels",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_incoming_cancellation.IncomingCancellationTests.test_legacy_unreferenced_bad_transfer_is_not_guessed",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_incoming_cancellation.IncomingCancellationTests.test_new_source_links_protect_receipts_without_delivery_numbers",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_incoming_cancellation.IncomingCancellationTests.test_reset_only_selected_receipt_preserves_other_delivery",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_incoming_cancellation.IncomingCancellationTests.test_scm_all_cancel_includes_pending_items_but_keeps_other_delivery",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_incoming_cancellation.IncomingCancellationTests.test_scm_all_checks_ambiguous_legacy_records_before_any_erp_call",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_incoming_cancellation.IncomingCancellationTests.test_scm_cancel_without_delivery_does_not_select_unlinked_receipts",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_incoming_cancellation.IncomingCancellationTests.test_scm_item_cancel_keeps_other_part_and_other_delivery",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_incoming_cancellation.IncomingCancellationTests.test_single_legacy_receipt_with_unreferenced_bad_transfer_still_cancels",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_lot_safety.ProductionReceiptAtomicTests.test_existing_batch_increment_rolls_back_on_history_failure",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_lot_safety.ProductionReceiptAtomicTests.test_history_failure_rolls_back_batch_and_mirror_then_retry_counts_once",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_lot_safety.ProductionReceiptAtomicTests.test_invalid_receipt_date_does_not_reuse_previous_rows_date",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_lot_safety.ProductionReceiptAtomicTests.test_same_date_batches_stay_separate_and_duplicate_receipt_is_skipped",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_lot_safety.TransferRequestLotTests.test_api_distinguishes_same_date_batches_and_template_submits_stock_id",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_lot_safety.TransferRequestLotTests.test_date_only_and_null_stock_remain_selectable_by_id",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_lot_safety.TransferRequestLotTests.test_fifo_still_splits_by_production_batch",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_lot_safety.TransferRequestLotTests.test_multiple_lines_cannot_overdraw_same_stock_and_roll_back_together",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_lot_safety.TransferRequestLotTests.test_old_date_or_missing_selection_requires_reload",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_lot_safety.TransferRequestLotTests.test_selected_batch_moves_and_revoke_restores_same_batch",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_lot_safety.TransferRequestLotTests.test_selected_batch_shortage_cannot_borrow_other_batch",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_lot_safety.TransferRequestLotTests.test_stock_must_belong_to_selected_part_and_source",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_receipt_integrity.StockIdentityTests.test_different_batches_remain_separate",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_receipt_integrity.StockIdentityTests.test_null_combinations_and_populated_identity_are_unique",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_scan_history_visibility.ScanHistoryVisibilityTests.test_default_keeps_history_without_creating_settings",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_scan_history_visibility.ScanHistoryVisibilityTests.test_filter_runs_before_each_source_limit",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_scan_history_visibility.ScanHistoryVisibilityTests.test_hiding_does_not_change_records_stock_or_audit_mode",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_scan_history_visibility.ScanHistoryVisibilityTests.test_inclusive_korean_dates_filter_every_source_and_both_views",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_scan_history_visibility.ScanHistoryVisibilityTests.test_invalid_input_cannot_change_saved_settings",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_scan_history_visibility.ScanHistoryVisibilityTests.test_permission_csrf_and_post_required",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_scan_history_visibility.ScanHistoryVisibilityTests.test_same_day_range_and_normal_result_limits",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_scan_history_visibility.ScanHistoryVisibilityTests.test_settings_persist_across_users_and_layout_reload",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_scan_history_visibility.ScanHistoryVisibilityTests.test_undated_history_is_hidden_only_while_enabled_and_never_modified",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_reconciliation.ERPTransferSafetyTests.test_deleted_used_erp_receipt_does_not_overdraw_original_lot",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_reconciliation.ERPTransferSafetyTests.test_erp_shortage_uses_unassigned_only_and_retry_is_idempotent",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_reconciliation.ERPTransferSafetyTests.test_history_failure_rolls_back_transfer_then_retry_succeeds",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_reconciliation.ERPTransferSafetyTests.test_partial_document_retry_imports_missing_line_only",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_reconciliation.ERPTransferSafetyTests.test_purchase_receipt_history_failure_rolls_back_and_retry_counts_once",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_reconciliation.ERPTransferSafetyTests.test_unknown_warehouse_does_not_fall_back_to_2000",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_reconciliation.PastChangesSafetyTests.test_failed_detail_response_never_deletes_existing_transactions",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_reconciliation.StockReconciliationTests.test_bad_empty_failed_and_negative_responses_do_not_erase_stock",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_reconciliation.StockReconciliationTests.test_duplicate_erp_rows_sum_instead_of_last_row_winning",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_reconciliation.StockReconciliationTests.test_fifo_reduces_oldest_lot_and_keeps_recent_lot",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_reconciliation.StockReconciliationTests.test_history_failure_rolls_back_stock_and_negative_normalization",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_reconciliation.StockReconciliationTests.test_invalid_row_after_valid_row_prevents_all_corrections",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_reconciliation.StockReconciliationTests.test_live_case_normalizes_without_changing_total_and_is_idempotent",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_reconciliation.StockReconciliationTests.test_manual_outgoing_shortage_creates_no_false_history",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_reconciliation.StockReconciliationTests.test_missing_balance_preserves_stock_explicit_zero_clears",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_reconciliation.StockReconciliationTests.test_negative_lots_are_visible_and_sum_matches_same_snapshot",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_reconciliation.StockReconciliationTests.test_negative_unassigned_balance_is_absorbed_without_changing_total",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_reconciliation.StockReconciliationTests.test_stale_debit_is_rejected_and_counterpart_rolls_back",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_reconciliation.StockReconciliationTests.test_stock_changed_during_erp_request_is_not_overwritten",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_reconciliation.StockReconciliationTests.test_undated_batches_are_trimmed_individually_not_overdrawn",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_reconciliation.StockReconciliationTests.test_valid_manual_outgoing_still_debits_and_records_full_quantity",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_reconciliation.SyncPipelineTests.test_failed_import_defers_total_correction_and_preserves_success_time",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_reconciliation.SyncPipelineTests.test_total_reconciliation_runs_after_all_imports",
+      "status": "pass"
+    },
+    {
+      "test": "qms.test_inspection_safety.ConcurrentInspectionTests.test_two_simultaneous_decisions_only_apply_once",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_note_schema_repair.PurchaseRequestNoteRepairTests.test_existing_column_and_notes_are_untouched_on_repeat_and_reverse",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_note_schema_repair.PurchaseRequestNoteRepairTests.test_missing_column_is_restored_without_changing_existing_request",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_receipt_integrity.ERPOutboxTests.test_cancel_rollback_never_deletes_remote_receipt",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_receipt_integrity.ERPOutboxTests.test_committed_registration_is_sent_once_and_duplicate_call_returns_existing",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_receipt_integrity.ERPOutboxTests.test_delete_is_durable_after_local_receipt_is_gone",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_receipt_integrity.ERPOutboxTests.test_deleting_unsent_receipt_cancels_registration",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_receipt_integrity.ERPOutboxTests.test_editing_unsent_receipt_replaces_queued_payload",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_receipt_integrity.ERPOutboxTests.test_existing_successful_receipt_does_not_require_another_price_lookup",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_receipt_integrity.ERPOutboxTests.test_incomplete_lookup_does_not_enable_resend",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_receipt_integrity.ERPOutboxTests.test_local_result_save_failure_leaves_recoverable_request",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_receipt_integrity.ERPOutboxTests.test_no_remote_call_before_commit_and_rollback_discards_request",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_receipt_integrity.ERPOutboxTests.test_operator_retry_requires_a_record_and_preserves_history",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_receipt_integrity.ERPOutboxTests.test_price_reregistration_validation_failure_preserves_existing_erp_receipt",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_receipt_integrity.ERPOutboxTests.test_replacement_waits_for_delete_success",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_receipt_integrity.ERPOutboxTests.test_timeout_can_be_reconciled_by_marker_without_resending",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_receipt_integrity.ERPOutboxTests.test_timeout_is_review_and_never_automatically_resent",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_receipt_integrity.ERPOutboxTests.test_uncertain_receipt_cannot_be_deleted",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_move_outbox.StockMoveOutboxTests.test_local_rollback_never_sends_remote_move",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_move_outbox.StockMoveOutboxTests.test_old_success_or_uncertain_failure_is_not_replayed",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_move_outbox.StockMoveOutboxTests.test_pending_move_has_one_durable_request",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_move_outbox.StockMoveOutboxTests.test_reconcile_does_not_accept_other_destination",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_move_outbox.StockMoveOutboxTests.test_reconcile_move_checks_quantity_and_both_warehouses",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_move_outbox.StockMoveOutboxTests.test_remote_success_with_missing_reference_requires_review",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_move_outbox.StockMoveOutboxTests.test_success_and_stale_object_retry_send_once",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_move_outbox.StockMoveOutboxTests.test_timeout_and_exception_are_not_blindly_retried",
+      "status": "pass"
+    },
+    {
+      "test": "material.test_stock_reconciliation.ERPLockTests.test_nested_same_thread_allowed_other_thread_rejected_then_released",
+      "status": "pass"
+    }
+  ]
+}

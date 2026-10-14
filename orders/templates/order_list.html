@@ -113,11 +113,10 @@
                         </button>
                         {% endif %}
 
-                        <a href="{% url 'order_approve_all' %}"
-                           class="btn btn-sm btn-outline-success"
-                           onclick="return confirm('미확인 발주를 일괄 승인하시겠습니까?');">
-                            전체승인
-                        </a>
+                        {% if user|has_perm:'can_scm_order_approve' %}
+                        <button type="submit" form="approval-all-form" class="btn btn-sm btn-outline-success"
+                           onclick="return confirm('미확인 발주를 일괄 승인하시겠습니까?');">전체승인</button>
+                        {% endif %}
                         <a href="{% url 'order_export' %}" class="btn btn-sm btn-success">
                             <i class="bi bi-file-earmark-excel"></i> 엑셀 저장
                         </a>
@@ -127,6 +126,7 @@
         </div>
     </div>
 
+    <form id="approval-all-form" method="post" action="{% url 'order_approve_all' %}">{% csrf_token %}</form>
     <!-- 데이터 테이블 -->
     <form id="action-form" method="post">
         {% csrf_token %}
@@ -207,13 +207,15 @@
                                         <span class="text-success fw-bold small">
                                             {{ order.approved_at|date:"Y-m-d" }} <i class="bi bi-check-circle-fill"></i>
                                         </span>
-                                    {% else %}
-                                        <a href="{% url 'order_approve' order.id %}"
+                                    {% elif user|has_perm:'can_scm_order_approve' %}
+                                        <button type="submit" formaction="{% url 'order_approve' order.id %}"
                                            class="btn btn-outline-primary btn-sm py-0 px-2"
                                            style="font-size: 0.75rem;"
                                            onclick="return confirm('이 발주 건을 승인하시겠습니까?');">
                                             발주확인
-                                        </a>
+                                        </button>
+                                    {% else %}
+                                        <span class="text-muted small">미확인</span>
                                     {% endif %}
                                 </td>
                                 <td class="text-center fw-bold text-primary">{{ order.vendor.name }}</td>

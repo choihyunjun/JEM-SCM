@@ -2101,6 +2101,9 @@ def api_process_tag_scan(request):
                     'success': False,
                     'error': f'취소된 라벨입니다. ({rm_label.label_id})',
                 })
+            if rm_label.used_transaction_id or rm_label.used_at:
+                return JsonResponse({'success': False, 'already_used': True,
+                    'error': '이미 이동한 라벨입니다. 원본 이동을 취소한 뒤 다시 스캔해주세요.'})
 
             # 3200 원재료창고 (출발) / 도착 창고 조회
             wh_from = Warehouse.objects.filter(code='3200').first()
@@ -2115,8 +2118,10 @@ def api_process_tag_scan(request):
                     'success': False,
                     'error': f'도착 창고({target_warehouse_code})가 등록되어 있지 않습니다.',
                 })
+            if wh_from.pk == wh_to.pk:
+                return JsonResponse({'success': False, 'error': '출발 창고와 도착 창고가 같습니다.'})
 
-            # 현장(3000)으로 이동할 때만 라벨 USED 처리
+            # 목적지에 따라 표시 문구만 구분한다. 중복 방지는 모든 이동에 적용한다.
             mark_used = (target_warehouse_code == '3000')
 
             # FIFO 검증 (3200 창고에서 같은 품번 더 오래된 LOT가 남아있으면 차단)
@@ -2219,6 +2224,14 @@ def api_process_tag_scan(request):
 
             # 트랜잭션: 3200 차감 → 3000 추가 → 라벨 USED → 이력 생성
             with transaction.atomic():
+                # Claim the label using current DB state, not the pre-transaction read.
+                # Even nonproduction moves consume this scan until explicitly cancelled.
+                claimed = RawMaterialLabel.objects.exclude(status__in=['USED', 'CANCELLED', 'EXPIRED', 'DISPOSED']).filter(
+                    pk=rm_label.pk, used_at__isnull=True, used_transaction__isnull=True,
+                ).update(used_at=timezone.now(), used_by=request.user)
+                if claimed != 1:
+                    return JsonResponse({'success': False, 'already_used': True,
+                        'error': '이미 이동했거나 사용할 수 없는 라벨입니다. 이력을 다시 조회해주세요.'})
                 remaining = move_qty
                 # LOT 재고 우선 차감
                 if lot_no and src_stock and src_stock.quantity > 0:
@@ -2247,12 +2260,11 @@ def api_process_tag_scan(request):
                 )
                 tgt_stock.refresh_from_db()
 
-                # 현장(3000)으로 이동할 때만 라벨 USED 처리
-                if mark_used:
-                    rm_label.status = 'USED'
-                    rm_label.used_at = timezone.now()
-                    rm_label.used_by = request.user
-                    rm_label.save(update_fields=['status', 'used_at', 'used_by'])
+                # A label represents one movement, regardless of destination warehouse.
+                rm_label.status = 'USED'
+                rm_label.used_at = timezone.now()
+                rm_label.used_by = request.user
+                rm_label.save(update_fields=['status', 'used_at', 'used_by'])
 
                 # 이력 생성
                 trx_no = f"RM-SCAN-{timezone.now().strftime('%y%m%d%H%M%S%f')}-{request.user.id}"
@@ -2271,6 +2283,10 @@ def api_process_tag_scan(request):
                     actor=request.user,
                     remark=f"[{label_kind} 라벨 {action_label}] {rm_label.label_id} (LOT: {lot_display})"
                 )
+                RawMaterialLabel.objects.filter(pk=rm_label.pk).update(used_transaction=trx_for_erp)
+                if getattr(settings, 'ERP_ENABLED', False):
+                    from .erp_api import register_erp_stock_move
+                    register_erp_stock_move(trx_for_erp, move_qty, wh_from.code, wh_to.code)
 
             # ERP 재고이동 등록 (atomic 밖 - ERP 실패가 SCM 롤백하지 않도록)
             erp_msg = ''
@@ -2848,23 +2864,30 @@ def api_process_tag_cancel_scan(request):
                 return JsonResponse({'success': False, 'error': '투입 상태가 아닙니다.'})
 
             wh_3200 = Warehouse.objects.filter(code='3200').first()
-            wh_3000 = Warehouse.objects.filter(code='3000').first()
-            if not wh_3200 or not wh_3000:
-                return JsonResponse({'success': False, 'error': '창고 마스터(3200/3000)가 없습니다.'})
+            if not wh_3200:
+                return JsonResponse({'success': False, 'error': '출발 창고(3200)가 없습니다.'})
 
-            last_trx = MaterialTransaction.objects.filter(
+            last_trx = rm_label.used_transaction or MaterialTransaction.objects.filter(
                 part=rm_label.part,
                 transaction_type='TRANSFER',
                 warehouse_from=wh_3200,
-                warehouse_to=wh_3000,
-                remark__icontains=rm_label.label_id,
+                # Legacy labels have no FK; match the full token, never an ID prefix.
+                remark__contains=f'] {rm_label.label_id} (LOT:',
             ).order_by('-date').first()
-
-            cancel_qty = float(last_trx.quantity) if last_trx else float(rm_label.quantity)
+            if (not last_trx or not last_trx.warehouse_to_id or last_trx.part_id != rm_label.part_id
+                    or last_trx.lot_no != rm_label.lot_no or last_trx.warehouse_from_id != wh_3200.pk):
+                return JsonResponse({'success': False, 'error': '원본 라벨 이동 이력을 확인할 수 없습니다.'})
+            wh_3000 = last_trx.warehouse_to  # Restore from the actual destination, including nonproduction.
+            cancel_qty = float(last_trx.quantity)
             lot_no_cancel = rm_label.lot_no
 
             from django.db.models import F as _F
             with transaction.atomic():
+                claimed = RawMaterialLabel.objects.filter(pk=rm_label.pk, status='USED',
+                    used_at=rm_label.used_at, used_transaction_id=rm_label.used_transaction_id).update(
+                        status='INSTOCK', used_at=None, used_by=None, used_transaction=None)
+                if claimed != 1:
+                    return JsonResponse({'success': False, 'error': '이미 취소되거나 변경된 라벨입니다. 다시 조회해주세요.'})
                 src_3000 = MaterialStock.objects.filter(
                     warehouse=wh_3000, part=rm_label.part, lot_no=lot_no_cancel
                 ).first()
@@ -2900,6 +2923,9 @@ def api_process_tag_cancel_scan(request):
                     actor=request.user,
                     remark=f"[{label_kind_c} 라벨 투입취소] {rm_label.label_id} (LOT: {lot_disp})"
                 )
+                if getattr(settings, 'ERP_ENABLED', False):
+                    from .erp_api import register_erp_stock_move
+                    register_erp_stock_move(cancel_trx, cancel_qty, wh_3000.code, wh_3200.code)
 
             erp_msg = ''
             try:

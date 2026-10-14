@@ -3,7 +3,7 @@
 {% block material_content %}
 <div class="container-fluid py-4">
   <h3>ERP 입고 연동 관리</h3>
-  <p>입고 등록·취소 요청의 처리 상태를 확인합니다. ‘ERP 확인 필요’ 건은 전표를 먼저 확인해 주세요.</p>
+  <p>입고 등록·취소 및 재고이동 등록 요청의 처리 상태를 확인합니다. ‘ERP 확인 필요’ 건은 전표를 먼저 확인해 주세요.</p>
   <form method="get" class="mb-3">
     <label for="status">상태</label>
     <select name="status" id="status"><option value="">전체</option>
@@ -11,7 +11,7 @@
     </select><button class="btn btn-sm btn-secondary">조회</button>
   </form>
   <table class="table table-bordered">
-    <thead><tr><th>등록일</th><th>입고 이력</th><th>요청</th><th>상태</th><th>ERP 전표</th><th>처리·이력</th></tr></thead>
+    <thead><tr><th>등록일</th><th>수불 이력</th><th>요청</th><th>상태</th><th>ERP 전표</th><th>처리·이력</th></tr></thead>
     <tbody>{% for job in page_obj %}<tr>
       <td>{{ job.created_at|date:'Y-m-d H:i' }}</td><td>{{ job.transaction_no }}</td>
       <td>{{ job.get_kind_display }}</td><td>{{ job.get_status_display }}</td><td>{{ job.erp_no|default:'—' }}</td>

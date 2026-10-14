@@ -4,7 +4,7 @@ from material.erp_outbox import dispatch, reconcile
 
 
 class Command(BaseCommand):
-    help = 'Send committed pending ERP receipt requests; reconcile uncertain results without resending.'
+    help = 'Send committed pending ERP receipt/stock-move requests; reconcile uncertain results without resending.'
 
     def add_arguments(self, parser):
         parser.add_argument('--reconcile', action='store_true')

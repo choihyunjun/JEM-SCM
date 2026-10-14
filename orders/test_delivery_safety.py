@@ -5,6 +5,7 @@ from django.contrib.auth.models import User
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.db.models import Sum
 from django.test import RequestFactory, TestCase, override_settings
+from django.utils import timezone
 
 from material.models import MaterialStock, Warehouse
 from .models import DeliveryOrder, DeliveryOrderItem, LabelPrintLog, Order, Part, Vendor
@@ -17,6 +18,8 @@ class DeliveryRegistrationTests(TestCase):
         self.user = User.objects.create(username='delivery-test', is_superuser=True)
         self.vendor = Vendor.objects.create(code='TEST', name='Test vendor')
         self.part = Part.objects.create(part_no='P1', part_name='Part 1', vendor=self.vendor)
+        Order.objects.create(vendor=self.vendor, part_no=self.part.part_no, part_name=self.part.part_name,
+            quantity=100, due_date=date(2026, 1, 1), approved_at=timezone.now())
         self.factory = RequestFactory()
 
     def request(self, data):
@@ -90,6 +93,8 @@ class DeliveryRegistrationTests(TestCase):
 
     def test_different_parts_with_same_lot_are_allowed(self):
         second = Part.objects.create(part_no='P2', part_name='Part 2', vendor=self.vendor)
+        Order.objects.create(vendor=self.vendor, part_no=second.part_no, part_name=second.part_name,
+            quantity=100, due_date=date(2026, 1, 1), approved_at=timezone.now())
         views.create_delivery_order(self.request(self.payload(
             ['2026-01-01', '2026-01-01'], parts=[self.part.part_no, second.part_no],
         )))

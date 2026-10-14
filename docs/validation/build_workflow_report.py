@@ -11,7 +11,13 @@ ROOT = HERE.parents[1]
 baseline = json.loads((HERE / 'baseline-results.json').read_text(encoding='utf-8'))
 focused = json.loads((HERE / 'focused-results.json').read_text(encoding='utf-8'))
 results = baseline['tests'] + focused['tests']
-commit = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'], cwd=ROOT, text=True).strip()
+# Keep the original audit reproducible after fixes change source locations.
+commit = 'c6083fb'
+snapshot_commit = '3959e98'
+
+
+def source_lines(file):
+    return subprocess.check_output(['git', 'show', f'{snapshot_commit}:{file}'], cwd=ROOT).decode('utf-8').splitlines()
 rows = []
 
 
@@ -23,7 +29,7 @@ def add(code, group, feature, expected, actual, verdict, priority, improvement, 
         evidence.extend(matches)
     locations = []
     for file, symbol in sources:
-        lines = (ROOT / file).read_text(encoding='utf-8').splitlines()
+        lines = source_lines(file)
         line = next(i for i, text in enumerate(lines, 1) if symbol in text)
         locations.append((file, line))
     rows.append(dict(code=code, group=group, feature=feature, expected=expected, actual=actual,
@@ -258,7 +264,7 @@ for record in results:
     detail = record.get('detail', '격리 테스트에서 해당 assert 검증이 통과했습니다. 자세한 입력/검증은 테스트 소스를 확인하세요.')
     module, cls, method = record['test'].rsplit('.', 2)
     file = module.replace('.', '/') + '.py'
-    lines = (ROOT / file).read_text(encoding='utf-8').splitlines()
+    lines = source_lines(file)
     line = next(i for i, text in enumerate(lines, 1) if 'def ' + method + '(' in text)
     details.append(f'''<details id="{anchor(record['test'])}"><summary><span class="status {'ok' if record['status']=='pass' else 'bad'}">{record['status']}</span> {esc(record['test'])}</summary>
 <p><a href="../../{file}">{file}:{line}</a></p><pre>{esc(detail)}</pre></details>''')
@@ -308,6 +314,8 @@ document.querySelectorAll('a[href^="#test-"]').forEach(a=>a.addEventListener('cl
 </script></body></html>'''
 for key, value in {'COMMIT': commit, 'CARDS': cards, 'ROWS': ''.join(table), 'DETAILS': ''.join(details), 'GROUPS': groups}.items():
     html = html.replace('__' + key + '__', value)
+if (HERE / 'workflow_fixes.html').exists():
+    html = html.replace('<main>', '<main><div class="callout"><strong>이 표는 수정 전 검증 기록입니다.</strong><p>오류 12개 항목의 수정 및 재검증 결과는 <a href="workflow_fixes.html">오류 수정 결과 보고서</a>에서 확인하세요. 업무 기준 확인 필요·미검증 항목은 검토 대기 상태로 유지했습니다.</p></div>', 1)
 (HERE / 'scm_workflow_audit.html').write_text(html, encoding='utf-8')
 (HERE / 'audit-findings.json').write_text(json.dumps({'commit': commit, 'counts': dict(counts), 'items': rows}, ensure_ascii=False, indent=2), encoding='utf-8')
 print(json.dumps({'items': len(rows), 'verdicts': dict(counts)}, ensure_ascii=False))

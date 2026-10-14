@@ -2199,22 +2199,8 @@ def register_erp_stock_move(trx, qty, from_warehouse_code, to_warehouse_code):
         }]
     }
 
-    success, data, error = call_erp_api('/apiproxy/api20A02I01101', body)
-
-    if success:
-        erp_no = data.get('resultData', '')
-        trx.erp_incoming_no = erp_no
-        trx.erp_sync_status = 'SUCCESS'
-        trx.erp_sync_message = f'ERP 재고이동번호: {erp_no}'
-        trx.save(update_fields=['erp_incoming_no', 'erp_sync_status', 'erp_sync_message'])
-        logger.info(f'ERP 재고이동 등록 성공: {trx.transaction_no} -> {erp_no}')
-        return True, erp_no, None
-    else:
-        trx.erp_sync_status = 'FAILED'
-        trx.erp_sync_message = error or 'Unknown error'
-        trx.save(update_fields=['erp_sync_status', 'erp_sync_message'])
-        logger.warning(f'ERP 재고이동 등록 실패: {trx.transaction_no} -> {error}')
-        return False, None, error
+    from .erp_outbox import enqueue_registration
+    return enqueue_registration(trx, body, kind='MOVE')
 
 
 def delete_erp_stock_move(erp_move_no):
