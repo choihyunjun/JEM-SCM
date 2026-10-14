@@ -150,6 +150,7 @@
                         <th>납품수량</th>
 
                         <th style="width: 100px;">입고수량</th>
+                        <th style="width: 100px;">불량수량</th>
 
                         <th>처리일시</th>
                         <th>관리</th>
@@ -182,6 +183,15 @@
                             {% endif %}
                         </td>
 
+                        <td class="fw-bold text-end pe-4">
+                            {% if item.defective_qty is None %}
+                                <span class="text-muted small">-</span>
+                            {% elif item.defective_qty > 0 %}
+                                <span class="text-danger">{{ item.defective_qty|intcomma }}</span>
+                            {% else %}
+                                <span class="text-muted">{{ item.defective_qty|intcomma }}</span>
+                            {% endif %}
+                        </td>
                         <td class="text-muted small">{{ item.created_at|date:"Y-m-d H:i" }}</td>
                         <td>
                             {% if user.is_superuser or user|has_perm:'can_scm_incoming_edit' %}
@@ -197,7 +207,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="8" class="py-5 text-muted">
+                        <td colspan="9" class="py-5 text-muted">
                             <i class="bi bi-inbox fs-1 d-block mb-3"></i>
                             검색된 입고 내역이 없습니다.
                         </td>

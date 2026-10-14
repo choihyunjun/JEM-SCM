@@ -165,6 +165,13 @@ class Incoming(models.Model):
         verbose_name = "일자별 입고 관리"
         verbose_name_plural = "2. 일자별 입고 관리"
 
+    @property
+    def defective_qty(self):
+        """미확정(None)과 불량 없는 확정 입고(0)를 구분한다."""
+        if self.confirmed_qty is None:
+            return None
+        return self.quantity - self.confirmed_qty
+
     def __str__(self):
         return f"{self.part.part_no} 입고 ({self.in_date})"
 

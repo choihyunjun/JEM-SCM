@@ -1993,30 +1993,34 @@ def incoming_cancel(request):
 
     return redirect('incoming_list')
 
+def _incoming_history_queryset(request):
+    """화면과 엑셀이 같은 업체 범위 및 조회 조건을 사용한다."""
+    from .access import scope_vendor_queryset, vendor_identity
+    incomings = scope_vendor_queryset(request.user, Incoming.objects.select_related(
+        'part', 'part__vendor'), field='part__vendor').order_by('-in_date', '-created_at', '-pk')
+    restricted, _, _ = vendor_identity(request.user)
+    if not restricted and request.GET.get('vendor_id'):
+        incomings = incomings.filter(part__vendor_id=request.GET['vendor_id'])
+    if request.GET.get('start_date'):
+        incomings = incomings.filter(in_date__gte=request.GET['start_date'])
+    if request.GET.get('end_date'):
+        incomings = incomings.filter(in_date__lte=request.GET['end_date'])
+    q = request.GET.get('q', '').strip()
+    if q:
+        incomings = incomings.filter(Q(part__part_no__icontains=q) | Q(part__part_name__icontains=q))
+    return incomings
+
+
 @login_required
 @menu_permission_required('can_manage_incoming')
 def incoming_list(request):
     user = request.user
     selected_v = request.GET.get('vendor_id')
     sd, ed, q = request.GET.get('start_date'), request.GET.get('end_date'), request.GET.get('q', '')
-
-    user_vendor = _get_user_vendor(user)
-
-    incomings = Incoming.objects.select_related('part', 'part__vendor').all().order_by('-in_date', '-created_at')
-
+    incomings = _incoming_history_queryset(request)
     profile = getattr(user, 'profile', None)
     vendor_ids = Incoming.objects.values_list('part__vendor_id', flat=True).distinct()
     vendor_list = Vendor.objects.filter(id__in=vendor_ids).order_by('name') if (user.is_superuser or (profile and _is_internal(user))) else []
-
-    if not user.is_superuser and (profile and profile.role != 'STAFF'):
-        incomings = incomings.filter(part__vendor=user_vendor) if user_vendor else incomings.none()
-    elif selected_v:
-        incomings = incomings.filter(part__vendor_id=selected_v)
-
-    if sd and ed:
-        incomings = incomings.filter(in_date__range=[sd, ed])
-    if q:
-        incomings = incomings.filter(Q(part__part_no__icontains=q) | Q(part__part_name__icontains=q))
 
     return render(request, 'incoming_list.html', {
         'incomings': incomings,
@@ -2032,7 +2036,7 @@ def incoming_list(request):
 @menu_permission_required('can_manage_incoming')
 def incoming_export(request):
     # 1. 권한 및 사용자 확인
-    user_vendor = Vendor.objects.filter(user=request.user).first()
+    user_vendor = _get_user_vendor(request.user)
 
     # 슈퍼유저가 아니고, 협력사도 아닌 경우에만 권한 체크
     if (not request.user.is_superuser) and (not user_vendor):
@@ -2040,45 +2044,8 @@ def incoming_export(request):
         if resp:
             return resp
 
-    # 2. 기본 쿼리셋 생성
-    incomings = Incoming.objects.select_related('part', 'part__vendor').all().order_by('-in_date', '-created_at')
-
-    # 3. 필터링 적용 (화면 조회와 동일한 로직)
-    # 3-1. 협력사 계정인 경우 본인 데이터만 필터링
-    if (not request.user.is_superuser) and user_vendor:
-        incomings = incomings.filter(part__vendor=user_vendor)
-    # (관리자 페이지 등에서 특정 업체만 선택해서 조회했을 경우 대응이 필요하다면 아래 주석 해제)
-    # elif request.GET.get('vendor_id'):
-    #     incomings = incomings.filter(part__vendor_id=request.GET.get('vendor_id'))
-
-    # 3-2. 날짜 필터 (시작일~종료일)
-    start_date = request.GET.get('start_date')
-    end_date = request.GET.get('end_date')
-    
-    if start_date and end_date:
-        incomings = incomings.filter(in_date__range=[start_date, end_date])
-
-    # 3-3. 검색어 필터 (품번/품명)
-    q = request.GET.get('q', '')
-    if q:
-        incomings = incomings.filter(Q(part__part_no__icontains=q) | Q(part__part_name__icontains=q))
-
-    # 4. 엑셀 파일 생성
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    # 헤더 작성
-    ws.append(['입고일자', '협력사', '품번', '품명', '입고수량(확정)', '처리일시'])
-
-    # 데이터 작성
-    for i in incomings:
-        ws.append([
-            i.in_date,
-            i.part.vendor.name,
-            i.part.part_no,
-            i.part.part_name,
-            i.confirmed_qty,  # [수정] 납품수량(quantity) 대신 확정수량(confirmed_qty) 사용
-            i.created_at.strftime("%Y-%m-%d %H:%M")
-        ])
+    from .incoming_excel import incoming_workbook
+    wb = incoming_workbook(_incoming_history_queryset(request).iterator())
 
     # 5. 응답 반환
     response = HttpResponse(
