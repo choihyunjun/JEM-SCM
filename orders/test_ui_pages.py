@@ -13,8 +13,8 @@ from django.urls import reverse
 from django.utils import timezone
 
 from material.models import MaterialTransaction, Warehouse
-from orders.models import Part, Vendor
-from qms.models import ImportInspection
+from orders.models import DeliveryOrder, LabelPrintLog, Order, Part, UserProfile, Vendor
+from qms.models import ImportInspection, NonConformance, OutgoingInspection, VendorClaim
 
 
 @override_settings(ERP_ENABLED=False, SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=['testserver'])
@@ -68,3 +68,60 @@ class MenuPageRenderingTests(TestCase):
                     self.assertEqual(response.status_code, 200)
                     self.assertContains(response, part.part_no)
                     self.assertEqual(response.context['page_obj'].paginator.count, 3)
+
+    def test_supplier_delivery_registration_redirect_and_print_pages(self):
+        supplier = User.objects.create_user('ui-supplier')
+        vendor = Vendor.objects.create(code='UI-SUPPLIER', name='UI supplier', user=supplier)
+        UserProfile.objects.filter(user=supplier).update(
+            role='VENDOR', account_type='VENDOR', org=vendor.organization,
+            can_scm_label_view=True, can_scm_label_edit=True,
+        )
+        part = Part.objects.create(part_no='UI-DELIVERY', part_name='Delivery part', vendor=vendor)
+        order = Order.objects.create(
+            vendor=vendor, part_no=part.part_no, part_name=part.part_name,
+            quantity=100, due_date=timezone.localdate(), approved_at=timezone.now(),
+            erp_order_no='UI-PO', erp_order_seq='1',
+        )
+        self.client.force_login(supplier)
+        self.assertContains(self.client.get(reverse('label_list')), part.part_no)
+        response = self.client.post(reverse('create_delivery_order'), {
+            'part_nos[]': [part.part_no], 'snps[]': ['10'], 'box_counts[]': ['2'],
+            'order_ids[]': [str(order.pk)], 'lot_nos[]': [timezone.localdate().isoformat()],
+        }, follow=True)
+        self.assertEqual(response.status_code, 200)
+        delivery = DeliveryOrder.objects.get()
+        item = delivery.items.get()
+        self.assertEqual(item.total_qty, 20)
+        self.assertEqual(item.linked_order, order)
+        self.assertEqual(LabelPrintLog.objects.get(delivery_item=item).printed_qty, 20)
+        self.assertContains(response, delivery.order_no)
+        for route in ['label_print', 'delivery_note_print']:
+            with self.subTest(route=route):
+                self.assertEqual(self.client.get(reverse(route, args=[delivery.pk])).status_code, 200)
+
+    def test_quality_registration_forms_render(self):
+        for route in ['m4_create', 'change_request_create', 'outgoing_create',
+                      'nc_create', 'capa_create', 'claim_create', 'rating_create',
+                      'isir_create', 'voc_create', 'gauge_create', 'qdoc_create']:
+            with self.subTest(route=route):
+                self.assertEqual(self.client.get(reverse('qms:' + route)).status_code, 200)
+
+    def test_quality_detail_and_edit_pages_render(self):
+        vendor = Vendor.objects.create(code='UI-DETAIL', name='Detail supplier')
+        nc = NonConformance.objects.create(
+            nc_no='UI-NC', vendor=vendor.organization, source='INCOMING',
+            occurred_date=timezone.localdate(), part_no='UI-PART', part_name='Part', defect_qty=1,
+        )
+        claim = VendorClaim.objects.create(
+            claim_no='UI-CLAIM', vendor=vendor.organization, issue_date=timezone.localdate(),
+            part_no='UI-PART', part_name='Part', claim_qty=1, issued_by=self.user,
+        )
+        outgoing = OutgoingInspection.objects.create(
+            inspection_no='UI-OUT', inspection_date=timezone.localdate(),
+            part_no='UI-PART', part_name='Part', total_qty=10,
+        )
+        for prefix, instance in [('nc', nc), ('claim', claim), ('outgoing', outgoing)]:
+            for suffix in ['detail', 'edit']:
+                route = f'qms:{prefix}_{suffix}'
+                with self.subTest(route=route):
+                    self.assertEqual(self.client.get(reverse(route, args=[instance.pk])).status_code, 200)
