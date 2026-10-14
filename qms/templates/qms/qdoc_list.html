@@ -41,7 +41,7 @@
 
     <!-- 필터 -->
     <div class="dtl-toolbar">
-        <form method="get" class="row g-2 align-items-end">
+        <form method="get" class="erp-filter-form row g-2 align-items-end">
             <div class="col-md-3">
                 <label class="dtl-form-label">문서 검색</label>
                 <input type="text" name="q" class="form-control dtl-form-control" placeholder="문서번호, 문서명..." value="{{ request.GET.q }}">
@@ -73,8 +73,8 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-3">
-                <button type="submit" class="dtl-btn-dark me-1">
+            <div class="col-md-auto erp-filter-actions">
+                <button type="submit" class="dtl-btn-dark">
                     <i class="bi bi-search me-1"></i>검색
                 </button>
                 <a href="{% url 'qms:qdoc_list' %}" class="dtl-btn-outline">초기화</a>

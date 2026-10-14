@@ -205,7 +205,10 @@
   body.erp-ui :is(.form-label, .dtl-form-label, .iil-form-label) { font-size: 0.75rem; font-weight: 550; color: #59636f; }
   body.erp-ui :is(.input-group-text, .dtl-readonly-box) { font-size: 0.8125rem; background: #f8f9fa; border-color: #d6dbe1; }
   body.erp-ui .form-check-input:checked { background-color: var(--erp-brand); border-color: var(--erp-brand); }
-  body.erp-ui .btn { border-radius: 4px; font-size: 0.8125rem; font-weight: 550; box-shadow: none; }
+  body.erp-ui .btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-height: 34px; border-radius: 4px; font-size: 0.8125rem; font-weight: 550; box-shadow: none;
+  }
   body.erp-ui .btn-primary {
     --bs-btn-bg: var(--erp-brand); --bs-btn-border-color: var(--erp-brand);
     --bs-btn-hover-bg: var(--erp-brand-dark); --bs-btn-hover-border-color: var(--erp-brand-dark);
@@ -222,9 +225,24 @@
   body.erp-ui :is(.dtl-btn-dark, .iil-btn-dark) { background: var(--erp-brand); border-radius: 4px; color: white; font-weight: 550; }
   body.erp-ui :is(.dtl-btn-dark, .iil-btn-dark):hover { background: var(--erp-brand-dark); color: white; }
   body.erp-ui :is(.dtl-btn-outline, .iil-btn-outline) { border-radius: 4px; font-weight: 550; }
-  body.erp-ui .iil-toolbar :is(.iil-btn-dark, .iil-btn-outline) {
-    min-height: 34px; white-space: nowrap; display: inline-flex;
-    align-items: center; justify-content: center; gap: 4px; text-decoration: none;
+  /* Anchor and button controls share metrics, including the border on filled buttons. */
+  body.erp-ui :is(.dtl-btn-dark, .dtl-btn-outline, .iil-btn-dark, .iil-btn-outline) {
+    box-sizing: border-box; min-height: 34px; padding: 6px 12px;
+    font-size: 0.8125rem; line-height: 20px; display: inline-flex;
+    align-items: center; justify-content: center; gap: 4px;
+    vertical-align: middle; text-align: center; text-decoration: none;
+  }
+  body.erp-ui :is(.dtl-btn-dark, .iil-btn-dark) { border: 1px solid transparent; }
+  /* Explicit search action groups do not inherit unequal grid-column widths. */
+  body.erp-ui .erp-filter-actions {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  }
+  body.erp-ui .erp-filter-actions > :is(.btn, .dtl-btn-dark, .dtl-btn-outline, .iil-btn-dark, .iil-btn-outline) {
+    flex: 0 0 auto; width: auto; min-width: 80px; min-height: 34px;
+    padding: 6px 12px; margin: 0; line-height: 20px; white-space: nowrap;
+  }
+  body.erp-ui .erp-filter-form :is(.form-control, .form-select):not(textarea) {
+    min-height: 34px; height: 34px;
   }
   body.erp-ui .iil-table :is(th, td),
   body.erp-ui[data-erp-page="inspection_attachment_list"] .dtl-table :is(th, td) { white-space: nowrap; }
@@ -269,6 +287,10 @@
     }
     body.erp-ui :is(.form-control, .form-select):not(textarea) { min-height: 40px; }
     body.erp-ui .btn { min-height: 38px; }
+    body.erp-ui .erp-filter-form :is(.form-control, .form-select):not(textarea),
+    body.erp-ui .erp-filter-actions > :is(.btn, .dtl-btn-dark, .dtl-btn-outline, .iil-btn-dark, .iil-btn-outline) {
+      min-height: 40px; height: 40px;
+    }
     body.erp-ui #layoutSidenav_content .table .btn { min-height: 34px; }
     body.erp-ui #layoutSidenav_content .table > :is(thead, tbody) > tr > :is(th, td) { padding: 10px; }
     body.erp-ui #sidebarToggle { min-width: 38px; }

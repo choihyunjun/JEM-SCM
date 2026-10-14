@@ -152,7 +152,7 @@
             </div>
         </div>
         <div class="card-body" style="padding: 1.25rem 1.25rem 0.5rem;">
-            <form method="get" class="row g-3 align-items-end mb-3">
+            <form method="get" class="erp-filter-form row g-3 align-items-end mb-3">
                 <div class="col-md-2">
                     <label class="dtl-form-label">시작일</label>
                     <input type="date" name="hstart" class="form-control form-control-sm dtl-form-control" value="{{ hstart }}">
@@ -174,13 +174,11 @@
                     <label class="dtl-form-label">검색 (품번/품명/수불번호)</label>
                     <input type="text" name="hq" class="form-control form-control-sm dtl-form-control" value="{{ hq }}" placeholder="검색어 입력">
                 </div>
-                <div class="col-md-1">
-                    <button type="submit" class="dtl-btn-dark btn-sm w-100">
+                <div class="col-md-auto erp-filter-actions">
+                    <button type="submit" class="dtl-btn-dark btn-sm">
                         <i class="bi bi-search"></i> 조회
                     </button>
-                </div>
-                <div class="col-md-1">
-                    <a href="{% url 'material:stock_move' %}" class="dtl-btn-outline btn-sm w-100">초기화</a>
+                    <a href="{% url 'material:stock_move' %}" class="dtl-btn-outline btn-sm">초기화</a>
                 </div>
             </form>
         </div>

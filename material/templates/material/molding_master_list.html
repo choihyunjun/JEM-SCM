@@ -29,7 +29,7 @@
     <!-- 검색 카드 -->
     <div class="dtl-toolbar mb-3">
         <div>
-            <form method="get" class="row g-2 align-items-end">
+            <form method="get" class="erp-filter-form row g-2 align-items-end">
                 <div class="col-md-3 col-lg-2" style="position:relative;">
                     <label class="dtl-form-label">품번/품명</label>
                     <input type="text" name="q" class="form-control form-control-sm dtl-form-control" value="{{ q }}" placeholder="품번 또는 품명 검색" id="searchPartNo" autocomplete="off">
@@ -58,7 +58,7 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-auto">
+                <div class="col-auto erp-filter-actions">
                     <button type="submit" class="dtl-btn-dark btn-sm"><i class="bi bi-search"></i> 조회</button>
                     <a href="{% url 'material:molding_master_list' %}" class="dtl-btn-outline btn-sm">초기화</a>
                 </div>

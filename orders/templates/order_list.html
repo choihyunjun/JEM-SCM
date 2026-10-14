@@ -56,7 +56,7 @@
     <!-- 필터 영역 -->
     <div class="card border-0 shadow-sm bg-light mb-3">
         <div class="card-body py-2 px-3 scm-filter">
-            <form method="get" id="filter-form" class="row g-2 align-items-center">
+            <form method="get" id="filter-form" class="erp-filter-form row g-2 align-items-center">
                 <input type="hidden" name="sort" value="{{ current_sort|default:'due_date' }}">
 
                 {% if user.is_superuser or user|has_perm:'can_scm_order_edit' %}
@@ -98,7 +98,7 @@
 
                 <div class="col-auto ms-auto">
                     <label class="small text-muted d-block">&nbsp;</label>
-                    <div class="d-flex gap-2 flex-wrap">
+                    <div class="erp-filter-actions">
                         <button type="submit" class="btn btn-sm btn-primary">
                             <i class="bi bi-search"></i> 조회
                         </button>

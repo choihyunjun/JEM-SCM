@@ -12,7 +12,7 @@
     <div class="dtl-card">
         <div class="dtl-card-header"><i class="bi bi-search"></i>검색 조건</div>
         <div class="dtl-card-body">
-            <form method="get" class="row g-2 align-items-end">
+            <form method="get" class="erp-filter-form row g-2 align-items-end">
                 <div class="col-md-2">
                     <label class="dtl-form-label">시작일</label>
                     <input type="date" name="start_date" class="form-control form-control-sm dtl-form-control" value="{{ start_date|default:'' }}">
@@ -29,13 +29,11 @@
                     <label class="dtl-form-label">공급처</label>
                     <input type="text" name="q_vendor" class="form-control form-control-sm dtl-form-control" placeholder="공급처명 입력" value="{{ q_vendor }}" autocomplete="off">
                 </div>
-                <div class="col-md-2">
-                    <button type="submit" class="dtl-btn-outline btn-sm w-100">
+                <div class="col-md-auto erp-filter-actions">
+                    <button type="submit" class="dtl-btn-outline btn-sm">
                         <i class="bi bi-search"></i> 조회
                     </button>
-                </div>
-                <div class="col-md-2">
-                    <a href="{% url 'qms:inspection_attachment_list' %}" class="dtl-btn-outline btn-sm w-100 text-center d-block">초기화</a>
+                    <a href="{% url 'qms:inspection_attachment_list' %}" class="dtl-btn-outline btn-sm">초기화</a>
                 </div>
             </form>
         </div>

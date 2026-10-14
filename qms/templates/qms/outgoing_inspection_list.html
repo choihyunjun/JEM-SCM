@@ -42,7 +42,7 @@
 
     <!-- 필터 -->
     <div class="dtl-toolbar">
-        <form method="get" class="row g-2 align-items-end">
+        <form method="get" class="erp-filter-form row g-2 align-items-end">
             <div class="col-md-2">
                 <label class="dtl-form-label">검사상태</label>
                 <select name="status" class="form-select form-select-sm dtl-form-control">
@@ -64,11 +64,9 @@
                 <label class="dtl-form-label">검사일(종료)</label>
                 <input type="date" name="date_to" class="form-control form-control-sm dtl-form-control" value="{{ request.GET.date_to }}">
             </div>
-            <div class="col-md-2">
-                <button type="submit" class="dtl-btn-dark btn-sm w-100"><i class="bi bi-search me-1"></i>검색</button>
-            </div>
-            <div class="col-md-1">
-                <a href="{% url 'qms:outgoing_list' %}" class="dtl-btn-outline btn-sm w-100 text-center d-block">초기화</a>
+            <div class="col-md-auto erp-filter-actions">
+                <button type="submit" class="dtl-btn-dark btn-sm"><i class="bi bi-search me-1"></i>검색</button>
+                <a href="{% url 'qms:outgoing_list' %}" class="dtl-btn-outline btn-sm">초기화</a>
             </div>
         </form>
     </div>

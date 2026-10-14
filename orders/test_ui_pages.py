@@ -99,6 +99,71 @@ class MenuPageRenderingTests(TestCase):
             with self.subTest(route=route):
                 self.assertEqual(self.client.get(reverse(route, args=[delivery.pk])).status_code, 200)
 
+    def test_wms_incoming_history_system_filters_with_inspected_transfer(self):
+        vendor = Vendor.objects.create(code='UI-INCOMING', name='Incoming supplier')
+        part = Part.objects.create(part_no='UI-INCOMING', part_name='Incoming part', vendor=vendor)
+        waiting = Warehouse.objects.create(code='8100', name='Inspection')
+        target = Warehouse.objects.create(code='2000', name='Material')
+        today = timezone.localdate()
+        origin = MaterialTransaction.objects.create(
+            transaction_no='UI-ORIGIN', transaction_type='IN_SCM', part=part,
+            vendor=vendor, warehouse_to=waiting, quantity=10, lot_no=today,
+        )
+        ImportInspection.objects.create(
+            inbound_transaction=origin, status='APPROVED', qty_good=10,
+            attachment='qms/inspection/ui-incoming.pdf',
+        )
+        transfer = MaterialTransaction.objects.create(
+            transaction_no='UI-TRANSFER', transaction_type='TRANSFER', part=part,
+            vendor=vendor, warehouse_from=waiting, warehouse_to=target,
+            quantity=10, lot_no=today,
+        )
+        direct = []
+        for kind in ['IN_SCM', 'IN_MANUAL', 'IN_ERP']:
+            direct.append(MaterialTransaction.objects.create(
+                transaction_no='UI-' + kind, transaction_type=kind, part=part,
+                vendor=vendor, warehouse_to=target, quantity=10, lot_no=today,
+            ))
+        for system, expected in [('', [transfer, *direct]),
+                                 ('SCM', [transfer, *direct[:2]]), ('ERP', [direct[2]])]:
+            with self.subTest(system=system):
+                response = self.client.get(reverse('material:incoming_history'), {
+                    'q_sys': system, 'q': part.part_no, 'q_vendor': vendor.name,
+                    'start_date': today.isoformat(), 'end_date': today.isoformat(),
+                })
+                self.assertEqual(response.status_code, 200)
+                rows = list(response.context['page_obj'])
+                self.assertCountEqual([row.pk for row in rows], [row.pk for row in expected])
+                if system != 'ERP':
+                    inspected = next(row for row in rows if row.pk == transfer.pk)
+                    self.assertEqual(inspected.inspection_attachment_name, 'ui-incoming.pdf')
+
+    def test_wms_incoming_label_issue_and_print_with_approved_inspection(self):
+        from material.models import RawMaterialLabel
+
+        vendor = Vendor.objects.create(code='UI-LABEL', name='Label supplier')
+        part = Part.objects.create(part_no='UI-LABEL', part_name='Label part', vendor=vendor)
+        waiting = Warehouse.objects.create(code='8100', name='Inspection')
+        movement = MaterialTransaction.objects.create(
+            transaction_no='UI-LABEL-IN', transaction_type='IN_MANUAL', part=part,
+            vendor=vendor, warehouse_to=waiting, quantity=50, lot_no=timezone.localdate(),
+        )
+        inspection = ImportInspection.objects.create(
+            inbound_transaction=movement, status='APPROVED', qty_good=50,
+        )
+        url = reverse('material:raw_material_incoming')
+        self.assertContains(self.client.get(url), part.part_no)
+        response = self.client.post(url, {
+            'action': 'print_labels', 'inspection_id': inspection.pk,
+            'unit': 'KG', 'pkg_qty': '25', 'pkg_count': '2', 'expiry_date': '',
+        }, follow=True)
+        self.assertEqual(response.status_code, 200)
+        labels = RawMaterialLabel.objects.filter(incoming_transaction=movement)
+        self.assertEqual(labels.count(), 2)
+        self.assertEqual(sum(label.quantity for label in labels), 50)
+        self.assertEqual(response.redirect_chain[0][0].split('?')[0], '/wms/raw-material/label-print/')
+        self.assertContains(self.client.get(url), part.part_no)
+
     def test_quality_registration_forms_render(self):
         for route in ['m4_create', 'change_request_create', 'outgoing_create',
                       'nc_create', 'capa_create', 'claim_create', 'rating_create',

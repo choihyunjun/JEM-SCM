@@ -35,7 +35,7 @@
     <div class="dtl-card mb-4">
         <div class="dtl-card-header"><i class="bi bi-search"></i> 검색 조건</div>
         <div class="dtl-card-body">
-            <form method="get" class="row g-3 align-items-end">
+            <form method="get" class="erp-filter-form row g-3 align-items-end">
                 <div class="col-6 col-lg-2">
                     <label class="dtl-form-label">시작일</label>
                     <input type="date" name="start_date" class="form-control form-control-sm dtl-form-control" value="{{ start_date|default:'' }}">
@@ -78,7 +78,7 @@
                         <option value="SCM" {% if q_sys == 'SCM' %}selected{% endif %}>SCM</option>
                     </select>
                 </div>
-                <div class="col-12 d-flex gap-2 mt-1">
+                <div class="col-12 erp-filter-actions mt-1">
                     <button type="submit" class="dtl-btn-dark btn-sm">
                         <i class="bi bi-search"></i> 조회
                     </button>

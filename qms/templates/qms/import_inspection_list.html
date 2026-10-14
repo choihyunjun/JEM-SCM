@@ -39,7 +39,7 @@
     </div>
 
     <div class="iil-toolbar">
-        <form method="get" class="row g-2 align-items-end">
+        <form method="get" class="erp-filter-form row g-2 align-items-end">
             <div class="col-md-3">
                 <label class="iil-form-label">기간 조회</label>
                 <div class="input-group input-group-sm">
@@ -67,11 +67,11 @@
                 </div>
             </div>
 
-            <div class="col-md-3 d-flex gap-2">
-                <button type="submit" class="iil-btn-dark w-100">
+            <div class="col-md-auto erp-filter-actions">
+                <button type="submit" class="iil-btn-dark">
                     <i class="bi bi-filter"></i> 조회
                 </button>
-                <a href="{% url 'qms:import_inspection_list' %}" class="iil-btn-outline w-50 text-center">
+                <a href="{% url 'qms:import_inspection_list' %}" class="iil-btn-outline">
                     <i class="bi bi-arrow-counterclockwise"></i> 초기화
                 </a>
             </div>
