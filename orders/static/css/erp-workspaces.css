@@ -29,7 +29,7 @@
   body.erp-ui .erp-dashboard .card .h4 { color: var(--erp-ink) !important; font-weight: 600; }
   body.erp-ui .erp-dashboard .card-header > span > i { display: none; }
   body.erp-ui .erp-dashboard :is(.btn-outline-primary, .btn-outline-success, .btn-outline-info, .btn-outline-secondary) {
-    color: #58626e; border-color: #d4d9e0; --bs-btn-hover-bg: #f3eef0; --bs-btn-hover-color: #752b40; --bs-btn-hover-border-color: #c5a8b2;
+    color: #58626e; border-color: #d4d9e0; --bs-btn-hover-bg: var(--erp-brand-soft); --bs-btn-hover-color: var(--erp-brand); --bs-btn-hover-border-color: var(--erp-brand-border);
   }
   body.erp-ui .erp-dashboard .dtl-btn-outline.w-100.py-3 { padding: 12px !important; text-align: left !important; }
   body.erp-ui .erp-dashboard .dtl-btn-outline.w-100.py-3 > i.d-block { display: inline-block !important; font-size: 0.875rem !important; margin: 0 8px 0 0 !important; }
@@ -65,7 +65,7 @@
     background: #fff; border: 1px solid var(--erp-line); border-radius: 5px; box-shadow: none;
     color: var(--erp-ink); padding: 18px 20px;
   }
-  body.erp-ui :is(.summary-card, .shortcut-card):hover { transform: none; box-shadow: none; border-color: #c8aab5; color: var(--erp-brand); }
+  body.erp-ui :is(.summary-card, .shortcut-card):hover { transform: none; box-shadow: none; border-color: var(--erp-brand-border); color: var(--erp-brand); }
   body.erp-ui .summary-card { text-align: left; }
   body.erp-ui .summary-card:is(.bg-total, .bg-danger-mt, .bg-warning-mt, .bg-success-mt) { background: #fff; }
   body.erp-ui .summary-card .card-number, body.erp-ui .summary-value { font-size: 1.875rem; font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -81,9 +81,9 @@
   body.erp-ui .section-title > i { display: none; }
   body.erp-ui .filter-toggle { border-radius: 4px; }
   body.erp-ui .filter-toggle.active { background: var(--erp-brand); border-color: var(--erp-brand); }
-  body.erp-ui .filter-toggle:hover { border-color: #bf99a6; color: var(--erp-brand); background: var(--erp-brand-soft); }
+  body.erp-ui .filter-toggle:hover { border-color: var(--erp-brand-border); color: var(--erp-brand); background: var(--erp-brand-soft); }
   body.erp-ui .filter-toggle.active:hover { color: white; background: var(--erp-brand-dark); }
-  body.erp-ui #layoutSidenav_content .table-mt tbody tr:hover { background: #faf6f8 !important; }
+  body.erp-ui #layoutSidenav_content .table-mt tbody tr:hover { background: var(--erp-hover) !important; }
   body.erp-ui #layoutSidenav_content .table-mt :is(th, td) { padding: 8px; }
   body.erp-ui .progress-bar-mt, body.erp-ui .progress-bar-mt .bar { border-radius: 3px; }
 
@@ -91,10 +91,10 @@
   body.erp-ui .warehouse-area { background: #fff; border-radius: 5px; box-shadow: none; border: 1px solid var(--erp-line); padding: 24px; justify-content: flex-start; min-width: 0; }
   body.erp-ui .warehouse-inner { margin-inline: auto; flex-shrink: 0; }
   body.erp-ui .wall-box { background: #fff; border-radius: 4px; box-shadow: none; border: 1px solid var(--erp-line); padding: 18px; }
-  body.erp-ui .wall-title { background: #f3f0f2; color: var(--erp-brand); box-shadow: none; border-radius: 3px; font-size: 0.9375rem; letter-spacing: 0; }
-  body.erp-ui .wall-title:is(.wall-a, .wall-b, .wall-2f) { background: #f3f0f2; box-shadow: none; }
+  body.erp-ui .wall-title { background: var(--erp-brand-soft); color: var(--erp-brand); box-shadow: none; border-radius: 3px; font-size: 0.9375rem; letter-spacing: 0; }
+  body.erp-ui .wall-title:is(.wall-a, .wall-b, .wall-2f) { background: var(--erp-brand-soft); box-shadow: none; }
   body.erp-ui .rack-cell { border-radius: 5px; transition: border-color 0.15s; box-shadow: none; }
-  body.erp-ui .rack-cell:hover { transform: none; box-shadow: none; outline: 2px solid #bb9ba7; outline-offset: 2px; }
+  body.erp-ui .rack-cell:hover { transform: none; box-shadow: none; outline: 2px solid var(--erp-brand-focus); outline-offset: 2px; }
   body.erp-ui .rack-cell.safe { background: #eef6f0; border: 1px solid #c6ddcd; box-shadow: none; }
   body.erp-ui .rack-cell.warning { background: #fcf5e7; border: 1px solid #e5d1a7; box-shadow: none; }
   body.erp-ui .rack-cell.danger { background: #fbeced; border: 1px solid #e7bec5; box-shadow: none; }

@@ -21,20 +21,20 @@
                     <label class="dtl-form-label">종료일</label>
                     <input type="date" name="end_date" class="form-control form-control-sm dtl-form-control" value="{{ end_date|default:'' }}">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="dtl-form-label">품번/품명</label>
                     <input type="text" name="q" class="form-control form-control-sm dtl-form-control" placeholder="품번 또는 품명 입력" value="{{ q }}" autocomplete="off">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="dtl-form-label">공급처</label>
                     <input type="text" name="q_vendor" class="form-control form-control-sm dtl-form-control" placeholder="공급처명 입력" value="{{ q_vendor }}" autocomplete="off">
                 </div>
-                <div class="col-md-1">
+                <div class="col-md-2">
                     <button type="submit" class="dtl-btn-outline btn-sm w-100">
                         <i class="bi bi-search"></i> 조회
                     </button>
                 </div>
-                <div class="col-md-1">
+                <div class="col-md-2">
                     <a href="{% url 'qms:inspection_attachment_list' %}" class="dtl-btn-outline btn-sm w-100 text-center d-block">초기화</a>
                 </div>
             </form>

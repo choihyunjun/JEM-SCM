@@ -2,9 +2,14 @@
    Scope excludes administration, sign-in and standalone print/label templates. */
 @media screen {
   body.erp-ui {
-    --erp-brand: #752b40;
-    --erp-brand-dark: #582032;
-    --erp-brand-soft: #f3e9ed;
+    --erp-brand: #900000;
+    --erp-brand-dark: #6e0000;
+    --erp-header: #8b0000;
+    --erp-brand-soft: #f8ecec;
+    --erp-brand-rgb: 144, 0, 0;
+    --erp-brand-border: #d8b0b0;
+    --erp-brand-focus: #b76565;
+    --erp-hover: #fcf7f7;
     --erp-ink: #292b31;
     --erp-muted: #69717b;
     --erp-line: #e2e4e8;
@@ -13,29 +18,49 @@
     --erp-danger: #ae3445;
     --erp-warning: #8b611c;
     --erp-success: #357257;
-    --bs-primary: #752b40;
-    --bs-primary-rgb: 117, 43, 64;
-    --bs-link-color: #752b40;
-    --bs-link-hover-color: #582032;
+    --bs-primary: var(--erp-brand);
+    --bs-primary-rgb: var(--erp-brand-rgb);
+    --bs-link-color: var(--erp-brand);
+    --bs-link-hover-color: var(--erp-brand-dark);
     font-family: "Pretendard Variable", Pretendard, sans-serif;
     font-size: 0.875rem;
     color: var(--erp-ink);
     background: var(--erp-canvas);
     letter-spacing: -0.015em;
   }
+  body.erp-ui.is-qms {
+    --erp-brand: #2c3e50;
+    --erp-brand-dark: #1a252f;
+    --erp-header: #2c3e50;
+    --erp-brand-soft: #eaf0f5;
+    --erp-brand-rgb: 44, 62, 80;
+    --erp-brand-border: #afc1d2;
+    --erp-brand-focus: #607e9b;
+    --erp-hover: #f5f8fb;
+  }
+  body.erp-ui.is-wms {
+    --erp-brand: #356b55;
+    --erp-brand-dark: #24503e;
+    --erp-header: #356b55;
+    --erp-brand-soft: #eaf3ee;
+    --erp-brand-rgb: 53, 107, 85;
+    --erp-brand-border: #a8c9b7;
+    --erp-brand-focus: #5b9477;
+    --erp-hover: #f4f9f6;
+  }
   body.erp-ui a { color: var(--erp-brand); }
   body.erp-ui a:hover { color: var(--erp-brand-dark); }
   body.erp-ui :is(button, a, input, select, textarea, summary):focus-visible {
-    outline: 2px solid #ad7587;
+    outline: 2px solid var(--erp-brand-focus);
     outline-offset: 3px;
   }
   body.erp-ui .text-muted { color: var(--erp-muted) !important; }
 
   /* Retain SB Admin's positioning, menu toggle and responsive breakpoints. */
   body.erp-ui .sb-topnav {
-    background: var(--erp-brand-dark) !important;
+    background: var(--erp-header) !important;
     box-shadow: none;
-    border-bottom: 1px solid #6f384a;
+    border-bottom: 1px solid var(--erp-brand-dark);
   }
   body.erp-ui .navbar-brand { color: #fff; gap: 2px; }
   body.erp-ui .navbar-brand img { height: 26px !important; opacity: 1; }
@@ -46,13 +71,13 @@
     font-weight: 500;
     margin: 0 2px;
     padding: 0.7rem 0.85rem !important;
-    color: #eadde2 !important;
+    color: rgba(255, 255, 255, 0.82) !important;
     border-bottom: 2px solid transparent;
   }
   body.erp-ui .sb-topnav .navbar-nav .nav-link.active-system {
     background: #ffffff09;
     color: #fff !important;
-    border-bottom-color: #e2b7c5;
+    border-bottom-color: rgba(255, 255, 255, 0.75);
     font-weight: 650;
   }
   body.erp-ui .sb-topnav .navbar-nav .nav-link:hover { background: #ffffff0d; color: #fff !important; }
@@ -155,7 +180,7 @@
   body.erp-ui :is(.dtl-field-value, .dtl-issue-title) { font-weight: 600; }
 
   /* Keep numeric alignment/status classes from the templates. No blanket row recoloring. */
-  body.erp-ui #layoutSidenav_content :is(.table, .dtl-table, .iil-table) { font-size: 0.8125rem; --bs-table-hover-bg: #faf6f8; }
+  body.erp-ui #layoutSidenav_content :is(.table, .dtl-table, .iil-table) { font-size: 0.8125rem; --bs-table-hover-bg: var(--erp-hover); }
   body.erp-ui #layoutSidenav_content .table th { font-size: 0.75rem; font-weight: 550; letter-spacing: 0; }
   body.erp-ui #layoutSidenav_content .table > thead > tr > th {
     background-color: #f8f9fa;
@@ -167,7 +192,7 @@
   }
   body.erp-ui #layoutSidenav_content .table > thead:is(.table-dark, .table-light) th { background: #f8f9fa !important; color: #626d79 !important; border-bottom: 1px solid #d9dee4; }
   body.erp-ui #layoutSidenav_content .table > tbody > tr > td { padding: 9px 12px; border-color: #e9ecf0; vertical-align: middle; }
-  body.erp-ui #layoutSidenav_content .table > tbody > tr:hover { --bs-table-hover-bg: #faf6f8; }
+  body.erp-ui #layoutSidenav_content .table > tbody > tr:hover { --bs-table-hover-bg: var(--erp-hover); }
   body.erp-ui #layoutSidenav_content .table :is(.text-end, .text-right) { font-variant-numeric: tabular-nums; }
   body.erp-ui #layoutSidenav_content .table .erp-number { text-align: right !important; font-variant-numeric: tabular-nums; }
   body.erp-ui #layoutSidenav_content .table .btn { min-height: 27px; padding: 3px 8px; font-size: 0.75rem; }
@@ -176,7 +201,7 @@
   /* Form sizes preserve input-group flex and existing scan input focus behavior. */
   body.erp-ui :is(.form-control, .form-select, .dtl-form-control, .iil-form-control) { border-radius: 4px; border-color: #d6dbe1; font-size: 0.8125rem; color: var(--erp-ink); }
   body.erp-ui :is(.form-control, .form-select):not(textarea) { min-height: 34px; }
-  body.erp-ui :is(.form-control, .form-select):focus { border-color: #b88292; box-shadow: 0 0 0 2px #752b4012; }
+  body.erp-ui :is(.form-control, .form-select):focus { border-color: var(--erp-brand-focus); box-shadow: 0 0 0 2px rgba(var(--erp-brand-rgb), 0.08); }
   body.erp-ui :is(.form-label, .dtl-form-label, .iil-form-label) { font-size: 0.75rem; font-weight: 550; color: #59636f; }
   body.erp-ui :is(.input-group-text, .dtl-readonly-box) { font-size: 0.8125rem; background: #f8f9fa; border-color: #d6dbe1; }
   body.erp-ui .form-check-input:checked { background-color: var(--erp-brand); border-color: var(--erp-brand); }
@@ -189,21 +214,29 @@
     color: #fff;
   }
   body.erp-ui .btn-outline-primary {
-    --bs-btn-color: var(--erp-brand); --bs-btn-border-color: #c7adb6;
+    --bs-btn-color: var(--erp-brand); --bs-btn-border-color: var(--erp-brand-border);
     --bs-btn-hover-bg: var(--erp-brand); --bs-btn-hover-border-color: var(--erp-brand);
     --bs-btn-active-bg: var(--erp-brand); --bs-btn-active-border-color: var(--erp-brand);
-    --bs-btn-disabled-color: var(--erp-brand); --bs-btn-disabled-border-color: #c7adb6;
+    --bs-btn-disabled-color: var(--erp-brand); --bs-btn-disabled-border-color: var(--erp-brand-border);
   }
   body.erp-ui :is(.dtl-btn-dark, .iil-btn-dark) { background: var(--erp-brand); border-radius: 4px; color: white; font-weight: 550; }
   body.erp-ui :is(.dtl-btn-dark, .iil-btn-dark):hover { background: var(--erp-brand-dark); color: white; }
   body.erp-ui :is(.dtl-btn-outline, .iil-btn-outline) { border-radius: 4px; font-weight: 550; }
+  body.erp-ui .iil-toolbar :is(.iil-btn-dark, .iil-btn-outline) {
+    min-height: 34px; white-space: nowrap; display: inline-flex;
+    align-items: center; justify-content: center; gap: 4px; text-decoration: none;
+  }
+  body.erp-ui .iil-table :is(th, td),
+  body.erp-ui[data-erp-page="inspection_attachment_list"] .dtl-table :is(th, td) { white-space: nowrap; }
+  body.erp-ui .iil-table :is(.iil-btn-dark, .iil-btn-outline) { display: inline-block; text-decoration: none; }
+  body.erp-ui[data-erp-page="inspection_attachment_list"] form :is(button, a) { white-space: nowrap; }
   body.erp-ui a.btn:is(.btn-primary, .btn-success, .btn-danger, .btn-secondary, .btn-dark) { color: #fff; }
   body.erp-ui a.btn:is(.btn-outline-primary, .btn-outline-success, .btn-outline-danger, .btn-outline-secondary):hover { color: var(--bs-btn-hover-color); }
   body.erp-ui .page-link { color: var(--erp-brand); font-size: 0.8125rem; }
   body.erp-ui .page-item.active .page-link { background: var(--erp-brand); border-color: var(--erp-brand); color: white; }
   body.erp-ui .modal-content { border-radius: 6px; border-color: var(--erp-line); }
   body.erp-ui .modal .modal-header {
-    background: #f7f5f6 !important;
+    background: var(--erp-hover) !important;
     color: var(--erp-ink) !important;
     border-bottom: 1px solid var(--erp-line);
     border-radius: 5px 5px 0 0 !important;
@@ -222,9 +255,9 @@
   @media (max-width: 767.98px) {
     /* SB Admin already offsets the content by 56px below the fixed header. */
     body.erp-ui.sb-nav-fixed #layoutSidenav { margin-top: 41px; }
-    body.erp-ui #mobileSystemNav { background: var(--erp-brand-dark); border-bottom-color: #875568; }
-    body.erp-ui #mobileSystemNav .mobile-system-tab { color: #eadde2; }
-    body.erp-ui #mobileSystemNav .active-system { background: #ffffff09; color: white; border-color: #e2b7c5; }
+    body.erp-ui #mobileSystemNav { background: var(--erp-brand-dark); border-bottom-color: var(--erp-brand-dark); }
+    body.erp-ui #mobileSystemNav .mobile-system-tab { color: rgba(255, 255, 255, 0.82); }
+    body.erp-ui #mobileSystemNav .active-system { background: #ffffff09; color: white; border-color: rgba(255, 255, 255, 0.75); }
     body.erp-ui #layoutSidenav_content .erp-content { padding: 20px 14px !important; }
     body.erp-ui #recentTabsBar { padding-left: 10px; }
     body.erp-ui form.row > :is(.col-md-2, .col-md-3):has(input[type="date"]),

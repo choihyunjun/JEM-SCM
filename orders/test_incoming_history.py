@@ -1,5 +1,6 @@
 from datetime import date, datetime, timezone as datetime_timezone
 from io import BytesIO
+import re
 
 from django.contrib.auth.models import User
 from django.test import TestCase, RequestFactory
@@ -35,8 +36,10 @@ class IncomingHistoryTests(TestCase):
             incoming = self.incoming(total, good, day=day)
             self.assertEqual(incoming.defective_qty, bad)
         response = self.client.get(reverse('incoming_list'))
-        self.assertContains(response, '<th style="width: 100px;">입고수량</th>', html=True)
-        self.assertContains(response, '<th style="width: 100px;">불량수량</th>', html=True)
+        # Column semantics must remain intact when presentation classes change.
+        headers = re.findall(r'<th\b[^>]*>\s*([^<]+?)\s*</th>', response.content.decode())
+        self.assertIn('입고수량', headers)
+        self.assertIn('불량수량', headers)
         actual = [(i.quantity, i.confirmed_qty, i.defective_qty) for i in response.context['incomings']]
         ws = self.exported()
         exported = [tuple(row) for row in ws.iter_rows(min_row=6, min_col=5, max_col=7, values_only=True)]
