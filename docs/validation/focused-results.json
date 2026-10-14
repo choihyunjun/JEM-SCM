@@ -1,0 +1,125 @@
+{
+  "generated_at_utc": "2026-10-14T04:32:52.270719+00:00",
+  "phase": "focused",
+  "database": "isolated SQLite in-memory",
+  "erp": "disabled / mocked",
+  "historical_migrations": "disabled by config.test_settings; not migration verification",
+  "blocked_network_attempts": 0,
+  "summary": {
+    "tests": 23,
+    "failures": 17,
+    "errors": 0,
+    "skipped": 0
+  },
+  "tests": [
+    {
+      "test": "docs.validation.workflow_cases.ScanAndERPWriterAudit.test_process_tag_repeat_scan_should_not_silently_cancel",
+      "status": "failure",
+      "detail": "Traceback (most recent call last):\n  File \"C:\\Users\\dorit\\Documents\\SCM\\docs\\validation\\workflow_cases.py\", line 246, in test_process_tag_repeat_scan_should_not_silently_cancel\n    self.assertEqual(self.stock.quantity, 75, 'Second scan reversed the first move without a separate cancel action')\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 100 != 75 : Second scan reversed the first move without a separate cancel action\n"
+    },
+    {
+      "test": "docs.validation.workflow_cases.ScanAndERPWriterAudit.test_raw_label_nonproduction_repeat_move_should_be_blocked",
+      "status": "failure",
+      "detail": "Traceback (most recent call last):\n  File \"C:\\Users\\dorit\\Documents\\SCM\\docs\\validation\\workflow_cases.py\", line 252, in test_raw_label_nonproduction_repeat_move_should_be_blocked\n    self.assertEqual(self.stock.quantity, 75, 'Same label moved 25 twice to a nonproduction warehouse')\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 50 != 75 : Same label moved 25 twice to a nonproduction warehouse\n"
+    },
+    {
+      "test": "docs.validation.workflow_cases.ScanAndERPWriterAudit.test_raw_label_older_lot_blocks_newer_lot",
+      "status": "pass"
+    },
+    {
+      "test": "docs.validation.workflow_cases.ScanAndERPWriterAudit.test_raw_label_sequential_duplicate_scan_is_blocked",
+      "status": "pass"
+    },
+    {
+      "test": "docs.validation.workflow_cases.ScanAndERPWriterAudit.test_same_erp_stock_move_is_not_sent_twice",
+      "status": "failure",
+      "detail": "Traceback (most recent call last):\n  File \"C:\\Users\\dorit\\Documents\\SCM\\docs\\validation\\workflow_cases.py\", line 274, in test_same_erp_stock_move_is_not_sent_twice\n    self.assertEqual(remote.call_count, 1, 'Same local movement produced two ERP write requests')\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 2 != 1 : Same local movement produced two ERP write requests\n"
+    },
+    {
+      "test": "docs.validation.workflow_cases.ScanAndERPWriterAudit.test_stale_label_read_should_not_allow_second_stock_move",
+      "status": "failure",
+      "detail": "Traceback (most recent call last):\n  File \"C:\\Users\\dorit\\Documents\\SCM\\docs\\validation\\workflow_cases.py\", line 264, in test_stale_label_read_should_not_allow_second_stock_move\n    self.assertEqual(self.stock.quantity, 75, 'Stale label state allowed a second debit')\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 50 != 75 : Stale label state allowed a second debit\n"
+    },
+    {
+      "test": "docs.validation.workflow_cases.WorkflowAudit.test_cancel_delivery_keeps_other_delivery_label_history",
+      "status": "failure",
+      "detail": "Traceback (most recent call last):\n  File \"C:\\Users\\dorit\\Documents\\SCM\\docs\\validation\\workflow_cases.py\", line 151, in test_cancel_delivery_keeps_other_delivery_label_history\n    self.assertTrue(LabelPrintLog.objects.filter(pk=second_log.pk).exists(),\n    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n                    'Cancelling one delivery deleted the second delivery label history')\n                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: False is not true : Cancelling one delivery deleted the second delivery label history\n"
+    },
+    {
+      "test": "docs.validation.workflow_cases.WorkflowAudit.test_closed_order_cannot_register_delivery",
+      "status": "failure",
+      "detail": "Traceback (most recent call last):\n  File \"C:\\Users\\dorit\\Documents\\SCM\\docs\\validation\\workflow_cases.py\", line 90, in test_closed_order_cannot_register_delivery\n    self.assertEqual(DeliveryOrderItem.objects.count(), 0, 'Closed order was registered')\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 1 != 0 : Closed order was registered\n"
+    },
+    {
+      "test": "docs.validation.workflow_cases.WorkflowAudit.test_delivery_must_not_exceed_remaining_order_quantity",
+      "status": "failure",
+      "detail": "Traceback (most recent call last):\n  File \"C:\\Users\\dorit\\Documents\\SCM\\docs\\validation\\workflow_cases.py\", line 94, in test_delivery_must_not_exceed_remaining_order_quantity\n    self.assertEqual(DeliveryOrderItem.objects.count(), 0, 'Order 100 accepted delivery 101')\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 1 != 0 : Order 100 accepted delivery 101\n"
+    },
+    {
+      "test": "docs.validation.workflow_cases.WorkflowAudit.test_multiple_lots_must_not_exceed_combined_remaining_quantity",
+      "status": "failure",
+      "detail": "Traceback (most recent call last):\n  File \"C:\\Users\\dorit\\Documents\\SCM\\docs\\validation\\workflow_cases.py\", line 103, in test_multiple_lots_must_not_exceed_combined_remaining_quantity\n    self.assertLessEqual(total, 100, 'Two LOT lines of 60 each exceeded the order total of 100')\n    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 120 not less than or equal to 100 : Two LOT lines of 60 each exceeded the order total of 100\n"
+    },
+    {
+      "test": "docs.validation.workflow_cases.WorkflowAudit.test_negative_packaging_factors_are_rejected",
+      "status": "failure",
+      "detail": "Traceback (most recent call last):\n  File \"C:\\Users\\dorit\\Documents\\SCM\\docs\\validation\\workflow_cases.py\", line 165, in test_negative_packaging_factors_are_rejected\n    self.assertEqual(DeliveryOrderItem.objects.count(), 0, 'Two negative packaging factors created a positive delivery')\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 1 != 0 : Two negative packaging factors created a positive delivery\n"
+    },
+    {
+      "test": "docs.validation.workflow_cases.WorkflowAudit.test_non_numeric_packaging_is_rejected_without_server_error",
+      "status": "failure",
+      "detail": "Traceback (most recent call last):\n  File \"C:\\Users\\dorit\\Documents\\SCM\\docs\\validation\\workflow_cases.py\", line 158, in test_non_numeric_packaging_is_rejected_without_server_error\n    self.assertLess(response.status_code, 500, 'Invalid numeric input returned HTTP 500')\n    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 500 not less than 500 : Invalid numeric input returned HTTP 500\n"
+    },
+    {
+      "test": "docs.validation.workflow_cases.WorkflowAudit.test_other_supplier_delivery_cannot_be_deleted",
+      "status": "pass"
+    },
+    {
+      "test": "docs.validation.workflow_cases.WorkflowAudit.test_other_supplier_delivery_note_is_not_readable",
+      "status": "failure",
+      "detail": "Traceback (most recent call last):\n  File \"C:\\Users\\dorit\\Documents\\SCM\\docs\\validation\\workflow_cases.py\", line 127, in test_other_supplier_delivery_note_is_not_readable\n    self.assertIn(response.status_code, [302, 403, 404], 'Other supplier note returned HTTP 200')\n    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 200 not found in [302, 403, 404] : Other supplier note returned HTTP 200\n"
+    },
+    {
+      "test": "docs.validation.workflow_cases.WorkflowAudit.test_other_supplier_labels_are_not_printable",
+      "status": "failure",
+      "detail": "Traceback (most recent call last):\n  File \"C:\\Users\\dorit\\Documents\\SCM\\docs\\validation\\workflow_cases.py\", line 132, in test_other_supplier_labels_are_not_printable\n    self.assertEqual(ProcessTag.objects.count(), 0, 'Other supplier print request created process tags')\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 1 != 0 : Other supplier print request created process tags\n"
+    },
+    {
+      "test": "docs.validation.workflow_cases.WorkflowAudit.test_other_supplier_lot_stock_is_not_readable",
+      "status": "failure",
+      "detail": "Traceback (most recent call last):\n  File \"C:\\Users\\dorit\\Documents\\SCM\\docs\\validation\\workflow_cases.py\", line 138, in test_other_supplier_lot_stock_is_not_readable\n    self.assertIn(response.status_code, [302, 403, 404], 'Other supplier LOT API returned HTTP 200')\n    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 200 not found in [302, 403, 404] : Other supplier LOT API returned HTTP 200\n"
+    },
+    {
+      "test": "docs.validation.workflow_cases.WorkflowAudit.test_other_supplier_order_cannot_be_linked_to_own_part",
+      "status": "failure",
+      "detail": "Traceback (most recent call last):\n  File \"C:\\Users\\dorit\\Documents\\SCM\\docs\\validation\\workflow_cases.py\", line 117, in test_other_supplier_order_cannot_be_linked_to_own_part\n    self.assertFalse(DeliveryOrderItem.objects.filter(linked_order=self.other_order).exists(),\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n                     'Own part was linked to another supplier purchase order')\n                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: True is not false : Own part was linked to another supplier purchase order\n"
+    },
+    {
+      "test": "docs.validation.workflow_cases.WorkflowAudit.test_other_supplier_part_is_rejected",
+      "status": "pass"
+    },
+    {
+      "test": "docs.validation.workflow_cases.WorkflowAudit.test_partial_deliveries_reduce_remaining_quantity",
+      "status": "pass"
+    },
+    {
+      "test": "docs.validation.workflow_cases.WorkflowAudit.test_receipt_inspection_partial_return_and_acknowledgement_chain",
+      "status": "pass"
+    },
+    {
+      "test": "docs.validation.workflow_cases.WorkflowAudit.test_supplier_can_approve_own_order",
+      "status": "failure",
+      "detail": "Traceback (most recent call last):\n  File \"C:\\Users\\dorit\\Documents\\SCM\\docs\\validation\\workflow_cases.py\", line 78, in test_supplier_can_approve_own_order\n    self.assertIsNotNone(self.order.approved_at, f'Supplier approval blocked; HTTP {response.status_code}')\n    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: unexpectedly None : Supplier approval blocked; HTTP 302\n"
+    },
+    {
+      "test": "docs.validation.workflow_cases.WorkflowAudit.test_two_valid_deliveries_in_same_second_both_succeed",
+      "status": "failure",
+      "detail": "Traceback (most recent call last):\n  File \"C:\\Users\\dorit\\Documents\\SCM\\docs\\validation\\workflow_cases.py\", line 172, in test_two_valid_deliveries_in_same_second_both_succeed\n    self.assertLess(second.status_code, 500, 'Second valid request in same second returned HTTP 500')\n    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 500 not less than 500 : Second valid request in same second returned HTTP 500\n"
+    },
+    {
+      "test": "docs.validation.workflow_cases.WorkflowAudit.test_unapproved_order_cannot_register_delivery",
+      "status": "failure",
+      "detail": "Traceback (most recent call last):\n  File \"C:\\Users\\dorit\\Documents\\SCM\\docs\\validation\\workflow_cases.py\", line 84, in test_unapproved_order_cannot_register_delivery\n    self.assertEqual(DeliveryOrderItem.objects.count(), 0, 'Unapproved order was registered')\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 1 != 0 : Unapproved order was registered\n"
+    }
+  ]
+}

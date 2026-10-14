@@ -13,77 +13,74 @@
 </style>
 <div class="container-fluid p-0">
 
-    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-3 top-control">
+    <div class="inventory-heading">
         <h3 class="fw-bold">일자별 소요 현황 (D+14)
             {% if not show_all %}
                 <span class="badge bg-info ms-2" style="font-size: 0.7rem; vertical-align: middle;">소요 품목만 표시 중</span>
             {% endif %}
         </h3>
 
-        <div class="top-actions">
-            {% if user.is_superuser or user|has_perm:'can_scm_inventory_view' %}
-            <form method="get" class="control-block" id="searchForm">
-                <input type="hidden" name="show_all" value="{{ show_all|lower }}">
-                <input type="hidden" name="search" value="1">
-                <input type="hidden" name="vendor_id" id="hiddenVendorId" value="{{ selected_vendor_id|default:'' }}">
+        <div class="inventory-actions" role="group" aria-label="소요 현황 작업">
+            <a href="{% url 'inventory_export' %}?show_all={{ show_all|lower }}&vendor_id={{ selected_vendor_id|default:'' }}&q={{ q|default:'' }}"
+               class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-file-earmark-excel text-success" aria-hidden="true"></i>엑셀 저장
+            </a>
 
-                {% if not is_vendor_user %}
-                <!-- 업체 선택 버튼 (관리자/직원만) -->
-                <button type="button" class="btn btn-sm btn-outline-secondary shadow-sm" onclick="openVendorSearchModal()" id="vendorSelectBtn">
-                    <i class="bi bi-building me-1"></i>
-                    {% if selected_vendor_name %}
-                    <span id="selectedVendorText">{{ selected_vendor_name }}</span>
-                    {% else %}
-                    <span id="selectedVendorText">전체 업체</span>
-                    {% endif %}
-                    <i class="bi bi-chevron-down ms-1"></i>
-                </button>
+            {% if user.is_superuser or user|has_perm:'can_scm_inventory_edit' %}
+            <a href="{% url 'demand_manage' %}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-pencil-square" aria-hidden="true"></i>소요량 수정/삭제
+            </a>
+            <button class="btn btn-sm btn-primary" onclick="openBulkShortageModal()">
+                <i class="bi bi-cart-plus" aria-hidden="true"></i>부족품 일괄 발주
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="inventory-toolbar">
+        {% if user.is_superuser or user|has_perm:'can_scm_inventory_view' %}
+        <form method="get" class="inventory-search" id="searchForm">
+            <input type="hidden" name="show_all" value="{{ show_all|lower }}">
+            <input type="hidden" name="search" value="1">
+            <input type="hidden" name="vendor_id" id="hiddenVendorId" value="{{ selected_vendor_id|default:'' }}">
+
+            {% if not is_vendor_user %}
+            <!-- 업체 선택 버튼 (관리자/직원만) -->
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="openVendorSearchModal()" id="vendorSelectBtn">
+                <i class="bi bi-building" aria-hidden="true"></i>
+                {% if selected_vendor_name %}
+                <span id="selectedVendorText">{{ selected_vendor_name }}</span>
                 {% else %}
-                <!-- 협력업체는 자기 업체명만 표시 -->
-                <span class="badge bg-primary px-3 py-2">
-                    <i class="bi bi-building me-1"></i>{{ vendor_name }}
-                </span>
+                <span id="selectedVendorText">전체 업체</span>
                 {% endif %}
-
-                <div class="input-group input-group-sm search-group">
-                    <input type="text" name="q" value="{{ q|default:'' }}"
-                           class="form-control border-primary shadow-sm" placeholder="품번/품명">
-                    <button class="btn btn-primary" type="submit">
-                        <i class="bi bi-search me-1"></i>조회
-                    </button>
-                </div>
-            </form>
+                <i class="bi bi-chevron-down" aria-hidden="true"></i>
+            </button>
+            {% else %}
+            <!-- 협력업체는 자기 업체명만 표시 -->
+            <span class="inventory-vendor-name">
+                <i class="bi bi-building me-1"></i>{{ vendor_name }}
+            </span>
             {% endif %}
 
-            <div class="control-block btn-block">
-                <a href="{% url 'inventory_export' %}?show_all={{ show_all|lower }}&vendor_id={{ selected_vendor_id|default:'' }}&q={{ q|default:'' }}"
-                   class="btn btn-sm btn-success shadow-sm">
-                    <i class="bi bi-file-earmark-excel me-1"></i>엑셀 저장
-                </a>
-
-                {% if user.is_superuser or user|has_perm:'can_scm_inventory_edit' %}
-                <a href="{% url 'demand_manage' %}" class="btn btn-sm btn-outline-primary shadow-sm bg-white">
-                    <i class="bi bi-pencil-square me-1"></i>소요량 수정/삭제
-                </a>
-
-                <button class="btn btn-sm btn-warning shadow-sm" onclick="openBulkShortageModal()">
-                    <i class="bi bi-cart-plus me-1"></i>부족품 일괄 발주
+            <div class="inventory-query">
+                <input type="text" name="q" value="{{ q|default:'' }}"
+                       class="form-control form-control-sm" placeholder="품번/품명" aria-label="품번 또는 품명 검색">
+                <button class="btn btn-sm btn-primary" type="submit">
+                    <i class="bi bi-search" aria-hidden="true"></i>조회
                 </button>
-                {% endif %}
             </div>
+        </form>
+        {% endif %}
 
-            <div class="control-block toggle-block">
-                <div class="btn-group shadow-sm">
-                    <a href="?show_all=false&vendor_id={{ selected_vendor_id|default:'' }}&q={{ q|default:'' }}&search=1"
-                       class="btn btn-sm {% if not show_all %}btn-primary{% else %}btn-outline-primary{% endif %}">
-                        📌 소요 품목만
-                    </a>
-                    <a href="?show_all=true&vendor_id={{ selected_vendor_id|default:'' }}&q={{ q|default:'' }}&search=1"
-                       class="btn btn-sm {% if show_all %}btn-primary{% else %}btn-outline-primary{% endif %}">
-                        🔍 전체 품목
-                    </a>
-                </div>
-            </div>
+        <div class="inventory-scope" role="group" aria-label="품목 표시 범위">
+                <a href="?show_all=false&vendor_id={{ selected_vendor_id|default:'' }}&q={{ q|default:'' }}&search=1"
+                   class="btn btn-sm btn-outline-secondary{% if not show_all %} active{% endif %}"{% if not show_all %} aria-current="true"{% endif %}>
+                    소요 품목만
+                </a>
+                <a href="?show_all=true&vendor_id={{ selected_vendor_id|default:'' }}&q={{ q|default:'' }}&search=1"
+                   class="btn btn-sm btn-outline-secondary{% if show_all %} active{% endif %}"{% if show_all %} aria-current="true"{% endif %}>
+                    전체 품목
+                </a>
         </div>
     </div>
 
@@ -858,28 +855,6 @@ document.getElementById('vendorModalSearchInput')?.addEventListener('keydown', f
 </script>
 
 <style>
-/* ✅ 상단 컨트롤 간격 강제 조정 */
-.top-actions{
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 14px;
-}
-.control-block{
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-.btn-block{ gap: 6px; }
-.toggle-block{ margin-left: 4px; }
-.search-group{ width: 220px; }
-
-/* 업체 선택 버튼 */
-#vendorSelectBtn {
-    min-width: 140px;
-    text-align: left;
-}
-
 /* 업체 검색 모달 리스트 */
 #vendorModalList .list-group-item-action {
     padding: 10px 15px;
@@ -890,12 +865,6 @@ document.getElementById('vendorModalSearchInput')?.addEventListener('keydown', f
 #vendorModalList .list-group-item-action:hover {
     background-color: #e3f2fd;
 }
-.top-control .btn,
-.top-control .form-select,
-.top-control .form-control{
-    height: 32px;
-}
-
 /* 기존 스타일 */
 .table { table-layout: auto !important; }
 .table-bordered th, .table-bordered td { border: 1px solid #dee2e6 !important; padding: 8px 4px !important; white-space: nowrap; }

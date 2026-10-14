@@ -1,5 +1,48 @@
 /* Dashboard and manufacturing-specific presentation. State calculations stay server-side. */
 @media screen {
+  /* Demand view: title actions and query controls are separate, consistently sized rows. */
+  body.erp-ui .inventory-heading {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 16px; margin-bottom: 16px;
+  }
+  body.erp-ui .inventory-heading h3 { margin: 0; }
+  body.erp-ui :is(.inventory-actions, .inventory-search, .inventory-query, .inventory-scope) {
+    display: flex; align-items: center; gap: 8px; min-width: 0;
+  }
+  body.erp-ui .inventory-actions { flex-wrap: wrap; }
+  body.erp-ui .inventory-toolbar {
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+    gap: 12px 24px; padding: 14px 16px; margin-bottom: 20px;
+    background: var(--erp-surface); border: 1px solid var(--erp-line); border-radius: 5px;
+  }
+  body.erp-ui :is(.inventory-heading, .inventory-toolbar) .btn {
+    height: 34px; min-height: 34px; padding: 6px 12px; gap: 6px;
+    font-size: 0.8125rem; line-height: 20px; white-space: nowrap; flex-shrink: 0;
+  }
+  body.erp-ui :is(.inventory-heading, .inventory-toolbar) .btn-outline-secondary {
+    --bs-btn-color: var(--erp-ink); --bs-btn-border-color: #cdd3db;
+    --bs-btn-hover-color: var(--erp-ink); --bs-btn-hover-bg: #f3f5f7; --bs-btn-hover-border-color: #b4beca;
+    background: #fff; color: var(--erp-ink);
+  }
+  body.erp-ui :is(.inventory-heading, .inventory-toolbar) .btn-outline-secondary:hover {
+    background: #f3f5f7;
+  }
+  body.erp-ui .inventory-search { flex-wrap: wrap; margin: 0; }
+  body.erp-ui .inventory-query { flex: 1 1 240px; }
+  body.erp-ui .inventory-query .form-control { width: 220px; min-width: 0; height: 34px; }
+  body.erp-ui .inventory-query .btn { min-width: 72px; }
+  body.erp-ui .inventory-toolbar #vendorSelectBtn { min-width: 140px; max-width: 260px; justify-content: flex-start; }
+  body.erp-ui .inventory-toolbar #selectedVendorText { overflow: hidden; text-overflow: ellipsis; }
+  body.erp-ui .inventory-toolbar #vendorSelectBtn .bi-chevron-down { margin-left: auto; }
+  body.erp-ui .inventory-vendor-name { display: inline-flex; align-items: center; min-height: 34px; font-weight: 550; }
+  body.erp-ui .inventory-scope { gap: 0; margin-left: auto; }
+  body.erp-ui .inventory-scope .btn { min-width: 100px; border-radius: 0; }
+  body.erp-ui .inventory-scope .btn:first-child { border-radius: 4px 0 0 4px; }
+  body.erp-ui .inventory-scope .btn:last-child { border-radius: 0 4px 4px 0; margin-left: -1px; }
+  body.erp-ui .inventory-scope .btn.active {
+    background: var(--erp-brand-soft); color: var(--erp-brand);
+    border-color: var(--erp-brand-border); z-index: 1;
+  }
   body.erp-ui .erp-dashboard { width: 100%; max-width: 1680px !important; margin: 0 auto; }
   body.erp-ui .erp-dashboard-heading { margin-bottom: 24px !important; padding-top: 0 !important; }
   body.erp-ui .erp-dashboard-heading :is(h1, h3) { margin: 0; }
@@ -117,6 +160,12 @@
   body.erp-ui .summary-card.active-filter { border-color: var(--erp-brand); box-shadow: none; }
 
   @media (max-width: 767.98px) {
+    body.erp-ui :is(.inventory-heading, .inventory-toolbar) .btn,
+    body.erp-ui .inventory-query .form-control { height: 40px; min-height: 40px; }
+    body.erp-ui .inventory-search { width: 100%; }
+    body.erp-ui .inventory-query { width: 100%; }
+    body.erp-ui .inventory-query .form-control { flex: 1; width: 0; }
+    body.erp-ui .inventory-scope { margin-left: 0; }
     body.erp-ui .erp-kpi-strip { padding: 0; }
     body.erp-ui .erp-kpi-strip > div { flex: 0 0 50%; width: 50%; padding: 16px 0; }
     body.erp-ui .erp-kpi-strip > div:nth-child(even) { border-right: 0; }

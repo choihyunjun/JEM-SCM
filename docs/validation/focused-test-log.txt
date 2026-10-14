@@ -1,0 +1,302 @@
+Found 23 test(s).
+Creating test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
+Operations to perform:
+  Synchronize unmigrated apps: admin, admin_app, auth, contenttypes, humanize, import_export, material, messages, orders, qms, sessions, staticfiles
+  Apply all migrations: (none)
+Synchronizing apps without migrations:
+  Creating tables...
+    Creating table django_admin_log
+    Creating table auth_permission
+    Creating table auth_group
+    Creating table auth_user
+    Creating table django_content_type
+    Creating table django_session
+    Creating table orders_vendor
+    Creating table orders_organization
+    Creating table orders_part
+    Creating table orders_demand
+    Creating table orders_order
+    Creating table orders_inventory
+    Creating table orders_incoming
+    Creating table orders_labelprintlog
+    Creating table orders_deliveryorder
+    Creating table orders_deliveryorderitem
+    Creating table orders_userprofile
+    Creating table orders_roledefaultpermission
+    Creating table orders_returnlog
+    Creating table orders_returnshipment
+    Creating table orders_vendormonthlyperformance
+    Creating table orders_notice
+    Creating table orders_qna
+    Creating table orders_inventoryuploadlog
+    Creating table orders_loginlog
+    Creating table qms_m4request
+    Creating table qms_m4review
+    Creating table qms_m4changelog
+    Creating table qms_formal4mrequest
+    Creating table qms_formal4mdocumentitem
+    Creating table qms_formal4mattachment
+    Creating table qms_formal4minspectionresult
+    Creating table qms_formal4mscheduleitem
+    Creating table qms_formal4mstagerecord
+    Creating table qms_formal4mapproval
+    Creating table qms_importinspection
+    Creating table qms_changerequest
+    Creating table qms_approvalstep
+    Creating table qms_vendorresponse
+    Creating table qms_vendorresponseattachment
+    Creating table qms_changedocument
+    Creating table qms_changehistory
+    Creating table qms_outgoinginspection
+    Creating table qms_nonconformance
+    Creating table qms_correctiveaction
+    Creating table qms_vendorclaim
+    Creating table qms_vendorrating
+    Creating table qms_isir
+    Creating table qms_isiritem
+    Creating table qms_isirattachment
+    Creating table qms_isirchecklist
+    Creating table qms_voc
+    Creating table qms_vocattachment
+    Creating table qms_gauge
+    Creating table qms_gaugecalibration
+    Creating table qms_qualitydocument
+    Creating table qms_documentrevision
+    Creating table material_stocksyncrun
+    Creating table material_bomcalculationjob
+    Creating table material_bomcalculationrow
+    Creating table material_warehouse
+    Creating table material_materialstock
+    Creating table material_materialtransaction
+    Creating table material_movementexpiryevent
+    Creating table material_movementvisibilityevent
+    Creating table material_erpincomingoperation
+    Creating table material_erpincomingevent
+    Creating table material_product
+    Creating table material_bomitem
+    Creating table material_inventoryclosing
+    Creating table material_inventorycheck
+    Creating table material_inventorysnapshot
+    Creating table material_processtag
+    Creating table material_processtagscanlog
+    Creating table material_inventorychecksession
+    Creating table material_inventorychecksessionitem
+    Creating table material_rawmaterialrack
+    Creating table material_rawmaterialsetting
+    Creating table material_rawmateriallabel
+    Creating table material_wmsconfig
+    Creating table material_moldingmachine
+    Creating table material_moldingworksetting
+    Creating table material_moldingdailyrecord
+    Creating table material_moldinglossdetail
+    Creating table material_moldingproductdetail
+    Creating table material_moldingerpsynclog
+    Creating table material_moldinguploadlog
+    Creating table material_moldingmaster
+    Creating table material_moldmtsetting
+    Creating table material_moldmaster
+    Creating table material_moldshotrecord
+    Creating table material_moldmtlog
+    Creating table material_moldrepairrequest
+    Creating table material_materialtransferrequest
+    Creating table material_materialtransferrequestline
+    Creating table material_transferrequestapprover
+    Creating table material_purchaseorderrequest
+    Creating table material_productionlotitem
+    Creating table admin_app_notificationrule
+    Creating table admin_app_notificationlog
+    Running deferred SQL...
+Running migrations:
+  No migrations to apply.
+System check identified no issues (0 silenced).
+test_process_tag_repeat_scan_should_not_silently_cancel (docs.validation.workflow_cases.ScanAndERPWriterAudit.test_process_tag_repeat_scan_should_not_silently_cancel) ... FAIL
+test_raw_label_nonproduction_repeat_move_should_be_blocked (docs.validation.workflow_cases.ScanAndERPWriterAudit.test_raw_label_nonproduction_repeat_move_should_be_blocked) ... RM 스캔 ERP 이동 실패: ERP 비활성화
+RM 스캔 ERP 이동 실패: ERP 비활성화
+FAIL
+test_raw_label_older_lot_blocks_newer_lot (docs.validation.workflow_cases.ScanAndERPWriterAudit.test_raw_label_older_lot_blocks_newer_lot) ... ok
+test_raw_label_sequential_duplicate_scan_is_blocked (docs.validation.workflow_cases.ScanAndERPWriterAudit.test_raw_label_sequential_duplicate_scan_is_blocked) ... RM 스캔 ERP 이동 실패: ERP 비활성화
+ok
+test_same_erp_stock_move_is_not_sent_twice (docs.validation.workflow_cases.ScanAndERPWriterAudit.test_same_erp_stock_move_is_not_sent_twice) ... FAIL
+test_stale_label_read_should_not_allow_second_stock_move (docs.validation.workflow_cases.ScanAndERPWriterAudit.test_stale_label_read_should_not_allow_second_stock_move) ... RM 스캔 ERP 이동 실패: ERP 비활성화
+RM 스캔 ERP 이동 실패: ERP 비활성화
+FAIL
+test_cancel_delivery_keeps_other_delivery_label_history (docs.validation.workflow_cases.WorkflowAudit.test_cancel_delivery_keeps_other_delivery_label_history) ... FAIL
+test_closed_order_cannot_register_delivery (docs.validation.workflow_cases.WorkflowAudit.test_closed_order_cannot_register_delivery) ... FAIL
+test_delivery_must_not_exceed_remaining_order_quantity (docs.validation.workflow_cases.WorkflowAudit.test_delivery_must_not_exceed_remaining_order_quantity) ... FAIL
+test_multiple_lots_must_not_exceed_combined_remaining_quantity (docs.validation.workflow_cases.WorkflowAudit.test_multiple_lots_must_not_exceed_combined_remaining_quantity) ... FAIL
+test_negative_packaging_factors_are_rejected (docs.validation.workflow_cases.WorkflowAudit.test_negative_packaging_factors_are_rejected) ... FAIL
+test_non_numeric_packaging_is_rejected_without_server_error (docs.validation.workflow_cases.WorkflowAudit.test_non_numeric_packaging_is_rejected_without_server_error) ... FAIL
+test_other_supplier_delivery_cannot_be_deleted (docs.validation.workflow_cases.WorkflowAudit.test_other_supplier_delivery_cannot_be_deleted) ... ok
+test_other_supplier_delivery_note_is_not_readable (docs.validation.workflow_cases.WorkflowAudit.test_other_supplier_delivery_note_is_not_readable) ... FAIL
+test_other_supplier_labels_are_not_printable (docs.validation.workflow_cases.WorkflowAudit.test_other_supplier_labels_are_not_printable) ... FAIL
+test_other_supplier_lot_stock_is_not_readable (docs.validation.workflow_cases.WorkflowAudit.test_other_supplier_lot_stock_is_not_readable) ... FAIL
+test_other_supplier_order_cannot_be_linked_to_own_part (docs.validation.workflow_cases.WorkflowAudit.test_other_supplier_order_cannot_be_linked_to_own_part) ... FAIL
+test_other_supplier_part_is_rejected (docs.validation.workflow_cases.WorkflowAudit.test_other_supplier_part_is_rejected) ... ok
+test_partial_deliveries_reduce_remaining_quantity (docs.validation.workflow_cases.WorkflowAudit.test_partial_deliveries_reduce_remaining_quantity) ... ok
+test_receipt_inspection_partial_return_and_acknowledgement_chain (docs.validation.workflow_cases.WorkflowAudit.test_receipt_inspection_partial_return_and_acknowledgement_chain) ... ok
+test_supplier_can_approve_own_order (docs.validation.workflow_cases.WorkflowAudit.test_supplier_can_approve_own_order) ... FAIL
+test_two_valid_deliveries_in_same_second_both_succeed (docs.validation.workflow_cases.WorkflowAudit.test_two_valid_deliveries_in_same_second_both_succeed) ... FAIL
+test_unapproved_order_cannot_register_delivery (docs.validation.workflow_cases.WorkflowAudit.test_unapproved_order_cannot_register_delivery) ... FAIL
+
+======================================================================
+FAIL: test_process_tag_repeat_scan_should_not_silently_cancel (docs.validation.workflow_cases.ScanAndERPWriterAudit.test_process_tag_repeat_scan_should_not_silently_cancel)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dorit\Documents\SCM\docs\validation\workflow_cases.py", line 246, in test_process_tag_repeat_scan_should_not_silently_cancel
+    self.assertEqual(self.stock.quantity, 75, 'Second scan reversed the first move without a separate cancel action')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 100 != 75 : Second scan reversed the first move without a separate cancel action
+
+======================================================================
+FAIL: test_raw_label_nonproduction_repeat_move_should_be_blocked (docs.validation.workflow_cases.ScanAndERPWriterAudit.test_raw_label_nonproduction_repeat_move_should_be_blocked)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dorit\Documents\SCM\docs\validation\workflow_cases.py", line 252, in test_raw_label_nonproduction_repeat_move_should_be_blocked
+    self.assertEqual(self.stock.quantity, 75, 'Same label moved 25 twice to a nonproduction warehouse')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 50 != 75 : Same label moved 25 twice to a nonproduction warehouse
+
+======================================================================
+FAIL: test_same_erp_stock_move_is_not_sent_twice (docs.validation.workflow_cases.ScanAndERPWriterAudit.test_same_erp_stock_move_is_not_sent_twice)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dorit\Documents\SCM\docs\validation\workflow_cases.py", line 274, in test_same_erp_stock_move_is_not_sent_twice
+    self.assertEqual(remote.call_count, 1, 'Same local movement produced two ERP write requests')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 2 != 1 : Same local movement produced two ERP write requests
+
+======================================================================
+FAIL: test_stale_label_read_should_not_allow_second_stock_move (docs.validation.workflow_cases.ScanAndERPWriterAudit.test_stale_label_read_should_not_allow_second_stock_move)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dorit\Documents\SCM\docs\validation\workflow_cases.py", line 264, in test_stale_label_read_should_not_allow_second_stock_move
+    self.assertEqual(self.stock.quantity, 75, 'Stale label state allowed a second debit')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 50 != 75 : Stale label state allowed a second debit
+
+======================================================================
+FAIL: test_cancel_delivery_keeps_other_delivery_label_history (docs.validation.workflow_cases.WorkflowAudit.test_cancel_delivery_keeps_other_delivery_label_history)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dorit\Documents\SCM\docs\validation\workflow_cases.py", line 151, in test_cancel_delivery_keeps_other_delivery_label_history
+    self.assertTrue(LabelPrintLog.objects.filter(pk=second_log.pk).exists(),
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                    'Cancelling one delivery deleted the second delivery label history')
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : Cancelling one delivery deleted the second delivery label history
+
+======================================================================
+FAIL: test_closed_order_cannot_register_delivery (docs.validation.workflow_cases.WorkflowAudit.test_closed_order_cannot_register_delivery)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dorit\Documents\SCM\docs\validation\workflow_cases.py", line 90, in test_closed_order_cannot_register_delivery
+    self.assertEqual(DeliveryOrderItem.objects.count(), 0, 'Closed order was registered')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : Closed order was registered
+
+======================================================================
+FAIL: test_delivery_must_not_exceed_remaining_order_quantity (docs.validation.workflow_cases.WorkflowAudit.test_delivery_must_not_exceed_remaining_order_quantity)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dorit\Documents\SCM\docs\validation\workflow_cases.py", line 94, in test_delivery_must_not_exceed_remaining_order_quantity
+    self.assertEqual(DeliveryOrderItem.objects.count(), 0, 'Order 100 accepted delivery 101')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : Order 100 accepted delivery 101
+
+======================================================================
+FAIL: test_multiple_lots_must_not_exceed_combined_remaining_quantity (docs.validation.workflow_cases.WorkflowAudit.test_multiple_lots_must_not_exceed_combined_remaining_quantity)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dorit\Documents\SCM\docs\validation\workflow_cases.py", line 103, in test_multiple_lots_must_not_exceed_combined_remaining_quantity
+    self.assertLessEqual(total, 100, 'Two LOT lines of 60 each exceeded the order total of 100')
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 120 not less than or equal to 100 : Two LOT lines of 60 each exceeded the order total of 100
+
+======================================================================
+FAIL: test_negative_packaging_factors_are_rejected (docs.validation.workflow_cases.WorkflowAudit.test_negative_packaging_factors_are_rejected)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dorit\Documents\SCM\docs\validation\workflow_cases.py", line 165, in test_negative_packaging_factors_are_rejected
+    self.assertEqual(DeliveryOrderItem.objects.count(), 0, 'Two negative packaging factors created a positive delivery')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : Two negative packaging factors created a positive delivery
+
+======================================================================
+FAIL: test_non_numeric_packaging_is_rejected_without_server_error (docs.validation.workflow_cases.WorkflowAudit.test_non_numeric_packaging_is_rejected_without_server_error)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dorit\Documents\SCM\docs\validation\workflow_cases.py", line 158, in test_non_numeric_packaging_is_rejected_without_server_error
+    self.assertLess(response.status_code, 500, 'Invalid numeric input returned HTTP 500')
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 500 not less than 500 : Invalid numeric input returned HTTP 500
+
+======================================================================
+FAIL: test_other_supplier_delivery_note_is_not_readable (docs.validation.workflow_cases.WorkflowAudit.test_other_supplier_delivery_note_is_not_readable)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dorit\Documents\SCM\docs\validation\workflow_cases.py", line 127, in test_other_supplier_delivery_note_is_not_readable
+    self.assertIn(response.status_code, [302, 403, 404], 'Other supplier note returned HTTP 200')
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 200 not found in [302, 403, 404] : Other supplier note returned HTTP 200
+
+======================================================================
+FAIL: test_other_supplier_labels_are_not_printable (docs.validation.workflow_cases.WorkflowAudit.test_other_supplier_labels_are_not_printable)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dorit\Documents\SCM\docs\validation\workflow_cases.py", line 132, in test_other_supplier_labels_are_not_printable
+    self.assertEqual(ProcessTag.objects.count(), 0, 'Other supplier print request created process tags')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : Other supplier print request created process tags
+
+======================================================================
+FAIL: test_other_supplier_lot_stock_is_not_readable (docs.validation.workflow_cases.WorkflowAudit.test_other_supplier_lot_stock_is_not_readable)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dorit\Documents\SCM\docs\validation\workflow_cases.py", line 138, in test_other_supplier_lot_stock_is_not_readable
+    self.assertIn(response.status_code, [302, 403, 404], 'Other supplier LOT API returned HTTP 200')
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 200 not found in [302, 403, 404] : Other supplier LOT API returned HTTP 200
+
+======================================================================
+FAIL: test_other_supplier_order_cannot_be_linked_to_own_part (docs.validation.workflow_cases.WorkflowAudit.test_other_supplier_order_cannot_be_linked_to_own_part)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dorit\Documents\SCM\docs\validation\workflow_cases.py", line 117, in test_other_supplier_order_cannot_be_linked_to_own_part
+    self.assertFalse(DeliveryOrderItem.objects.filter(linked_order=self.other_order).exists(),
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                     'Own part was linked to another supplier purchase order')
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: True is not false : Own part was linked to another supplier purchase order
+
+======================================================================
+FAIL: test_supplier_can_approve_own_order (docs.validation.workflow_cases.WorkflowAudit.test_supplier_can_approve_own_order)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dorit\Documents\SCM\docs\validation\workflow_cases.py", line 78, in test_supplier_can_approve_own_order
+    self.assertIsNotNone(self.order.approved_at, f'Supplier approval blocked; HTTP {response.status_code}')
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : Supplier approval blocked; HTTP 302
+
+======================================================================
+FAIL: test_two_valid_deliveries_in_same_second_both_succeed (docs.validation.workflow_cases.WorkflowAudit.test_two_valid_deliveries_in_same_second_both_succeed)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dorit\Documents\SCM\docs\validation\workflow_cases.py", line 172, in test_two_valid_deliveries_in_same_second_both_succeed
+    self.assertLess(second.status_code, 500, 'Second valid request in same second returned HTTP 500')
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 500 not less than 500 : Second valid request in same second returned HTTP 500
+
+======================================================================
+FAIL: test_unapproved_order_cannot_register_delivery (docs.validation.workflow_cases.WorkflowAudit.test_unapproved_order_cannot_register_delivery)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\dorit\Documents\SCM\docs\validation\workflow_cases.py", line 84, in test_unapproved_order_cannot_register_delivery
+    self.assertEqual(DeliveryOrderItem.objects.count(), 0, 'Unapproved order was registered')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : Unapproved order was registered
+
+----------------------------------------------------------------------
+Ran 23 tests in 0.755s
+
+FAILED (failures=17)
+Destroying test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
