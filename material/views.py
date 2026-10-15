@@ -5399,8 +5399,8 @@ def bom_calc_batch_export(request):
 @wms_permission_required('can_wms_bom_calc')
 def bom_calc_demand_export(request):
     """
-    [WMS] 소요량 변환 엑셀 다운로드 (필요일자/모품번/자품번/자품명/필요수량/거래처)
-    - 동일 필요일자+자품번은 수량 합산
+    [WMS] 전체산출 간소화 엑셀 다운로드 (필요일자/품번/필요수량)
+    - 소요량 변환과 동일한 제품/반제품/원재료를 필요일자+품번별 합산
     """
     session_key = request.GET.get('session_key', '')
     from .bom_jobs import get_results
@@ -5422,12 +5422,17 @@ def bom_calc_demand_export(request):
         cell.font = header_font
         cell.fill = header_fill
 
-    # 자품번별 합산 (동일 필요일자+자품번 → 수량 합산)
+    # 소요량 변환의 LEVEL 0 제품과 모든 하위 BOM 행을 같은 기준으로 합산한다.
+    # 구조 데이터가 없는 이전 결과는 소요량 변환처럼 기존 items를 사용한다.
     from collections import defaultdict
     agg = defaultdict(float)
     for batch in batch_results:
-        for item in batch['items']:
-            key = (batch.get('need_date', '') or '', item['child_part_no'])
+        need_date = batch.get('need_date') or ''
+        structured = batch.get('structured_items', [])
+        if structured:
+            agg[(need_date, batch['part_no'])] += float(batch['qty'])
+        for item in structured or batch['items']:
+            key = (need_date, item['child_part_no'])
             agg[key] += float(item['required_qty'])
 
     # 정렬: 필요일자 → 자품번
@@ -5435,7 +5440,7 @@ def bom_calc_demand_export(request):
     for (need_date, child_part_no) in sorted(agg.keys()):
         ws.cell(row=row_idx, column=1, value=need_date)
         ws.cell(row=row_idx, column=2, value=child_part_no)
-        ws.cell(row=row_idx, column=3, value=round(agg[(need_date, child_part_no)], 2))
+        ws.cell(row=row_idx, column=3, value=agg[(need_date, child_part_no)])
         row_idx += 1
 
     widths = [14, 20, 14]

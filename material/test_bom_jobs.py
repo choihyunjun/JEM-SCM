@@ -162,7 +162,7 @@ class BOMJobTests(TestCase):
             response = self.client.get(reverse('material:' + endpoint), {'session_key': key})
             self.assertEqual(response.status_code, 200)
             workbook = openpyxl.load_workbook(io.BytesIO(response.content))
-            self.assertEqual(workbook.active.max_row, 67 if endpoint == 'bom_calc_batch_export' else 2)
+            self.assertEqual(workbook.active.max_row, 67 if endpoint == 'bom_calc_batch_export' else 3)
             if endpoint == 'bom_calc_batch_export':
                 self.assertEqual(workbook.active.cell(1, 8).value, '배분 전 가용재고')
         response = self.client.get(reverse('material:bom_calc_batch_export'), {'session_key': key, 'mode': 'structured'})
@@ -171,6 +171,60 @@ class BOMJobTests(TestCase):
         response = self.client.post(reverse('material:bom_register_demand'), {'session_key': key})
         self.assertEqual(response.status_code, 302)
         self.assertEqual(Demand.objects.get(part=self.part).quantity, 65)
+
+    def test_simplified_export_matches_structured_quantities_for_all_levels(self):
+        semi = Product.objects.create(part_no='SEMI', part_name='Semi')
+        nested = Product.objects.create(part_no='NESTED', part_name='Nested semi')
+        BOMItem.objects.create(product=self.product, seq=2, child_part_no='SEMI', child_part_name='Semi', required_qty=2)
+        BOMItem.objects.create(product=self.product, seq=3, child_part_no='SEMI', child_part_name='Semi', required_qty=3)
+        BOMItem.objects.create(product=semi, child_part_no='NESTED', child_part_name='Nested semi', required_qty=2)
+        BOMItem.objects.create(product=nested, child_part_no='RAW', child_part_name='Raw material', required_qty=0.12345)
+        job = self.job('20260901,FG,2\n20260901,FG,3\n20260902,FG,1\n,FG,1\n20260902,UNKNOWN,5')
+        self.finish(job)
+        key = f'job:{job.pk}'
+        response = self.client.get(reverse('material:bom_calc_batch_export'), {'session_key': key, 'mode': 'structured'})
+        self.assertEqual(response.status_code, 200)
+        structured = openpyxl.load_workbook(io.BytesIO(response.content)).active
+        expected = {}
+        for row in structured.iter_rows(min_row=2, values_only=True):
+            if row[9] is not None:
+                group = (row[3] or '', row[5])
+                expected[group] = expected.get(group, 0) + row[9]
+
+        response = self.client.get(reverse('material:bom_calc_demand_export'), {'session_key': key})
+        self.assertEqual(response.status_code, 200)
+        simplified = openpyxl.load_workbook(io.BytesIO(response.content)).active
+        self.assertEqual(list(simplified.values)[0], ('필요일자', '품번', '필요수량'))
+        actual = {(day or '', part): qty for day, part, qty in list(simplified.values)[1:]}
+        self.assertEqual(set(actual), set(expected))
+        self.assertEqual(simplified.max_row, len(expected) + 1)
+        self.assertEqual(list(actual), sorted(expected))
+        for group, qty in expected.items():
+            self.assertAlmostEqual(actual[group], qty)
+        self.assertEqual(actual[('2026-09-01', 'FG')], 5)
+        self.assertEqual(actual[('2026-09-01', 'SEMI')], 25)
+        self.assertEqual(actual[('2026-09-01', 'NESTED')], 50)
+        self.assertAlmostEqual(actual[('2026-09-01', 'RAW')], 11.1725)
+        page = self.client.get(reverse('material:bom_calculate'), {'job': job.pk})
+        self.assertContains(page, '전체산출 (간소화)')
+        self.assertNotContains(page, '원재료 산출')
+
+    def test_simplified_export_legacy_results_with_and_without_structure(self):
+        _, name, items, structured = _calculate_bom_requirements('FG', 5)
+        for include_structure in (True, False):
+            with self.subTest(include_structure=include_structure):
+                batch = {'part_no': 'FG', 'part_name': name, 'qty': 5,
+                         'need_date': '2026-09-01', 'items': items}
+                if include_structure:
+                    batch['structured_items'] = structured
+                session = self.client.session
+                session['batch_calc_legacy'] = [batch]
+                session.save()
+                response = self.client.get(reverse('material:bom_calc_demand_export'), {'session_key': 'legacy'})
+                self.assertEqual(response.status_code, 200)
+                sheet = openpyxl.load_workbook(io.BytesIO(response.content)).active
+                actual = {part: qty for _, part, qty in list(sheet.values)[1:]}
+                self.assertEqual(actual, {'FG': 5, 'RAW': 5} if include_structure else {'RAW': 5})
 
     def test_upload_replaces_large_legacy_session_and_progress_endpoint(self):
         session = self.client.session
