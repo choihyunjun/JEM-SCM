@@ -157,3 +157,81 @@ class PersistentSyncFailureTests(TestCase):
                 self.assertIn(code,result[3][0])
         self.assertEqual(MaterialStock.objects.count(),0)
         self.assertEqual(MaterialTransaction.objects.count(),0)
+
+
+class DocumentContextTests(TestCase):
+    def diagnose(self, **kwargs):
+        out = StringIO()
+        call_command('diagnose_erp_documents', context=True, date_from='20260101',
+                     date_to='20261019', stdout=out, **kwargs)
+        return json.loads(out.getvalue())['documents']
+
+    def test_context_matches_exact_document_and_line_keys_without_writes(self):
+        from orders.models import Part
+        from material.models import Warehouse
+        part = Part.objects.create(part_no='ZR700', part_name='Resin')
+        wh = Warehouse.objects.create(code='3000', name='Factory')
+        for index, number in enumerate(['RV1', 'RV1-1', 'RV10-1']):
+            MaterialTransaction.objects.create(transaction_no=f'T{index}', transaction_type='IN_ERP',
+                                               part=part, warehouse_to=wh, quantity=25,
+                                               erp_incoming_no=number)
+        before = list(MaterialTransaction.objects.order_by('pk').values())
+        with patch('material.erp_api.fetch_erp_incoming_headers', return_value=(True, [
+            {'rcvNb': 'RV1', 'rcvDt': '20260601', 'whCd': '3000'}, {'rcvNb': 'RV10'},
+        ], None)) as headers, patch('material.erp_api.fetch_erp_incoming_detail', return_value=(True, [], None)):
+            rows = self.diagnose(incoming=['RV1', 'RV2', 'RV1'])
+        headers.assert_called_once_with('20260101', '20261019')
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]['erp_header']['match_count'], 1)
+        self.assertEqual(rows[0]['scm_transactions']['row_count'], 2)
+        self.assertEqual(rows[0]['scm_transactions']['stored_quantity_sum'], 50)
+        self.assertEqual(rows[0]['scm_transactions']['rows'][0]['part__part_no'], 'ZR700')
+        self.assertEqual(rows[1]['erp_header']['status'], 'NOT_FOUND_IN_RANGE')
+        self.assertEqual(rows[1]['scm_transactions']['row_count'], 0)
+        self.assertEqual(rows[0]['status'], 'REVIEW')  # Context never clears an empty-detail failure.
+        self.assertEqual(before, list(MaterialTransaction.objects.order_by('pk').values()))
+
+    def test_header_failure_is_not_reported_as_missing_document(self):
+        for response in [(False, None, 'denied'), (True, {'items': []}, None), (True, [None], None)]:
+            with self.subTest(response=response), patch('material.erp_api.fetch_erp_outgoing_headers',
+                    return_value=response), patch('material.erp_api.fetch_erp_outgoing_details',
+                    return_value=(True, [], None)):
+                rows = self.diagnose(outgoing=['IS1'])
+            self.assertEqual(rows[0]['erp_header']['status'], 'UNVERIFIED')
+
+    def test_invalid_context_dates_stop_before_api_calls(self):
+        with patch('material.erp_api.fetch_erp_incoming_detail') as details, patch(
+            'material.erp_api.fetch_erp_incoming_headers'
+        ) as headers:
+            for date_from, date_to in [(None, None), ('20261020', '20261019'),
+                                      ('20260230', '20261019'), ('202611', '20261019')]:
+                with self.subTest(date_from=date_from), self.assertRaises(CommandError):
+                    call_command('diagnose_erp_documents', incoming=['RV1'], context=True,
+                                 date_from=date_from, date_to=date_to, stdout=StringIO())
+            details.assert_not_called()
+            headers.assert_not_called()
+
+    def test_api_phase_cannot_write_to_database(self):
+        from django.db import connection
+        def attempted_write(*args):
+            with connection.cursor() as cursor:
+                cursor.execute('DELETE FROM material_stocksyncrun')
+        with patch('material.erp_api.fetch_erp_incoming_headers', side_effect=attempted_write), patch(
+            'material.erp_api.fetch_erp_incoming_detail', side_effect=attempted_write
+        ):
+            rows = self.diagnose(incoming=['RV1'])
+        self.assertEqual(rows[0]['erp_header']['status'], 'UNVERIFIED')
+        self.assertEqual(rows[0]['status'], 'REVIEW')
+        self.assertIn('SCM DB에 접근하지 않습니다', rows[0]['reason'])
+        self.assertFalse(StockSyncRun.objects.exists())
+
+    def test_local_phase_rejects_write_queries(self):
+        from django.db import connection
+        from material.management.commands.diagnose_erp_documents import Command
+        def attempted_write():
+            with connection.cursor() as cursor:
+                cursor.execute('DELETE FROM material_stocksyncrun')
+        with patch('django.db.models.query.QuerySet.count', side_effect=attempted_write):
+            with self.assertRaisesRegex(RuntimeError, 'DB 변경'):
+                Command().local_context('RV1')
+        self.assertFalse(StockSyncRun.objects.exists())
