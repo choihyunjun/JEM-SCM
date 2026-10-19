@@ -16,6 +16,7 @@ from django.conf import settings
 from django.db import transaction
 from .erp_sync_lock import serialized_erp_sync
 from .stock_safety import deduct_stock
+from .erp_detail_validation import require_details
 
 logger = logging.getLogger(__name__)
 
@@ -612,8 +613,7 @@ def sync_erp_incoming(date_from=None, date_to=None):
         try:
             # 3) 디테일 조회
             ok2, details, err2 = fetch_erp_incoming_detail(rcv_nb)
-            if not ok2 or not details:
-                raise ValueError('ERP 상세 조회에 실패했거나 응답이 비어 있습니다.')
+            require_details(ok2, details, err2)
 
             # 헤더 정보
             rcv_dt = header.get('rcvDt', '')  # 'YYYYMMDD'
@@ -1572,8 +1572,7 @@ def sync_erp_adjustments(date_from=None, date_to=None):
         try:
             # 디테일 조회
             ok2, details, err2 = fetch_erp_adjustment_detail(adjust_nb, adjust_fg)
-            if not ok2 or not details:
-                raise ValueError('ERP 상세 조회에 실패했거나 응답이 비어 있습니다.')
+            require_details(ok2, details, err2)
 
             # Warehouse 매칭
             warehouse = None
@@ -1880,8 +1879,7 @@ def sync_erp_issue(date_from=None, date_to=None):
         try:
             # 3) 디테일 조회
             ok2, details, err2 = fetch_erp_issue_details(isu_nb)
-            if not ok2 or not details:
-                raise ValueError('ERP 상세 조회에 실패했거나 응답이 비어 있습니다.')
+            require_details(ok2, details, err2)
 
             isu_dt = header.get('isuDt', '')  # 'YYYYMMDD'
 
@@ -2322,8 +2320,7 @@ def sync_erp_stock_transfer(date_from=None, date_to=None):
         try:
             # 3) 디테일 조회
             ok2, details, err2 = fetch_erp_transfer_details(move_nb)
-            if not ok2 or not details:
-                raise ValueError(err2 or 'ERP 이동 상세 응답이 비어 있습니다.')
+            require_details(ok2, details, err2)
 
             move_dt = header.get('moveDt', '')  # 'YYYYMMDD'
 
@@ -2541,8 +2538,7 @@ def sync_erp_outgoing(date_from=None, date_to=None):
         try:
             # 3) 디테일 조회
             ok2, details, err2 = fetch_erp_outgoing_details(isu_nb)
-            if not ok2 or not details:
-                raise ValueError('ERP 상세 조회에 실패했거나 응답이 비어 있습니다.')
+            require_details(ok2, details, err2)
 
             isu_dt = header.get('isuDt', '')  # 'YYYYMMDD'
             wh_cd = header.get('whCd', '')    # 출고창고코드

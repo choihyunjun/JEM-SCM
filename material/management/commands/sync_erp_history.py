@@ -29,7 +29,8 @@ ERP 전체 수불 이력 동기화 커맨드
 import sys
 import time
 from datetime import datetime
-from material.erp_sync_lock import serialized_erp_sync
+from material.erp_sync_lock import erp_sync_lock, ERPSyncBusy
+from django.utils import timezone
 from django.core.management.base import BaseCommand, CommandError
 
 class Command(BaseCommand):
@@ -63,9 +64,12 @@ class Command(BaseCommand):
             help='전체 초기화: 모든 수불/재고 삭제 후 ERP 기준 재시작 (서버 배포용)',
         )
 
-    @serialized_erp_sync
     def handle(self, *args, **options):
-        self._run(options)
+        try:
+            with erp_sync_lock():
+                self._run(options)
+        except ERPSyncBusy as exc:
+            self.stdout.write(f'건너뜀: {exc}')
 
     def _run(self, options):
         from material.erp_api import (
@@ -77,10 +81,21 @@ class Command(BaseCommand):
             sync_erp_outgoing,
             sync_stock_from_erp,
         )
-        from material.models import MaterialTransaction, MaterialStock
+        from material.models import MaterialTransaction, MaterialStock, StockSyncRun
+        from material.erp_sync_pipeline import record_sync_failure, unresolved_full_history_failure
 
         date_from = options['date_from']
         date_to = options['date_to'] or datetime.now().strftime('%Y%m%d')
+        try:
+            start_date = datetime.strptime(date_from, '%Y%m%d').date()
+            end_date = datetime.strptime(date_to, '%Y%m%d').date()
+            if start_date > end_date:
+                raise ValueError()
+        except (ValueError, TypeError):
+            raise CommandError('조회 기간을 YYYYMMDD 형식으로 지정하고 시작일 ≤ 종료일로 입력하세요.')
+        today = timezone.localdate()
+        full_history = start_date <= today.replace(month=1, day=1) and end_date >= today
+        started_at = timezone.now()
 
         is_full_reset = options['full_reset']
         is_reset = options['reset'] or is_full_reset
@@ -93,7 +108,9 @@ class Command(BaseCommand):
         ))
 
         total_start = time.time()
-        grand_total = {'synced': 0, 'skipped': 0, 'errors': 0}
+        grand_total = {'synced': 0, 'skipped': 0, 'errors': 0, 'error_list': [], 'steps': [],
+                       'scope': 'full_history' if full_history else 'history_range',
+                       'date_from': date_from, 'date_to': date_to}
 
         # --full-reset: 모든 데이터 삭제 + ERP 현재고 기준 완전 재시작
         if is_full_reset:
@@ -185,6 +202,10 @@ class Command(BaseCommand):
                 grand_total['synced'] += synced
                 grand_total['skipped'] += skipped
                 grand_total['errors'] += errors
+                grand_total['steps'].append({'stage': name, 'synced': synced, 'skipped': skipped,
+                                             'errors': errors, 'elapsed_seconds': round(elapsed, 2),
+                                             'error_list': list(error_list)})
+                grand_total['error_list'].extend(f'{name}: {err}' for err in error_list)
 
                 status = self.style.SUCCESS(f'{synced}건') if synced > 0 else f'{synced}건'
                 self.stdout.write(
@@ -193,22 +214,29 @@ class Command(BaseCommand):
                 )
 
                 if error_list:
-                    for err in error_list[:3]:
+                    for err in error_list:
                         self.stderr.write(self.style.ERROR(f'     {err}'))
-                    if len(error_list) > 3:
-                        self.stderr.write(f'     ... 외 {len(error_list) - 3}건')
 
             except Exception as e:
                 self.stderr.write(self.style.ERROR(f'  -> 실패: {e}'))
                 grand_total['errors'] += 1
+                grand_total['error_list'].append(f'{name}: {e}')
+                grand_total['steps'].append({'stage': name, 'errors': 1, 'error_list': [str(e)],
+                                             'elapsed_seconds': round(time.time() - start, 2)})
 
             self.stdout.write('')
 
         if grand_total['errors']:
-            from material.erp_sync_pipeline import record_sync_failure
             message = f"수불 오류 {grand_total['errors']}건: 총량 보정을 보류했습니다."
-            record_sync_failure(message)
+            record_sync_failure(message, grand_total)
             raise CommandError(message)
+
+        if not full_history:
+            blocker = unresolved_full_history_failure()
+            if blocker:
+                grand_total['error_list'].append(blocker)
+                record_sync_failure(blocker, grand_total)
+                raise CommandError(blocker)
 
         # 최종 재고 보정 (ERP 현재고와 SCM 재고 동기화)
         self.stdout.write(self.style.WARNING('[마무리] ERP 현재고 기준 재고 동기화 (sync_stock_from_erp)...'))
@@ -226,7 +254,13 @@ class Command(BaseCommand):
                     f'(증가 {result["increased"]}, 감소 {result["decreased"]}) ({elapsed:.1f}초)'
                 )
         except Exception as e:
+            grand_total['stock_error'] = str(e)
+            record_sync_failure(str(e), grand_total)
             raise CommandError(str(e)) from e
+
+        grand_total['stock'] = result
+        StockSyncRun.objects.create(started_at=started_at, finished_at=timezone.now(),
+                                    status='success', summary=grand_total)
 
         total_elapsed = time.time() - total_start
 

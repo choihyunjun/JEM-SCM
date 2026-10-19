@@ -16,7 +16,7 @@ ERP 과거 수불 변경 감지 커맨드
 
 import time
 from datetime import datetime, timedelta
-from material.erp_sync_lock import serialized_erp_sync
+from material.erp_sync_lock import erp_sync_lock, ERPSyncBusy
 from django.core.management.base import BaseCommand, CommandError
 
 class Command(BaseCommand):
@@ -30,9 +30,12 @@ class Command(BaseCommand):
             help='검사할 기간 (일, 기본: 30)',
         )
 
-    @serialized_erp_sync
     def handle(self, *args, **options):
-        self._run(options)
+        try:
+            with erp_sync_lock():
+                self._run(options)
+        except ERPSyncBusy as exc:
+            self.stdout.write(f'건너뜀: {exc}')
 
     def _run(self, options):
         from material.erp_api import (

@@ -1,6 +1,7 @@
 """Import all six ledgers, then reconcile; never report failed imports as done."""
 from django.core.cache import cache
 from django.utils import timezone
+from django.db.models import Q
 
 from .erp_sync_lock import serialized_erp_sync
 from .models import StockSyncRun
@@ -11,6 +12,21 @@ def record_sync_failure(message, summary=None):
                                 error=message, summary=summary or {})
     cache.set('erp_sync_progress', {'stage': '확인 필요', 'percent': 100,
                                     'error': message, 'detail': message}, 600)
+
+
+def unresolved_full_history_failure():
+    """A shorter date window must not hide an earlier failed full-history audit.
+
+    Include legacy failures, whose history command stored only a count and {}.
+    A subsequent successful full-history run is the only automatic clearance.
+    """
+    run = StockSyncRun.objects.filter(
+        Q(summary__scope='full_history') |
+        Q(summary={}, error__startswith='수불 오류 ')
+    ).first()
+    if run and run.status != 'success':
+        return f'전체 수불 점검 #{run.pk} 미해결: {run.error or run.status}. 전체 기간 재점검 성공 전 총량 보정을 보류합니다.'
+    return None
 
 
 @serialized_erp_sync
@@ -24,7 +40,8 @@ def sync_inventory(date_from=None, date_to=None):
         ('adjust', '재고조정', erp_api.sync_erp_adjustments),
         ('outgoing', '고객출고', erp_api.sync_erp_outgoing),
     ]
-    result = {'synced': 0, 'skipped': 0, 'errors': 0, 'error_list': [], 'stock': None}
+    result = {'synced': 0, 'skipped': 0, 'errors': 0, 'error_list': [], 'stock': None,
+              'steps': [], 'date_from': date_from, 'date_to': date_to}
     for index, (key, label, func) in enumerate(jobs):
         cache.set('erp_sync_progress', {'stage': f'{label} 동기화 중', 'percent': index * 12}, 600)
         try:
@@ -39,7 +56,14 @@ def sync_inventory(date_from=None, date_to=None):
         result['synced'] += synced
         result['skipped'] += skipped
         result['errors'] += errors
-        result['error_list'].extend(f'{label}: {err}' for err in error_list[:5])
+        result['error_list'].extend(f'{label}: {err}' for err in error_list)
+        result['steps'].append({'stage': key, 'label': label, 'synced': synced,
+                                'skipped': skipped, 'errors': errors, 'error_list': list(error_list)})
+    if not result['errors']:
+        blocker = unresolved_full_history_failure()
+        if blocker:
+            result['errors'] += 1
+            result['error_list'].append(blocker)
     if result['errors']:
         message = '수불 반영 오류로 총량 보정을 보류했습니다. ' + '; '.join(result['error_list'][:5])
         record_sync_failure(message, result)
