@@ -17,6 +17,7 @@ from django.db import transaction
 from .erp_sync_lock import serialized_erp_sync
 from .stock_safety import deduct_stock
 from .erp_detail_validation import require_details
+from .quantities import stock_quantity
 
 logger = logging.getLogger(__name__)
 
@@ -204,7 +205,8 @@ def register_erp_incoming(trx, qty, warehouse_code, erp_order_no='', erp_order_s
         except Exception:
             pass
         return False, None, error_msg
-    supply_amount = round(unit_price * qty)      # 공급가액
+    qty = float(stock_quantity(qty))  # JSON numeric payload; preserve fractional ERP quantities.
+    supply_amount = round(float(unit_price) * qty)      # 공급가액
     vat_amount = round(supply_amount * 0.1)      # 부가세 (10%)
     total_amount = supply_amount + vat_amount     # 합계액
 
@@ -660,7 +662,7 @@ def sync_erp_incoming(date_from=None, date_to=None):
                     logger.warning(f'ERP 입고 동기화: 품번 미매칭 ({item_cd}), 건너뜀')
                     continue
 
-                qty = int(detail.get('rcvQt', 0) or 0)
+                qty = stock_quantity(detail.get('rcvQt', 0) or 0)
                 if qty <= 0:
                     continue
 
@@ -842,7 +844,7 @@ def compare_erp_stock(year=None):
         wh_cd = item.get('whCd', '')
         if wh_cd in hidden_wh_codes:
             continue
-        qty = int(item.get('invQt1', 0) or 0)
+        qty = stock_quantity(item.get('invQt1', 0) or 0)
         if qty == 0:
             continue
         key = (wh_cd, item.get('itemCd', ''))
@@ -855,7 +857,7 @@ def compare_erp_stock(year=None):
     scm_map = {}
     for row in scm_agg:
         key = (row['warehouse__code'], row['part__part_no'])
-        scm_map[key] = int(row['total'] or 0)
+        scm_map[key] = stock_quantity(row['total'] or 0)
 
     all_keys = set(erp_map.keys()) | set(scm_map.keys())
     wh_names = {w.code: w.name for w in Warehouse.objects.all()}
@@ -946,12 +948,12 @@ def _trim_lot_stock_fifo(warehouse, part, excess_qty, now, reason=''):
         warehouse=warehouse, part=part, lot_no__isnull=False, quantity__gt=0
     ), key=fifo_sort_key)
 
-    remaining = int(excess_qty)
+    remaining = stock_quantity(excess_qty)
     trimmed_total = 0
     for row in rows:
         if remaining <= 0:
             break
-        take = min(int(row.quantity), remaining)
+        take = min(row.quantity, remaining)
         deduct_stock(row, take)
         remaining -= take
         trimmed_total += take
@@ -963,7 +965,7 @@ def _trim_lot_stock_fifo(warehouse, part, excess_qty, now, reason=''):
             production_lot=row.production_lot,
             quantity=-take,
             warehouse_from=warehouse,
-            result_stock=max(int(row.quantity) - take, 0),
+            result_stock=max(row.quantity - take, 0),
             remark=f'{reason} [{row.lot_no} -{take:,}]'[:200],
         )
     return trimmed_total
@@ -1608,10 +1610,10 @@ def sync_erp_adjustments(date_from=None, date_to=None):
 
                 # 수량 결정
                 if adjust_fg == '1':  # 입고조정
-                    qty = int(detail.get('rcvQt', 0) or 0)
+                    qty = stock_quantity(detail.get('rcvQt', 0) or 0)
                     trx_type = 'ADJ_ERP_IN'
                 else:  # 출고조정
-                    qty = int(detail.get('isuQt', 0) or 0)
+                    qty = stock_quantity(detail.get('isuQt', 0) or 0)
                     trx_type = 'ADJ_ERP_OUT'
 
                 if qty <= 0:
@@ -1909,7 +1911,7 @@ def sync_erp_issue(date_from=None, date_to=None):
                 if not part:
                     continue
 
-                qty = int(detail.get('isuQt', 0) or 0)
+                qty = stock_quantity(detail.get('isuQt', 0) or 0)
                 if qty <= 0:
                     continue
 
@@ -2060,7 +2062,7 @@ def sync_erp_receipt(date_from=None, date_to=None):
             if not part:
                 continue
 
-            qty = int(item.get('rcvQt', 0) or 0)
+            qty = stock_quantity(item.get('rcvQt', 0) or 0)
             if qty <= 0:
                 continue
 
@@ -2187,7 +2189,7 @@ def register_erp_stock_move(trx, qty, from_warehouse_code, to_warehouse_code):
         'detail': [{
             'moveSq': 1,
             'itemCd': trx.part.part_no,
-            'moveQt': qty,
+            'moveQt': float(stock_quantity(qty)),
             'fwhCd': from_warehouse_code,
             'flcCd': from_warehouse_code,
             'twhCd': to_warehouse_code,
@@ -2350,7 +2352,7 @@ def sync_erp_stock_transfer(date_from=None, date_to=None):
                 if not part:
                     continue
 
-                qty = int(detail.get('moveQt', 0) or 0)
+                qty = stock_quantity(detail.get('moveQt', 0) or 0)
                 if qty <= 0:
                     continue
 
@@ -2581,7 +2583,7 @@ def sync_erp_outgoing(date_from=None, date_to=None):
                 if not part:
                     continue
 
-                qty = int(detail.get('isuQt', 0) or 0)
+                qty = stock_quantity(detail.get('isuQt', 0) or 0)
                 if qty <= 0:
                     continue
 

@@ -29,7 +29,10 @@ class Command(BaseCommand):
             self.stdout.write(str(exc))
             return
         if result['errors']:
-            raise CommandError('; '.join(result['error_list']) or '수불 동기화 오류')
+            stock = result.get('stock') or {}
+            stock_status = (f"ERP 현재고 보정 완료 (조정 {stock.get('adjusted', 0)}건). "
+                            if stock and not stock.get('error') else 'ERP 현재고 보정 확인 필요. ')
+            raise CommandError(stock_status + '; '.join(result['error_list']))
         self.stdout.write(self.style.SUCCESS(
             f"수불 {result['synced']}건 / 재고 조정 {result['stock']['adjusted']}건 완료"
         ))

@@ -1,32 +1,16 @@
-"""Import all six ledgers, then reconcile; never report failed imports as done."""
+"""ERP current stock is authoritative, independently of ledger import failures."""
 from django.core.cache import cache
 from django.utils import timezone
-from django.db.models import Q
 
 from .erp_sync_lock import serialized_erp_sync
 from .models import StockSyncRun
 
 
-def record_sync_failure(message, summary=None):
-    StockSyncRun.objects.create(status='failed', finished_at=timezone.now(),
+def record_sync_failure(message, summary=None, status='failed'):
+    StockSyncRun.objects.create(status=status, finished_at=timezone.now(),
                                 error=message, summary=summary or {})
     cache.set('erp_sync_progress', {'stage': '확인 필요', 'percent': 100,
                                     'error': message, 'detail': message}, 600)
-
-
-def unresolved_full_history_failure():
-    """A shorter date window must not hide an earlier failed full-history audit.
-
-    Include legacy failures, whose history command stored only a count and {}.
-    A subsequent successful full-history run is the only automatic clearance.
-    """
-    run = StockSyncRun.objects.filter(
-        Q(summary__scope='full_history') |
-        Q(summary={}, error__startswith='수불 오류 ')
-    ).first()
-    if run and run.status != 'success':
-        return f'전체 수불 점검 #{run.pk} 미해결: {run.error or run.status}. 전체 기간 재점검 성공 전 총량 보정을 보류합니다.'
-    return None
 
 
 @serialized_erp_sync
@@ -59,20 +43,20 @@ def sync_inventory(date_from=None, date_to=None):
         result['error_list'].extend(f'{label}: {err}' for err in error_list)
         result['steps'].append({'stage': key, 'label': label, 'synced': synced,
                                 'skipped': skipped, 'errors': errors, 'error_list': list(error_list)})
-    if not result['errors']:
-        blocker = unresolved_full_history_failure()
-        if blocker:
-            result['errors'] += 1
-            result['error_list'].append(blocker)
-    if result['errors']:
-        message = '수불 반영 오류로 총량 보정을 보류했습니다. ' + '; '.join(result['error_list'][:5])
-        record_sync_failure(message, result)
-    else:
+    result['ledger_errors'] = result['errors']
+    try:
         result['stock'] = erp_api.sync_stock_from_erp()
-        message = result['stock'].get('error')
-        if message:
-            result['errors'] += 1
-            result['error_list'].append(message)
+    except Exception as exc:
+        result['stock'] = {'adjusted': 0, 'error': str(exc)}
+    stock_error = result['stock'].get('error')
+    if stock_error:
+        result['errors'] += 1
+        result['error_list'].append(f'ERP 현재고 보정: {stock_error}')
+    message = None
+    if result['errors']:
+        message = ('ERP 현재고 보정 확인 필요. ' if stock_error else 'ERP 현재고 보정 완료. ')
+        message += f'수불 이력 오류 {result["ledger_errors"]}건. ' + '; '.join(result['error_list'][:5])
+        record_sync_failure(message, result, status='failed' if stock_error else 'partial')
     cache.set('erp_sync_progress', {
         'stage': '확인 필요' if result['errors'] else '수불·총량 보정 완료',
         'percent': 100, 'error': message,

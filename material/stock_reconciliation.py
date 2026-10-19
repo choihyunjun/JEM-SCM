@@ -1,6 +1,6 @@
 """Reconcile explicit ERP balances without discarding LOT identity or audit."""
 from collections import defaultdict
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
 from django.core.cache import cache
 from django.db import transaction
@@ -9,6 +9,7 @@ from django.utils import timezone
 from orders.models import Part
 from .models import MaterialStock, ProcessTag, StockSyncRun, Warehouse
 from .stock_safety import deduct_stock, unassigned_stock
+from .quantities import stock_quantity
 
 
 def stock_snapshot():
@@ -23,7 +24,7 @@ def stock_snapshot():
 
 
 def parse_balances(items):
-    balances = defaultdict(int)
+    balances = defaultdict(Decimal)
     if not isinstance(items, list) or not items:
         raise ValueError('ERP 재고 응답이 비어 있거나 올바르지 않습니다. 기존 재고를 유지합니다.')
     for item in items:
@@ -32,15 +33,9 @@ def parse_balances(items):
         wh, part = item.get('whCd'), item.get('itemCd')
         if not wh or not part or item.get('invQt1') in (None, ''):
             raise ValueError('ERP 재고 응답에 창고·품번·수량이 누락되었습니다. 기존 재고를 유지합니다.')
-        try:
-            qty = Decimal(str(item['invQt1']))
-            if not qty.is_finite():
-                raise ValueError('ERP 재고 수량을 확인할 수 없습니다.')
-        except InvalidOperation as exc:
-            raise ValueError('ERP 재고 수량 형식이 올바르지 않습니다.') from exc
-        # MaterialStock.quantity is an IntegerField; retain the existing ERP
-        # import conversion instead of changing quantity units in this repair.
-        balances[(str(wh), str(part))] += int(qty)
+        qty = stock_quantity(item['invQt1'])
+        key = (str(wh), str(part))
+        balances[key] = stock_quantity(balances[key] + qty)
     return balances
 
 
@@ -74,7 +69,7 @@ def _reconcile_key(warehouse, part, erp_qty, expected):
         bucket = next((s for s in rows if s.lot_no is None and s.production_lot is None), None)
         negatives = [s for s in assigned if s.quantity < 0]
         positive_total = sum(max(s.quantity, 0) for s in assigned)
-        if not negatives and positive_total <= erp_qty and (bucket.quantity if bucket else 0) == erp_qty - positive_total:
+        if not negatives and positive_total <= max(erp_qty, 0) and (bucket.quantity if bucket else 0) == erp_qty - positive_total:
             return changes
         if bucket is None:
             bucket = unassigned_stock(warehouse, part)
@@ -110,7 +105,7 @@ def _reconcile_key(warehouse, part, erp_qty, expected):
             bucket.quantity = target
             bucket.save(update_fields=['quantity'])
             direction = 'IN' if diff > 0 else 'OUT'
-            audit(bucket, diff, f'ERP 재고동기화 (ERP={erp_qty}, 미지정:{before}→{target}, diff={diff:+d})',
+            audit(bucket, diff, f'ERP 재고동기화 (ERP={erp_qty}, 미지정:{before}→{target}, diff={diff:+f})',
                   kind=f'ADJ_ERP_{direction}')
             changes['increased' if diff > 0 else 'decreased'] += 1
             if diff < 0:
@@ -158,10 +153,6 @@ def reconcile_stock():
                 continue
             if code not in parts:
                 result['skipped_no_part'] += 1
-                continue
-            if qty < 0:
-                result['skipped_negative'] += 1
-                issues.append(f'{wh}/{code}: ERP 음수 재고 보정 보류')
                 continue
             expected = snapshot.get((wh, code), {})
             if all(value[0] >= 0 for value in expected.values()) and sum(value[0] for value in expected.values()) == qty:

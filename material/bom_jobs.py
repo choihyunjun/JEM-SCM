@@ -99,6 +99,8 @@ def build_snapshot(plans):
         children[item.pop('product__part_no')].append(item)
     parts = {p['part_no']: p for p in Part.objects.values('part_no', 'vendor__name', 'part_group')}
     stocks = dict(MaterialStock.objects.filter(quantity__gt=0).values('part__part_no').annotate(total=Sum('quantity')).values_list('part__part_no', 'total'))
+    # BOM snapshots use JSON numbers and float-based requirement calculations.
+    stocks = {part_no: float(qty) for part_no, qty in stocks.items()}
     templates, vendors, unlinked, missing = {}, Counter(), {}, []
     frequencies = Counter(p['part_no'] for p in plans)
     for root, count in frequencies.items():

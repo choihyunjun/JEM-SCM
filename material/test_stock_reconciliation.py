@@ -122,9 +122,9 @@ class StockReconciliationTests(TestCase):
         stock.refresh_from_db()
         self.assertEqual(stock.quantity, 0)
 
-    def test_bad_empty_failed_and_negative_responses_do_not_erase_stock(self):
+    def test_bad_empty_failed_responses_do_not_erase_stock(self):
         stock = self.stock(25)
-        for rows in ([], [self.row('bad')], [dict(whCd='4300', itemCd='P1')], [self.row('NaN')], [self.row(-1)]):
+        for rows in ([], [self.row('bad')], [dict(whCd='4300', itemCd='P1')], [self.row('NaN')]):
             with self.subTest(rows=rows):
                 self.assertTrue(self.sync(rows)['error'])
                 stock.refresh_from_db()
@@ -279,15 +279,16 @@ class SyncPipelineTests(TestCase):
         self.assertEqual(calls, self.names + ['stock'])
         stock.assert_called_once()
 
-    def test_failed_import_defers_total_correction_and_preserves_success_time(self):
+    def test_failed_import_still_corrects_erp_stock_and_records_partial_result(self):
         previous = StockSyncRun.objects.create(status='success', finished_at=timezone.now())
         with ExitStack() as stack:
             for name in self.names:
                 stack.enter_context(patch(f'material.erp_api.sync_erp_{name}', return_value=(0, 0, 1, ['timeout']) if name == 'issue' else (0, 0, 0, [])))
-            stock = stack.enter_context(patch('material.erp_api.sync_stock_from_erp'))
+            stock = stack.enter_context(patch('material.erp_api.sync_stock_from_erp', return_value={'adjusted': 1, 'error': None}))
             self.assertEqual(sync_inventory()['errors'], 1)
-        stock.assert_not_called()
-        self.assertEqual(StockSyncRun.objects.first().status, 'failed')
+        stock.assert_called_once()
+        self.assertEqual(StockSyncRun.objects.first().status, 'partial')
+        self.assertEqual(StockSyncRun.objects.first().summary['stock']['adjusted'], 1)
         self.assertEqual(StockSyncRun.objects.filter(status='success').get().pk, previous.pk)
         self.assertTrue(cache.get('erp_sync_progress')['error'])
 

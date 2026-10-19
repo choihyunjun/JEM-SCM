@@ -202,7 +202,8 @@ class Command(BaseCommand):
             for detail in details:
                 sq = detail.get(sq_key, 1)
                 trx_key = f'{nb}-{sq}'
-                qty = int(detail.get(qt_key, 0) or 0)
+                from material.quantities import stock_quantity
+                qty = stock_quantity(detail.get(qt_key, 0) or 0)
                 if qty <= 0:
                     continue
                 erp_map[trx_key] = -qty if is_negative else qty
@@ -241,7 +242,8 @@ class Command(BaseCommand):
             rcv_nb = item.get('rcvNb', '')
             if not rcv_nb:
                 continue
-            qty = int(item.get('rcvQt', 0) or 0)
+            from material.quantities import stock_quantity
+            qty = stock_quantity(item.get('rcvQt', 0) or 0)
             if qty <= 0:
                 continue
             erp_map[rcv_nb] = qty  # 생산입고는 양수

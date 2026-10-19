@@ -87,7 +87,7 @@ class MaterialStock(models.Model):
     # ProductionLotItem에 등록된 품목만 채워짐 - 같은 날짜 안에서도 실제 생산 배치 단위로
     # 재고를 분리 추적하기 위함. 미등록 품목은 항상 NULL (기존 동작 그대로).
     production_lot = models.CharField("생산 LOT(배치)", max_length=20, null=True, blank=True)
-    quantity = models.IntegerField("현재고", default=0)
+    quantity = models.DecimalField("현재고", max_digits=20, decimal_places=4, default=0)
 
     # 로케이션(Rack/Bin) 관리까지 필요하다면 추후 여기에 location 필드 추가
 
@@ -152,7 +152,7 @@ class MaterialTransaction(models.Model):
     part = models.ForeignKey(Part, on_delete=models.CASCADE, verbose_name="품목")
     lot_no = models.DateField("LOT 번호(생산일)", null=True, blank=True)
     production_lot = models.CharField("생산 LOT(배치)", max_length=20, null=True, blank=True)
-    quantity = models.IntegerField("변동수량") # 입고(+), 출고(-)
+    quantity = models.DecimalField("변동수량", max_digits=20, decimal_places=4) # 입고(+), 출고(-)
 
     # 위치 정보 (From -> To)
     # 입고 시: To만 있음 / 출고 시: From만 있음 / 이동 시: 둘 다 있음
@@ -160,7 +160,7 @@ class MaterialTransaction(models.Model):
     warehouse_to = models.ForeignKey(Warehouse, on_delete=models.SET_NULL, null=True, blank=True, related_name='tx_to', verbose_name="받은 창고")
     
     # 변동 후 해당 창고의 재고량 (이력 추적용)
-    result_stock = models.IntegerField("변동후 잔량", default=0)
+    result_stock = models.DecimalField("변동후 잔량", max_digits=20, decimal_places=4, default=0)
 
     # 관련 정보
     vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="관련 거래처")

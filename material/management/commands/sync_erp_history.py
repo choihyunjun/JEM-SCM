@@ -82,7 +82,7 @@ class Command(BaseCommand):
             sync_stock_from_erp,
         )
         from material.models import MaterialTransaction, MaterialStock, StockSyncRun
-        from material.erp_sync_pipeline import record_sync_failure, unresolved_full_history_failure
+        from material.erp_sync_pipeline import record_sync_failure
 
         date_from = options['date_from']
         date_to = options['date_to'] or datetime.now().strftime('%Y%m%d')
@@ -227,16 +227,9 @@ class Command(BaseCommand):
             self.stdout.write('')
 
         if grand_total['errors']:
-            message = f"수불 오류 {grand_total['errors']}건: 총량 보정을 보류했습니다."
-            record_sync_failure(message, grand_total)
-            raise CommandError(message)
-
-        if not full_history:
-            blocker = unresolved_full_history_failure()
-            if blocker:
-                grand_total['error_list'].append(blocker)
-                record_sync_failure(blocker, grand_total)
-                raise CommandError(blocker)
+            self.stderr.write(self.style.WARNING(
+                f"수불 이력 오류 {grand_total['errors']}건: 오류를 보존하고 ERP 현재고 보정은 진행합니다."
+            ))
 
         # 최종 재고 보정 (ERP 현재고와 SCM 재고 동기화)
         self.stdout.write(self.style.WARNING('[마무리] ERP 현재고 기준 재고 동기화 (sync_stock_from_erp)...'))
@@ -259,6 +252,10 @@ class Command(BaseCommand):
             raise CommandError(str(e)) from e
 
         grand_total['stock'] = result
+        if grand_total['errors']:
+            message = f"ERP 현재고 보정 완료 (조정 {result['adjusted']}건). 수불 이력 오류 {grand_total['errors']}건은 별도 확인 필요."
+            record_sync_failure(message, grand_total, status='partial')
+            raise CommandError(message)
         StockSyncRun.objects.create(started_at=started_at, finished_at=timezone.now(),
                                     status='success', summary=grand_total)
 

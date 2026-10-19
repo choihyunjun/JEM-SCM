@@ -12,7 +12,7 @@ from django.utils import timezone
 
 from material.erp_detail_validation import require_details
 from material.erp_sync_lock import ERPSyncBusy
-from material.erp_sync_pipeline import sync_inventory, unresolved_full_history_failure
+from material.erp_sync_pipeline import sync_inventory
 from material.models import MaterialStock, MaterialTransaction, StockSyncRun
 
 
@@ -90,30 +90,31 @@ class PersistentSyncFailureTests(TestCase):
         call_command('sync_erp_history',date_from=today.replace(month=1,day=1).strftime('%Y%m%d'),
                      date_to=today.strftime('%Y%m%d'),stdout=StringIO(),stderr=StringIO(),**kwargs)
 
-    def test_all_seven_details_persist_and_stock_is_not_corrected(self):
+    def test_all_seven_errors_persist_but_erp_stock_is_corrected(self):
         errors={'incoming':[f'RV{i}: DETAIL_EMPTY' for i in range(5)],
                 'outgoing':['IS1: DETAIL_API_FAILURE: timeout','IS2: DETAIL_EMPTY']}
         with ExitStack() as stack:
             stock=self.jobs(stack,errors)
-            with self.assertRaisesRegex(CommandError,'수불 오류 7건'):
+            with self.assertRaisesRegex(CommandError,'현재고 보정 완료.*수불 이력 오류 7건'):
                 self.history()
-            stock.assert_not_called()
+            stock.assert_called_once()
         run=StockSyncRun.objects.first()
+        self.assertEqual(run.status, 'partial')
+        self.assertEqual(run.summary['stock']['adjusted'], 1)
         self.assertEqual(run.summary['scope'],'full_history')
         self.assertEqual(len(run.summary['error_list']),7)
         self.assertEqual(len(run.summary['steps']),6)
         self.assertIn('timeout',run.summary['steps'][-1]['error_list'][0])
 
-    def test_recent_success_cannot_hide_legacy_full_failure(self):
+    def test_legacy_failure_does_not_block_erp_authoritative_stock(self):
         StockSyncRun.objects.create(status='failed',error='수불 오류 7건: 총량 보정을 보류했습니다.')
         StockSyncRun.objects.create(status='success',summary={'adjusted':1})
         with ExitStack() as stack:
             stock=self.jobs(stack)
             result=sync_inventory(date_from='20261013',date_to='20261019')
-            stock.assert_not_called()
-        self.assertEqual(result['errors'],1)
-        self.assertIn('미해결',result['error_list'][0])
-        self.assertIsNotNone(unresolved_full_history_failure())
+            stock.assert_called_once()
+        self.assertEqual(result['errors'],0)
+        self.assertTrue(StockSyncRun.objects.filter(status='failed').exists())
 
     def test_full_success_clears_marker_and_enables_recent_reconciliation(self):
         StockSyncRun.objects.create(status='failed',error='수불 오류 7건: 총량 보정을 보류했습니다.')
@@ -121,7 +122,6 @@ class PersistentSyncFailureTests(TestCase):
             stock=self.jobs(stack)
             self.history()
             stock.assert_called_once()
-            self.assertIsNone(unresolved_full_history_failure())
             self.assertEqual(sync_inventory()['errors'],0)
             self.assertEqual(stock.call_count,2)
 
@@ -131,17 +131,16 @@ class PersistentSyncFailureTests(TestCase):
             stock.return_value={'adjusted':0,'error':'ERP timeout'}
             with self.assertRaisesRegex(CommandError,'ERP timeout'):
                 self.history()
-        self.assertIsNotNone(unresolved_full_history_failure())
+        self.assertEqual(StockSyncRun.objects.first().status, 'failed')
         self.assertEqual(StockSyncRun.objects.first().summary['stock_error'],'ERP timeout')
 
-    def test_short_history_run_also_respects_prior_full_failure(self):
+    def test_short_history_still_corrects_stock_after_prior_failure(self):
         StockSyncRun.objects.create(status='failed',error='수불 오류 7건: 총량 보정을 보류했습니다.')
         today=timezone.localdate().strftime('%Y%m%d')
         with ExitStack() as stack:
             stock=self.jobs(stack)
-            with self.assertRaisesRegex(CommandError,'미해결'):
-                call_command('sync_erp_history',date_from=today,date_to=today,stdout=StringIO(),stderr=StringIO())
-            stock.assert_not_called()
+            call_command('sync_erp_history',date_from=today,date_to=today,stdout=StringIO(),stderr=StringIO())
+            stock.assert_called_once()
 
     def test_importers_distinguish_empty_and_api_failure_without_stock_writes(self):
         from material.erp_api import sync_erp_incoming, sync_erp_outgoing
@@ -184,7 +183,7 @@ class DocumentContextTests(TestCase):
         self.assertEqual(len(rows), 2)
         self.assertEqual(rows[0]['erp_header']['match_count'], 1)
         self.assertEqual(rows[0]['scm_transactions']['row_count'], 2)
-        self.assertEqual(rows[0]['scm_transactions']['stored_quantity_sum'], 50)
+        self.assertEqual(float(rows[0]['scm_transactions']['stored_quantity_sum']), 50)
         self.assertEqual(rows[0]['scm_transactions']['rows'][0]['part__part_no'], 'ZR700')
         self.assertEqual(rows[1]['erp_header']['status'], 'NOT_FOUND_IN_RANGE')
         self.assertEqual(rows[1]['scm_transactions']['row_count'], 0)

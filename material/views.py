@@ -468,7 +468,7 @@ def stock_list(request):
         # 4. ERP 총량 비교 (show_erp=1 일 때, 30분 캐시)
         if show_erp:
             from datetime import datetime as _dt
-            cache_key = f'stock_list_erp_map_{_dt.now().year}'
+            cache_key = f'stock_list_erp_map_decimal_{_dt.now().year}'
             erp_map = _cache.get(cache_key)
             if erp_map is None:
                 try:
@@ -477,8 +477,9 @@ def stock_list(request):
                     if ok and erp_items:
                         erp_map = {}
                         for ei in erp_items:
-                            qty = int(ei.get('invQt1', 0) or 0)
-                            if qty > 0:
+                            from material.quantities import stock_quantity
+                            qty = stock_quantity(ei.get('invQt1', 0) or 0)
+                            if qty != 0:
                                 key = f"{ei.get('whCd', '')}|{ei.get('itemCd', '')}"
                                 erp_map[key] = erp_map.get(key, 0) + qty
                         _cache.set(cache_key, erp_map, timeout=1800)
@@ -3772,7 +3773,7 @@ def get_lot_details(request, part_no):
                 'lot_no': date_str,
                 'production_lot': stock.production_lot or '',
                 'lot_label': lot_label,
-                'quantity': stock.quantity,
+                'quantity': float(stock.quantity),
                 'days_old': days_old,
                 'is_null_lot': False,
             }
@@ -3792,7 +3793,7 @@ def get_lot_details(request, part_no):
                 'lot_no': 'LOT 미지정',
                 'production_lot': ns.production_lot or '',
                 'lot_label': ns.production_lot or 'LOT 미지정',
-                'quantity': ns.quantity,
+                'quantity': float(ns.quantity),
                 'days_old': None,
                 'is_null_lot': True,
             })
@@ -3812,9 +3813,9 @@ def get_lot_details(request, part_no):
             'part_no': part.part_no,
             'part_name': part.part_name,
             'vendor_name': part.vendor.name if part.vendor else '-',
-            'total_quantity': total_qty,
-            'shown_total': shown_total,
-            'sync_gap': sync_gap,
+            'total_quantity': float(total_qty),
+            'shown_total': float(shown_total),
+            'sync_gap': float(sync_gap),
             'sync_needed': sync_gap != 0,
             'negative_count': sum(stock.quantity < 0 for stock in stocks),
             'lot_details': lot_data,
@@ -4827,6 +4828,7 @@ def _calculate_bom_requirements(part_no, production_qty):
                 quantity__gt=0
             ).aggregate(total=Sum('quantity'))['total'] or 0
 
+        stock_qty = float(stock_qty)
         shortage = max(0, info['required_qty'] - stock_qty)
 
         result.append({
@@ -8496,7 +8498,22 @@ def erp_stock_manage(request):
     context['stock_sync_latest'] = StockSyncRun.objects.first()
     context['stock_sync_success'] = StockSyncRun.objects.filter(status='success').first()
 
-    if action in ('sync_stock', 'sync_transactions'):
+    if action == 'sync_stock':
+        if not context['erp_enabled']:
+            messages.warning(request, 'ERP 연동이 비활성화 상태입니다.')
+            return redirect('material:erp_stock_manage')
+        from .erp_api import sync_stock_from_erp
+        try:
+            result = sync_stock_from_erp()
+            if result.get('error'):
+                messages.warning(request, f"ERP 현재고 {result['adjusted']}건 보정, 추가 확인 필요: {result['error']}")
+            else:
+                messages.success(request, f"ERP 현재고 기준 재고 보정 완료: {result['adjusted']}건")
+        except Exception as exc:
+            messages.error(request, f'재고 보정 미완료: {exc}')
+        return redirect('material:erp_stock_manage')
+
+    if action == 'sync_transactions':
         if not context['erp_enabled']:
             messages.warning(request, 'ERP 연동이 비활성화 상태입니다.')
             return redirect('material:erp_stock_manage')
@@ -8504,7 +8521,10 @@ def erp_stock_manage(request):
         try:
             result = sync_inventory()
             if result['errors']:
-                messages.warning(request, '동기화 확인 필요: ' + '; '.join(result['error_list'][:5]))
+                stock = result.get('stock') or {}
+                stock_status = (f"ERP 현재고 {stock.get('adjusted', 0)}건 보정 완료. "
+                                if stock and not stock.get('error') else 'ERP 현재고 보정 확인 필요. ')
+                messages.warning(request, stock_status + '수불 이력 확인: ' + '; '.join(result['error_list'][:5]))
             else:
                 messages.success(request, f"수불·재고 동기화 완료: 수불 {result['synced']}건, 재고 조정 {result['stock']['adjusted']}건")
         except Exception as exc:

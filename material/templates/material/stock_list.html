@@ -129,13 +129,13 @@
                                         data-warehouse-code="{{ item.warehouse__code }}"
                                         title="더블클릭하여 LOT별 상세 보기"
                                         ondblclick="showLotDetails('{{ item.part__part_no }}', '{{ item.warehouse__code }}')">
-                                        {{ item.total_qty|intcomma }}
+                                        {{ item.total_qty|floatformat:"-4"|intcomma }}
                                         <div class="text-info small" style="font-size: 0.65rem;">🔍 LOT 상세</div>
                                     </td>
                                     {% if show_erp %}
-                                    <td class="fw-bold text-end pe-3 text-warning">{{ item.erp_qty|intcomma }}</td>
+                                    <td class="fw-bold text-end pe-3 text-warning">{{ item.erp_qty|floatformat:"-4"|intcomma }}</td>
                                     <td class="fw-bold text-end pe-3 {% if item.erp_diff == 0 %}text-success{% elif item.erp_diff > 0 %}text-primary{% else %}text-danger{% endif %}">
-                                        {% if item.erp_diff > 0 %}+{% endif %}{{ item.erp_diff|intcomma }}
+                                        {% if item.erp_diff > 0 %}+{% endif %}{{ item.erp_diff|floatformat:"-4"|intcomma }}
                                     </td>
                                     {% endif %}
                                 {% else %}
@@ -148,7 +148,7 @@
                                         data-part-no="{{ item.part__part_no }}"
                                         title="더블클릭하여 LOT별 상세 보기 (전체 창고)"
                                         ondblclick="showLotDetails('{{ item.part__part_no }}', null)">
-                                        {{ item.total_qty|intcomma }}
+                                        {{ item.total_qty|floatformat:"-4"|intcomma }}
                                         <div class="text-info small" style="font-size: 0.65rem;">🔍 LOT 상세</div>
                                     </td>
                                     {% if show_erp %}
@@ -263,7 +263,7 @@ function showLotDetails(partNo, warehouseCode) {
             html += '    </div>';
             html += '    <div class="row mt-2">';
             html += '      <div class="col-md-6"><strong>협력사:</strong> ' + escapeHtml(data.vendor_name) + '</div>';
-            html += '      <div class="col-md-6"><strong>전체 재고:</strong> <span class="text-primary fw-bold fs-5">' + Number(data.total_quantity).toLocaleString() + ' ' + (data.weight_unit || 'EA') + '</span></div>';
+            html += '      <div class="col-md-6"><strong>전체 재고:</strong> <span class="text-primary fw-bold fs-5">' + Number(data.total_quantity).toLocaleString('ko-KR', {maximumFractionDigits: 4}) + ' ' + (data.weight_unit || 'EA') + '</span></div>';
             html += '    </div>';
             html += '  </div>';
             html += '</div>';
@@ -280,9 +280,9 @@ function showLotDetails(partNo, warehouseCode) {
                 const gap = Number(data.sync_gap);
                 html += '<div class="alert alert-danger border-danger">';
                 html += '  <i class="bi bi-exclamation-octagon-fill me-2"></i>';
-                html += '  <strong>재고 정합 필요.</strong> 아래 LOT 재고 합계(' + Number(data.shown_total).toLocaleString() + ')가 ';
-                html += '  SCM 전체 재고(' + Number(data.total_quantity).toLocaleString() + ')와 ';
-                html += '  <strong>' + Math.abs(gap).toLocaleString() + ' ' + (data.weight_unit || 'EA') + '</strong> ';
+                html += '  <strong>재고 정합 필요.</strong> 아래 LOT 재고 합계(' + Number(data.shown_total).toLocaleString('ko-KR', {maximumFractionDigits: 4}) + ')가 ';
+                html += '  SCM 전체 재고(' + Number(data.total_quantity).toLocaleString('ko-KR', {maximumFractionDigits: 4}) + ')와 ';
+                html += '  <strong>' + Math.abs(gap).toLocaleString('ko-KR', {maximumFractionDigits: 4}) + ' ' + (data.weight_unit || 'EA') + '</strong> ';
                 html += (gap < 0 ? '많습니다' : '적습니다') + '. 재고를 다시 조회해 주세요.';
                 html += '</div>';
             }
@@ -331,7 +331,7 @@ function showLotDetails(partNo, warehouseCode) {
                     html += Number(lot.quantity) < 0 ? '<tr class="table-danger text-danger">' : '<tr>';
                     html += '  <td><span class="badge bg-secondary me-1">' + escapeHtml(lot.warehouse_code) + '</span>' + escapeHtml(lot.warehouse) + '</td>';
                     html += '  <td class="text-center">' + lotCell + '</td>';
-                    html += '  <td class="text-end fw-bold">' + Number(lot.quantity).toLocaleString() + ' ' + (data.weight_unit || 'EA') + '</td>';
+                    html += '  <td class="text-end fw-bold">' + Number(lot.quantity).toLocaleString('ko-KR', {maximumFractionDigits: 4}) + ' ' + (data.weight_unit || 'EA') + '</td>';
                     html += '  <td class="text-center ' + daysClass + '">' + daysText + '</td>';
                     html += '</tr>';
                 });
