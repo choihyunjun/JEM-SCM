@@ -15,9 +15,9 @@ import requests
 from django.conf import settings
 from django.db import transaction
 from .erp_sync_lock import serialized_erp_sync
-from .stock_safety import deduct_stock
+from .stock_safety import deduct_stock, quantity_change
 from .erp_detail_validation import require_details
-from .quantities import stock_quantity
+from .quantities import erp_quantity, stock_quantity, stock_total
 
 logger = logging.getLogger(__name__)
 
@@ -205,7 +205,7 @@ def register_erp_incoming(trx, qty, warehouse_code, erp_order_no='', erp_order_s
         except Exception:
             pass
         return False, None, error_msg
-    qty = float(stock_quantity(qty))  # JSON numeric payload; preserve fractional ERP quantities.
+    qty = erp_quantity(qty)  # whole quantities keep the integer form ERP received before
     supply_amount = round(float(unit_price) * qty)      # 공급가액
     vat_amount = round(supply_amount * 0.1)      # 부가세 (10%)
     total_amount = supply_amount + vat_amount     # 합계액
@@ -695,7 +695,7 @@ def sync_erp_incoming(date_from=None, date_to=None):
                         defaults={'quantity': 0}
                     )
                     _MS.objects.filter(pk=stock_obj.pk).update(
-                        quantity=_F('quantity') + qty
+                        quantity=quantity_change(qty)
                     )
 
                     # MaterialTransaction 생성
@@ -836,7 +836,9 @@ def compare_erp_stock(year=None):
 
     cache.set('erp_sync_progress', {'stage': '데이터 비교 중...', 'percent': 50}, timeout=300)
 
+    from .stock_reconciliation import SCM_ONLY_WAREHOUSE_CODES
     hidden_wh_codes = set(Warehouse.objects.filter(is_hidden_stock=True).values_list('code', flat=True))
+    hidden_wh_codes |= set(SCM_ONLY_WAREHOUSE_CODES)
 
     erp_map = {}
     erp_info = {}
@@ -851,13 +853,14 @@ def compare_erp_stock(year=None):
         erp_map[key] = erp_map.get(key, 0) + qty
         erp_info[item.get('itemCd', '')] = item.get('itemNm', '')
 
-    scm_agg = MaterialStock.objects.exclude(warehouse__is_hidden_stock=True).values(
+    scm_agg = MaterialStock.objects.exclude(warehouse__is_hidden_stock=True).exclude(
+        warehouse__code__in=SCM_ONLY_WAREHOUSE_CODES).values(
         'warehouse__code', 'part__part_no'
     ).annotate(total=Sum('quantity'))
     scm_map = {}
     for row in scm_agg:
         key = (row['warehouse__code'], row['part__part_no'])
-        scm_map[key] = stock_quantity(row['total'] or 0)
+        scm_map[key] = stock_total(row['total'])
 
     all_keys = set(erp_map.keys()) | set(scm_map.keys())
     wh_names = {w.code: w.name for w in Warehouse.objects.all()}
@@ -954,6 +957,8 @@ def _trim_lot_stock_fifo(warehouse, part, excess_qty, now, reason=''):
         if remaining <= 0:
             break
         take = min(row.quantity, remaining)
+        if take <= 0:
+            continue
         deduct_stock(row, take)
         remaining -= take
         trimmed_total += take
@@ -2109,7 +2114,7 @@ def sync_erp_receipt(date_from=None, date_to=None):
                     defaults={'quantity': 0}
                 )
                 MaterialStock.objects.filter(pk=lot_stock.pk).update(
-                    quantity=F('quantity') + qty
+                    quantity=quantity_change(qty)
                 )
 
                 # NULL 재고 차감 (있으면)
@@ -2189,7 +2194,7 @@ def register_erp_stock_move(trx, qty, from_warehouse_code, to_warehouse_code):
         'detail': [{
             'moveSq': 1,
             'itemCd': trx.part.part_no,
-            'moveQt': float(stock_quantity(qty)),
+            'moveQt': erp_quantity(qty),
             'fwhCd': from_warehouse_code,
             'flcCd': from_warehouse_code,
             'twhCd': to_warehouse_code,
@@ -2391,7 +2396,7 @@ def sync_erp_stock_transfer(date_from=None, date_to=None):
                             warehouse=to_wh, part=part, lot_no=src.lot_no, production_lot=src.production_lot,
                             defaults={'quantity': 0}
                         )
-                        MaterialStock.objects.filter(pk=dst.pk).update(quantity=_F('quantity') + take)
+                        MaterialStock.objects.filter(pk=dst.pk).update(quantity=quantity_change(take))
                         remaining -= take
                     # 2) LOT으로 부족하면 NULL LOT에서 충당
                     if remaining > 0:
@@ -2399,12 +2404,12 @@ def sync_erp_stock_transfer(date_from=None, date_to=None):
                             warehouse=from_wh, part=part, lot_no=None, production_lot=None,
                             defaults={'quantity': 0}
                         )
-                        MaterialStock.objects.filter(pk=src_null.pk).update(quantity=_F('quantity') - remaining)
+                        MaterialStock.objects.filter(pk=src_null.pk).update(quantity=quantity_change(-remaining))
                         dst_null, _c2 = MaterialStock.objects.get_or_create(
                             warehouse=to_wh, part=part, lot_no=None, production_lot=None,
                             defaults={'quantity': 0}
                         )
-                        MaterialStock.objects.filter(pk=dst_null.pk).update(quantity=_F('quantity') + remaining)
+                        MaterialStock.objects.filter(pk=dst_null.pk).update(quantity=quantity_change(remaining))
 
                     # 입고창고 최종 합계 조회 (result_stock용)
                     to_total = MaterialStock.objects.filter(

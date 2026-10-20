@@ -22,7 +22,7 @@
     <span class="dtl-title d-block mb-3">ERP 재고 관리</span>
 
     <div class="small mb-3">
-        <strong>마지막 총량 보정 성공:</strong>
+        <strong>마지막 총량 보정 적용:</strong>
         {% if stock_sync_success %}{{ stock_sync_success.finished_at|date:"Y-m-d H:i:s" }}{% else %}완료 기록 없음{% endif %}
         {% if stock_sync_latest %}
         <div class="mt-1">
@@ -130,7 +130,7 @@
                 <div class="dtl-card-header"><i class="bi bi-list-check"></i> 수불 동기화</div>
                 <div class="card-body">
                     <p class="text-muted small mb-2">
-                        ERP 수불 이력(입고/출고/생산)을 SCM에 기록합니다.
+                        최근 7일 ERP 수불 이력(입고/출고/생산)을 SCM에 기록한 뒤 현재고를 보정합니다.
                     </p>
                     <ul class="small text-muted mb-3">
                         <li>구매입고 / 고객출고</li>

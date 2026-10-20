@@ -84,7 +84,7 @@ class Command(BaseCommand):
                 updated, deleted, new = self._compare_header_detail(
                     trx_type, fetch_headers, fetch_detail,
                     nb_key, sq_key, qt_key, is_negative,
-                    date_from, date_to, date_from_parsed,
+                    date_from, date_to, date_from_parsed, detection_errors,
                 )
                 elapsed = time.time() - start
 
@@ -138,21 +138,29 @@ class Command(BaseCommand):
             self.stderr.write(self.style.ERROR(f'  -> 오류: {e}'))
         self.stdout.write('')
 
-        if detection_errors:
-            from material.erp_sync_pipeline import record_sync_failure
-            message = '과거 수불 확인 오류: ' + '; '.join(detection_errors[:5])
-            record_sync_failure(message)
-            raise CommandError(message)
-
-        # 감지한 신규 수불도 먼저 반영한 후 총량을 보정한다.
+        # 감지한 신규 수불도 먼저 반영한 후 총량을 보정한다. 이력 확인 오류가 있어도
+        # ERP 현재고 보정은 진행하고, 오류는 별도로 기록·보고한다.
+        from material.erp_sync_pipeline import record_sync_failure, stock_failed, stock_result_message
+        result = None
         if total_updated or total_deleted or total_new:
             from material.erp_sync_pipeline import sync_inventory
             result = sync_inventory(date_from=date_from, date_to=date_to)
-            if result['errors']:
-                raise CommandError('; '.join(result['error_list']))
-            self.stdout.write(f"  -> 재고 조정 {result['stock']['adjusted']}건")
+        elif detection_errors:
+            from material.erp_api import sync_stock_from_erp
+            result = {'errors': 0, 'error_list': [], 'stock': sync_stock_from_erp()}
         else:
             self.stdout.write('변경 사항 없음 - 재고 보정 생략')
+        if result:
+            self.stdout.write(f"  -> {stock_result_message(result['stock'])}")
+
+        problems = list(detection_errors) + (result['error_list'] if result else [])
+        if detection_errors:
+            stock = result['stock']
+            message = stock_result_message(stock) + ' 과거 수불 확인 오류: ' + '; '.join(detection_errors[:5])
+            record_sync_failure(message, {'detection_errors': detection_errors, 'stock': stock},
+                                status='failed' if stock_failed(stock) else 'partial')
+        if problems:
+            raise CommandError('; '.join(problems[:10]))
 
         total_elapsed = time.time() - total_start
         self.stdout.write(self.style.SUCCESS(
@@ -174,7 +182,7 @@ class Command(BaseCommand):
 
     def _compare_header_detail(self, trx_type, fetch_headers, fetch_detail,
                                nb_key, sq_key, qt_key, is_negative,
-                               date_from, date_to, date_from_parsed):
+                               date_from, date_to, date_from_parsed, errors):
         """
         header+detail 패턴 트랜잭션 비교 (구매입고, 생산출고, 재고이동, 고객출고).
         Returns: (updated, deleted, new)
@@ -190,23 +198,29 @@ class Command(BaseCommand):
         if not headers:
             return 0, 0, 0
 
+        from material.erp_detail_validation import require_details
+        from material.quantities import stock_quantity
+        unverified = []
         for header in headers:
             nb = header.get(nb_key, '')
             if not nb:
                 continue
 
-            ok2, details, err2 = fetch_detail(nb)
-            if not ok2 or not details:
-                raise ValueError(err2 or f'{nb}: 상세 조회 실패/응답 누락 — 삭제 판정 보류')
-
-            for detail in details:
-                sq = detail.get(sq_key, 1)
-                trx_key = f'{nb}-{sq}'
-                from material.quantities import stock_quantity
-                qty = stock_quantity(detail.get(qt_key, 0) or 0)
-                if qty <= 0:
-                    continue
-                erp_map[trx_key] = -qty if is_negative else qty
+            # One empty or unreadable document must not abort the whole type; it is
+            # reported and excluded from deletion decisions below.
+            try:
+                ok2, details, err2 = fetch_detail(nb)
+                require_details(ok2, details, err2)
+                document = {}
+                for detail in details:
+                    qty = stock_quantity(detail.get(qt_key, 0) or 0)
+                    if qty > 0:
+                        document[f'{nb}-{detail.get(sq_key, 1)}'] = -qty if is_negative else qty
+            except ValueError as exc:
+                unverified.append(f'{nb}-')
+                errors.append(f'{trx_type} {nb}: {exc}')
+                continue
+            erp_map.update(document)
 
         # 2) SCM에서 해당 기간 + 타입의 트랜잭션 조회
         scm_records = MaterialTransaction.objects.filter(
@@ -219,8 +233,8 @@ class Command(BaseCommand):
         for pk, erp_no, qty in scm_records:
             scm_map[erp_no] = (pk, qty)
 
-        # 3) 비교
-        return self._diff_maps(erp_map, scm_map)
+        # 3) 비교 (확인하지 못한 전표의 SCM 기록은 삭제 판정에서 제외)
+        return self._diff_maps(erp_map, scm_map, tuple(unverified))
 
     def _compare_receipt(self, fetch_receipt_list, date_from, date_to, date_from_parsed):
         """
@@ -262,7 +276,7 @@ class Command(BaseCommand):
         # 3) 비교
         return self._diff_maps(erp_map, scm_map)
 
-    def _diff_maps(self, erp_map, scm_map):
+    def _diff_maps(self, erp_map, scm_map, unverified=()):
         """
         ERP 맵과 SCM 맵을 비교하여 수정/삭제/신규 건수 반환.
         erp_map: {trx_key: qty}
@@ -285,6 +299,8 @@ class Command(BaseCommand):
                         f'    수정: {trx_key} 수량 {scm_qty} → {erp_qty}'
                     ))
                     updated += 1
+            elif unverified and trx_key.startswith(unverified):
+                continue
             else:
                 MaterialTransaction.objects.filter(pk=pk).delete()
                 self.stdout.write(self.style.ERROR(

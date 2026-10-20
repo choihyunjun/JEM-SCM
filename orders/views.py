@@ -10,6 +10,7 @@ from django.http import HttpResponse, JsonResponse
 from django.contrib import messages
 from django.views.decorators.http import require_POST
 from django.db import transaction, OperationalError
+from material.stock_safety import quantity_change
 from functools import wraps
 import openpyxl
 import datetime
@@ -2124,7 +2125,7 @@ def receive_delivery_order_confirm(request):
                         warehouse=target_wh, part=part, lot_no=item.lot_no,
                         production_lot=None,
                     )
-                    MaterialStock.objects.filter(pk=stock.pk).update(quantity=F('quantity') + item.total_qty)
+                    MaterialStock.objects.filter(pk=stock.pk).update(quantity=quantity_change(item.total_qty))
                     stock.refresh_from_db()
 
                 # ERP 발주 연결 여부로 발주입고/예외입고 구분

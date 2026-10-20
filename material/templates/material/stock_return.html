@@ -18,8 +18,8 @@
                     <td>{% if case.source_incoming_id %}<input type="checkbox" name="case_ids" value="{{ case.pk }}" aria-label="{{ case.part.part_no }} 선택">{% endif %}</td>
                     <td><strong>{{ case.part.part_no }}</strong><div class="small">{{ case.part.part_name }}<br>{{ case.part.vendor.name }}</div></td>
                     <td>{{ case.delivery_order.order_no|default:"수기 입고" }}<div class="small">{{ case.source_incoming.lot_no|date:"Y-m-d"|default:"-" }} / {{ case.source_incoming.production_lot|default:"-" }}<br>{{ case.source_incoming.transaction_no|default:"원본 입고 연결 확인 필요" }}</div></td>
-                    <td>{{ case.reason }}</td><td class="erp-number">{{ case.quantity }}</td><td>{{ case.shipped_quantity }}</td><td>{{ case.remaining_quantity }}</td>
-                    <td>{% if case.source_incoming_id %}<input class="form-control" style="min-width:100px" type="number" name="quantity_{{ case.pk }}" value="{{ case.remaining_quantity }}" min="1" max="{{ case.remaining_quantity }}" aria-label="{{ case.part.part_no }} 반출 수량">{% else %}<span class="text-warning">과거 내역 확인 필요</span>{% endif %}</td>
+                    <td>{{ case.reason }}</td><td class="erp-number">{{ case.quantity }}</td><td>{{ case.shipped_quantity|floatformat:"-4" }}</td><td>{{ case.remaining_quantity|floatformat:"-4" }}</td>
+                    <td>{% if case.source_incoming_id %}<input class="form-control" style="min-width:100px" type="number" name="quantity_{{ case.pk }}" value="{{ case.remaining_quantity|floatformat:"-4" }}" min="1" max="{{ case.remaining_quantity|floatformat:"-4" }}" aria-label="{{ case.part.part_no }} 반출 수량">{% else %}<span class="text-warning">과거 내역 확인 필요</span>{% endif %}</td>
                 </tr>{% empty %}<tr><td colspan="8" class="text-center text-muted py-4">반출 대기 건이 없습니다.</td></tr>{% endfor %}</tbody>
             </table></div>
             {% if return_cases %}<div class="text-end"><button class="btn btn-danger">선택 항목 반출 확정</button></div>{% endif %}
@@ -37,7 +37,7 @@
             <thead><tr><th>반출일</th><th>반출 번호 / 납품서</th><th>품번</th><th>LOT / 제조 LOT</th><th class="erp-number">수량</th><th>협력사 인수</th><th>반출증</th></tr></thead>
             <tbody>{% for trx in history_page %}<tr>
                 <td>{{ trx.date|date:"Y-m-d H:i" }}</td><td>{{ trx.transaction_no }}<div class="small">{{ trx.ref_delivery_order|default:"-" }}</div></td>
-                <td>{{ trx.part.part_no }}</td><td>{{ trx.lot_no|date:"Y-m-d"|default:"-" }} / {{ trx.production_lot|default:"-" }}</td><td class="erp-number">{{ trx.quantity }}</td>
+                <td>{{ trx.part.part_no }}</td><td>{{ trx.lot_no|date:"Y-m-d"|default:"-" }} / {{ trx.production_lot|default:"-" }}</td><td class="erp-number">{{ trx.quantity|floatformat:"-4" }}</td>
                 <td>{% if trx.return_shipment.confirmed_at %}<span class="badge bg-success">확인 완료</span>{% elif trx.return_shipment %}<span class="badge bg-secondary">확인 대기</span>{% else %}과거 내역{% endif %}</td>
                 <td><a class="btn btn-sm btn-outline-primary" href="{% url 'material:print_return_note' trx.pk %}" target="_blank" rel="noopener">인쇄 / 재인쇄</a></td>
             </tr>{% empty %}<tr><td colspan="7" class="text-center text-muted">반출 이력이 없습니다.</td></tr>{% endfor %}</tbody>

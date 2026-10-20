@@ -314,7 +314,7 @@
                             <td>{{ trx.warehouse_to.name }}</td>
                             <td>{{ trx.lot_no|date:"Y-m-d"|default:"-" }}</td>
                             <td class="text-end fw-bold {% if trx.quantity > 0 %}text-primary{% elif trx.quantity < 0 %}text-danger{% endif %}">
-                                {% if trx.quantity > 0 %}+{% endif %}{{ trx.quantity }}
+                                {% if trx.quantity > 0 %}+{% endif %}{{ trx.quantity|floatformat:"-4" }}
                             </td>
                             <td class="small">{{ trx.actor.username|default:"-" }}</td>
                         </tr>
@@ -506,7 +506,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         + '<input type="date" class="form-control form-control-sm lot-correct-date"'
                         + ' data-pid="' + pid + '" data-stock-id="' + l.id + '" data-orig-date="' + l.lot_no + '" value="' + curDate + '" style="width:140px;" min="2000-01-01" max="2099-12-31">'
                         + '<input type="number" class="form-control form-control-sm lot-correct-qty"'
-                        + ' data-pid="' + pid + '" data-stock-id="' + l.id + '" data-orig-qty="' + l.quantity + '" value="' + curQty + '" style="width:90px;" min="0">'
+                        + ' data-pid="' + pid + '" data-stock-id="' + l.id + '" data-orig-qty="' + l.quantity + '" value="' + curQty + '" style="width:90px;" min="0" step="any">'
                         + '<small class="text-muted correct-desc" data-stock-id="' + l.id + '">'
                         + '\uc6d0\ub798: ' + l.quantity.toLocaleString() + unit + dHtml + '</small>'
                         + '<button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 btn-reprint-lot ms-auto"'
@@ -554,7 +554,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 + '<small class="fw-bold text-success d-block mb-2"><i class="bi bi-plus-circle me-1"></i>\uc0c8 LOT \ubc30\ubd84</small>'
                 + '<div id="new-lot-input-' + pid + '" class="row g-2 align-items-end mb-2" style="' + newLotInputStyle + '">'
                 + '<div class="col-4"><input type="date" class="form-control form-control-sm lot-date-input" data-pid="' + pid + '" min="2000-01-01" max="2099-12-31"></div>'
-                + '<div class="col-3"><input type="number" class="form-control form-control-sm lot-qty-input" data-pid="' + pid + '" min="1" placeholder="\uc218\ub7c9"></div>'
+                + '<div class="col-3"><input type="number" class="form-control form-control-sm lot-qty-input" data-pid="' + pid + '" min="0.0001" step="any" placeholder="\uc218\ub7c9"></div>'
                 + '<div class="col-2"><button type="button" class="btn btn-sm btn-success w-100 btn-add-lot" data-pid="' + pid + '"><i class="bi bi-plus-lg"></i> \ucd94\uac00</button></div>'
                 + '<div class="col-3 text-end"><small>\ubc30\ubd84: <strong class="text-primary alloc-sum" data-pid="' + pid + '">' + allocSum.toLocaleString() + '</strong>'
                 + ' / \uc794\uc5ec: <strong class="alloc-remain ' + (remaining < 0 ? 'text-danger' : 'text-success') + '" data-pid="' + pid + '">' + remaining.toLocaleString() + '</strong></small></div>'
@@ -589,9 +589,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 const dateInput = row.querySelector('.lot-correct-date');
                 const qtyInput = row.querySelector('.lot-correct-qty');
                 const origDate = dateInput.dataset.origDate;
-                const origQty = parseInt(qtyInput.dataset.origQty) || 0;
+                const origQty = parseFloat(qtyInput.dataset.origQty) || 0;
                 const newDate = dateInput.value;
-                const newQty = parseInt(qtyInput.value) || 0;
+                const newQty = parseFloat(qtyInput.value) || 0;
 
                 if (!correctData[pid]) correctData[pid] = {};
                 if (newDate === origDate && newQty === origQty) {
@@ -677,7 +677,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const dateInput = document.querySelector('.lot-date-input[data-pid="' + pid + '"]');
         const qtyInput = document.querySelector('.lot-qty-input[data-pid="' + pid + '"]');
         const lotDate = dateInput.value;
-        const lotQty = parseInt(qtyInput.value) || 0;
+        const lotQty = parseFloat(qtyInput.value) || 0;
 
         if (!lotDate) { alert('배분 LOT 날짜를 입력해주세요.'); dateInput.focus(); return; }
         if (lotQty <= 0) { alert('수량은 1 이상이어야 합니다.'); qtyInput.focus(); return; }

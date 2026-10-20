@@ -37,6 +37,7 @@ from .models import ImportInspection
 
 # ✅ [새 기능 필수] 판정 시 재고 이동을 위해 필요 (없으면 판정 버튼 누를 때 에러남)
 from material.models import Warehouse, MaterialStock, MaterialTransaction
+from material.stock_safety import quantity_change
 
 # ✅ [새 기능 필수] 판정 시 SCM 연동을 위해 필요
 from orders.models import Incoming, Inventory as ScmInventory, DeliveryOrder, DeliveryOrderItem, ReturnLog, Organization
@@ -1385,7 +1386,7 @@ def import_inspection_detail(request, pk):
                         f"(보유: {have}, 필요: {total_input}) 재고 이력을 먼저 확인해주세요."
                     )
                 if MaterialStock.objects.filter(pk=src_stock.pk, quantity__gte=total_input).update(
-                    quantity=F('quantity') - total_input
+                    quantity=quantity_change(-total_input)
                 ) != 1:
                     raise ValueError('검사대기 재고가 변경되었습니다. 다시 확인해 주세요.')
                 src_stock.refresh_from_db()
@@ -1404,7 +1405,7 @@ def import_inspection_detail(request, pk):
                         part=part,
                         lot_no=lot_no, production_lot=origin_trx.production_lot
                     )
-                    stock_good.quantity = F("quantity") + qty_good
+                    stock_good.quantity = quantity_change(qty_good)
                     stock_good.save()
                     stock_good.refresh_from_db()
 
@@ -1466,7 +1467,7 @@ def import_inspection_detail(request, pk):
                         part=part,
                         lot_no=lot_no, production_lot=origin_trx.production_lot
                     )
-                    stock_bad.quantity = F("quantity") + qty_bad
+                    stock_bad.quantity = quantity_change(qty_bad)
                     stock_bad.save()
                     stock_bad.refresh_from_db()
 

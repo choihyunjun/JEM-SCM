@@ -154,7 +154,7 @@
                                 <td class="fw-bold text-danger">{{ log.delivery_order.order_no|default:"수기 입고" }}<div class="small text-muted">LOT {{ log.source_incoming.lot_no|date:"Y-m-d"|default:"미확인" }} / {{ log.source_incoming.production_lot|default:"-" }}</div></td>
                                 <td>{{ log.created_at|date:"Y-m-d" }}</td>
                                 <td class="fw-bold">{{ log.part.part_no }}</td>
-                                <td class="fw-bold text-danger">{{ log.quantity|intcomma }} / {{ log.shipped_quantity|intcomma }} / {{ log.confirmed_quantity|intcomma }}</td>
+                                <td class="fw-bold text-danger">{{ log.quantity|intcomma }} / {{ log.shipped_quantity|floatformat:"-4"|intcomma }} / {{ log.confirmed_quantity|intcomma }}</td>
                                 <td>{{ log.reason|default:"-" }}</td>
                                 <td>
                                     {% if not log.source_incoming_id or not log.delivery_item_id %}
@@ -163,19 +163,19 @@
                                     {% if log.legacy_confirmed_quantity %}<div class="small">기존 확인 {{ log.legacy_confirmed_quantity }}개</div>{% endif %}
                                     {% for shipment in log.shipments.all %}
                                         <div class="mb-2 small">
-                                            {{ shipment.movement.date|date:"Y-m-d" }} · {{ shipment.movement.quantity }}개
+                                            {{ shipment.movement.date|date:"Y-m-d" }} · {{ shipment.movement.quantity|floatformat:"-4" }}개
                                             {% if shipment.confirmed_at %}<span class="badge bg-success">인수 확인 완료</span>
                                             {% else %}
                                             <form action="{% url 'confirm_return' log.id %}" method="post" class="d-inline">
                                                 {% csrf_token %}<input type="hidden" name="shipment_id" value="{{ shipment.pk }}">
-                                                <button class="btn btn-sm btn-outline-danger" onclick="return confirm('반출된 {{ shipment.movement.quantity }}개를 실제로 인수하셨습니까?')">인수 확인</button>
+                                                <button class="btn btn-sm btn-outline-danger" onclick="return confirm('반출된 {{ shipment.movement.quantity|floatformat:"-4" }}개를 실제로 인수하셨습니까?')">인수 확인</button>
                                             </form>
                                             {% endif %}
                                         </div>
                                     {% empty %}
                                         {% if not log.is_confirmed %}<span class="badge bg-secondary">반출 대기</span>{% endif %}
                                     {% endfor %}
-                                    {% if log.remaining_quantity %}<div class="small text-muted">반출 대기 {{ log.remaining_quantity }}개</div>{% endif %}
+                                    {% if log.remaining_quantity %}<div class="small text-muted">반출 대기 {{ log.remaining_quantity|floatformat:"-4" }}개</div>{% endif %}
                                 </td>
                             </tr>
                             {% empty %}

@@ -6,6 +6,22 @@ from .erp_sync_lock import serialized_erp_sync
 from .models import StockSyncRun
 
 
+def stock_failed(stock):
+    """No verified ERP balance was applied; a result without status counts as failed."""
+    if not stock:
+        return True
+    return stock.get('status', 'failed' if stock.get('error') else 'success') == 'failed'
+
+
+def stock_result_message(stock):
+    """Applied-with-warnings must not read as a failed correction (and vice versa)."""
+    if stock_failed(stock):
+        return 'ERP 현재고 보정 실패(미적용).'
+    if stock.get('error'):
+        return f"ERP 현재고 보정 {stock.get('adjusted', 0)}건 적용, 일부 항목 확인 필요."
+    return f"ERP 현재고 보정 완료 ({stock.get('adjusted', 0)}건)."
+
+
 def record_sync_failure(message, summary=None, status='failed'):
     StockSyncRun.objects.create(status=status, finished_at=timezone.now(),
                                 error=message, summary=summary or {})
@@ -47,16 +63,16 @@ def sync_inventory(date_from=None, date_to=None):
     try:
         result['stock'] = erp_api.sync_stock_from_erp()
     except Exception as exc:
-        result['stock'] = {'adjusted': 0, 'error': str(exc)}
+        result['stock'] = {'adjusted': 0, 'error': str(exc), 'status': 'failed'}
     stock_error = result['stock'].get('error')
     if stock_error:
         result['errors'] += 1
         result['error_list'].append(f'ERP 현재고 보정: {stock_error}')
     message = None
     if result['errors']:
-        message = ('ERP 현재고 보정 확인 필요. ' if stock_error else 'ERP 현재고 보정 완료. ')
-        message += f'수불 이력 오류 {result["ledger_errors"]}건. ' + '; '.join(result['error_list'][:5])
-        record_sync_failure(message, result, status='failed' if stock_error else 'partial')
+        message = stock_result_message(result['stock'])
+        message += f' 수불 이력 오류 {result["ledger_errors"]}건. ' + '; '.join(result['error_list'][:5])
+        record_sync_failure(message, result, status='failed' if stock_failed(result['stock']) else 'partial')
     cache.set('erp_sync_progress', {
         'stage': '확인 필요' if result['errors'] else '수불·총량 보정 완료',
         'percent': 100, 'error': message,

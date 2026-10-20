@@ -23,6 +23,8 @@ ERP 현재고를 단일 진실로 보고, SCM 재고를 두 방향으로 정합�
 from datetime import datetime
 
 from django.core.management.base import BaseCommand
+from material.stock_safety import quantity_change
+from material.quantities import stock_quantity, stock_total
 from django.db.models import Sum
 
 
@@ -61,7 +63,7 @@ class Command(BaseCommand):
 
         erp_map = {}
         for item in (erp_items or []):
-            qty = int(item.get('invQt1', 0) or 0)
+            qty = stock_quantity(item.get('invQt1', 0) or 0)
             key = (item.get('whCd', ''), item.get('itemCd', ''))
             erp_map[key] = erp_map.get(key, 0) + qty
 
@@ -69,7 +71,7 @@ class Command(BaseCommand):
         def _agg(qs):
             out = {}
             for row in qs.values('warehouse__code', 'part__part_no').annotate(total=Sum('quantity')):
-                out[(row['warehouse__code'], row['part__part_no'])] = int(row['total'] or 0)
+                out[(row['warehouse__code'], row['part__part_no'])] = stock_total(row['total'])
             return out
 
         null_qs = MaterialStock.objects.filter(lot_no__isnull=True)
@@ -202,7 +204,7 @@ class Command(BaseCommand):
                         if diff != 0:
                             ns = MaterialStock.objects.filter(warehouse=wh, part=part, lot_no=None).first()
                             if ns:
-                                MaterialStock.objects.filter(pk=ns.pk).update(quantity=F('quantity') + diff)
+                                MaterialStock.objects.filter(pk=ns.pk).update(quantity=quantity_change(diff))
                             elif target_null != 0:
                                 MaterialStock.objects.create(warehouse=wh, part=part, lot_no=None, quantity=target_null)
                             _create_trx(

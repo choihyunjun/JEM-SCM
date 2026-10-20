@@ -57,7 +57,7 @@
                 </div>
                 <div class="col-md-3">
                     <span class="dtl-field-label">입고수량</span>
-                    <div class="dtl-field-value">{{ inspection.inbound_transaction.quantity|intcomma }} {{ inspection.inbound_transaction.part.weight_unit|default:"EA" }}</div>
+                    <div class="dtl-field-value">{{ inspection.inbound_transaction.quantity|floatformat:"-4"|intcomma }} {{ inspection.inbound_transaction.part.weight_unit|default:"EA" }}</div>
                 </div>
                 <div class="col-md-3">
                     <span class="dtl-field-label">현재위치</span>
@@ -98,7 +98,7 @@
                             <div class="col-md-4">
                                 <div class="dtl-qty-tile neutral">
                                     <span class="dtl-qty-caption">총 입고 수량</span>
-                                    <input type="number" class="dtl-qty-input" value="{{ inspection.inbound_transaction.quantity }}" readonly id="totalQty">
+                                    <input type="number" class="dtl-qty-input" value="{{ inspection.inbound_transaction.quantity|floatformat:"-4" }}" readonly id="totalQty">
                                 </div>
                             </div>
                             <div class="col-md-1 text-center dtl-qty-arrow"><i class="bi bi-arrow-right"></i></div>
@@ -106,7 +106,7 @@
                                 <div class="dtl-qty-tile good">
                                     <span class="dtl-qty-caption">양품 (합격)</span>
                                     <input type="number" name="qty_good" id="qtyGood" class="dtl-qty-input"
-                                           value="{% if inspection.status != 'PENDING' %}{{ inspection.qty_good }}{% else %}{{ inspection.inbound_transaction.quantity }}{% endif %}" required min="0"
+                                           value="{% if inspection.status != 'PENDING' %}{{ inspection.qty_good }}{% else %}{{ inspection.inbound_transaction.quantity|floatformat:"-4" }}{% endif %}" required min="0"
                                            {% if inspection.status != 'PENDING' %}disabled{% endif %} oninput="calcBadQty()">
                                 </div>
                             </div>

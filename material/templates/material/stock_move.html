@@ -90,7 +90,7 @@
 
                     <div class="col-md-1">
                         <label class="dtl-form-label">수량</label>
-                        <input type="number" id="inputQty" class="form-control dtl-form-control text-end fw-bold" placeholder="0" min="1">
+                        <input type="number" id="inputQty" class="form-control dtl-form-control text-end fw-bold" placeholder="0" min="0.0001" step="any">
                     </div>
 
                     <div class="col-md-1">
@@ -526,7 +526,7 @@
         }
 
         document.getElementById('inputPart').value = partNo;
-        qrScannedQty = parseInt(qty) || null;
+        qrScannedQty = parseFloat(qty) || null;
 
         try {
             await loadAvailableLots();
@@ -613,9 +613,9 @@
 
                 let displayText;
                 if (lot.is_null_lot) {
-                    displayText = `ERP 재고 (재고: ${lot.quantity.toLocaleString()} ${unit}) ★ 우선 소진`;
+                    displayText = `ERP 재고 (재고: ${Number(lot.quantity).toLocaleString('ko-KR', {maximumFractionDigits: 4})} ${unit}) ★ 우선 소진`;
                 } else {
-                    displayText = `${lot.lot_label || lot.lot_no} (재고: ${lot.quantity.toLocaleString()} ${unit}, ${lot.days_old}일 경과)`;
+                    displayText = `${lot.lot_label || lot.lot_no} (재고: ${Number(lot.quantity).toLocaleString('ko-KR', {maximumFractionDigits: 4})} ${unit}, ${lot.days_old}일 경과)`;
                     if (index === 0 || (index === 1 && data.lots[0].is_null_lot)) {
                         displayText += ' ⚠️ FIFO 추천';
                     }
@@ -646,7 +646,7 @@
             currentLotData = {
                 stock_id: selectedOption.value,
                 lot_no: selectedOption.dataset.lotNo,
-                max_qty: parseInt(selectedOption.dataset.quantity),
+                max_qty: parseFloat(selectedOption.dataset.quantity),
                 days_old: parseInt(selectedOption.dataset.daysOld),
                 unit: lotSelect.dataset.unit || 'EA'
             };
@@ -691,9 +691,9 @@
         if(!lotSel.value) { alert('LOT를 선택해주세요.'); return; }
         if(!toVal) { alert('받는 창고를 선택해주세요.'); return; }
         if(fromVal === toVal) { alert('보내는 곳과 받는 곳이 같습니다.'); return; }
-        if(!qty || parseInt(qty) <= 0) { alert('수량은 1 이상이어야 합니다.'); return; }
+        if(!qty || parseFloat(qty) <= 0) { alert('수량은 0보다 커야 합니다.'); return; }
 
-        if (currentLotData && parseInt(qty) > currentLotData.max_qty) {
+        if (currentLotData && parseFloat(qty) > currentLotData.max_qty) {
             alert(`선택한 LOT의 재고(${currentLotData.max_qty} ${currentLotData.unit})를 초과할 수 없습니다.`);
             return;
         }
@@ -705,10 +705,10 @@
             existingRows.forEach((input, idx) => {
                 if (input.value === String(currentLotData.stock_id)) {
                     const qtyInput = document.querySelectorAll('#tableBody input[name="move_qty[]"]')[idx];
-                    alreadyAdded += parseInt(qtyInput.value) || 0;
+                    alreadyAdded += parseFloat(qtyInput.value) || 0;
                 }
             });
-            if (alreadyAdded + parseInt(qty) > currentLotData.max_qty) {
+            if (alreadyAdded + parseFloat(qty) > currentLotData.max_qty) {
                 const remaining = currentLotData.max_qty - alreadyAdded;
                 alert(`이미 이 LOT에서 ${alreadyAdded} ${currentLotData.unit}가 추가되어 있습니다.\n잔여 이동 가능: ${remaining} ${currentLotData.unit}`);
                 return;
@@ -759,7 +759,7 @@
                 lotNo: currentLotData.lot_no,
                 fifoReason, qrRawData
             };
-            await showLabelSelectModal(partNo, currentLotData.lot_no, parseInt(qty));
+            await showLabelSelectModal(partNo, currentLotData.lot_no, parseFloat(qty));
             return;
         }
 
@@ -916,7 +916,7 @@
                 <input type="hidden" name="label_ids[]" value='${labelIdsJson}'>
             </td>
             <td class="fw-bold">
-                ${parseInt(qty).toLocaleString()}
+                ${parseFloat(qty).toLocaleString('ko-KR', {maximumFractionDigits: 4})}
                 <input type="hidden" name="move_qty[]" value="${qty}">
             </td>
             <td>

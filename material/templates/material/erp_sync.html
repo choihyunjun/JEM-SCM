@@ -130,7 +130,7 @@
                             <td class="text-center text-muted">{{ forloop.counter }}</td>
                             <td class="fw-bold font-monospace">{{ trx.part.part_no }}</td>
                             <td>{{ trx.part.part_name }}</td>
-                            <td class="text-end fw-bold pe-3 erp-number">{{ trx.quantity|intcomma }}</td>
+                            <td class="text-end fw-bold pe-3 erp-number">{{ trx.quantity|floatformat:"-4"|intcomma }}</td>
                             {% if sync_type == 'IN' %}
                             <td class="text-center">{{ trx.warehouse_to.name|default:"-" }}</td>
                             <td class="text-center">{{ trx.lot_no|date:"Y-m-d"|default:"-" }}</td>

@@ -87,7 +87,7 @@
                                                data-insp-id="{{ insp.id }}"
                                                data-part-no="{{ insp.inbound_transaction.part.part_no }}"
                                                data-part-name="{{ insp.inbound_transaction.part.part_name }}"
-                                               data-qty="{{ insp.inbound_transaction.quantity }}"
+                                               data-qty="{{ insp.inbound_transaction.quantity|floatformat:"-4" }}"
                                                data-has-setting="{{ insp.has_setting|yesno:'1,' }}"
                                                data-unit-weight="{{ insp.setting_unit_weight }}"
                                                data-shelf-life="{{ insp.setting_shelf_life }}"
@@ -104,7 +104,7 @@
                                         {{ insp.inbound_transaction.part.part_name|truncatechars:25 }}
                                     </td>
                                     <td class="text-end fw-bold erp-number">
-                                        {{ insp.inbound_transaction.quantity|intcomma }}
+                                        {{ insp.inbound_transaction.quantity|floatformat:"-4"|intcomma }}
                                     </td>
                                     <td class="text-center small">
                                         {{ insp.inbound_transaction.lot_no|date:"Y-m-d"|default:"-" }}
@@ -148,7 +148,7 @@
                                             </button>
                                             {% else %}
                                             <button type="button" class="btn btn-success btn-print"
-                                                    onclick="openLabelModal('{{ insp.id }}', '{{ insp.inbound_transaction.part.part_no }}', '{{ insp.inbound_transaction.part.part_name|truncatechars:30 }}', {{ insp.inbound_transaction.quantity }}, {{ insp.has_setting|yesno:'true,false' }}, {{ insp.setting_unit_weight }}, {{ insp.setting_shelf_life }}, '{{ insp.inbound_transaction.lot_no|date:"Y-m-d" }}')">
+                                                    onclick="openLabelModal('{{ insp.id }}', '{{ insp.inbound_transaction.part.part_no }}', '{{ insp.inbound_transaction.part.part_name|truncatechars:30 }}', {{ insp.inbound_transaction.quantity|floatformat:"-4" }}, {{ insp.has_setting|yesno:'true,false' }}, {{ insp.setting_unit_weight }}, {{ insp.setting_shelf_life }}, '{{ insp.inbound_transaction.lot_no|date:"Y-m-d" }}')">
                                                 <i class="bi bi-qr-code"></i> 라벨발행
                                             </button>
                                             {% endif %}
@@ -171,7 +171,7 @@
                                         {% else %}
                                         <div class="btn-group btn-group-sm">
                                             <button type="button" class="btn btn-success btn-print"
-                                                    onclick="openLabelModal('{{ insp.id }}', '{{ insp.inbound_transaction.part.part_no }}', '{{ insp.inbound_transaction.part.part_name|truncatechars:30 }}', {{ insp.inbound_transaction.quantity }}, {{ insp.has_setting|yesno:'true,false' }}, {{ insp.setting_unit_weight }}, {{ insp.setting_shelf_life }}, '{{ insp.inbound_transaction.lot_no|date:"Y-m-d" }}')">
+                                                    onclick="openLabelModal('{{ insp.id }}', '{{ insp.inbound_transaction.part.part_no }}', '{{ insp.inbound_transaction.part.part_name|truncatechars:30 }}', {{ insp.inbound_transaction.quantity|floatformat:"-4" }}, {{ insp.has_setting|yesno:'true,false' }}, {{ insp.setting_unit_weight }}, {{ insp.setting_shelf_life }}, '{{ insp.inbound_transaction.lot_no|date:"Y-m-d" }}')">
                                                 <i class="bi bi-qr-code"></i> 라벨발행
                                             </button>
                                             <button type="button" class="btn btn-outline-primary btn-print"
@@ -226,7 +226,7 @@
                                     </td>
                                     <td class="fw-bold">{{ insp.inbound_transaction.part.part_no }}</td>
                                     <td>{{ insp.inbound_transaction.part.part_name|truncatechars:20 }}</td>
-                                    <td class="text-end erp-number">{{ insp.inbound_transaction.quantity|intcomma }}</td>
+                                    <td class="text-end erp-number">{{ insp.inbound_transaction.quantity|floatformat:"-4"|intcomma }}</td>
                                     <td class="text-muted">{{ insp.inbound_transaction.vendor.name|default:"-"|truncatechars:8 }}</td>
                                     <td class="text-center">
                                         <span class="status-badge status-pending">검사대기</span>

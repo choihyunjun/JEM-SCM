@@ -21,7 +21,12 @@ PY
     echo 'Waiting for the current ERP sync to finish before migrating (up to 2 hours)...'
     flock -w 7200 9
     systemctl stop gunicorn
-    trap 'systemctl start gunicorn' EXIT
+    # Always bring the service back. A failed migration is atomic on SQLite, so
+    # the previous schema remains; restore the printed backup only if needed.
+    trap 'status=$?; systemctl start gunicorn; if [ "$status" -ne 0 ]; then
+        echo "DEPLOY FAILED (exit $status). Gunicorn restarted. DB unchanged unless migrate reported OK." >&2
+        echo "Restore if required: systemctl stop gunicorn; cp <backup above> <db.sqlite3>; git checkout <previous commit>; systemctl start gunicorn" >&2
+    fi' EXIT
     "$ERP_PYTHON" - <<'PY'
 import sqlite3
 from datetime import datetime
@@ -46,5 +51,10 @@ PY
     "$ERP_PYTHON" manage.py check_deployment
     "$ERP_PYTHON" manage.py collectstatic --noinput
 ) 9<"$ERP_LOCK_FILE"
+# Type=notify services report "activating" for a few seconds after start.
+for _ in $(seq 1 30); do
+    systemctl is-active --quiet gunicorn && break
+    sleep 1
+done
 systemctl is-active gunicorn
 "$ERP_PYTHON" manage.py sync_erp_stock --wait-seconds 7200

@@ -319,10 +319,11 @@ class PastChangesSafetyTests(TestCase):
         part = Part.objects.create(part_no='P1', part_name='Test')
         trx = MaterialTransaction.objects.create(transaction_no='KEEP', transaction_type='TRF_ERP',
             part=part, quantity=10, erp_incoming_no='MOVE-1')
-        with self.assertRaises(ValueError):
-            Command()._compare_header_detail('TRF_ERP',
-                Mock(return_value=(True, [dict(moveNb='MOVE')], None)),
-                Mock(return_value=(False, None, 'timeout')),
-                'moveNb', 'moveSq', 'moveQt', False,
-                '20260901', '20260917', date(2026, 9, 1))
+        errors = []
+        Command()._compare_header_detail('TRF_ERP',
+            Mock(return_value=(True, [dict(moveNb='MOVE')], None)),
+            Mock(return_value=(False, None, 'timeout')),
+            'moveNb', 'moveSq', 'moveQt', False,
+            '20260901', '20260917', date(2026, 9, 1), errors)
+        self.assertIn('DETAIL_API_FAILURE', errors[0])
         self.assertTrue(MaterialTransaction.objects.filter(pk=trx.pk).exists())

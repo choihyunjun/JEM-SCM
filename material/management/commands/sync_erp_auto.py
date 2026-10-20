@@ -1,7 +1,7 @@
 """ERP 수불 반영 후 현재고 보정 (cron 호출용)."""
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
-from material.erp_sync_pipeline import sync_inventory
+from material.erp_sync_pipeline import stock_result_message, sync_inventory
 from material.erp_sync_lock import ERPSyncBusy
 from datetime import timedelta
 from django.utils import timezone
@@ -29,10 +29,7 @@ class Command(BaseCommand):
             self.stdout.write(str(exc))
             return
         if result['errors']:
-            stock = result.get('stock') or {}
-            stock_status = (f"ERP 현재고 보정 완료 (조정 {stock.get('adjusted', 0)}건). "
-                            if stock and not stock.get('error') else 'ERP 현재고 보정 확인 필요. ')
-            raise CommandError(stock_status + '; '.join(result['error_list']))
+            raise CommandError(stock_result_message(result.get('stock')) + ' ' + '; '.join(result['error_list']))
         self.stdout.write(self.style.SUCCESS(
             f"수불 {result['synced']}건 / 재고 조정 {result['stock']['adjusted']}건 완료"
         ))

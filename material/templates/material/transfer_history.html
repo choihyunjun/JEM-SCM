@@ -148,7 +148,7 @@
                                     <span class="text-muted">-</span>
                                 {% endif %}
                             </td>
-                            <td class="fw-bold erp-number">{{ trx.quantity|intcomma }}</td>
+                            <td class="fw-bold erp-number">{{ trx.quantity|floatformat:"-4"|intcomma }}</td>
                             <td class="small text-muted">
                                 {% if trx.actor %}{{ trx.actor.username }}{% else %}-{% endif %}
                             </td>

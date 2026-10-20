@@ -488,12 +488,12 @@
             <div class="wall-title wall-2f">2공장</div>
             <div class="pallet-grid">
                 {% for cell in wall_a.1 %}
-                <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.base_qty }}" data-stock-status="{{ cell.stock_status }}" data-part-id="{{ cell.part_id }}" data-safety-stock="{{ cell.safety_stock }}" data-current-qty="{{ cell.stock_qty }}" data-shortage-qty="{{ cell.shortage_qty }}" onclick="showScanHistory(this)"{% endif %}>
+                <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.base_qty }}" data-stock-status="{{ cell.stock_status }}" data-part-id="{{ cell.part_id }}" data-safety-stock="{{ cell.safety_stock }}" data-current-qty="{{ cell.stock_qty|floatformat:"-4" }}" data-shortage-qty="{{ cell.shortage_qty }}" onclick="showScanHistory(this)"{% endif %}>
                     <div class="rack-position">{{ cell.rack.position_code }}</div>
                     {% if cell.rack.part %}
                     <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
                     <div class="rack-part-name">{{ cell.rack.part.part_name }}</div>
-                    <div class="rack-stock">{{ cell.stock_qty|intcomma }}kg</div>
+                    <div class="rack-stock">{{ cell.stock_qty|floatformat:"-4"|intcomma }}kg</div>
                     {% else %}
                     <span class="empty-dash">—</span>
                     {% endif %}
@@ -502,12 +502,12 @@
             </div>
             <div class="pallet-grid" style="margin-top: 15px;">
                 {% for cell in wall_a.2 %}
-                <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.base_qty }}" data-stock-status="{{ cell.stock_status }}" data-part-id="{{ cell.part_id }}" data-safety-stock="{{ cell.safety_stock }}" data-current-qty="{{ cell.stock_qty }}" data-shortage-qty="{{ cell.shortage_qty }}" onclick="showScanHistory(this)"{% endif %}>
+                <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.base_qty }}" data-stock-status="{{ cell.stock_status }}" data-part-id="{{ cell.part_id }}" data-safety-stock="{{ cell.safety_stock }}" data-current-qty="{{ cell.stock_qty|floatformat:"-4" }}" data-shortage-qty="{{ cell.shortage_qty }}" onclick="showScanHistory(this)"{% endif %}>
                     <div class="rack-position">{{ cell.rack.position_code }}</div>
                     {% if cell.rack.part %}
                     <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
                     <div class="rack-part-name">{{ cell.rack.part.part_name }}</div>
-                    <div class="rack-stock">{{ cell.stock_qty|intcomma }}kg</div>
+                    <div class="rack-stock">{{ cell.stock_qty|floatformat:"-4"|intcomma }}kg</div>
                     {% else %}
                     <span class="empty-dash">—</span>
                     {% endif %}
@@ -535,12 +535,12 @@
                     <div class="floor-col">
                         <div class="cells-stack">
                             {% for cell in wall_a.2 %}
-                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.base_qty }}" data-stock-status="{{ cell.stock_status }}" data-part-id="{{ cell.part_id }}" data-safety-stock="{{ cell.safety_stock }}" data-current-qty="{{ cell.stock_qty }}" data-shortage-qty="{{ cell.shortage_qty }}" onclick="showScanHistory(this)"{% endif %}>
+                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.base_qty }}" data-stock-status="{{ cell.stock_status }}" data-part-id="{{ cell.part_id }}" data-safety-stock="{{ cell.safety_stock }}" data-current-qty="{{ cell.stock_qty|floatformat:"-4" }}" data-shortage-qty="{{ cell.shortage_qty }}" onclick="showScanHistory(this)"{% endif %}>
                                 <div class="rack-position">{{ cell.rack.position_code }}</div>
                                 {% if cell.rack.part %}
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
                                 <div class="rack-part-name">{{ cell.rack.part.part_name }}</div>
-                                <div class="rack-stock">{{ cell.stock_qty|intcomma }}kg</div>
+                                <div class="rack-stock">{{ cell.stock_qty|floatformat:"-4"|intcomma }}kg</div>
                                 {% else %}
                                 <span class="empty-dash">—</span>
                                 {% endif %}
@@ -551,12 +551,12 @@
                     <div class="floor-col">
                         <div class="cells-stack">
                             {% for cell in wall_a.1 %}
-                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.base_qty }}" data-stock-status="{{ cell.stock_status }}" data-part-id="{{ cell.part_id }}" data-safety-stock="{{ cell.safety_stock }}" data-current-qty="{{ cell.stock_qty }}" data-shortage-qty="{{ cell.shortage_qty }}" onclick="showScanHistory(this)"{% endif %}>
+                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.base_qty }}" data-stock-status="{{ cell.stock_status }}" data-part-id="{{ cell.part_id }}" data-safety-stock="{{ cell.safety_stock }}" data-current-qty="{{ cell.stock_qty|floatformat:"-4" }}" data-shortage-qty="{{ cell.shortage_qty }}" onclick="showScanHistory(this)"{% endif %}>
                                 <div class="rack-position">{{ cell.rack.position_code }}</div>
                                 {% if cell.rack.part %}
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
                                 <div class="rack-part-name">{{ cell.rack.part.part_name }}</div>
-                                <div class="rack-stock">{{ cell.stock_qty|intcomma }}kg</div>
+                                <div class="rack-stock">{{ cell.stock_qty|floatformat:"-4"|intcomma }}kg</div>
                                 {% else %}
                                 <span class="empty-dash">—</span>
                                 {% endif %}
@@ -585,12 +585,12 @@
                     <div class="floor-col">
                         <div class="cells-stack">
                             {% for cell in wall_b.1 %}
-                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.base_qty }}" data-stock-status="{{ cell.stock_status }}" data-part-id="{{ cell.part_id }}" data-safety-stock="{{ cell.safety_stock }}" data-current-qty="{{ cell.stock_qty }}" data-shortage-qty="{{ cell.shortage_qty }}" onclick="showScanHistory(this)"{% endif %}>
+                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.base_qty }}" data-stock-status="{{ cell.stock_status }}" data-part-id="{{ cell.part_id }}" data-safety-stock="{{ cell.safety_stock }}" data-current-qty="{{ cell.stock_qty|floatformat:"-4" }}" data-shortage-qty="{{ cell.shortage_qty }}" onclick="showScanHistory(this)"{% endif %}>
                                 <div class="rack-position">{{ cell.rack.position_code }}</div>
                                 {% if cell.rack.part %}
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
                                 <div class="rack-part-name">{{ cell.rack.part.part_name }}</div>
-                                <div class="rack-stock">{{ cell.stock_qty|intcomma }}kg</div>
+                                <div class="rack-stock">{{ cell.stock_qty|floatformat:"-4"|intcomma }}kg</div>
                                 {% else %}
                                 <span class="empty-dash">—</span>
                                 {% endif %}
@@ -601,12 +601,12 @@
                     <div class="floor-col">
                         <div class="cells-stack">
                             {% for cell in wall_b.2 %}
-                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.base_qty }}" data-stock-status="{{ cell.stock_status }}" data-part-id="{{ cell.part_id }}" data-safety-stock="{{ cell.safety_stock }}" data-current-qty="{{ cell.stock_qty }}" data-shortage-qty="{{ cell.shortage_qty }}" onclick="showScanHistory(this)"{% endif %}>
+                            <div class="rack-cell {{ cell.stock_status }}" title="{{ cell.rack.position_code }}" data-rack-id="{{ cell.rack.id }}" {% if cell.rack.part %}data-part-no="{{ cell.rack.part.part_no }}" data-part-name="{{ cell.rack.part.part_name }}" data-override="{{ cell.base_qty }}" data-stock-status="{{ cell.stock_status }}" data-part-id="{{ cell.part_id }}" data-safety-stock="{{ cell.safety_stock }}" data-current-qty="{{ cell.stock_qty|floatformat:"-4" }}" data-shortage-qty="{{ cell.shortage_qty }}" onclick="showScanHistory(this)"{% endif %}>
                                 <div class="rack-position">{{ cell.rack.position_code }}</div>
                                 {% if cell.rack.part %}
                                 <div class="rack-part-no">{{ cell.rack.part.part_no }}</div>
                                 <div class="rack-part-name">{{ cell.rack.part.part_name }}</div>
-                                <div class="rack-stock">{{ cell.stock_qty|intcomma }}kg</div>
+                                <div class="rack-stock">{{ cell.stock_qty|floatformat:"-4"|intcomma }}kg</div>
                                 {% else %}
                                 <span class="empty-dash">—</span>
                                 {% endif %}

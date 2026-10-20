@@ -142,7 +142,7 @@
                             data-vendor="{{ item.vendor.name|default:'' }}"
                             data-part-no="{{ item.part.part_no }}"
                             data-part-name="{{ item.part.part_name }}"
-                            data-qty="{{ item.quantity }}"
+                            data-qty="{{ item.quantity|floatformat:"-4" }}"
                             data-lot="{{ item.lot_no|date:'Y-m-d'|default:'' }}"
                             data-warehouse="{{ item.display_warehouse.name|default:'' }}"
                             data-erp-no="{{ item.erp_incoming_no|default:'' }}"
@@ -179,7 +179,7 @@
                             <td class="small">{{ item.vendor.name|default:"-" }}</td>
                             <td class="small fw-bold">{{ item.part.part_no }}</td>
                             <td class="text-start small text-truncate" style="max-width:200px;">{{ item.part.part_name }}</td>
-                            <td class="fw-bold text-end pe-3 erp-number">{{ item.quantity|intcomma }}</td>
+                            <td class="fw-bold text-end pe-3 erp-number">{{ item.quantity|floatformat:"-4"|intcomma }}</td>
                             <td class="small">
                                 {% if item.lot_no %}{{ item.lot_no|date:"Y-m-d" }}{% else %}-{% endif %}
                             </td>

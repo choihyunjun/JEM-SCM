@@ -3,13 +3,17 @@ from collections import defaultdict
 from decimal import Decimal
 
 from django.core.cache import cache
-from django.db import transaction
+from django.db import DatabaseError, transaction
 from django.utils import timezone
 
 from orders.models import Part
 from .models import MaterialStock, ProcessTag, StockSyncRun, Warehouse
 from .stock_safety import deduct_stock, unassigned_stock
 from .quantities import stock_quantity
+
+# Incoming-inspection hold and nonconforming stock never reach ERP (ERP receives
+# only the accepted quantity), so ERP balances must not overwrite them.
+SCM_ONLY_WAREHOUSE_CODES = ('8100', '8200')
 
 
 def stock_snapshot():
@@ -128,7 +132,7 @@ def reconcile_stock():
     from .erp_api import fetch_erp_stock
     result = dict(adjusted=0, increased=0, decreased=0, created=0, lot_trimmed=0,
                   negative_normalized=0, skipped_no_part=0, skipped_no_wh=0,
-                  skipped_missing=0, skipped_changed=0, skipped_negative=0, error=None)
+                  skipped_missing=0, skipped_changed=0, skipped_negative=0, error=None, status='running')
     run = StockSyncRun.objects.create()
     try:
         # Compare under row locks after the network request; never apply a total
@@ -144,10 +148,13 @@ def reconcile_stock():
         # Missing is not zero. Only explicit balances (including explicit 0)
         # authorize a correction; unknown API completeness cannot erase stock.
         missing = [key for key, rows in snapshot.items()
-                   if key not in balances and any(value[0] != 0 for value in rows.values())]
+                   if key[0] not in SCM_ONLY_WAREHOUSE_CODES
+                   and key not in balances and any(value[0] != 0 for value in rows.values())]
         result['skipped_missing'] = len(missing)
         issues = [f'ERP 응답 누락 {len(missing)}건: 기존 재고 유지'] if missing else []
         for index, ((wh, code), qty) in enumerate(sorted(balances.items())):
+            if wh in SCM_ONLY_WAREHOUSE_CODES:
+                continue
             if wh not in warehouses:
                 result['skipped_no_wh'] += 1
                 continue
@@ -159,7 +166,8 @@ def reconcile_stock():
                 continue  # no write needed; avoid a transaction for every unchanged ERP row
             try:
                 changes = _reconcile_key(warehouses[wh], parts[code], qty, expected)
-            except ValueError as exc:
+            except (ValueError, DatabaseError) as exc:
+                # One locked or changed key must not stop the remaining ERP balances.
                 result['skipped_changed'] += 1
                 issues.append(f'{wh}/{code}: {exc}')
                 continue
@@ -178,6 +186,8 @@ def reconcile_stock():
         result['error'] = str(exc)
         run.status = 'failed'
     finally:
+        # partial = applied with items left for review; failed = nothing verified to apply.
+        result['status'] = run.status
         run.finished_at = timezone.now()
         run.summary = result
         run.error = result['error'] or ''

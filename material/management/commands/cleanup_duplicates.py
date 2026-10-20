@@ -9,6 +9,7 @@ ERP 동기화 중복 트랜잭션 정리 + 재고 재계산
 
 from django.core.management.base import BaseCommand
 from django.db.models import Count
+from material.quantities import stock_quantity
 
 
 class Command(BaseCommand):
@@ -191,7 +192,7 @@ class Command(BaseCommand):
 
             erp_map = {}
             for item in items:
-                qty = int(item.get('invQt1', 0) or 0)
+                qty = stock_quantity(item.get('invQt1', 0) or 0)
                 wh_id = wh_map.get(item.get('whCd', ''))
                 part_id = part_map.get(item.get('itemCd', ''))
                 if wh_id and part_id:

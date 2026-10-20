@@ -23,7 +23,7 @@
                             <i class="bi bi-box-seam fs-4" style="color:#047857;"></i>
                         </div>
                     </div>
-                    <div class="small text-muted mt-2">총 {{ total_qty|intcomma }} EA</div>
+                    <div class="small text-muted mt-2">총 {{ total_qty|floatformat:"-4"|intcomma }} EA</div>
                 </div>
             </div>
         </div>
@@ -182,7 +182,7 @@
                                     <small>{{ tx.warehouse_to.name }}</small>
                                     {% else %}<small class="text-muted">-</small>{% endif %}
                                 </td>
-                                <td class="text-end"><span class="text-primary fw-bold">+{{ tx.quantity|intcomma }}</span></td>
+                                <td class="text-end"><span class="text-primary fw-bold">+{{ tx.quantity|floatformat:"-4"|intcomma }}</span></td>
                             </tr>
                             {% empty %}
                             <tr><td colspan="5" class="text-center text-muted py-4"><i class="bi bi-inbox fs-4 d-block mb-1"></i>금일 입고 이력이 없습니다</td></tr>
@@ -224,7 +224,7 @@
                                     {% else %}<small class="text-muted">-</small>{% endif %}
                                 </td>
                                 <td><small>{{ tx.display_vendor|default:"-" }}</small></td>
-                                <td class="text-end"><span class="text-danger fw-bold">{{ tx.quantity|intcomma }}</span></td>
+                                <td class="text-end"><span class="text-danger fw-bold">{{ tx.quantity|floatformat:"-4"|intcomma }}</span></td>
                             </tr>
                             {% empty %}
                             <tr><td colspan="6" class="text-center text-muted py-4"><i class="bi bi-inbox fs-4 d-block mb-1"></i>금일 출고 이력이 없습니다</td></tr>
@@ -261,7 +261,7 @@
                                 <td>{{ stock.part.part_no }}</td>
                                 <td><span class="dtl-pill amber">{{ stock.lot_no }}</span></td>
                                 <td>{{ stock.warehouse.name|default:"-" }}</td>
-                                <td class="text-end fw-bold erp-number">{{ stock.quantity|intcomma }}</td>
+                                <td class="text-end fw-bold erp-number">{{ stock.quantity|floatformat:"-4"|intcomma }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -338,7 +338,7 @@
     const POLL_MS = 10 * 60 * 1000;
 
     function numberWithCommas(x){
-        return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        return Number(x).toLocaleString('ko-KR', {maximumFractionDigits: 4});
     }
 
     function buildInboundRows(rows){

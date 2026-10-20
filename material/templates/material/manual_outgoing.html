@@ -15,7 +15,7 @@
     <div class="d-flex justify-content-between align-items-center mb-4 pt-3">
         <div>
             <span class="dtl-title d-block">출고처리</span>
-            <span class="text-muted small">여러 품목을 리스트에 담아 한 번에 출고 처리합니다.</span>
+            <span class="text-muted small">여러 품목을 리스트에 담아 한 번에 출고 처리합니다. ERP에는 전송되지 않으므로 ERP에도 출고를 등록해야 재고 총량에 반영됩니다 (미등록 시 ERP 현재고 보정에서 'LOT 미지정'으로 되돌아옵니다).</span>
         </div>
         <div>
             <a href="{% url 'material:outgoing_history' %}" class="dtl-btn-outline btn-sm">
@@ -94,7 +94,7 @@
                     </div>
                     <div class="col-6 col-lg-1">
                         <label class="dtl-form-label" style="color:#b91c1c;">수량</label>
-                        <input type="number" id="inputQty" class="form-control dtl-form-control text-end fw-bold" placeholder="0" min="1">
+                        <input type="number" id="inputQty" class="form-control dtl-form-control text-end fw-bold" placeholder="0" min="0.0001" step="any">
                     </div>
                     <div class="col-12 col-lg-4">
                         <label class="dtl-form-label">비고 (선택)</label>
@@ -212,12 +212,12 @@
                     <tbody>
                         {% for item in history_page %}
                         <tr style="cursor:pointer;"
-                            onclick="openHistoryDetail({{ item.id }}, '{{ item.transaction_no }}', '{{ item.date|date:"Y-m-d H:i" }}', '{{ item.part.part_no }}', '{{ item.part.part_name|escapejs }}', {{ item.display_quantity }}, '{{ item.lot_no|date:"Y-m-d"|default:"-" }}', '{{ item.warehouse_from.name|default:"-"|escapejs }}', '{{ item.vendor.name|default:"-"|escapejs }}', '{{ item.actor.username|default:"-" }}', '{{ item.remark|default:""|escapejs }}', {{ item.can_cancel|yesno:"true,false" }})">
+                            onclick="openHistoryDetail({{ item.id }}, '{{ item.transaction_no }}', '{{ item.date|date:"Y-m-d H:i" }}', '{{ item.part.part_no }}', '{{ item.part.part_name|escapejs }}', {{ item.display_quantity|floatformat:"-4" }}, '{{ item.lot_no|date:"Y-m-d"|default:"-" }}', '{{ item.warehouse_from.name|default:"-"|escapejs }}', '{{ item.vendor.name|default:"-"|escapejs }}', '{{ item.actor.username|default:"-" }}', '{{ item.remark|default:""|escapejs }}', {{ item.can_cancel|yesno:"true,false" }})">
                             <td class="small text-nowrap">{{ item.date|date:"Y-m-d H:i" }}</td>
                             <td class="small fw-bold text-danger text-nowrap">{{ item.transaction_no }}</td>
                             <td class="small">{{ item.part.part_no }}</td>
                             <td class="text-start small text-truncate" style="max-width:200px;">{{ item.part.part_name }}</td>
-                            <td class="fw-bold text-end pe-3">{{ item.display_quantity|intcomma }}</td>
+                            <td class="fw-bold text-end pe-3">{{ item.display_quantity|floatformat:"-4"|intcomma }}</td>
                             <td class="small">{{ item.lot_no|date:"Y-m-d"|default:"-" }}</td>
                             <td class="small">{{ item.warehouse_from.name|default:"-" }}</td>
                             <td>
@@ -234,7 +234,7 @@
                             <td>
                                 {% if item.can_cancel %}
                                 <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1"
-                                        onclick="event.stopPropagation(); openCancelModal({{ item.id }}, '{{ item.transaction_no }}', '{{ item.part.part_no }}', {{ item.display_quantity }})"
+                                        onclick="event.stopPropagation(); openCancelModal({{ item.id }}, '{{ item.transaction_no }}', '{{ item.part.part_no }}', {{ item.display_quantity|floatformat:"-4" }})"
                                         title="출고 삭제">
                                     <i class="bi bi-trash"></i>
                                 </button>
@@ -521,9 +521,9 @@
 
                 let displayText;
                 if (lot.is_null_lot) {
-                    displayText = `ERP 재고 (재고: ${lot.quantity.toLocaleString()} ${unit}) ★ 우선 소진`;
+                    displayText = `ERP 재고 (재고: ${Number(lot.quantity).toLocaleString('ko-KR', {maximumFractionDigits: 4})} ${unit}) ★ 우선 소진`;
                 } else {
-                    displayText = `${lot.lot_label || lot.lot_no} (재고: ${lot.quantity.toLocaleString()} ${unit}, ${lot.days_old}일 경과)`;
+                    displayText = `${lot.lot_label || lot.lot_no} (재고: ${Number(lot.quantity).toLocaleString('ko-KR', {maximumFractionDigits: 4})} ${unit}, ${lot.days_old}일 경과)`;
                     if (isFifo) displayText += ' ⚠️ FIFO 추천';
                 }
                 option.textContent = displayText;
@@ -550,7 +550,7 @@
         const lotInfo = document.getElementById('lotInfo');
 
         if (selectedOption && selectedOption.value) {
-            const maxQty = parseInt(selectedOption.dataset.quantity) || 0;
+            const maxQty = parseFloat(selectedOption.dataset.quantity) || 0;
             qtyInput.value = maxQty;
             qtyInput.max = maxQty;
 
@@ -730,7 +730,7 @@
             lotSel.focus();
             return;
         }
-        if (!qty || parseInt(qty) <= 0) {
+        if (!qty || parseFloat(qty) <= 0) {
             alert("수량을 1개 이상 입력해주세요.");
             document.getElementById('inputQty').focus();
             return;
@@ -738,10 +738,10 @@
 
         var selectedOption = lotSel.options[lotSel.selectedIndex];
         var lotNo = selectedOption.dataset.lotNo || '';
-        var maxQty = parseInt(selectedOption.dataset.quantity) || 0;
+        var maxQty = parseFloat(selectedOption.dataset.quantity) || 0;
         var unit = lotSel.dataset.unit || 'EA';
 
-        if (maxQty > 0 && parseInt(qty) > maxQty) {
+        if (maxQty > 0 && parseFloat(qty) > maxQty) {
             alert(`선택한 LOT의 재고(${maxQty.toLocaleString()} ${unit})를 초과할 수 없습니다.`);
             return;
         }
@@ -772,7 +772,7 @@
                 <input type="hidden" name="stock_ids[]" value="${selectedOption.value}">
             </td>
             <td class="fw-bold fs-5 text-end pe-4">
-                ${parseInt(qty).toLocaleString()}
+                ${parseFloat(qty).toLocaleString('ko-KR', {maximumFractionDigits: 4})}
                 <input type="hidden" name="quantities[]" value="${qty}">
             </td>
             <td class="text-muted small">

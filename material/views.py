@@ -1,6 +1,7 @@
 # material/views.py
 import logging
-from .stock_safety import deduct_stock
+from .stock_safety import deduct_stock, quantity_change
+from .quantities import input_quantity, stock_quantity, stock_total
 import re
 
 from django.shortcuts import render, redirect, get_object_or_404
@@ -495,7 +496,7 @@ def stock_list(request):
                 part_no = item.get('part__part_no', '')
                 erp_qty = erp_map.get(f'{wh_code}|{part_no}', 0)
                 item['erp_qty'] = erp_qty
-                item['erp_diff'] = item['total_qty'] - erp_qty
+                item['erp_diff'] = stock_total(item['total_qty']) - erp_qty
 
     # 5. 필터용 데이터
     part_groups = Part.objects.values_list('part_group', flat=True).distinct().order_by('part_group')
@@ -598,7 +599,7 @@ def manual_incoming(request):
                         defaults={'quantity': 0}
                     )
                     MaterialStock.objects.filter(pk=stock.pk).update(
-                        quantity=F('quantity') + qty
+                        quantity=quantity_change(qty)
                     )
                     stock.refresh_from_db()
 
@@ -877,7 +878,7 @@ def _do_cancel_incoming(trx, cancel_action, correction_reason='', correction_act
                         warehouse=trx.warehouse_to, part=part, lot_no=lot_no, production_lot=trx.production_lot
                     )
                     MaterialStock.objects.filter(pk=inspect_stock.pk).update(
-                        quantity=F('quantity') + trx.quantity
+                        quantity=quantity_change(trx.quantity)
                     )
                     reverse_inspection_summary(trx, inspection)
                     return_cases.delete()
@@ -1235,7 +1236,7 @@ def edit_manual_incoming(request, trx_id):
                     defaults={'quantity': 0}
                 )
                 MaterialStock.objects.filter(pk=new_stock.pk).update(
-                    quantity=F('quantity') + new_qty
+                    quantity=quantity_change(new_qty)
                 )
                 new_stock.refresh_from_db()
                 trx.result_stock = new_stock.quantity
@@ -2233,7 +2234,8 @@ def api_process_tag_scan(request):
                 if claimed != 1:
                     return JsonResponse({'success': False, 'already_used': True,
                         'error': '이미 이동했거나 사용할 수 없는 라벨입니다. 이력을 다시 조회해주세요.'})
-                remaining = move_qty
+                # float - Decimal raises TypeError when the LOT holds the whole label.
+                remaining = stock_quantity(move_qty)
                 # LOT 재고 우선 차감
                 if lot_no and src_stock and src_stock.quantity > 0:
                     deduct_lot = min(src_stock.quantity, remaining)
@@ -2257,7 +2259,7 @@ def api_process_tag_scan(request):
                     defaults={'quantity': 0}
                 )
                 MaterialStock.objects.filter(pk=tgt_stock.pk).update(
-                    quantity=_F('quantity') + move_qty
+                    quantity=quantity_change(move_qty)
                 )
                 tgt_stock.refresh_from_db()
 
@@ -2389,7 +2391,7 @@ def api_process_tag_scan(request):
                     defaults={'quantity': 0}
                 )
                 MaterialStock.objects.filter(pk=tgt_t.pk).update(
-                    quantity=_F('quantity') + cancel_qty_t
+                    quantity=quantity_change(cancel_qty_t)
                 )
                 tgt_t.refresh_from_db()
 
@@ -2544,7 +2546,7 @@ def api_process_tag_scan(request):
         mark_used_t = (target_warehouse_code == '3000')
 
         with transaction.atomic():
-            remaining = move_qty_t
+            remaining = stock_quantity(move_qty_t)
             if lot_no_t and src_stock_t and src_stock_t.quantity > 0:
                 deduct_lot = min(src_stock_t.quantity, remaining)
                 deduct_stock(src_stock_t, deduct_lot)
@@ -2565,7 +2567,7 @@ def api_process_tag_scan(request):
                 defaults={'quantity': 0}
             )
             MaterialStock.objects.filter(pk=tgt_stock_t.pk).update(
-                quantity=_F('quantity') + move_qty_t
+                quantity=quantity_change(move_qty_t)
             )
             tgt_stock_t.refresh_from_db()
 
@@ -2900,7 +2902,7 @@ def api_process_tag_cancel_scan(request):
                 tgt_3200, _ = MaterialStock.objects.get_or_create(
                     warehouse=wh_3200, part=rm_label.part, lot_no=lot_no_cancel, defaults={'quantity': 0}
                 )
-                MaterialStock.objects.filter(pk=tgt_3200.pk).update(quantity=_F('quantity') + cancel_qty)
+                MaterialStock.objects.filter(pk=tgt_3200.pk).update(quantity=quantity_change(cancel_qty))
                 tgt_3200.refresh_from_db()
 
                 rm_label.status = 'INSTOCK'
@@ -3523,9 +3525,9 @@ def stock_move(request):
                         continue
 
                     try:
-                        qty = int(move_qtys[i])
+                        qty = input_quantity(move_qtys[i], positive=False)
                     except (ValueError, TypeError):
-                        continue
+                        raise ValueError(f'{p_no}: 이동 수량이 올바르지 않습니다. (소수점 4자리까지)')
 
                     if qty <= 0:
                         continue
@@ -3581,7 +3583,7 @@ def stock_move(request):
                     )
 
                     MaterialStock.objects.filter(pk=target_stock.pk).update(
-                        quantity=F('quantity') + qty
+                        quantity=quantity_change(qty)
                     )
 
                     # ✅ update(F()) 이후 실제 수량을 다시 읽어서 result_stock 숫자 저장
@@ -3874,7 +3876,7 @@ def api_get_available_lots(request):
                 'lot_no': stock.lot_no.strftime('%Y-%m-%d') if stock.lot_no else None,
                 'production_lot': stock.production_lot,
                 'lot_label': lot_label,
-                'quantity': stock.quantity,
+                'quantity': float(stock.quantity),
                 'days_old': days_old,
                 'is_null_lot': stock.lot_no is None,
             }
@@ -3955,7 +3957,7 @@ def _handle_lot_correct(request):
                     warehouse_to=warehouse,
                     result_stock=new_qty,
                     actor=request.user,
-                    remark=f"LOT 수정: {stock.lot_no} {old_qty}→{new_qty} ({delta:+d})"
+                    remark=f"LOT 수정: {stock.lot_no} {old_qty}→{new_qty} ({delta:+f})"
                 )
                 total_corrected += 1
 
@@ -4018,7 +4020,7 @@ def lot_allocation(request):
                         qty_str = quantities[i].strip()
                         if not lot_str or not qty_str:
                             continue
-                        qty = int(qty_str)
+                        qty = input_quantity(qty_str, positive=False)
                         if qty <= 0:
                             continue
                         try:
@@ -4037,7 +4039,7 @@ def lot_allocation(request):
                     corrections = []  # (old_stock, old_date, old_qty, new_date, new_qty)
                     sum_correction_delta = 0  # 양수: NULL 감소(LOT 증가), 음수: NULL 증가(LOT 해제)
                     for sid, nd_str, nq_str in zip(correct_ids, correct_dates, correct_qtys_raw):
-                        new_qty = int(nq_str)
+                        new_qty = input_quantity(nq_str, positive=False)
                         new_date = datetime.strptime(nd_str, '%Y-%m-%d').date()
                         old_stock = MaterialStock.objects.get(
                             pk=sid, warehouse=warehouse, part=part
@@ -4103,7 +4105,7 @@ def lot_allocation(request):
                                 defaults={'quantity': 0}
                             )
                             MaterialStock.objects.filter(pk=new_stock.pk).update(
-                                quantity=F('quantity') + new_qty
+                                quantity=quantity_change(new_qty)
                             )
                             new_stock.refresh_from_db()
                             MaterialTransaction.objects.create(
@@ -4123,7 +4125,7 @@ def lot_allocation(request):
                             defaults={'quantity': 0}
                         )
                         MaterialStock.objects.filter(pk=lot_stock.pk).update(
-                            quantity=F('quantity') + qty
+                            quantity=quantity_change(qty)
                         )
                         lot_stock.refresh_from_db()
                         trx_no = f"LOTA-{timezone.now().strftime('%y%m%d%H%M%S%f')}-{request.user.id}"
@@ -4248,7 +4250,7 @@ def api_null_stock_info(request):
                     warehouse=warehouse, part=part, lot_no__isnull=False, quantity__gt=0
                 ).order_by('lot_no')
                 existing_lots = [
-                    {'id': s.id, 'lot_no': s.lot_no.strftime('%Y-%m-%d'), 'quantity': s.quantity}
+                    {'id': s.id, 'lot_no': s.lot_no.strftime('%Y-%m-%d'), 'quantity': float(s.quantity)}
                     for s in lot_stocks
                 ]
                 total_qty = null_qty + sum(s.quantity for s in lot_stocks)
@@ -4257,9 +4259,9 @@ def api_null_stock_info(request):
                     'part_no': part.part_no,
                     'part_name': part.part_name or '',
                     'part_id': part.id,
-                    'null_qty': null_qty,
+                    'null_qty': float(null_qty),
                     'existing_lots': existing_lots,
-                    'total_qty': total_qty,
+                    'total_qty': float(total_qty),
                     'weight_unit': part.weight_unit or 'EA',
                 })
 
@@ -4282,16 +4284,16 @@ def api_null_stock_info(request):
             warehouse=warehouse, part=part, lot_no__isnull=False, quantity__gt=0
         ).order_by('lot_no')
         existing_lots = [
-            {'id': s.id, 'lot_no': s.lot_no.strftime('%Y-%m-%d'), 'quantity': s.quantity}
+            {'id': s.id, 'lot_no': s.lot_no.strftime('%Y-%m-%d'), 'quantity': float(s.quantity)}
             for s in lot_stocks
         ]
         total_qty = null_qty + sum(s.quantity for s in lot_stocks)
 
         return JsonResponse({
             'success': True,
-            'null_qty': null_qty,
+            'null_qty': float(null_qty),
             'existing_lots': existing_lots,
-            'total_qty': total_qty,
+            'total_qty': float(total_qty),
             'part_name': part.part_name or '',
             'part_id': part.id,
         })
@@ -6013,7 +6015,8 @@ def inventory_check_result(request, pk):
         system_qty = MaterialStock.objects.filter(
             warehouse=check.warehouse,
             part_id=part_id,
-        ).aggregate(total=Sum('quantity'))['total'] or 0
+        ).aggregate(total=Sum('quantity'))['total']
+        system_qty = stock_total(system_qty)
 
         discrepancy = scanned_total - system_qty
         is_matched = (discrepancy == 0)
@@ -6719,7 +6722,7 @@ def api_erp_transfer_preview(request):
             move_sq = detail.get('moveSq', 1)
             trx_key = f'{move_nb}-{move_sq}'
             item_cd = detail.get('itemCd', '')
-            qty = int(detail.get('moveQt', 0) or 0)
+            qty = stock_quantity(detail.get('moveQt', 0) or 0)
             already_applied = trx_key in existing_nbs
 
             part = Part.objects.filter(part_no=item_cd).first()
@@ -6733,7 +6736,7 @@ def api_erp_transfer_preview(request):
                 for lot in lots:
                     lot_info.append({
                         'lot_no': lot.lot_no if lot.lot_no else 'LOT없음',
-                        'qty': lot.quantity,
+                        'qty': float(lot.quantity),
                     })
 
             results.append({
@@ -6820,7 +6823,7 @@ def api_erp_transfer_apply(request):
             fwh_cd = target_detail.get('fwhCd', '')
             twh_cd = target_detail.get('twhCd', '')
             item_cd = target_detail.get('itemCd', '')
-            qty = int(target_detail.get('moveQt', 0) or 0)
+            qty = stock_quantity(target_detail.get('moveQt', 0) or 0)
 
             if fwh_cd != '3200' or twh_cd != '3000':
                 error_list.append({'key': trx_key, 'error': '3200→3000 이동이 아님'})
@@ -8357,7 +8360,7 @@ def cancel_stock_move(request, trx_id):
                 current = target_stock.quantity if target_stock else 0
                 return JsonResponse({
                     'success': False,
-                    'error': f'받는 창고 재고({current})가 이동 수량({int(trx.quantity)})보다 적어 취소할 수 없습니다.'
+                    'error': f'받는 창고 재고({current})가 이동 수량({trx.quantity.normalize():f})보다 적어 취소할 수 없습니다.'
                 })
 
             deduct_stock(target_stock, trx.quantity)
@@ -8371,7 +8374,7 @@ def cancel_stock_move(request, trx_id):
                 defaults={'quantity': 0}
             )
             MaterialStock.objects.filter(pk=source_stock.pk).update(
-                quantity=F('quantity') + trx.quantity
+                quantity=quantity_change(trx.quantity)
             )
 
             # 3. 연결된 라벨 원복 (USED → INSTOCK / PRINTED)
@@ -8458,7 +8461,7 @@ def api_transfer_detail(request, trx_id):
             'date': timezone.localtime(trx.date).strftime('%Y-%m-%d %H:%M'),
             'part_no': trx.part.part_no,
             'part_name': trx.part.part_name,
-            'quantity': int(trx.quantity),
+            'quantity': float(trx.quantity),
             'lot_no': trx.lot_no.strftime('%Y-%m-%d') if trx.lot_no else '-',
             'from_wh': f"({trx.warehouse_from.code}) {trx.warehouse_from.name}" if trx.warehouse_from else '-',
             'to_wh': f"({trx.warehouse_to.code}) {trx.warehouse_to.name}" if trx.warehouse_to else '-',
@@ -8496,7 +8499,8 @@ def erp_stock_manage(request):
 
     from .models import StockSyncRun
     context['stock_sync_latest'] = StockSyncRun.objects.first()
-    context['stock_sync_success'] = StockSyncRun.objects.filter(status='success').first()
+    # partial = the ERP balance was applied; only some items/ledgers need review.
+    context['stock_sync_success'] = StockSyncRun.objects.filter(status__in=['success', 'partial']).first()
 
     if action == 'sync_stock':
         if not context['erp_enabled']:
@@ -8506,7 +8510,8 @@ def erp_stock_manage(request):
         try:
             result = sync_stock_from_erp()
             if result.get('error'):
-                messages.warning(request, f"ERP 현재고 {result['adjusted']}건 보정, 추가 확인 필요: {result['error']}")
+                from .erp_sync_pipeline import stock_result_message
+                messages.warning(request, f"{stock_result_message(result)} {result['error']}")
             else:
                 messages.success(request, f"ERP 현재고 기준 재고 보정 완료: {result['adjusted']}건")
         except Exception as exc:
@@ -8519,12 +8524,15 @@ def erp_stock_manage(request):
             return redirect('material:erp_stock_manage')
         from .erp_sync_pipeline import sync_inventory
         try:
-            result = sync_inventory()
+            # A full-year import takes ~50 minutes; a web request cannot hold it.
+            # Older documents are covered by detect_past_changes / nightly sync_erp_history.
+            from datetime import timedelta
+            today = timezone.localdate()
+            result = sync_inventory(date_from=(today - timedelta(days=6)).strftime('%Y%m%d'),
+                                    date_to=today.strftime('%Y%m%d'))
             if result['errors']:
-                stock = result.get('stock') or {}
-                stock_status = (f"ERP 현재고 {stock.get('adjusted', 0)}건 보정 완료. "
-                                if stock and not stock.get('error') else 'ERP 현재고 보정 확인 필요. ')
-                messages.warning(request, stock_status + '수불 이력 확인: ' + '; '.join(result['error_list'][:5]))
+                from .erp_sync_pipeline import stock_result_message
+                messages.warning(request, stock_result_message(result.get('stock')) + ' 확인: ' + '; '.join(result['error_list'][:5]))
             else:
                 messages.success(request, f"수불·재고 동기화 완료: 수불 {result['synced']}건, 재고 조정 {result['stock']['adjusted']}건")
         except Exception as exc:
@@ -8708,7 +8716,7 @@ def manual_outgoing(request):
 
                 for i in range(len(part_ids)):
                     p_id = part_ids[i]
-                    qty = int(quantities[i])
+                    qty = input_quantity(quantities[i], positive=False)
                     rmk = remarks[i] if i < len(remarks) else ''
                     lot_no_str = lot_nos[i] if i < len(lot_nos) and lot_nos[i] else None
                     stock_id = stock_ids[i] if i < len(stock_ids) and stock_ids[i] else None
@@ -8871,7 +8879,7 @@ def cancel_manual_outgoing(request, trx_id):
                 defaults={'quantity': 0}
             )
             MaterialStock.objects.filter(pk=stock.pk).update(
-                quantity=F('quantity') + trx_qty
+                quantity=quantity_change(trx_qty)
             )
 
             trx.delete()
@@ -12299,9 +12307,9 @@ def transfer_request_approve(request, pk):
                     for s in fifo_stocks:
                         if remaining <= 0:
                             break
-                        take = min(int(s.quantity), remaining)
+                        take = min(s.quantity, remaining)
                         updated = MaterialStock.objects.filter(pk=s.pk, quantity__gte=take).update(
-                            quantity=F('quantity') - take
+                            quantity=quantity_change(-take)
                         )
                         if not updated:
                             raise ValueError(f'{line.part.part_no}: 재고가 변경되었습니다. 다시 조회해주세요.')
@@ -12309,7 +12317,7 @@ def transfer_request_approve(request, pk):
                             warehouse=to_wh, part=line.part, lot_no=s.lot_no, production_lot=s.production_lot,
                             defaults={'quantity': 0}
                         )
-                        MaterialStock.objects.filter(pk=target_stock.pk).update(quantity=F('quantity') + take)
+                        MaterialStock.objects.filter(pk=target_stock.pk).update(quantity=quantity_change(take))
                         target_stock.refresh_from_db()
 
                         lot_label = s.lot_no.strftime('%Y-%m-%d') if s.lot_no else 'NULL'
@@ -12352,7 +12360,7 @@ def transfer_request_approve(request, pk):
                     production_lot = stock.production_lot
 
                     updated = MaterialStock.objects.filter(pk=stock.pk, quantity__gte=qty).update(
-                        quantity=F('quantity') - qty
+                        quantity=quantity_change(-qty)
                     )
                     if not updated:
                         raise ValueError(f'{line.part.part_no}: 선택한 LOT 재고 부족. 다시 조회해주세요.')
@@ -12360,7 +12368,7 @@ def transfer_request_approve(request, pk):
                         warehouse=to_wh, part=line.part, lot_no=lot_no, production_lot=production_lot,
                         defaults={'quantity': 0}
                     )
-                    MaterialStock.objects.filter(pk=target_stock.pk).update(quantity=F('quantity') + qty)
+                    MaterialStock.objects.filter(pk=target_stock.pk).update(quantity=quantity_change(qty))
                     target_stock.refresh_from_db()
 
                     lot_label = lot_no.strftime('%Y-%m-%d') if lot_no else 'NULL'
@@ -12484,7 +12492,7 @@ def transfer_request_revoke(request, pk):
                     defaults={'quantity': 0}
                 )
                 MaterialStock.objects.filter(pk=from_stock.pk).update(
-                    quantity=F('quantity') + trx.quantity
+                    quantity=quantity_change(trx.quantity)
                 )
                 to_stock = MaterialStock.objects.filter(
                     warehouse=trx.warehouse_to, part=trx.part, lot_no=trx.lot_no,
@@ -12555,7 +12563,7 @@ def api_transfer_request_stock(request):
         if not wh:
             continue
         qty = MaterialStock.objects.filter(warehouse=wh, part=part).aggregate(total=Sum('quantity'))['total'] or 0
-        stocks.append({'warehouse_code': wh.code, 'warehouse_name': wh.name, 'qty': int(qty)})
+        stocks.append({'warehouse_code': wh.code, 'warehouse_name': wh.name, 'qty': float(stock_total(qty))})
 
     return JsonResponse({'ok': True, 'part_no': part.part_no, 'part_name': part.part_name, 'stocks': stocks})
 
@@ -12585,7 +12593,7 @@ def api_transfer_request_lots(request):
     if not stocks:
         return JsonResponse({'ok': True, 'lots': []})
 
-    total_qty = int(sum(s.quantity for s in stocks))
+    total_qty = float(sum(s.quantity for s in stocks))
     lots = [{'lot_no': '__FIFO__', 'lot_label': f'전체 (FIFO 자동분할)', 'qty': total_qty, 'fifo': True}]
     for s in stocks:
         if s.lot_no:
@@ -12596,7 +12604,7 @@ def api_transfer_request_lots(request):
             'stock_id': s.pk,
             'lot_no': s.lot_no.isoformat() if s.lot_no else '',
             'lot_label': label,
-            'qty': int(s.quantity),
+            'qty': float(s.quantity),
             'fifo': False,
         })
 

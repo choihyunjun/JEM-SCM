@@ -236,11 +236,11 @@
                             </td>
                             <td class="fw-bold">
                                 {% if trx.warehouse_to and not trx.warehouse_from %}
-                                    <span class="text-success">+{{ trx.quantity|intcomma }}</span>
+                                    <span class="text-success">+{{ trx.quantity|floatformat:"-4"|intcomma }}</span>
                                 {% elif trx.warehouse_from and not trx.warehouse_to %}
-                                    <span class="text-danger">-{{ trx.quantity|intcomma }}</span>
+                                    <span class="text-danger">-{{ trx.quantity|floatformat:"-4"|intcomma }}</span>
                                 {% else %}
-                                    {{ trx.quantity|intcomma }}
+                                    {{ trx.quantity|floatformat:"-4"|intcomma }}
                                 {% endif %}
                             </td>
                             <td class="small text-muted">

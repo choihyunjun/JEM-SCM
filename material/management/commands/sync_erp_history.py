@@ -82,7 +82,7 @@ class Command(BaseCommand):
             sync_stock_from_erp,
         )
         from material.models import MaterialTransaction, MaterialStock, StockSyncRun
-        from material.erp_sync_pipeline import record_sync_failure
+        from material.erp_sync_pipeline import record_sync_failure, stock_failed, stock_result_message
 
         date_from = options['date_from']
         date_to = options['date_to'] or datetime.now().strftime('%Y%m%d')
@@ -237,24 +237,22 @@ class Command(BaseCommand):
 
         try:
             result = sync_stock_from_erp()
-            elapsed = time.time() - start
-
-            if result.get('error'):
-                raise CommandError(result['error'])
-            else:
-                self.stdout.write(
-                    f'  -> 조정: {result["adjusted"]}건 '
-                    f'(증가 {result["increased"]}, 감소 {result["decreased"]}) ({elapsed:.1f}초)'
-                )
         except Exception as e:
-            grand_total['stock_error'] = str(e)
-            record_sync_failure(str(e), grand_total)
-            raise CommandError(str(e)) from e
-
+            result = {'adjusted': 0, 'error': str(e), 'status': 'failed'}
+        elapsed = time.time() - start
         grand_total['stock'] = result
-        if grand_total['errors']:
-            message = f"ERP 현재고 보정 완료 (조정 {result['adjusted']}건). 수불 이력 오류 {grand_total['errors']}건은 별도 확인 필요."
-            record_sync_failure(message, grand_total, status='partial')
+        message = stock_result_message(result)
+        self.stdout.write(
+            f'  -> {message} (증가 {result.get("increased", 0)}, 감소 {result.get("decreased", 0)}) ({elapsed:.1f}초)'
+        )
+        if result.get('error') or grand_total['errors']:
+            if result.get('error'):
+                grand_total['stock_error'] = result['error']
+                message += f" {result['error']}"
+            if grand_total['errors']:
+                message += f" 수불 이력 오류 {grand_total['errors']}건은 별도 확인 필요."
+            record_sync_failure(message, grand_total,
+                                status='failed' if stock_failed(result) else 'partial')
             raise CommandError(message)
         StockSyncRun.objects.create(started_at=started_at, finished_at=timezone.now(),
                                     status='success', summary=grand_total)
