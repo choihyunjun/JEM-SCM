@@ -1,4 +1,4 @@
-# 권장 cron (root). 설치: crontab -l > 백업 후 crontab scripts/crontab.recommended  (기존: crontab -l > 백업 후)
+# 권장 cron (root). 설치: crontab -l > 백업 후 crontab scripts/crontab.recommended
 # 모든 ERP 동기화는 같은 잠금을 쓴다. 겹치면 뒤의 것이 건너뛰므로 시간대를 나눈다.
 P=/var/www/scm_project
 PY=/var/www/scm_project/venv/bin/python
