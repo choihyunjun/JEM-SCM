@@ -16,7 +16,7 @@ from material.models import MaterialStock, MaterialTransaction, Warehouse
 from material.views import _do_cancel_incoming
 from qms.models import ImportInspection
 from qms.views import import_inspection_detail
-from .models import (DeliveryOrder, DeliveryOrderItem, Incoming, Inventory, LabelPrintLog,
+from .models import (DeliveryOrder, DeliveryOrderItem, Incoming, LabelPrintLog,
                      Order, Part, ReturnLog, ReturnShipment, UserProfile, Vendor)
 from .returns import acknowledge_return, refresh_delivery_status, restored_quantities, ship_return
 
@@ -173,12 +173,10 @@ class ReturnProcessTests(TestCase):
         self.assertFalse(ReturnLog.objects.filter(pk=case.pk).exists())
         self.assertEqual(self.inspection.correction_history[0]['qty_bad'], 20)
         self.assertFalse(Incoming.objects.exists())
-        self.assertEqual(Inventory.objects.get(part=self.part).base_stock, 0)
         self.assertEqual(MaterialStock.objects.get(warehouse=self.waiting, production_lot='A').quantity, 100)
         self.decide(90, 10)
         self.assertEqual(Incoming.objects.get().confirmed_qty, 90)
         self.assertEqual(ReturnLog.objects.get().quantity, 10)
-        self.assertEqual(Inventory.objects.get(part=self.part).base_stock, 90)
 
     def test_correction_requires_reason_and_blocks_after_shipment(self):
         case = self.case()

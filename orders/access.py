@@ -48,9 +48,8 @@ def vendor_identity(user):
     restricted = profile.role == 'VENDOR' or bool(org and org.org_type == 'VENDOR') or bool(direct)
     if not restricted:
         return False, None, None
+    # 소속 조직(UserProfile.org) 연결이 기준이다. 예전 Vendor.user 연결은 조직 연결이 없을 때만 쓴다.
     linked = org.linked_vendor if org and org.org_type == 'VENDOR' else None
-    if direct and linked and direct.pk != linked.pk:
-        return True, None, None
     vendor = linked or direct
     if not org or org.org_type != 'VENDOR':
         org = Organization.objects.filter(linked_vendor=vendor).first() if vendor else None

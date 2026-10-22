@@ -5,7 +5,9 @@ from django.contrib.auth.models import User
 class Vendor(models.Model):
     name = models.CharField(max_length=100, verbose_name="업체명")
     code = models.CharField(max_length=20, unique=True, verbose_name='업체코드', default='V000')
-    user = models.OneToOneField(User, on_delete=models.CASCADE, null=True, blank=True)
+    # 예전 방식 계정 연결. 접근 권한의 기준은 UserProfile.org(소속 조직)이며,
+    # 사용자를 삭제해도 거래처·품목·발주가 함께 지워지지 않도록 연결만 끊는다.
+    user = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True)
     can_view_inventory = models.BooleanField(default=True, verbose_name="과부족 조회 권한")
 
     # 납품서 출력용 정보
@@ -121,6 +123,11 @@ class Order(models.Model):
     # [ERP 연동 필드]
     erp_order_no = models.CharField(max_length=50, blank=True, null=True, verbose_name="ERP 발주번호")
     erp_order_seq = models.CharField(max_length=20, blank=True, null=True, verbose_name="ERP 발주순번")
+    # ERP 발주 적용 시점의 ERP 발주수량. 재적용 때 ERP 수량 변경분(증감)만 SCM 발주에 반영한다.
+    erp_po_qty = models.IntegerField(null=True, blank=True, verbose_name="ERP 발주수량(적용 기준)")
+    ERP_STATUS_CHOICES = [('', '정상'), ('CANCELLED', 'ERP 취소')]
+    erp_status = models.CharField(max_length=20, blank=True, default='', choices=ERP_STATUS_CHOICES,
+                                  verbose_name="ERP 발주 상태")
 
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="발주등록일")
     approved_at = models.DateTimeField(null=True, blank=True, verbose_name="발주승인일")
@@ -416,6 +423,13 @@ class UserProfile(models.Model):
         if is_new:
             self._apply_role_defaults()
         super().save(*args, **kwargs)
+
+    def reset_to_role_defaults(self):
+        """새 계정: 메뉴 권한 체크를 모두 끄고 지정한 역할의 기본 권한만 켠다 (저장은 호출자가)."""
+        for f in self._meta.fields:
+            if f.name.startswith('can_') and isinstance(f, models.BooleanField):
+                setattr(self, f.name, False)
+        self._apply_role_defaults()
 
     def _apply_role_defaults(self):
         """RoleDefaultPermission 테이블에서 역할별 기본 권한 조회 후 적용"""

@@ -30,6 +30,8 @@
             </div>
 
             <input type="hidden" name="status" value="{{ status_filter|default:'' }}">
+            <input type="hidden" name="do_start" value="{{ do_start|default:'' }}">
+            <input type="hidden" name="do_end" value="{{ do_end|default:'' }}">
         </form>
 
         <form method="get" class="d-flex align-items-center">
@@ -42,6 +44,12 @@
                 <option value="received" {% if status_filter == 'received' %}selected{% endif %}>입고완료</option>
                 <option value="rejected" {% if status_filter == 'rejected' %}selected{% endif %}>전량 부적합</option>
             </select>
+            <div class="input-group input-group-sm ms-2" style="width: 300px;" title="납품서 등록일 기간">
+                <input type="date" name="do_start" value="{{ do_start|default:'' }}" class="form-control" aria-label="납품서 등록 시작일">
+                <span class="input-group-text px-1">~</span>
+                <input type="date" name="do_end" value="{{ do_end|default:'' }}" class="form-control" aria-label="납품서 등록 종료일">
+                <button class="btn btn-outline-primary" type="submit"><i class="bi bi-calendar-range"></i></button>
+            </div>
         </form>
     </div>
     {% endif %}
@@ -49,7 +57,8 @@
 
 <div class="card border-dark shadow-sm mb-4">
     <div class="card-header bg-white fw-bold">
-        <i class="bi bi-files"></i> 최근 생성된 납품서
+        <i class="bi bi-files"></i> 납품서 목록
+        <span class="badge bg-secondary ms-1">{{ orders.paginator.count }}건</span>
     </div>
     <div class="card-body p-0">
 
@@ -125,6 +134,19 @@
                         </tbody>
                     </table>
                 </div>
+                {% if orders.has_other_pages %}
+                <nav class="py-2" aria-label="납품서 페이지">
+                    <ul class="pagination pagination-sm justify-content-center mb-0">
+                        {% if orders.has_previous %}
+                        <li class="page-item"><a class="page-link" href="?page={{ orders.previous_page_number }}&vendor_id={{ selected_vendor_id|default:'' }}&q={{ q|urlencode }}&status={{ status_filter|default:'' }}&do_start={{ do_start|default:'' }}&do_end={{ do_end|default:'' }}">이전</a></li>
+                        {% endif %}
+                        <li class="page-item disabled"><span class="page-link">{{ orders.number }} / {{ orders.paginator.num_pages }}</span></li>
+                        {% if orders.has_next %}
+                        <li class="page-item"><a class="page-link" href="?page={{ orders.next_page_number }}&vendor_id={{ selected_vendor_id|default:'' }}&q={{ q|urlencode }}&status={{ status_filter|default:'' }}&do_start={{ do_start|default:'' }}&do_end={{ do_end|default:'' }}">다음</a></li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
             </div>
 
             <div class="tab-pane fade" id="return-pane" role="tabpanel">

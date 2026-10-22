@@ -26,10 +26,12 @@
                 <i class="bi bi-file-earmark-excel text-success" aria-hidden="true"></i>엑셀 저장
             </a>
 
-            {% if user.is_superuser or user|has_perm:'can_scm_inventory_edit' %}
+            {% if can_edit_demand %}
             <a href="{% url 'demand_manage' %}" class="btn btn-sm btn-outline-secondary">
                 <i class="bi bi-pencil-square" aria-hidden="true"></i>소요량 수정/삭제
             </a>
+            {% endif %}
+            {% if can_create_order %}
             <button class="btn btn-sm btn-primary" onclick="openBulkShortageModal()">
                 <i class="bi bi-cart-plus" aria-hidden="true"></i>부족품 일괄 발주
             </button>
@@ -138,9 +140,9 @@
                                 <div class="text-muted" style="font-size: 0.6rem;">(기준: 오늘아침)</div>
                             </td>
                             {% for day in item.daily_status %}
-                            <td class="text-primary date-cell {% if user.is_superuser or user.profile.role == 'STAFF' %}cursor-pointer hover-bg-light{% endif %}"
+                            <td class="text-primary date-cell {% if can_edit_demand %}cursor-pointer hover-bg-light{% endif %}"
                                 style="min-width: 85px;"
-                                {% if user.is_superuser or user.profile.role == 'STAFF' %}onclick="editDemand('{{ item.part_no }}', '{{ day.date|date:'Y-m-d' }}', '{{ day.demand_qty }}')"{% endif %}>
+                                {% if can_edit_demand %}onclick="editDemand('{{ item.part_no }}', '{{ day.date|date:'Y-m-d' }}', '{{ day.demand_qty }}')"{% endif %}>
                                 {% if day.demand_qty > 0 %}{{ day.demand_qty|intcomma }}{% else %}-{% endif %}
                             </td>
                             {% endfor %}
@@ -156,14 +158,14 @@
                         <tr class="text-center border-bottom-bold">
                             <td class="bg-light small fw-bold">과부족</td>
                             {% for day in item.daily_status %}
-                            <td class="fw-bold date-cell {% if user.is_superuser or user.profile.role == 'STAFF' %}cursor-pointer hover-bg-light{% endif %} {% if day.is_danger %}bg-danger-light text-danger{% endif %}"
+                            <td class="fw-bold date-cell {% if can_create_order %}cursor-pointer hover-bg-light{% endif %} {% if day.is_danger %}bg-danger-light text-danger{% endif %}"
                                 style="min-width: 85px;"
-                                {% if user.is_superuser or user.profile.role == 'STAFF' %}
+                                {% if can_create_order %}
                                     onclick="openOrderModal('{{ item.part_no }}', '{{ item.part_name|escapejs }}', '{{ item.vendor_name|escapejs }}', '{{ day.stock|stringformat:'d' }}', '{{ day.date|date:'Y-m-d' }}')"
                                     title="클릭하여 발주 생성"
                                 {% endif %}>
                                 {{ day.stock|intcomma }}
-                                {% if day.is_danger and user.is_superuser or user.profile.role == 'STAFF' %}
+                                {% if day.is_danger and can_create_order %}
                                     <i class="bi bi-plus-circle-fill ms-1" style="font-size: 0.7rem;"></i>
                                 {% endif %}
                             </td>
@@ -177,18 +179,6 @@
     </div>
     {% endif %}
 </div>
-
-{% if search_submitted %}
-<div style="position: fixed; bottom: 25px; right: 35px; z-index: 9999;">
-    <div class="shadow-lg border p-2" style="background-color: #212529; color: white; border-radius: 8px; font-size: 0.9rem; border-color: #495057;">
-        <i class="bi bi-info-circle text-info me-1"></i>
-        기초재고 업로드 일자 :
-        <span class="text-warning fw-bold ms-1" style="text-shadow: 1px 1px 1px rgba(0,0,0,0.5);">
-            {% if inventory_ref_date %}{{ inventory_ref_date|date:"Y-m-d" }}{% else %}미등록{% endif %}
-        </span>
-    </div>
-</div>
-{% endif %}
 
 <!-- 업체 검색 모달 -->
 <div class="modal fade" id="vendorSearchModal" tabindex="-1">

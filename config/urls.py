@@ -56,10 +56,8 @@ urlpatterns = [
 
     path('inventory/demand-manage/', views.demand_manage, name='demand_manage'),
     path('inventory/demand-delete-action/', views.demand_delete_action, name='demand_delete_action'),
-    path('inventory/demand-upload/', views.demand_upload_action, name='demand_upload_action'),
     path('inventory/demand-preview-upload/', views.demand_preview_upload, name='demand_preview_upload'),
     path('inventory/demand-apply-upload/', views.demand_apply_upload, name='demand_apply_upload'),
-    path('inventory/demand-delete/', views.delete_all_demands, name='delete_all_demands'),
     path('inventory/demand-update-ajax/', views.demand_update_ajax, name='demand_update_ajax'),
     path('inventory/quick-order/', views.quick_order_action, name='quick_order_action'),
     path('inventory/bulk-shortage-order/', views.bulk_shortage_order, name='bulk_shortage_order'),
@@ -71,7 +69,6 @@ urlpatterns = [
     path('label/create_order/', views.create_delivery_order, name='create_delivery_order'),
     path('label/print/<int:order_id>/', views.label_print, name='label_print'),
     path('label/print_note/<int:order_id>/', views.delivery_note_print, name='delivery_note_print'),
-    path('label/action/', views.label_print_action, name='label_print_action'),
     path('label/delete/<int:order_id>/', views.delete_delivery_order, name='delete_delivery_order'),
 
     # [QR 스캔 프로세스]
@@ -94,9 +91,7 @@ urlpatterns = [
     # [협력사 관리]
     path('vendor/', views.vendor_manage, name='vendor_manage'),
     path('vendor/detail/<int:vendor_id>/', views.vendor_detail, name='vendor_detail'),
-    path('vendor/create/', views.vendor_create, name='vendor_create'),
     path('vendor/update/', views.vendor_update, name='vendor_update'),
-    path('vendor/delete/', views.vendor_delete, name='vendor_delete'),
     path('vendor/link-user/', views.vendor_link_user, name='vendor_link_user'),
     path('vendor/unlink-user/', views.vendor_unlink_user, name='vendor_unlink_user'),
     path('vendor/search-users/', views.vendor_search_users, name='vendor_search_users'),

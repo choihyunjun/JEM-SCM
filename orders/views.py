@@ -56,20 +56,10 @@ def _is_internal(user) -> bool:
     return _get_role(user) != 'VENDOR'
 
 def _get_user_vendor(user):
-    """협력사 계정의 Vendor 객체 반환 - 기존 방식과 새 방식 모두 지원"""
-    # 1. 기존 방식: Vendor.user 필드로 직접 연결
-    vendor = Vendor.objects.filter(user=user).first()
-    if vendor:
-        return vendor
-
-    # 2. 새 방식: UserProfile.org.linked_vendor로 연결
-    try:
-        if hasattr(user, 'profile') and user.profile.org and user.profile.org.linked_vendor:
-            return user.profile.org.linked_vendor
-    except Exception:
-        pass
-
-    return None
+    """협력사 계정의 Vendor 객체 반환 (orders.access.vendor_identity와 같은 기준: 소속 조직 우선)."""
+    from .access import vendor_identity
+    restricted, vendor, _ = vendor_identity(user)
+    return vendor if restricted else None
 
 # [Legacy] 기존 role 기반 권한 - 폴백용으로 유지
 ROLE_MENU_PERMS = {
@@ -83,7 +73,7 @@ ROLE_ACTION_PERMS = {
         'order.upload', 'order.delete', 'order.close', 'order.approve', 'order.approve_all', 'order.export',
         'inv.upload', 'inv.adjust', 'inv.export',
         'incoming.scan', 'incoming.cancel', 'incoming.export',
-        'demand.upload', 'demand.edit', 'demand.delete', 'demand.delete_all', 'demand.export',
+        'demand.upload', 'demand.edit', 'demand.delete', 'demand.export',
         'label.print', 'delivery.print', 'delivery.register', 'delivery.delete',
     },
     'STAFF': {
@@ -122,6 +112,27 @@ def require_action_perm(request, action: str):
 def scope_qs_for_user(user, qs):
     from .access import scope_vendor_queryset
     return scope_vendor_queryset(user, qs)
+
+
+def _internal_perm(user, permission: str) -> bool:
+    """내부 직원 전용 작업 권한: 권한 관리 화면의 체크값만 본다(역할 이름과 무관).
+
+    협력사로 묶인 계정은 체크값과 상관없이 불가.
+    """
+    if not getattr(user, 'is_authenticated', False):
+        return False
+    if user.is_superuser:
+        return True
+    from .access import has_permission, vendor_identity
+    restricted, _, _ = vendor_identity(user)
+    return not restricted and has_permission(user, permission)
+
+
+def _deny_internal_perm(request, permission: str, label: str, target='order_list'):
+    if _internal_perm(request.user, permission):
+        return None
+    messages.error(request, f"{label} 권한이 없습니다. 관리자에게 권한을 요청하세요.")
+    return redirect(target)
 
 
 def menu_permission_required(permission_field):
@@ -258,144 +269,42 @@ def order_list(request):
         orders = orders.filter(Q(part_no__icontains=q) | Q(part_name__icontains=q))
 
     today = timezone.localtime().date()
-    overdue_list = []
-    active_overdue = Order.objects.filter(
-        due_date__lt=today, is_closed=False, approved_at__isnull=False
-    ).select_related('vendor')
+    from .remaining import order_progress
+    from .supply import shortage_items
 
+    # 미납/임박 판단은 납품서 등록 기준 잔량(orders/remaining.py) 하나만 사용한다.
+    active_orders = Order.objects.filter(is_closed=False, approved_at__isnull=False).select_related('vendor')
     if not (user.is_superuser or (_is_internal(user))):
-        active_overdue = active_overdue.filter(vendor=user_vendor) if user_vendor else active_overdue.none()
+        active_orders = active_orders.filter(vendor=user_vendor) if user_vendor else active_orders.none()
     elif selected_vendor:
-        active_overdue = active_overdue.filter(vendor_id=selected_vendor)
+        active_orders = active_orders.filter(vendor_id=selected_vendor)
+    alert_orders = list(active_orders.filter(due_date__lte=today + timedelta(days=3)).order_by('due_date'))
+    progress = order_progress(alert_orders)
 
-    # N+1 최적화: 모든 미납 발주의 입고 수량을 한 번에 계산
-    overdue_ids = list(active_overdue.values_list('id', flat=True))
-    overdue_erp_nos = list(active_overdue.exclude(erp_order_no__isnull=True).exclude(erp_order_no='').values_list('erp_order_no', flat=True))
+    overdue_list = []
+    due_soon_count = 0
+    long_overdue_count = 0
+    for o in alert_orders:
+        rem = progress[o.pk].remaining
+        if rem <= 0:
+            continue
+        if o.due_date >= today:
+            due_soon_count += 1
+            continue
+        if o.due_date < today - timedelta(days=7):
+            long_overdue_count += 1
+        overdue_list.append({
+            'due_date': o.due_date,
+            'vendor_name': o.vendor.name if o.vendor else "미지정",
+            'part_no': o.part_no,
+            'order_qty': o.quantity,
+            'incoming_qty': progress[o.pk].delivered,
+            'remain_qty': rem
+        })
 
-    # linked_order로 연결된 입고 수량 집계
-    linked_incoming_by_order = {}
-    if overdue_ids:
-        linked_qs = DeliveryOrderItem.objects.filter(
-            linked_order_id__in=overdue_ids,
-            order__status__in=['RECEIVED', 'APPROVED']
-        ).values('linked_order_id').annotate(total=Sum('total_qty'))
-        for item in linked_qs:
-            linked_incoming_by_order[item['linked_order_id']] = item['total'] or 0
-
-    # ERP 발주번호로 연결된 입고 수량 집계
-    linked_incoming_by_erp = {}
-    if overdue_erp_nos:
-        erp_qs = DeliveryOrderItem.objects.filter(
-            erp_order_no__in=overdue_erp_nos,
-            order__status__in=['RECEIVED', 'APPROVED']
-        ).values('erp_order_no').annotate(total=Sum('total_qty'))
-        for item in erp_qs:
-            linked_incoming_by_erp[item['erp_order_no']] = item['total'] or 0
-
-    for o in active_overdue.order_by('due_date'):
-        # 미리 계산된 입고 수량 사용
-        linked_incoming = linked_incoming_by_order.get(o.id, 0)
-
-        # linked_order로 입고가 없으면 ERP 발주번호로 확인
-        if linked_incoming == 0 and o.erp_order_no:
-            linked_incoming = linked_incoming_by_erp.get(o.erp_order_no, 0)
-
-        rem = o.quantity - linked_incoming
-
-        if rem > 0:
-            overdue_list.append({
-                'due_date': o.due_date,
-                'vendor_name': o.vendor.name if o.vendor else "미지정",
-                'part_no': o.part_no,
-                'order_qty': o.quantity,
-                'incoming_qty': linked_incoming,
-                'remain_qty': rem
-            })
-
-    # ========== 알림 대시보드 요약 데이터 (최적화) ==========
-    from material.models import MaterialStock, Warehouse
-    from collections import defaultdict
-
-    target_warehouses = Warehouse.objects.filter(code__in=['2000', '4200'])
-    target_wh_ids = list(target_warehouses.values_list('id', flat=True))
-
-    # 협력사 필터링을 위한 parts 쿼리
-    if user_vendor:
-        alert_parts = Part.objects.filter(vendor=user_vendor)
-    else:
-        alert_parts = Part.objects.all()
-
-    # 1) 재고 부족 예상 품목 수 (N+1 최적화: 배치 쿼리)
-    part_ids = list(alert_parts.values_list('id', flat=True))
-
-    # 1-1) 재고 일괄 조회
-    stock_map = {}
-    if part_ids:
-        if target_wh_ids:
-            stock_qs = MaterialStock.objects.filter(
-                part_id__in=part_ids, warehouse_id__in=target_wh_ids
-            ).values('part_id').annotate(total=Sum('quantity'))
-        else:
-            stock_qs = MaterialStock.objects.filter(
-                part_id__in=part_ids
-            ).values('part_id').annotate(total=Sum('quantity'))
-        stock_map = {item['part_id']: item['total'] or 0 for item in stock_qs}
-
-    # 1-2) 소요량 일괄 조회 (향후 7일)
-    demand_map = {}
-    if part_ids:
-        demand_qs = Demand.objects.filter(
-            part_id__in=part_ids,
-            due_date__gte=today,
-            due_date__lte=today + timedelta(days=7)
-        ).values('part_id').annotate(total=Sum('quantity'))
-        demand_map = {item['part_id']: item['total'] or 0 for item in demand_qs}
-
-    # 1-3) 입고 예정 일괄 조회 (향후 7일, part_no 기준)
-    part_no_map = {p.id: p.part_no for p in alert_parts.only('id', 'part_no')}
-    part_nos = list(part_no_map.values())
-    incoming_map = {}
-    if part_nos:
-        incoming_qs = Order.objects.filter(
-            part_no__in=part_nos,
-            is_closed=False,
-            due_date__gte=today,
-            due_date__lte=today + timedelta(days=7)
-        ).values('part_no').annotate(total=Sum('quantity'))
-        incoming_map = {item['part_no']: item['total'] or 0 for item in incoming_qs}
-
-    # 1-4) 부족 품목 수 계산 (메모리에서)
-    shortage_count = 0
-    for part_id in part_ids:
-        wms_stock = stock_map.get(part_id, 0)
-        future_demand = demand_map.get(part_id, 0)
-        part_no = part_no_map.get(part_id, '')
-        pending_incoming = incoming_map.get(part_no, 0)
-
-        expected_stock = wms_stock + pending_incoming - future_demand
-        if expected_stock < 0:
-            shortage_count += 1
-
-    # 2) 납기 D-3 임박 품목 수
-    due_soon_query = Order.objects.filter(
-        is_closed=False,
-        approved_at__isnull=False,
-        due_date__gte=today,
-        due_date__lte=today + timedelta(days=3)
-    )
-    if user_vendor:
-        due_soon_query = due_soon_query.filter(vendor=user_vendor)
-    due_soon_count = due_soon_query.count()
-
-    # 3) 장기 미입고 (납기 경과 7일 이상)
-    long_overdue_query = Order.objects.filter(
-        is_closed=False,
-        approved_at__isnull=False,
-        due_date__lt=today - timedelta(days=7)
-    )
-    if user_vendor:
-        long_overdue_query = long_overdue_query.filter(vendor=user_vendor)
-    long_overdue_count = long_overdue_query.count()
+    # 재고 부족 예상 품목 수 (대시보드와 같은 기준: 2000+4200+4300, D+7 소요, 입고 전 납품서)
+    alert_parts = Part.objects.filter(vendor=user_vendor) if user_vendor else Part.objects.all()
+    shortage_count = len(shortage_items(alert_parts, today))
 
     return render(request, 'order_list.html', {
         'orders': orders, 'user_name': user.username, 'vendor_name': vendor_name,
@@ -409,6 +318,7 @@ def order_list(request):
         'due_soon_count': due_soon_count,
         'long_overdue_count': long_overdue_count,
         'today': today,
+        'can_manage_orders': _internal_perm(user, 'can_scm_order_edit'),
     })
 
 # ==========================================
@@ -418,16 +328,18 @@ def order_list(request):
 @login_required
 @menu_permission_required('can_scm_order_edit')
 def order_upload(request):
-    resp = require_action_perm(request, 'order.upload')
+    # 화면·미리보기·확정 모두 같은 '발주 등록' 체크 권한으로 판단한다 (ADMIN 역할도 동일).
+    resp = _deny_internal_perm(request, 'can_scm_order_edit', '발주 등록')
     if resp:
         return resp
-    if not request.user.is_superuser and _get_role(request.user) != 'STAFF':
-        return redirect('order_list')
     return render(request, 'order_upload.html', {'active_menu': 'upload'})
 
 @login_required
 def order_upload_template(request):
     """발주 등록용 엑셀 양식 다운로드"""
+    resp = _deny_internal_perm(request, 'can_scm_order_edit', '발주 등록')
+    if resp:
+        return resp
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
     wb = openpyxl.Workbook()
@@ -487,7 +399,7 @@ def order_upload_template(request):
 @login_required
 @require_POST
 def order_upload_preview(request):
-    resp = require_action_perm(request, 'order.upload')
+    resp = _deny_internal_perm(request, 'can_scm_order_edit', '발주 등록')
     if resp:
         return resp
 
@@ -571,7 +483,7 @@ def order_upload_preview(request):
 @login_required
 @require_POST
 def order_create_confirm(request):
-    resp = require_action_perm(request, 'order.upload')
+    resp = _deny_internal_perm(request, 'can_scm_order_edit', '발주 등록')
     if resp:
         return resp
 
@@ -614,17 +526,41 @@ def order_create_confirm(request):
 @login_required
 @require_POST
 def order_delete(request):
-    if not request.user.is_superuser:
+    resp = _deny_internal_perm(request, 'can_scm_order_edit', '발주 삭제(발주 등록/수정/삭제)')
+    if resp:
+        return resp
+    ids = request.POST.getlist('order_ids')
+    if not ids:
+        messages.warning(request, '삭제할 발주를 선택해주세요.')
         return redirect('order_list')
-    Order.objects.filter(id__in=request.POST.getlist('order_ids')).delete()
+
+    from .remaining import has_delivery_history
+    with transaction.atomic():
+        targets = list(Order.objects.select_for_update().filter(id__in=ids).order_by('pk'))
+        blocked = [o for o in targets if has_delivery_history(o)]
+        if blocked:
+            # 삭제하면 그 납품 수량이 같은 품번의 다른 발주 잔량에서 빠지므로 막는다.
+            names = ', '.join(f"{o.part_no}({o.due_date:%m/%d})" for o in blocked[:5])
+            more = f" 외 {len(blocked) - 5}건" if len(blocked) > 5 else ''
+            messages.error(request, f"납품서가 등록된 발주는 삭제할 수 없습니다: {names}{more}. "
+                                    "납품이 끝난 발주는 [마감] 처리해주세요. (선택한 발주는 하나도 삭제되지 않았습니다)")
+            return redirect('order_list')
+        Order.objects.filter(pk__in=[o.pk for o in targets]).delete()
+    messages.success(request, f"발주 {len(targets)}건을 삭제했습니다.")
     return redirect('order_list')
 
 @login_required
 @require_POST
 def order_close_action(request):
-    if not request.user.is_superuser:
+    resp = _deny_internal_perm(request, 'can_scm_order_edit', '발주 마감(발주 등록/수정/삭제)')
+    if resp:
+        return resp
+    ids = request.POST.getlist('order_ids')
+    if not ids:
+        messages.warning(request, '마감할 발주를 선택해주세요.')
         return redirect('order_list')
-    Order.objects.filter(id__in=request.POST.getlist('order_ids')).update(is_closed=True)
+    count = Order.objects.filter(id__in=ids, is_closed=False).update(is_closed=True)
+    messages.success(request, f"발주 {count}건을 마감했습니다.")
     return redirect('order_list')
 
 @login_required
@@ -736,41 +672,16 @@ def inventory_list(request):
         parts = list(part_qs)
         part_ids = [p.id for p in parts]
 
-        # 2. 자재창고(2000, 4200) 조회
-        target_warehouses = Warehouse.objects.filter(code__in=['2000', '4200', '4300'])
-        target_wh_ids = list(target_warehouses.values_list('id', flat=True))
+        # 2~3. 가용 재고 (2000+4200+4300, orders/supply.py 공통 기준)
+        from .supply import available_stock_map, expected_incoming
+        stock_map = available_stock_map(part_ids)
 
-        # 3. MaterialStock 일괄 조회 (part별 재고 합계)
-        if target_wh_ids:
-            stock_qs = MaterialStock.objects.filter(
-                part_id__in=part_ids,
-                warehouse_id__in=target_wh_ids
-            ).values('part_id').annotate(total_qty=Sum('quantity'))
-        else:
-            stock_qs = MaterialStock.objects.filter(
-                part_id__in=part_ids
-            ).values('part_id').annotate(total_qty=Sum('quantity'))
-
-        stock_map = {item['part_id']: item['total_qty'] or 0 for item in stock_qs}
-
-        # 4. 입고예정 조회: PENDING 납품서 (등록됨 + QR 미스캔) 기반
-        #    - linked_order.due_date가 있으면 해당 날짜에 입고예정 반영
-        #    - 없으면 오늘 날짜로 반영
-        part_no_to_id = {p.part_no: p.id for p in parts}
-        pending_items = DeliveryOrderItem.objects.filter(
-            part_no__in=part_no_to_id.keys(),
-            order__status='PENDING'
-        ).select_related('linked_order')
-
+        # 4. 입고예정: PENDING 납품서 (등록됨 + QR 미스캔), 예정일 = 연결 발주 납기(지났으면 오늘)
+        pending_by_part_no = expected_incoming([p.part_no for p in parts], today)
         incoming_map = defaultdict(lambda: defaultdict(int))
-        for item in pending_items:
-            pid = part_no_to_id.get(item.part_no)
-            if pid:
-                # 입고예정일: 연결된 발주서 납기일 → 없으면 오늘
-                expected_date = item.linked_order.due_date if item.linked_order else today
-                if expected_date < today:
-                    expected_date = today  # 과거 날짜는 오늘로
-                incoming_map[pid][expected_date] += item.total_qty
+        for p in parts:
+            if p.part_no in pending_by_part_no:
+                incoming_map[p.id] = pending_by_part_no[p.part_no]
 
         # 5. Demand 일괄 조회 (part별, 날짜별 소요량)
         demand_qs = Demand.objects.filter(
@@ -818,11 +729,6 @@ def inventory_list(request):
                 'daily_status': daily_status
             })
 
-    latest_inv_date = None
-    last_inv_obj = Inventory.objects.exclude(last_inventory_date__isnull=True).order_by('-last_inventory_date').first()
-    if last_inv_obj:
-        latest_inv_date = last_inv_obj.last_inventory_date
-
     # 미확인 발주 목록 (approved_at이 null인 것) - 중복 발주 방지용
     pending_orders = Order.objects.filter(
         approved_at__isnull=True,
@@ -850,7 +756,8 @@ def inventory_list(request):
         'user_name': user.username,
         'vendor_name': user_vendor.name if user_vendor else "관리자",
         'q': q,
-        'inventory_ref_date': latest_inv_date,
+        'can_edit_demand': _internal_perm(user, 'can_scm_inventory_edit'),
+        'can_create_order': _internal_perm(user, 'can_scm_order_edit'),
         'pending_order_keys': pending_order_keys,
         'pending_order_parts': pending_order_parts,
         'search_submitted': search_submitted,
@@ -902,27 +809,14 @@ def inventory_export(request):
     parts = list(part_qs)
     part_ids = [p.id for p in parts]
 
-    # ─── 재고 ───
-    target_wh_ids = list(Warehouse.objects.filter(code__in=['2000', '4200', '4300']).values_list('id', flat=True))
-    stock_qs = MaterialStock.objects.filter(part_id__in=part_ids)
-    if target_wh_ids:
-        stock_qs = stock_qs.filter(warehouse_id__in=target_wh_ids)
-    stock_map = {r['part_id']: r['total_qty'] or 0
-                 for r in stock_qs.values('part_id').annotate(total_qty=Sum('quantity'))}
-
-    # ─── 입고예정 ───
-    part_no_to_id = {p.part_no: p.id for p in parts}
-    pending_items = DeliveryOrderItem.objects.filter(
-        part_no__in=part_no_to_id.keys(), order__status='PENDING'
-    ).select_related('linked_order')
+    # ─── 재고 / 입고예정 (화면과 같은 orders/supply.py 기준) ───
+    from .supply import available_stock_map, expected_incoming
+    stock_map = available_stock_map(part_ids)
+    pending_by_part_no = expected_incoming([p.part_no for p in parts], today)
     incoming_map = defaultdict(lambda: defaultdict(int))
-    for pi in pending_items:
-        pid = part_no_to_id.get(pi.part_no)
-        if pid:
-            ed = (pi.linked_order.due_date if pi.linked_order else today)
-            if ed < today:
-                ed = today
-            incoming_map[pid][ed] += pi.total_qty
+    for p in parts:
+        if p.part_no in pending_by_part_no:
+            incoming_map[p.id] = pending_by_part_no[p.part_no]
 
     # ─── 소요량 ───
     demand_qs = Demand.objects.filter(
@@ -1109,10 +1003,9 @@ def inventory_export(request):
 @login_required
 @require_POST
 def quick_order_action(request):
-    user = request.user
-    if not (user.is_superuser or (_is_internal(user))):
-        messages.error(request, "발주 등록 권한이 없습니다.")
-        return redirect('inventory_list')
+    resp = _deny_internal_perm(request, 'can_scm_order_edit', '발주 등록', target='inventory_list')
+    if resp:
+        return resp
 
     v_name = request.POST.get('vendor_name')
     p_no = request.POST.get('part_no')
@@ -1142,9 +1035,8 @@ def quick_order_action(request):
 def bulk_shortage_order(request):
     """부족품 일괄 발주 처리"""
     import json
-    user = request.user
-    if not (user.is_superuser or (_is_internal(user))):
-        return JsonResponse({'success': False, 'error': '발주 등록 권한이 없습니다.'})
+    if not _internal_perm(request.user, 'can_scm_order_edit'):
+        return JsonResponse({'success': False, 'error': '발주 등록 권한이 없습니다.'}, status=403)
 
     try:
         orders_json = request.POST.get('orders', '[]')
@@ -1180,8 +1072,9 @@ def bulk_shortage_order(request):
 @login_required
 @menu_permission_required('can_view_inventory')
 def demand_manage(request):
-    if not request.user.is_superuser:
-        return redirect('inventory_list')
+    resp = _deny_internal_perm(request, 'can_scm_inventory_edit', '소요량 수정', target='inventory_list')
+    if resp:
+        return resp
 
     # 복수 업체 ID 지원 (콤마로 구분)
     vendor_ids_str = request.GET.get('vendor_ids', '')
@@ -1232,67 +1125,19 @@ def demand_manage(request):
 @login_required
 @require_POST
 def demand_delete_action(request):
-    resp = require_action_perm(request, 'demand.delete')
+    resp = _deny_internal_perm(request, 'can_scm_inventory_edit', '소요량 수정', target='inventory_list')
     if resp:
         return resp
-
-    if not request.user.is_superuser:
-        return redirect('inventory_list')
     Demand.objects.filter(id__in=request.POST.getlist('demand_ids')).delete()
     messages.success(request, "삭제 완료.")
     return redirect(request.META.get('HTTP_REFERER', 'demand_manage'))
 
 @login_required
 @require_POST
-def delete_all_demands(request):
-    resp = require_action_perm(request, 'demand.delete_all')
-    if resp:
-        return resp
-
-    if not request.user.is_superuser:
-        return redirect('inventory_list')
-    Demand.objects.all().delete()
-    messages.success(request, "전체 삭제 완료.")
-    return redirect('inventory_list')
-
-@login_required
-@require_POST
-def demand_upload_action(request):
-    resp = require_action_perm(request, 'demand.upload')
-    if resp:
-        return resp
-
-    if not request.user.is_superuser:
-        return redirect('inventory_list')
-    if request.FILES.get('demand_file'):
-        try:
-            wb = openpyxl.load_workbook(request.FILES['demand_file'], read_only=True, data_only=True)
-            ws = wb.active
-            c_count = 0
-            all_parts = {p.part_no: p for p in Part.objects.select_related('vendor').all()}
-
-            with transaction.atomic():
-                for row in ws.iter_rows(min_row=2, values_only=True):
-                    p_no = str(row[0]).strip() if row[0] else None
-                    if not p_no or p_no not in all_parts:
-                        continue
-                    Demand.objects.update_or_create(part=all_parts[p_no], due_date=row[2], defaults={'quantity': row[1] or 0})
-                    c_count += 1
-
-            messages.success(request, f"소요량 {c_count}건 반영 완료")
-
-        except Exception as e:
-            messages.error(request, f"업로드 중 오류: {str(e)}")
-
-    return redirect('inventory_list')
-
-
-@login_required
-@require_POST
 def demand_preview_upload(request):
     """엑셀 파일 파싱 후 OK/오류 행 프리뷰 JSON 반환"""
-    if not request.user.is_superuser:
-        return JsonResponse({'error': '권한 없음'}, status=403)
+    if not _internal_perm(request.user, 'can_scm_inventory_edit'):
+        return JsonResponse({'error': '소요량 수정 권한이 없습니다.'}, status=403)
 
     f = request.FILES.get('demand_file')
     if not f:
@@ -1358,8 +1203,8 @@ def demand_preview_upload(request):
 @require_POST
 def demand_apply_upload(request):
     """프리뷰 검토 후 소요량 일괄 반영 (덮어쓰기)"""
-    if not request.user.is_superuser:
-        return JsonResponse({'error': '권한 없음'}, status=403)
+    if not _internal_perm(request.user, 'can_scm_inventory_edit'):
+        return JsonResponse({'error': '소요량 수정 권한이 없습니다.'}, status=403)
 
     import json as _json
     import datetime as _dt
@@ -1413,12 +1258,8 @@ def demand_apply_upload(request):
 @login_required
 @require_POST
 def demand_update_ajax(request):
-    resp = require_action_perm(request, 'demand.edit')
-    if resp:
-        return resp
-
-    if not request.user.is_superuser:
-        return JsonResponse({'status': 'error'}, status=403)
+    if not _internal_perm(request.user, 'can_scm_inventory_edit'):
+        return JsonResponse({'status': 'error', 'message': '소요량 수정 권한이 없습니다.'}, status=403)
 
     p_no, d_date, qty = request.POST.get('part_no'), request.POST.get('due_date'), request.POST.get('quantity')
 
@@ -1500,7 +1341,22 @@ def label_list(request):
     elif status_filter == 'received':
         recent_orders = recent_orders.filter(status='APPROVED')
 
-    recent_orders = recent_orders[:20]
+    # 납품서 목록: 기간 검색 + 페이지 넘김 (기본 최근 20건씩)
+    do_start = request.GET.get('do_start', '').strip()
+    do_end = request.GET.get('do_end', '').strip()
+    try:
+        start_day = date.fromisoformat(do_start) if do_start else None
+        end_day = date.fromisoformat(do_end) if do_end else None
+    except ValueError:
+        messages.warning(request, '납품서 조회 기간을 YYYY-MM-DD 형식으로 입력해주세요.')
+        start_day = end_day = None
+        do_start = do_end = ''
+    if start_day:
+        recent_orders = recent_orders.filter(created_at__date__gte=start_day)
+    if end_day:
+        recent_orders = recent_orders.filter(created_at__date__lte=end_day)
+    from django.core.paginator import Paginator
+    recent_orders = Paginator(recent_orders, 20).get_page(request.GET.get('page'))
 
     # [수정] 부적합/반출 관리 탭 데이터 (ReturnLog 기준)
     if user_vendor:
@@ -1529,12 +1385,10 @@ def label_list(request):
     return_logs = return_logs_qs.select_related('source_incoming', 'delivery_item').prefetch_related('shipments__movement')
     return_pending_count = return_logs_qs.filter(shipments__confirmed_at__isnull=True,
                                                shipments__isnull=False).distinct().count()
-    from .returns import restored_quantities
-    returned_by_order, returned_by_part = restored_quantities(return_logs_qs)
-
-    # 3. 라벨 발행 데이터 (잔량 계산 로직)
+    # 3. 라벨 발행 데이터 (잔량 계산: orders/remaining.py 단일 기준)
+    from .remaining import manual_pools, order_progress
     label_data = []
-    
+
     order_q = Order.objects.filter(is_closed=False, approved_at__isnull=False)
     if not is_staff_or_admin:
         order_q = order_q.filter(vendor=user_vendor) if user_vendor else order_q.none()
@@ -1545,14 +1399,10 @@ def label_list(request):
         order_q = order_q.filter(Q(part_no__icontains=q) | Q(part_name__icontains=q))
 
     # [A] ERP 발주 건
-    erp_orders = order_q.exclude(erp_order_no__isnull=True).exclude(erp_order_no='')
+    erp_orders = list(order_q.exclude(erp_order_no__isnull=True).exclude(erp_order_no=''))
+    erp_progress = order_progress(erp_orders)
     for o in erp_orders:
-        printed = LabelPrintLog.objects.filter(order=o).aggregate(Sum('printed_qty'))['printed_qty__sum'] or 0
-        
-        returned = returned_by_order[o.pk]
-
-        valid_printed = printed - returned
-        remain = o.quantity - valid_printed
+        remain = erp_progress[o.pk].remaining
 
         if remain > 0:
             label_data.append({
@@ -1567,22 +1417,15 @@ def label_list(request):
                 'due_date': o.due_date
             })
 
-    # [B] 수기 발주 건
-    manual_orders = order_q.filter(Q(erp_order_no__isnull=True) | Q(erp_order_no=''))
-    manual_pnos = manual_orders.values_list('part_no', flat=True).distinct()
+    # [B] 수기 발주 건 (협력사·품번별 풀)
+    manual_orders = list(order_q.filter(Q(erp_order_no__isnull=True) | Q(erp_order_no='')))
+    pools = manual_pools({(o.part_no, o.vendor_id) for o in manual_orders})
 
-    for p_no in manual_pnos:
-        sub_orders = manual_orders.filter(part_no=p_no)
-        total_qty = sub_orders.aggregate(Sum('quantity'))['quantity__sum'] or 0
-        part_first = sub_orders.first()
-        part_name = part_first.part_name
-        due_date = sub_orders.order_by('due_date').first().due_date
-        
-        printed = LabelPrintLog.objects.filter(part_no=p_no, order__isnull=True).aggregate(Sum('printed_qty'))['printed_qty__sum'] or 0
-        
-        returned = returned_by_part[p_no]
-
-        remain = total_qty - (printed - returned)
+    for (p_no, vendor_id), pool in sorted(pools.items()):
+        open_orders = pool.open_orders
+        if not open_orders:
+            continue
+        remain = pool.remaining
 
         if remain > 0:
             label_data.append({
@@ -1591,10 +1434,10 @@ def label_list(request):
                 'erp_no': '-',
                 'erp_seq': '-',
                 'part_no': p_no,
-                'part_name': part_name,
-                'total_order': total_qty,
+                'part_name': open_orders[0].part_name,
+                'total_order': sum(o.quantity for o in open_orders),
                 'remain': remain,
-                'due_date': due_date
+                'due_date': min(o.due_date for o in open_orders)
             })
 
     label_data.sort(key=lambda x: x['due_date'])
@@ -1608,6 +1451,8 @@ def label_list(request):
         'vendor_list': vendor_list,
         'selected_vendor_id': selected_v,
         'status_filter': status_filter,
+        'do_start': do_start,
+        'do_end': do_end,
         'active_menu': 'label',
         'q': q
     })
@@ -1660,11 +1505,6 @@ def delete_delivery_order(request, order_id):
 
     return redirect('label_list')
 
-
-@login_required
-@menu_permission_required('can_scm_label_view')
-def label_print_action(request):
-    return redirect('label_list')
 
 @login_required
 @menu_permission_required('can_scm_label_edit')
@@ -1776,6 +1616,14 @@ def delivery_note_print(request, order_id):
 # [5. 입고 및 반출 관리]
 # ==========================================
 
+def _receivable_warehouses():
+    """입고 창고 선택 목록: 실제 창고 마스터(코드순). 검사대기(8100)·부적합(8200)·미사용·재고미표시 창고 제외."""
+    if Warehouse is None:
+        return []
+    return (Warehouse.objects.filter(is_active=True, is_hidden_stock=False)
+            .exclude(code__in=['8100', '8200']).order_by('code'))
+
+
 @login_required
 @require_POST
 @menu_permission_required('can_scm_incoming_edit')
@@ -1791,10 +1639,7 @@ def receive_delivery_order_scan(request):
         messages.warning(request, f"이미 입고 처리된 납품서입니다. ({do.order_no})")
         return redirect('incoming_list')
 
-    if Warehouse is None:
-        warehouses = []
-    else:
-        warehouses = Warehouse.objects.exclude(code__in=['8100', '8200']).order_by('code')
+    warehouses = _receivable_warehouses()
 
     # =====================================================================
     # [FIFO 경고 체크] 입고 확인 화면에 표시할 FIFO 경고 생성
@@ -1979,13 +1824,13 @@ def incoming_export(request):
 def scm_admin_main(request):
     today = timezone.localtime().date()
     overdue_list = []
-    active_overdue_orders = Order.objects.filter(due_date__lt=today, is_closed=False, approved_at__isnull=False).order_by('due_date')
+    active_overdue_orders = list(Order.objects.filter(
+        due_date__lt=today, is_closed=False, approved_at__isnull=False).select_related('vendor').order_by('due_date'))
+    from .remaining import order_progress
+    progress = order_progress(active_overdue_orders)
 
     for order in active_overdue_orders:
-        total_printed = LabelPrintLog.objects.filter(part_no=order.part_no).aggregate(Sum('printed_qty'))['printed_qty__sum'] or 0
-        closed_qty = Order.objects.filter(part_no=order.part_no, is_closed=True).aggregate(Sum('quantity'))['quantity__sum'] or 0
-        current_printed = max(0, total_printed - closed_qty)
-        remain = order.quantity - current_printed
+        remain = progress[order.pk].remaining
 
         if remain > 0:
             overdue_list.append({
@@ -2001,7 +1846,8 @@ def scm_admin_main(request):
         'total_vendors': Vendor.objects.count(),
         'total_parts': Part.objects.count(),
         'unapproved_orders': Order.objects.filter(approved_at__isnull=True, is_closed=False).count(),
-        'today_incoming': Incoming.objects.filter(in_date=today).aggregate(Sum('quantity'))['quantity__sum'] or 0,
+        # 무검사 직납 + 수입검사 판정 완료분 모두 Incoming에 기록된다. 입고량 = 확정(양품) 수량.
+        'today_incoming': Incoming.objects.filter(in_date=today).aggregate(Sum('confirmed_qty'))['confirmed_qty__sum'] or 0,
         'overdue_count': len(overdue_list)
     }
 
@@ -2039,6 +1885,13 @@ def receive_delivery_order_confirm(request):
 
     if inspection_needed == 'yes' and ImportInspection is None:
         messages.error(request, "QMS 연동 모델을 불러올 수 없습니다.")
+        return redirect('incoming_list')
+
+    # 창고는 화면 목록과 같은 실제 창고 마스터 기준으로만 받는다.
+    allowed_codes = set(_receivable_warehouses().values_list('code', flat=True))
+    chosen = target_warehouse_code if inspection_needed == 'yes' else (direct_warehouse_code or '4200')
+    if chosen not in allowed_codes:
+        messages.error(request, f"입고 창고 [{chosen}]를 사용할 수 없습니다. 창고 목록에서 다시 선택해주세요.")
         return redirect('incoming_list')
 
     try:
@@ -2317,15 +2170,26 @@ def _calculate_vendor_monthly_stats(vendor, year_month):
     total_lead_time = 0
     lead_time_count = 0
 
+    # 발주와 연결되지 않은(과거) 수기 납품은 같은 품번 수기 발주 중 납품일 이전에 등록된,
+    # 납기가 가장 빠른 발주와 비교한다. 비교할 발주가 전혀 없을 때만 판단 대상에서 뺀다.
+    manual_orders = list(Order.objects.filter(
+        vendor=vendor, approved_at__isnull=False).filter(Q(erp_order_no__isnull=True) | Q(erp_order_no=''))
+        .order_by('due_date', 'created_at', 'pk'))
+
     for item in delivery_items:
         delivery_date = item.order.created_at.date()
         qty = item.total_qty
 
-        if item.linked_order and item.linked_order.due_date:
-            due_date = item.linked_order.due_date
+        target = item.linked_order
+        if target is None and not item.erp_order_no:
+            target = next((o for o in manual_orders if o.part_no == item.part_no
+                           and o.created_at.date() <= delivery_date), None)
 
-            if item.linked_order.created_at:
-                lead_time = (delivery_date - item.linked_order.created_at.date()).days
+        if target and target.due_date:
+            due_date = target.due_date
+
+            if target.created_at:
+                lead_time = (delivery_date - target.created_at.date()).days
                 total_lead_time += max(0, lead_time)
                 lead_time_count += 1
 
@@ -2333,26 +2197,15 @@ def _calculate_vendor_monthly_stats(vendor, year_month):
                 on_time_qty += qty
             else:
                 delayed_qty += qty
-        else:
-            on_time_qty += qty
 
-    # 납기가 지난 미입고 수량을 "지연"으로 처리
-    for o in orders:
-        if o.due_date < today:
-            order_incoming = DeliveryOrderItem.objects.filter(
-                linked_order=o,
-                order__status__in=['RECEIVED', 'APPROVED']
-            ).aggregate(Sum('total_qty'))['total_qty__sum'] or 0
-
-            if order_incoming == 0 and o.erp_order_no:
-                order_incoming = DeliveryOrderItem.objects.filter(
-                    erp_order_no=o.erp_order_no,
-                    order__status__in=['RECEIVED', 'APPROVED']
-                ).aggregate(Sum('total_qty'))['total_qty__sum'] or 0
-
-            undelivered = max(0, o.quantity - order_incoming)
-            if undelivered > 0:
-                delayed_qty += undelivered
+    # 납기가 지난 미납 수량을 "지연"으로 처리 (잔량 = 발주량 - 납품서 등록량, orders/remaining.py)
+    from .remaining import order_progress
+    past_due = [o for o in orders if o.due_date < today]
+    progress = order_progress(past_due)
+    for o in past_due:
+        undelivered = progress[o.pk].remaining
+        if undelivered > 0:
+            delayed_qty += undelivered
 
     # 준수율 계산
     total_qty_for_rate = on_time_qty + delayed_qty
@@ -2635,19 +2488,23 @@ def vendor_delivery_close_month(request):
 @login_required
 def scm_alert_dashboard(request):
     """SCM 종합 대시보드 - 발주/입고 현황 + 알림"""
+    from .access import vendor_identity
+    from .remaining import order_progress
+    from .supply import shortage_items
+
     user = request.user
-    user_vendor = _get_user_vendor(user)
+    # 협력사 판별은 다른 메뉴와 같은 기준(소속 조직 우선). 회사 연결이 없는 협력사 계정은 아무것도 보지 않는다.
+    restricted, user_vendor, _ = vendor_identity(user)
     today = timezone.localtime().date()
     this_month_start = today.replace(day=1)
 
-    # MaterialStock 사용 (WMS 실시간 재고 - 과부족 조회와 동일 기준)
-    from material.models import MaterialStock, Warehouse
-    target_warehouses = Warehouse.objects.filter(code__in=['2000', '4200'])
+    def scoped(qs, field):
+        if not restricted:
+            return qs
+        return qs.filter(**{field: user_vendor}) if user_vendor else qs.none()
 
     # ========== 1. 발주 통계 ==========
-    order_qs = Order.objects.all()
-    if user_vendor:
-        order_qs = order_qs.filter(vendor=user_vendor)
+    order_qs = scoped(Order.objects.all(), 'vendor')
 
     # 금일 발주
     today_orders = order_qs.filter(created_at__date=today)
@@ -2665,10 +2522,8 @@ def scm_alert_dashboard(request):
     # 미완료 발주 (승인됨, 미마감)
     open_orders = order_qs.filter(approved_at__isnull=False, is_closed=False).count()
 
-    # ========== 2. 입고 통계 ==========
-    incoming_qs = Incoming.objects.all()
-    if user_vendor:
-        incoming_qs = incoming_qs.filter(part__vendor=user_vendor)
+    # ========== 2. 입고 통계 (무검사 직납 + 수입검사 판정분, 확정 양품 기준) ==========
+    incoming_qs = scoped(Incoming.objects.all(), 'part__vendor')
 
     # 금일 입고
     today_incoming = incoming_qs.filter(in_date=today)
@@ -2682,15 +2537,15 @@ def scm_alert_dashboard(request):
 
     # ========== 3. 납품서 통계 ==========
     delivery_qs = DeliveryOrder.objects.all()
-    if user_vendor:
-        # DeliveryOrder는 vendor 필드가 없음 - items__linked_order__vendor로 필터링
-        delivery_qs = delivery_qs.filter(items__linked_order__vendor=user_vendor).distinct()
+    if restricted:
+        vendor_part_nos = Part.objects.filter(vendor=user_vendor).values_list('part_no', flat=True) if user_vendor else []
+        delivery_qs = delivery_qs.filter(items__part_no__in=vendor_part_nos).distinct()
 
     pending_delivery = delivery_qs.filter(status='PENDING').count()
     today_delivery = delivery_qs.filter(created_at__date=today).count()
 
     # ========== 4. 협력사별 미입고 현황 (상위 10개) ==========
-    if not user_vendor:
+    if not restricted:
         vendor_order_stats = Order.objects.filter(
             approved_at__isnull=False,
             is_closed=False
@@ -2707,127 +2562,37 @@ def scm_alert_dashboard(request):
     recent_incoming = incoming_qs.select_related('part', 'part__vendor').order_by('-in_date', '-created_at')[:10]
 
     # ========== 6. 품목/협력사 현황 ==========
-    if user_vendor:
-        total_parts = Part.objects.filter(vendor=user_vendor).count()
-    else:
-        total_parts = Part.objects.count()
+    total_parts = scoped(Part.objects.all(), 'vendor').count()
     total_vendors = Vendor.objects.count()
 
-    # 협력사 필터링 - 소요량이 있는 품목만 조회 (성능 최적화)
-    parts_with_demand = Demand.objects.filter(
-        due_date__gte=today,
-        due_date__lte=today + timedelta(days=7)
-    ).values_list('part_id', flat=True).distinct()
+    # 재고 부족 품목 (D+7, 가용재고 2000+4200+4300, 7일 안에 들어올 입고 전 납품서만 입고예정으로 인정)
+    shortage_list = shortage_items(scoped(Part.objects.select_related('vendor'), 'vendor'), today, days=7)
 
-    if user_vendor:
-        parts = Part.objects.select_related('vendor').filter(vendor=user_vendor, id__in=parts_with_demand)
-    else:
-        parts = Part.objects.select_related('vendor').filter(id__in=parts_with_demand)
+    # 납기 임박(D-3) / 미납(납기 경과): 납품서 등록 기준 잔량(orders/remaining.py)
+    alert_orders = list(scoped(Order.objects.filter(
+        is_closed=False, approved_at__isnull=False, due_date__lte=today + timedelta(days=3),
+    ), 'vendor').select_related('vendor').order_by('due_date'))
+    progress = order_progress(alert_orders)
+    parts_by_no = {p.part_no: p for p in Part.objects.filter(part_no__in={o.part_no for o in alert_orders})}
 
-    # 1. 재고 부족 품목 (과부족 D+7 기준 부족 예상 품목)
-    shortage_items = []
-
-    for part in parts:
-        # MaterialStock 기준 현재고 (창고 2000, 4200 합산)
-        if target_warehouses.exists():
-            wms_stock = MaterialStock.objects.filter(part=part, warehouse__in=target_warehouses).aggregate(total=Sum('quantity'))['total'] or 0
-        else:
-            wms_stock = MaterialStock.objects.filter(part=part).aggregate(total=Sum('quantity'))['total'] or 0
-        current_stock = wms_stock
-
-        # D+7까지의 소요량 합산
-        future_demand = Demand.objects.filter(
-            part=part,
-            due_date__gte=today,
-            due_date__lte=today + timedelta(days=7)
-        ).aggregate(total=Sum('quantity'))['total'] or 0
-
-        # D+7까지의 입고 예정 (PENDING 상태의 납품서 - 등록되었으나 아직 스캔 안된 것)
-        pending_incoming = DeliveryOrderItem.objects.filter(
-            order__status='PENDING',
-            part_no=part.part_no
-        ).aggregate(total=Sum('total_qty'))['total'] or 0
-
-        # 예상 재고 = 현재고 + 입고예정 - 소요량
-        expected_stock = current_stock + pending_incoming - future_demand
-
-        if expected_stock < 0:
-            shortage_items.append({
-                'part': part,
-                'current_stock': current_stock,
-                'future_demand': future_demand,
-                'pending_incoming': pending_incoming,
-                'expected_shortage': abs(expected_stock),
-            })
-
-    # 부족량 순 정렬
-    shortage_items.sort(key=lambda x: x['expected_shortage'], reverse=True)
-
-    # 2. 납기 D-3 임박 품목 (3일 이내 납기 도래하는 미입고 발주)
-    due_soon_orders = Order.objects.filter(
-        is_closed=False,
-        approved_at__isnull=False,  # 승인된 발주만
-        due_date__gte=today,
-        due_date__lte=today + timedelta(days=3)
-    ).select_related('vendor')
-    if user_vendor:
-        due_soon_orders = due_soon_orders.filter(vendor=user_vendor)
-    due_soon_orders = due_soon_orders.order_by('due_date')
-
-    # 입고 완료된 수량 계산
     due_soon_list = []
-    for order in due_soon_orders:
-        part = Part.objects.filter(vendor=order.vendor, part_no=order.part_no).first()
-        if part:
-            # ERP 발주번호 기반으로 입고 수량 조회
-            incoming_qty = Incoming.objects.filter(
-                part=part,
-                erp_order_no=order.erp_order_no,
-                erp_order_seq=order.erp_order_seq
-            ).aggregate(total=Sum('confirmed_qty'))['total'] or 0
-
-            remain_qty = order.quantity - incoming_qty
-            if remain_qty > 0:
-                days_left = (order.due_date - today).days
-                due_soon_list.append({
-                    'order': order,
-                    'part': part,
-                    'incoming_qty': incoming_qty,
-                    'remain_qty': remain_qty,
-                    'days_left': days_left,
-                })
-
-    # 3. 미납 발주 (납기일 경과)
-    overdue_orders = Order.objects.filter(
-        is_closed=False,
-        approved_at__isnull=False,
-        due_date__lt=today  # 납기일이 지난 모든 발주
-    ).select_related('vendor')
-    if user_vendor:
-        overdue_orders = overdue_orders.filter(vendor=user_vendor)
-    overdue_orders = overdue_orders.order_by('due_date')
-
     overdue_list = []
-    for order in overdue_orders:
-        part = Part.objects.filter(vendor=order.vendor, part_no=order.part_no).first()
-        if part:
-            # ERP 발주번호 기반으로 입고 수량 조회
-            incoming_qty = Incoming.objects.filter(
-                part=part,
-                erp_order_no=order.erp_order_no,
-                erp_order_seq=order.erp_order_seq
-            ).aggregate(total=Sum('confirmed_qty'))['total'] or 0
-
-            remain_qty = order.quantity - incoming_qty
-            if remain_qty > 0:
-                overdue_days = (today - order.due_date).days
-                overdue_list.append({
-                    'order': order,
-                    'part': part,
-                    'incoming_qty': incoming_qty,
-                    'remain_qty': remain_qty,
-                    'overdue_days': overdue_days,
-                })
+    for order in alert_orders:
+        remain_qty = progress[order.pk].remaining
+        if remain_qty <= 0:
+            continue
+        row = {
+            'order': order,
+            'part': parts_by_no.get(order.part_no),
+            'incoming_qty': progress[order.pk].delivered,
+            'remain_qty': remain_qty,
+        }
+        if order.due_date >= today:
+            row['days_left'] = (order.due_date - today).days
+            due_soon_list.append(row)
+        else:
+            row['overdue_days'] = (today - order.due_date).days
+            overdue_list.append(row)
 
     # 경과일 순 정렬
     overdue_list.sort(key=lambda x: x['overdue_days'], reverse=True)
@@ -2835,16 +2600,13 @@ def scm_alert_dashboard(request):
     # 공지사항 (최근 5개, 활성화된 것만)
     notices = Notice.objects.filter(is_active=True)[:5]
 
-    # QnA (협력사는 본인 글만, 관리자는 전체)
-    if user_vendor:
-        qna_list = QnA.objects.filter(vendor=user_vendor)[:10]
-    else:
-        qna_list = QnA.objects.all()[:10]
+    # QnA (협력사는 자기 회사 글만, 내부는 전체)
+    qna_list = scoped(QnA.objects.all(), 'vendor')[:10]
 
     context = {
         # 알림 현황
-        'shortage_items': shortage_items[:20],
-        'shortage_count': len(shortage_items),
+        'shortage_items': shortage_list[:20],
+        'shortage_count': len(shortage_list),
         'due_soon_list': due_soon_list,
         'due_soon_count': len(due_soon_list),
         'overdue_list': overdue_list[:30],
@@ -2881,6 +2643,7 @@ def scm_alert_dashboard(request):
         # 기타
         'today': today,
         'user_vendor': user_vendor,
+        'is_vendor_account': restricted,
         'notices': notices,
         'qna_list': qna_list,
     }
@@ -2930,7 +2693,12 @@ def qna_create(request):
         messages.error(request, '제목과 내용을 모두 입력해주세요.')
         return redirect('scm_alert_dashboard')
 
-    user_vendor = Vendor.objects.filter(user=request.user).first()
+    # 협력사 계정은 소속 조직(지금 방식) 기준으로 회사를 찾는다. 예전 Vendor.user 연결도 함께 지원.
+    from .access import vendor_identity
+    restricted, user_vendor, _ = vendor_identity(request.user)
+    if restricted and not user_vendor:
+        messages.error(request, '협력사 계정의 업체 연결을 확인해 주세요. 관리자에게 문의하세요.')
+        return redirect('scm_alert_dashboard')
 
     QnA.objects.create(
         title=title,
@@ -3868,6 +3636,10 @@ def user_create(request):
     account_type = request.POST.get('account_type', 'VENDOR')
     org_id = request.POST.get('org_id', '') or None
 
+    if role not in dict(UserProfile.ROLE_CHOICES):
+        messages.error(request, '역할을 다시 선택해주세요.')
+        return redirect('user_manage')
+
     if not username or not password:
         messages.error(request, '사용자명과 비밀번호는 필수입니다.')
         return redirect('user_manage')
@@ -3879,11 +3651,13 @@ def user_create(request):
     # 사용자 생성
     user = User.objects.create_user(username=username, password=password)
 
-    # 프로필 생성/업데이트
+    # 프로필 생성/업데이트 — 프로필은 User 생성 시 기본 역할(협력사)로 먼저 만들어지므로,
+    # 선택한 역할의 기본 권한으로 다시 맞춘다.
     profile, _ = UserProfile.objects.get_or_create(user=user)
     profile.display_name = display_name
     profile.department = department
     profile.role = role
+    profile.reset_to_role_defaults()
     profile.account_type = account_type
     if org_id:
         profile.org_id = org_id
@@ -4036,45 +3810,6 @@ def vendor_detail(request, vendor_id):
 
 @login_required
 @menu_permission_required('can_access_scm_admin')
-def vendor_create(request):
-    """협력사 신규 등록"""
-    if request.method != 'POST':
-        return redirect('vendor_manage')
-
-    code = request.POST.get('code', '').strip()
-    name = request.POST.get('name', '').strip()
-
-    if not code or not name:
-        messages.error(request, '업체코드와 업체명은 필수입니다.')
-        return redirect('vendor_manage')
-
-    if Vendor.objects.filter(code=code).exists():
-        messages.error(request, f'업체코드 "{code}"가 이미 존재합니다.')
-        return redirect('vendor_manage')
-
-    try:
-        Vendor.objects.create(
-            code=code,
-            name=name,
-            erp_code=code,
-            biz_registration_number=request.POST.get('biz_registration_number') or None,
-            representative=request.POST.get('representative') or None,
-            address=request.POST.get('address') or None,
-            biz_type=request.POST.get('biz_type') or None,
-            biz_item=request.POST.get('biz_item') or None,
-            email=request.POST.get('email') or None,
-            contact_name=request.POST.get('contact_name') or None,
-            contact_phone=request.POST.get('contact_phone') or None,
-        )
-        messages.success(request, f'협력사 "{name}"이(가) 등록되었습니다.')
-    except Exception as e:
-        messages.error(request, f'등록 실패: {e}')
-
-    return redirect('vendor_manage')
-
-
-@login_required
-@menu_permission_required('can_access_scm_admin')
 def vendor_update(request):
     """협력사 수정"""
     if request.method != 'POST':
@@ -4109,37 +3844,6 @@ def vendor_update(request):
         messages.error(request, '협력사를 찾을 수 없습니다.')
     except Exception as e:
         messages.error(request, f'수정 실패: {e}')
-
-    return redirect('vendor_manage')
-
-
-@login_required
-@menu_permission_required('can_access_scm_admin')
-def vendor_delete(request):
-    """협력사 삭제"""
-    if request.method != 'POST':
-        return redirect('vendor_manage')
-
-    vendor_id = request.POST.get('vendor_id')
-    try:
-        vendor = Vendor.objects.get(id=vendor_id)
-
-        # 연결된 데이터 체크
-        if vendor.order_set.exists():
-            messages.error(request, f'"{vendor.name}"에 연결된 발주 데이터가 있어 삭제할 수 없습니다.')
-            return redirect('vendor_manage')
-
-        if vendor.part_set.exists():
-            messages.error(request, f'"{vendor.name}"에 연결된 품목 데이터가 있어 삭제할 수 없습니다.')
-            return redirect('vendor_manage')
-
-        name = vendor.name
-        vendor.delete()
-        messages.success(request, f'협력사 "{name}"이(가) 삭제되었습니다.')
-    except Vendor.DoesNotExist:
-        messages.error(request, '협력사를 찾을 수 없습니다.')
-    except Exception as e:
-        messages.error(request, f'삭제 실패: {e}')
 
     return redirect('vendor_manage')
 
@@ -4210,12 +3914,26 @@ def vendor_link_user(request):
     try:
         vendor = Vendor.objects.get(id=vendor_id)
         user = User.objects.get(id=user_id)
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        if user.is_superuser or user.is_staff or profile.role in ('ADMIN', 'STAFF') or profile.account_type == 'INTERNAL':
+            messages.error(request, f'내부 직원 계정 "{user.username}"은(는) 협력사에 연결할 수 없습니다.')
+            return redirect('vendor_manage')
 
-        # Vendor.user에 직접 연결
-        vendor.user = user
-        vendor.save()
+        with transaction.atomic():
+            # Vendor.user(예전 방식)와 소속 조직(지금 방식, 접근 기준)을 같은 협력사로 맞춘다.
+            vendor.user = user
+            vendor.save()
+            org = Organization.objects.filter(linked_vendor=vendor).first()
+            if org:
+                profile.org = org
+                profile.account_type = 'VENDOR'
+                profile.save(update_fields=['org', 'account_type'])
 
-        messages.success(request, f'"{vendor.name}"에 사용자 "{user.username}"이(가) 연결되었습니다.')
+        if org:
+            messages.success(request, f'"{vendor.name}"에 사용자 "{user.username}"이(가) 연결되었습니다. (소속 조직도 함께 지정)')
+        else:
+            messages.warning(request, f'"{vendor.name}"에 사용자 "{user.username}"을(를) 연결했지만 협력사 조직이 없어 '
+                                      '사용자 관리에서 소속 조직을 지정해야 자료가 보입니다.')
     except Vendor.DoesNotExist:
         messages.error(request, '협력사를 찾을 수 없습니다.')
     except User.DoesNotExist:
@@ -4672,9 +4390,9 @@ def erp_po_sync(request):
     - POST action=search: ERP API로 발주 조회
     - POST action=apply: 선택 항목을 SCM Order로 등록
     """
-    if not request.user.is_superuser and _get_role(request.user) == 'VENDOR':
-        messages.error(request, "해당 메뉴에 대한 접근 권한이 없습니다.")
-        return redirect('order_list')
+    resp = _deny_internal_perm(request, 'can_scm_order_edit', 'ERP 발주 적용(발주 등록)')
+    if resp:
+        return resp
 
     from material.erp_api import fetch_erp_po_headers, fetch_erp_po_details
     from django.conf import settings as conf_settings
@@ -4736,15 +4454,18 @@ def erp_po_sync(request):
             messages.info(request, '해당 기간에 ERP 발주 내역이 없습니다.')
             return render(request, 'erp_po_sync.html', context)
 
-        # 2) 이미 SCM에 등록된 건 조회
-        existing = set(
-            Order.objects.filter(erp_order_no__isnull=False)
-            .exclude(erp_order_no='')
-            .values_list('erp_order_no', 'erp_order_seq')
-        )
+        # 2) 이미 SCM에 등록된 건 (ERP 수량·납기 변경/취소 비교용)
+        from .erp_po import line_values, parse_erp_date, sync_state
+        existing = {
+            (o.erp_order_no, o.erp_order_seq): o
+            for o in Order.objects.filter(erp_order_no__isnull=False).exclude(erp_order_no='')
+        }
 
         # 3) SCM Part 목록 (매칭용)
         part_map = {p.part_no: p for p in Part.objects.select_related('vendor').all()}
+
+        def fmt(raw):
+            return f'{raw[:4]}-{raw[4:6]}-{raw[6:8]}' if raw and len(raw) == 8 else ''
 
         # 4) 각 헤더의 디테일 조회 → 품목 리스트 구성
         po_items = []
@@ -4755,146 +4476,98 @@ def erp_po_sync(request):
             vendor_name = header.get('attrNm', '')
 
             details = fetch_erp_po_details(po_nb)
+            seen_seq = set()
             for detail in details:
-                item_cd = detail.get('itemCd', '')
-                po_sq = str(detail.get('poSq', ''))
-                po_qt = int(detail.get('poQt', 0) or 0)
-                rcv_qt = int(detail.get('rcvQt', 0) or 0)
-                due_dt = detail.get('dueDt', '')
-                item_nm = detail.get('itemNm', '')
+                values = line_values(detail)
+                item_cd, item_nm, po_sq = values['item_cd'], values['item_nm'], values['po_sq']
+                seen_seq.add(po_sq)
 
                 # 품번/품명 필터
                 if item_search:
                     if item_search not in item_cd.upper() and item_search not in (item_nm or '').upper():
                         continue
 
-                # 이미 적용 여부
-                is_applied = (po_nb, po_sq) in existing
-
-                # Part 매칭
-                part_obj = part_map.get(item_cd)
-                part_matched = part_obj is not None
-
-                # 날짜 포맷
-                po_display = ''
-                if po_dt and len(po_dt) == 8:
-                    po_display = f'{po_dt[:4]}-{po_dt[4:6]}-{po_dt[6:8]}'
-                due_display = ''
-                if due_dt and len(due_dt) == 8:
-                    due_display = f'{due_dt[:4]}-{due_dt[4:6]}-{due_dt[6:8]}'
+                scm_order = existing.get((po_nb, po_sq))
+                state = sync_state(scm_order, values)
 
                 po_items.append({
                     'po_nb': po_nb,
-                    'po_dt': po_display,
+                    'po_dt': fmt(po_dt),
                     'po_sq': po_sq,
                     'tr_cd': tr_cd_val,
                     'vendor_name': vendor_name,
                     'item_cd': item_cd,
                     'item_nm': item_nm,
-                    'po_qt': po_qt,
-                    'rcv_qt': rcv_qt,
-                    'remain_qt': po_qt - rcv_qt,
-                    'due_dt': due_display,
-                    'due_dt_raw': due_dt,
-                    'is_applied': is_applied,
-                    'part_matched': part_matched,
+                    'po_qt': values['po_qt'],
+                    'rcv_qt': values['rcv_qt'],
+                    'remain_qt': values['remain_qt'],
+                    'due_dt': fmt(values['due_raw']),
+                    'due_dt_raw': values['due_raw'],
+                    'is_applied': scm_order is not None,
+                    'sync_state': state,
+                    'scm_qty': scm_order.quantity if scm_order else None,
+                    'scm_due': scm_order.due_date if scm_order else None,
+                    'part_matched': item_cd in part_map,
+                    'selectable': bool(state) or (scm_order is None and item_cd in part_map and values['remain_qt'] > 0),
                 })
+
+            # ERP 상세에서 사라진 순번 = ERP 취소 (상세 조회가 성공한 발주만 판단)
+            if details:
+                for (o_no, o_seq), scm_order in existing.items():
+                    if o_no != po_nb or o_seq in seen_seq or scm_order.erp_status == 'CANCELLED':
+                        continue
+                    po_items.append({
+                        'po_nb': po_nb, 'po_dt': fmt(po_dt), 'po_sq': o_seq, 'tr_cd': tr_cd_val,
+                        'vendor_name': vendor_name, 'item_cd': scm_order.part_no, 'item_nm': scm_order.part_name,
+                        'po_qt': 0, 'rcv_qt': 0, 'remain_qt': 0, 'due_dt': '', 'due_dt_raw': '',
+                        'is_applied': True, 'sync_state': 'cancelled',
+                        'scm_qty': scm_order.quantity, 'scm_due': scm_order.due_date,
+                        'part_matched': True, 'selectable': True,
+                    })
 
         context['po_items'] = po_items
         context['summary'] = {
             'total': len(po_items),
-            'applied': sum(1 for i in po_items if i['is_applied']),
-            'new': sum(1 for i in po_items if not i['is_applied']),
+            'applied': sum(1 for i in po_items if i['is_applied'] and not i['sync_state']),
+            'new': sum(1 for i in po_items if i['selectable']),
+            'changed': sum(1 for i in po_items if i['sync_state']),
             'unmatched': sum(1 for i in po_items if not i['part_matched']),
         }
         return render(request, 'erp_po_sync.html', context)
 
-    # ── SCM 적용 ──
+    # ── SCM 적용 (신규 생성 + 기존 발주 ERP 변경/취소 반영) ──
     elif action == 'apply':
         selected = request.POST.getlist('selected_items')
         if not selected:
             messages.warning(request, '적용할 항목을 선택해주세요.')
             return redirect('erp_po_sync')
 
-        # 이미 등록된 건
-        existing = set(
-            Order.objects.filter(erp_order_no__isnull=False)
-            .exclude(erp_order_no='')
-            .values_list('erp_order_no', 'erp_order_seq')
-        )
-
-        part_map = {p.part_no: p for p in Part.objects.select_related('vendor').all()}
-        vendor_map = {v.erp_code: v for v in Vendor.objects.exclude(erp_code__isnull=True).exclude(erp_code='')}
-
-        created_count = 0
-        skipped_count = 0
-        error_list = []
-
+        # 포맷: "poNb|poSq|itemCd|poQt|dueDt|trCd" — 수량·납기는 화면 값을 믿지 않고 ERP를 다시 조회한다.
+        keys, error_list = [], []
         for item_data in selected:
-            # 포맷: "poNb|poSq|itemCd|poQt|dueDt|trCd"
-            try:
-                fields = item_data.split('|')
-                po_nb = fields[0]
-                po_sq = fields[1]
-                item_cd = fields[2]
-                po_qt = int(fields[3])
-                due_dt_raw = fields[4]
-                tr_cd_val = fields[5] if len(fields) > 5 else ''
-            except (IndexError, ValueError):
+            fields = item_data.split('|')
+            if len(fields) < 2 or not fields[0] or not fields[1]:
                 error_list.append(f'데이터 파싱 오류: {item_data}')
                 continue
+            keys.append((fields[0], fields[1], fields[5] if len(fields) > 5 else ''))
 
-            # 중복 체크
-            if (po_nb, po_sq) in existing:
-                skipped_count += 1
-                continue
+        from .erp_po import apply_lines
+        result = apply_lines(keys, fetch_erp_po_details, today)
+        error_list += result['errors']
 
-            # Part 매칭
-            part_obj = part_map.get(item_cd)
-            if not part_obj:
-                error_list.append(f'품번 미매칭: {item_cd}')
-                continue
-
-            # Vendor: Part에 할당된 vendor 우선, 없으면 ERP 거래처코드로 매칭
-            vendor = part_obj.vendor
-            if not vendor and tr_cd_val:
-                vendor = vendor_map.get(tr_cd_val)
-            if not vendor:
-                error_list.append(f'거래처 미매칭: {item_cd} (trCd={tr_cd_val})')
-                continue
-
-            # 납기일 파싱
-            due_date_val = None
-            if due_dt_raw and len(due_dt_raw) == 8:
-                try:
-                    due_date_val = date(int(due_dt_raw[:4]), int(due_dt_raw[4:6]), int(due_dt_raw[6:8]))
-                except ValueError:
-                    due_date_val = today
-            if not due_date_val:
-                due_date_val = today
-
-            # Order 생성 (협력사 승인 대기)
-            Order.objects.create(
-                vendor=vendor,
-                part_group=part_obj.part_group or '',
-                part_no=part_obj.part_no,
-                part_name=part_obj.part_name or '',
-                quantity=po_qt,
-                due_date=due_date_val,
-                erp_order_no=po_nb,
-                erp_order_seq=po_sq,
-            )
-            existing.add((po_nb, po_sq))
-            created_count += 1
-
-        # 결과 메시지
-        msg = f'SCM 발주 {created_count}건 등록 완료 (협력사 승인 대기)'
-        if skipped_count:
-            msg += f', 중복 건너뜀 {skipped_count}건'
+        msg = f"SCM 발주 신규 {result['created']}건 (협력사 승인 대기)"
+        if result['updated']:
+            msg += f", ERP 변경 반영 {result['updated']}건"
+        if result['cancelled']:
+            msg += f", ERP 취소 마감 {result['cancelled']}건"
+        if result['skipped']:
+            msg += f", 변경 없음/건너뜀 {result['skipped']}건"
         if error_list:
             msg += f', 오류 {len(error_list)}건'
-            for err in error_list[:5]:
-                messages.warning(request, err)
+        for warn in result['warnings'][:10]:
+            messages.warning(request, warn)
+        for err in error_list[:5]:
+            messages.error(request, err)
 
         messages.success(request, msg)
         return redirect('erp_po_sync')

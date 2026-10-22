@@ -29,7 +29,7 @@
                         <th style="width: 18%;">협력사</th>
                         <th>품번</th>
                         <th style="width: 12%;" class="erp-number">발주수량</th>
-                        <th style="width: 12%;" class="erp-number">입고수량</th>
+                        <th style="width: 12%;" class="erp-number" title="납품서로 등록한 수량">납품등록</th>
                         <th style="width: 15%;">미납 잔량</th>
                     </tr>
                 </thead>
@@ -59,7 +59,7 @@
             <form method="get" id="filter-form" class="erp-filter-form row g-2 align-items-center">
                 <input type="hidden" name="sort" value="{{ current_sort|default:'due_date' }}">
 
-                {% if user.is_superuser or user|has_perm:'can_scm_order_edit' %}
+                {% if can_manage_orders %}
                 <div class="col-auto">
                     <label class="small text-muted d-block">협력사</label>
                     <input type="hidden" name="vendor_id" id="hiddenVendorId" value="{{ selected_vendor|default:'' }}">
@@ -104,7 +104,7 @@
                         </button>
                         <a href="{% url 'order_list' %}" class="btn btn-sm btn-outline-secondary">초기화</a>
 
-                        {% if user.is_superuser or user|has_perm:'can_scm_order_edit' %}
+                        {% if can_manage_orders %}
                         <button type="button" class="btn btn-sm btn-danger" onclick="deleteSelected();">
                             <i class="bi bi-trash"></i> 삭제
                         </button>
@@ -136,7 +136,7 @@
                     <table class="table table-bordered table-hover mb-0 scm-table">
                         <thead class="table-light">
                             <tr class="text-center align-middle">
-                                {% if user.is_superuser or user|has_perm:'can_scm_order_edit' %}
+                                {% if can_manage_orders %}
                                 <th style="width: 35px;"><input type="checkbox" id="checkAll"></th>
                                 {% endif %}
 
@@ -183,7 +183,7 @@
                         <tbody>
                             {% for order in orders %}
                             <tr class="{% if order.is_closed %}table-secondary text-muted{% elif order.approved_at %}table-success{% endif %}" style="--bs-table-bg-opacity: .1;">
-                                {% if user.is_superuser or user|has_perm:'can_scm_order_edit' %}
+                                {% if can_manage_orders %}
                                 <td class="text-center">
                                     <input type="checkbox" name="order_ids" value="{{ order.id }}">
                                 </td>
@@ -191,7 +191,9 @@
 
                                 <td class="text-center">{{ forloop.counter }}</td>
                                 <td class="text-center">
-                                    {% if order.is_closed %}
+                                    {% if order.erp_status == 'CANCELLED' %}
+                                        <span class="badge bg-dark" title="ERP에서 취소된 발주">ERP취소</span>
+                                    {% elif order.is_closed %}
                                         <span class="badge bg-danger">발주마감</span>
                                     {% elif order.approved_at %}
                                         <span class="badge bg-success">승인완료</span>
@@ -227,7 +229,7 @@
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="{% if user.is_superuser or user|has_perm:'can_scm_order_edit' %}11{% else %}10{% endif %}" class="text-center py-5 text-muted">
+                                <td colspan="{% if can_manage_orders %}11{% else %}10{% endif %}" class="text-center py-5 text-muted">
                                     <i class="bi bi-inbox fs-1 d-block mb-3"></i>
                                     조회된 데이터가 없습니다.
                                 </td>
@@ -403,7 +405,7 @@
             alert('삭제할 항목을 선택해주세요.');
             return;
         }
-        if (confirm('선택한 ' + selected.length + '건의 발주를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) {
+        if (confirm('선택한 ' + selected.length + '건의 발주를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.\n(납품서가 등록된 발주는 삭제되지 않습니다. 납품이 끝났으면 마감하세요.)')) {
             const form = document.getElementById('action-form');
             form.action = "{% url 'order_delete' %}";
             form.submit();
@@ -416,7 +418,7 @@
             alert('마감할 항목을 선택해주세요.');
             return;
         }
-        if (confirm('선택한 ' + selected.length + '건의 발주를 마감 처리하시겠습니까?\n마감된 발주는 라벨 발행 및 소요량 집계에서 제외됩니다.')) {
+        if (confirm('선택한 ' + selected.length + '건의 발주를 마감 처리하시겠습니까?\n마감 = 납품 완료 처리입니다. 마감된 발주는 납품서 등록 대상에서 제외됩니다.\n(발주 취소는 마감이 아니라 삭제를 사용하세요.)')) {
             const form = document.getElementById('action-form');
             form.action = "{% url 'order_close_action' %}";
             form.submit();

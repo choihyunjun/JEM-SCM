@@ -81,7 +81,10 @@
                 <div class="d-flex gap-2 align-items-center">
                     <span class="badge bg-secondary filter-badge active" data-filter="all" style="cursor:pointer;">전체 {{ summary.total }}건</span>
                     <span class="badge bg-success filter-badge" data-filter="applied" style="cursor:pointer;">적용됨 {{ summary.applied }}건</span>
-                    <span class="badge bg-primary filter-badge" data-filter="new" style="cursor:pointer;">미적용 {{ summary.new }}건</span>
+                    <span class="badge bg-primary filter-badge" data-filter="new" style="cursor:pointer;">적용 가능 {{ summary.new }}건</span>
+                    {% if summary.changed > 0 %}
+                    <span class="badge bg-warning text-dark filter-badge" data-filter="changed" style="cursor:pointer;">ERP 변경/취소 {{ summary.changed }}건</span>
+                    {% endif %}
                     {% if summary.unmatched > 0 %}
                     <span class="badge bg-danger filter-badge" data-filter="unmatched" style="cursor:pointer;">품번 미매칭 {{ summary.unmatched }}건</span>
                     {% endif %}
@@ -111,17 +114,19 @@
                         </thead>
                         <tbody>
                             {% for item in po_items %}
-                            <tr class="po-row {% if item.is_applied %}table-light text-muted{% elif not item.part_matched %}table-warning{% endif %}"
-                                data-status="{% if item.is_applied %}applied{% elif not item.part_matched %}unmatched{% else %}new{% endif %}">
+                            <tr class="po-row {% if item.sync_state %}table-warning{% elif item.is_applied %}table-light text-muted{% elif not item.part_matched %}table-warning{% elif item.remain_qt <= 0 %}text-muted{% endif %}"
+                                data-status="{% if item.sync_state %}changed{% elif item.is_applied %}applied{% elif not item.part_matched %}unmatched{% else %}new{% endif %}">
                                 <td class="text-center">
-                                    {% if item.is_applied %}
+                                    {% if item.selectable %}
+                                        <input type="checkbox" class="form-check-input item-check"
+                                               name="selected_items"
+                                               value="{{ item.po_nb }}|{{ item.po_sq }}|{{ item.item_cd }}|{{ item.po_qt }}|{{ item.due_dt_raw }}|{{ item.tr_cd }}">
+                                    {% elif item.is_applied %}
                                         <i class="bi bi-check-circle-fill text-success"></i>
                                     {% elif not item.part_matched %}
                                         <i class="bi bi-exclamation-triangle text-warning" title="SCM 품번 미등록"></i>
                                     {% else %}
-                                        <input type="checkbox" class="form-check-input item-check"
-                                               name="selected_items"
-                                               value="{{ item.po_nb }}|{{ item.po_sq }}|{{ item.item_cd }}|{{ item.po_qt }}|{{ item.due_dt_raw }}|{{ item.tr_cd }}">
+                                        <i class="bi bi-dash-circle text-muted" title="ERP 잔량 0 - 적용 불가"></i>
                                     {% endif %}
                                 </td>
                                 <td class="small fw-bold text-nowrap">{{ item.po_nb }}</td>
@@ -136,10 +141,16 @@
                                 </td>
                                 <td class="small text-nowrap">{{ item.due_dt }}</td>
                                 <td class="text-center">
-                                    {% if item.is_applied %}
+                                    {% if item.sync_state == 'cancelled' %}
+                                        <span class="badge bg-danger" title="ERP에서 취소됨 - 선택 후 적용하면 SCM 발주를 마감합니다">ERP 취소</span>
+                                    {% elif item.sync_state == 'changed' %}
+                                        <span class="badge bg-warning text-dark" title="SCM {{ item.scm_qty }}개 / 납기 {{ item.scm_due|date:'Y-m-d' }} - 선택 후 적용하면 ERP 변경을 반영합니다">ERP 변경</span>
+                                    {% elif item.is_applied %}
                                         <span class="badge bg-success">적용됨</span>
                                     {% elif not item.part_matched %}
                                         <span class="badge bg-warning text-dark">미매칭</span>
+                                    {% elif item.remain_qt <= 0 %}
+                                        <span class="badge bg-light text-muted border">입고완료</span>
                                     {% else %}
                                         <span class="badge bg-outline-secondary border text-dark">미적용</span>
                                     {% endif %}
@@ -209,7 +220,7 @@ function confirmApply() {
         alert('적용할 항목을 선택해주세요.');
         return false;
     }
-    return confirm('선택한 ' + checked + '건을 SCM 발주에 등록합니다.\n(협력사 승인 후 라벨 발행 가능)\n\n계속하시겠습니까?');
+    return confirm('선택한 ' + checked + '건을 SCM 발주에 등록/갱신합니다.\n수량(ERP 잔량)·납기는 ERP를 다시 조회해 반영하고, ERP에서 취소된 발주는 마감합니다.\n(신규 발주는 협력사 승인 후 납품서 등록 가능)\n\n계속하시겠습니까?');
 }
 
 // 상태 필터

@@ -172,7 +172,7 @@
                                     <th>품명</th>
                                     <th class="erp-number">현재고</th>
                                     <th class="erp-number">D+7 소요</th>
-                                    <th class="erp-number">입고 예정</th>
+                                    <th class="erp-number" title="7일 안에 들어올 입고 전 납품서 수량">입고 예정(7일)</th>
                                     <th class="erp-number">예상 부족</th>
                                 </tr>
                             </thead>
@@ -232,7 +232,7 @@
                                             <th>협력사</th>
                                             <th>품번</th>
                                             <th class="erp-number">발주</th>
-                                            <th class="erp-number">입고</th>
+                                            <th class="erp-number" title="납품서로 등록한 수량">납품등록</th>
                                             <th class="erp-number">미납</th>
                                         </tr>
                                     </thead>
@@ -250,7 +250,7 @@
                                             </td>
                                             <td class="fw-bold small">{{ item.order.due_date|date:"m/d" }}</td>
                                             <td class="small">{{ item.order.vendor.name|truncatechars:8 }}</td>
-                                            <td class="fw-bold text-primary small">{{ item.part.part_no }}</td>
+                                            <td class="fw-bold text-primary small">{{ item.order.part_no }}</td>
                                             <td class="small erp-number">{{ item.order.quantity|intcomma }}</td>
                                             <td class="text-success small erp-number">{{ item.incoming_qty|intcomma }}</td>
                                             <td class="fw-bold text-danger erp-number">{{ item.remain_qty|intcomma }}</td>
@@ -279,7 +279,7 @@
                                             <th>협력사</th>
                                             <th>품번</th>
                                             <th class="erp-number">발주</th>
-                                            <th class="erp-number">입고</th>
+                                            <th class="erp-number" title="납품서로 등록한 수량">납품등록</th>
                                             <th class="erp-number">미납</th>
                                         </tr>
                                     </thead>
@@ -295,7 +295,7 @@
                                             </td>
                                             <td class="text-muted small">{{ item.order.due_date|date:"m/d" }}</td>
                                             <td class="small">{{ item.order.vendor.name|truncatechars:8 }}</td>
-                                            <td class="fw-bold text-primary small">{{ item.part.part_no }}</td>
+                                            <td class="fw-bold text-primary small">{{ item.order.part_no }}</td>
                                             <td class="small erp-number">{{ item.order.quantity|intcomma }}</td>
                                             <td class="text-success small erp-number">{{ item.incoming_qty|intcomma }}</td>
                                             <td class="fw-bold text-danger erp-number">{{ item.remain_qty|intcomma }}</td>

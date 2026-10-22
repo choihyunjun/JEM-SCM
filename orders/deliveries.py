@@ -4,12 +4,12 @@ from datetime import date
 from uuid import uuid4
 
 from django.db import transaction
-from django.db.models import F, Q, Sum
+from django.db.models import F
 from django.utils import timezone
 
 from .access import scope_vendor_queryset
-from .models import DeliveryOrder, DeliveryOrderItem, LabelPrintLog, Order, Part, ReturnLog
-from .returns import restored_quantities
+from .models import DeliveryOrder, DeliveryOrderItem, LabelPrintLog, Order, Part
+from .remaining import manual_pools, order_progress
 
 
 def register_delivery(user, data):
@@ -58,20 +58,16 @@ def register_delivery(user, data):
                     raise ValueError('수기 발주는 납품서 등록 목록의 품번별 잔량을 선택해주세요.')
             requested[(part_no, order_id)] += snp * boxes
 
-        returned_orders, returned_parts = restored_quantities(ReturnLog.objects.filter(part__part_no__in=part_nos))
+        # 화면(label_list)과 같은 잔량 계산을 사용한다: 발주량 - 납품서 등록량 + 반출 복구분
+        progress = order_progress(orders.values())
+        pools = manual_pools({(part_no, parts[part_no].vendor_id)
+                              for (part_no, order_id) in requested if order_id is None})
         for (part_no, order_id), quantity in requested.items():
             if order_id is not None:
-                capacity = orders[order_id].quantity
-                printed = LabelPrintLog.objects.filter(order_id=order_id).aggregate(q=Sum('printed_qty'))['q'] or 0
-                returned = returned_orders[order_id]
+                remain = progress[order_id].remaining
             else:
-                manual = scope_vendor_queryset(user, Order.objects.filter(
-                    part_no=part_no, vendor_id=parts[part_no].vendor_id,
-                    approved_at__isnull=False, is_closed=False)).filter(Q(erp_order_no='') | Q(erp_order_no__isnull=True))
-                capacity = manual.aggregate(q=Sum('quantity'))['q'] or 0
-                printed = LabelPrintLog.objects.filter(part_no=part_no, order__isnull=True).aggregate(q=Sum('printed_qty'))['q'] or 0
-                returned = returned_parts[part_no]
-            remain = max(0, capacity - max(0, printed - returned))
+                pool = pools.get((part_no, parts[part_no].vendor_id))
+                remain = pool.remaining if pool else 0
             if quantity > remain:
                 raise ValueError(f'[{part_no}] 납품가능 수량 {remain:,}개를 초과했습니다. 다시 조회해주세요.')
 
@@ -79,8 +75,15 @@ def register_delivery(user, data):
             order_no='DO-' + timezone.now().strftime('%Y%m%d-%H%M%S') + '-' + uuid4().hex[:16])
         for part_no, snp, boxes, order_id, lot in lines:
             part, order = parts[part_no], orders.get(order_id)
+            # 수기 발주는 품번 풀로 검증하되, 납기 판단을 위해 가장 빠른 열린 발주에 연결해 둔다.
+            linked = order
+            pool = pools.get((part_no, part.vendor_id)) if order is None else None
+            if pool:
+                linked = pool.primary_order()
+                if linked:
+                    pool.allocated[linked.pk] = pool.allocated.get(linked.pk, 0) + snp * boxes
             item = DeliveryOrderItem.objects.create(order=delivery, part_no=part_no, part_name=part.part_name,
-                snp=snp, box_count=boxes, total_qty=snp * boxes, lot_no=lot, linked_order=order,
+                snp=snp, box_count=boxes, total_qty=snp * boxes, lot_no=lot, linked_order=linked,
                 erp_order_no=order.erp_order_no if order else '', erp_order_seq=order.erp_order_seq if order else '')
             LabelPrintLog.objects.create(delivery_item=item, vendor=part.vendor, part=part,
                 part_no=part_no, printed_qty=item.total_qty, snp=snp, order=order)

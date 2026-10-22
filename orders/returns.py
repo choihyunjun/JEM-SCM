@@ -78,18 +78,23 @@ def acknowledge_return(case_id, shipment_id, user):
     return shipment.movement.quantity
 
 
-def restored_quantities(cases):
-    """발주번호가 아닌 원본 납품 품목 FK로 단 한 번씩 복구한다."""
-    by_order, by_manual_part = defaultdict(int), defaultdict(int)
+def restorable_items(cases):
+    """(원본 납품 품목, 인수 확인으로 복구할 수량)을 한 건씩 돌려준다."""
     for case in cases.select_related('delivery_item__linked_order', 'part').prefetch_related('shipments__movement'):
         item = case.delivery_item
         if not item or item.part_no != case.part.part_no or item.order_id != case.delivery_order_id:
             continue  # 연결 불명확한 과거 건을 다른 발주에 추정 반영하지 않는다.
-        quantity = min(case.quantity, case.confirmed_quantity)
+        yield item, min(case.quantity, case.confirmed_quantity)
+
+
+def restored_quantities(cases):
+    """발주번호가 아닌 원본 납품 품목 FK로 단 한 번씩 복구한다."""
+    by_order, by_manual_part = defaultdict(int), defaultdict(int)
+    for item, quantity in restorable_items(cases):
         if item.linked_order_id and item.erp_order_no:
             by_order[item.linked_order_id] += quantity
         elif not item.erp_order_no:
-            by_manual_part[case.part.part_no] += quantity
+            by_manual_part[item.part_no] += quantity
     return by_order, by_manual_part
 
 
@@ -144,7 +149,7 @@ def guard_inspection_stock_usage(origin, transfers):
 
 
 def reverse_inspection_summary(origin, inspection):
-    from .models import Incoming, Inventory
+    from .models import Incoming
     if not origin.ref_delivery_order:
         return
     # 과거 자료에 집계가 없는 경우 새로 만들지 않는다. 존재하는 집계만 원복한다.
@@ -159,4 +164,4 @@ def reverse_inspection_summary(origin, inspection):
             incoming.delete()
         else:
             incoming.save(update_fields=['quantity', 'confirmed_qty'])
-        Inventory.objects.filter(part_id=origin.part_id).update(base_stock=F('base_stock') - inspection.qty_good)
+        # 예전 SCM 재고표(Inventory.base_stock)는 어디서도 읽지 않으므로 더 이상 갱신하지 않는다.
