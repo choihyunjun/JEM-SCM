@@ -33,8 +33,8 @@
         {% if s.lot_diffs or s.pending or s.changed or s.missing or s.no_master %}
         <div class="card-body small">
             {% if s.lot_diffs %}
-            <div class="mb-2"><strong>LOT 관리 품목 차이</strong> — LOT는 그대로 두고 차이를 'LOT 미지정'에 넣었습니다. 원인(스캔 누락, ERP 직접 이동 등)을 확인하세요.
-                <ul class="mb-0">{% for d in s.lot_diffs %}<li>{{ d.wh }} / {{ d.part_no }} {{ d.name|truncatechars:24 }} : 차이 {{ d.diff|floatformat:"-4" }} (ERP {{ d.erp|floatformat:"-4" }})</li>{% endfor %}</ul>
+            <div class="mb-2"><strong>LOT 관리 품목에서 ERP와 다른 수량</strong> — SCM 총량은 ERP에 맞췄고, LOT는 건드리지 않았습니다. 차이만큼은 'LOT 미지정'으로 표시됩니다.
+                <ul class="mb-0">{% for d in lot_diff_rows %}<li>{{ d.wh }}창고 {{ d.part_no }} {{ d.name|truncatechars:24 }} : SCM이 ERP보다 {% if d.diff > 0 %}{{ d.diff|floatformat:"-4" }} 적었음{% else %}{{ d.abs|floatformat:"-4" }} 많았음{% endif %}{% if d.hint %} <span class="text-primary">→ {{ d.hint }}</span>{% endif %}</li>{% endfor %}</ul>
             </div>
             {% endif %}
             {% if s.pending %}<div class="mb-2"><strong>ERP로 보내는 중</strong> (다음 회차에 다시 비교): {{ s.pending|join:", " }}</div>{% endif %}
@@ -47,18 +47,9 @@
     {% endif %}
     {% endwith %}
 
-    <div class="small mb-3">
-        <strong>마지막 총량 보정 적용:</strong>
-        {% if stock_sync_success %}{{ stock_sync_success.finished_at|date:"Y-m-d H:i:s" }}{% else %}완료 기록 없음{% endif %}
-        {% if stock_sync_latest %}
-        <div class="mt-1">
-            최근 시도: {{ stock_sync_latest.started_at|date:"Y-m-d H:i:s" }} —
-            {% if stock_sync_latest.status == 'success' %}완료
-            {% elif stock_sync_latest.status == 'running' %}완료 기록 대기 (장시간 지속되면 서버 로그 확인)
-            {% else %}<span class="text-danger">확인 필요: {{ stock_sync_latest.error }}</span>{% endif %}
-        </div>
-        {% endif %}
-    </div>
+    {% if ledger_error %}
+    <div class="small mb-3 text-danger">수불 이력 가져오기 확인 필요 ({{ ledger_error.started_at|date:"m-d H:i" }}): {{ ledger_error.error|truncatechars:200 }}</div>
+    {% endif %}
 
     {% if not erp_enabled %}
     <div class="alert alert-warning">ERP 연동이 비활성화 상태입니다. (settings.py: ERP_ENABLED = False)</div>
@@ -116,12 +107,11 @@
         <!-- 재고 동기화 카드 -->
         <div class="col-md-3">
             <div class="dtl-card h-100 mb-0">
-                <div class="dtl-card-header"><i class="bi bi-arrow-repeat"></i> 재고 동기화</div>
+                <div class="dtl-card-header"><i class="bi bi-arrow-repeat"></i> 재고 맞추기</div>
                 <div class="card-body">
                     <p class="text-muted small mb-2">
-                        수불 이력 오류와 관계없이 ERP 현재고 기준으로 SCM 재고를 조정합니다.<br>
-                        LOT 초과분은 <strong>FIFO 순서로 자동 차감</strong>됩니다.
-                        응답에서 빠진 품목·창고는 기존 재고를 유지합니다.
+                        ERP 현재고에 SCM 재고를 맞추고 위 결과를 갱신합니다.<br>
+                        LOT 없는 품목은 ERP 숫자 그대로, LOT 관리 품목은 LOT는 그대로 두고 차이만 표시합니다.
                     </p>
                     <form id="syncStockForm" method="post">
                         {% csrf_token %}
@@ -131,7 +121,7 @@
                             {% if stock_sync_running %}
                             <span class="spinner-border spinner-border-sm me-1"></span>실행 중...
                             {% else %}
-                            <i class="bi bi-arrow-repeat me-1"></i>재고 동기화 실행
+                            <i class="bi bi-arrow-repeat me-1"></i>재고 맞추기
                             {% endif %}
                         </button>
                     </form>
@@ -156,7 +146,7 @@
                 <div class="dtl-card-header"><i class="bi bi-list-check"></i> 수불 동기화</div>
                 <div class="card-body">
                     <p class="text-muted small mb-2">
-                        최근 7일 ERP 수불 이력(입고/출고/생산)을 SCM에 기록한 뒤 현재고를 보정합니다.
+                        최근 7일 ERP 수불 이력(입고/출고/생산/이동)을 받아 온 뒤, 이어서 재고 맞추기까지 합니다. (자동으로 10분마다 실행)
                     </p>
                     <ul class="small text-muted mb-3">
                         <li>구매입고 / 고객출고</li>

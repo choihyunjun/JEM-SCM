@@ -8261,7 +8261,7 @@ def erp_stock_manage(request):
     """[WMS] ERP 재고 관리 - 재고 동기화 / ERP vs SCM 비교"""
     from django.conf import settings as django_settings
     from django.core.cache import cache
-    from datetime import date
+    from datetime import date, timedelta
     from .erp_sync_lock import erp_sync_is_running
 
     context = {
@@ -8279,6 +8279,18 @@ def erp_stock_manage(request):
     if context['stock_check']:
         _s = context['stock_check'].summary
         context['stock_check_todo'] = len(_s.get('lot_diffs', [])) + len(_s.get('changed', []))
+        # 같은 품목이 한 창고는 +, 다른 창고는 - 로 같은 양이면 창고 이동이 한쪽에만 반영된 것
+        rows = [dict(d, abs=abs(d['diff']), hint='') for d in _s.get('lot_diffs', [])]
+        for d in rows:
+            twin = next((o for o in rows if o is not d and o['part_no'] == d['part_no'] and o['diff'] == -d['diff']), None)
+            if twin:
+                src, dst = (twin, d) if d['diff'] > 0 else (d, twin)
+                d['hint'] = (f"ERP에서는 {src['wh']}→{dst['wh']}로 옮겨졌는데 SCM은 아직 못 받음. "
+                             f"다음 수불 동기화(재고이동)에서 들어오면 자동으로 사라집니다.")
+        context['lot_diff_rows'] = rows
+    # 수불 이력 가져오기 오류 (재고 맞추기 결과와 별개)
+    context['ledger_error'] = StockSyncRun.objects.filter(
+        summary__has_key='synced', started_at__gte=timezone.now() - timedelta(hours=24)).exclude(status='success').first()
     # partial = the ERP balance was applied; only some items/ledgers need review.
     context['stock_sync_success'] = StockSyncRun.objects.filter(status__in=['success', 'partial']).first()
 
