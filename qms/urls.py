@@ -52,8 +52,6 @@ urlpatterns = [
     path('inspection/<int:pk>/', views.import_inspection_detail, name='import_inspection_detail'),
 
     # 4M 변경관리(v2)는 폐지됨. 옛 주소는 안내 화면만 보여준다.
-    # change_request_create 이름은 orders/test_ui_pages.py 가 아직 참조하므로 유지(테스트 정리 후 삭제 가능).
-    path('change/create/', views.change_request_retired, name='change_request_create'),
     re_path(r'^change/', views.change_request_retired, name='change_request_retired'),
 
     # ============================================

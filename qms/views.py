@@ -1554,12 +1554,6 @@ def import_inspection_detail(request, pk):
                         incoming_obj.save(update_fields=["quantity", "confirmed_qty"])
                         incoming_obj.refresh_from_db()
 
-                    # (주의) SCM Inventory.base_stock 누적은 정책에 따라 ON/OFF
-                    if qty_good > 0:
-                        scm_inv, _ = ScmInventory.objects.get_or_create(part=part)
-                        scm_inv.base_stock = F('base_stock') + qty_good
-                        scm_inv.save()
-
                 target_do = DeliveryOrder.objects.filter(order_no=ref_do_no).first() if ref_do_no else None
                 if qty_bad > 0:
                     ReturnLog.objects.create(

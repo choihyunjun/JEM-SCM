@@ -165,7 +165,7 @@ class MenuPageRenderingTests(TestCase):
         self.assertContains(self.client.get(url), part.part_no)
 
     def test_quality_registration_forms_render(self):
-        for route in ['m4_create', 'change_request_create', 'outgoing_create',
+        for route in ['m4_create', 'outgoing_create',
                       'nc_create', 'capa_create', 'claim_create', 'rating_create',
                       'isir_create', 'voc_create', 'gauge_create', 'qdoc_create']:
             with self.subTest(route=route):
