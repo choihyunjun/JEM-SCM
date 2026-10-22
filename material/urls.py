@@ -32,7 +32,6 @@ urlpatterns = [
     path('inbound/history/edit/<int:trx_id>/', views.edit_manual_incoming, name='edit_incoming_history'),
 
     # 3. 출고 관리
-    path('outbound/create/', views.outbound_create, name='outbound_create'),
     path('outbound/manual/', views.manual_outgoing, name='manual_outgoing'),
     path('outbound/manual/cancel/<int:trx_id>/', views.cancel_manual_outgoing, name='cancel_manual_outgoing'),
     path('outbound/history/', views.outgoing_history, name='outgoing_history'),
@@ -91,8 +90,6 @@ urlpatterns = [
 
     # BOM 관리
     path('bom/', views.bom_list, name='bom_list'),
-    path('bom/upload/', views.bom_upload, name='bom_upload'),
-    path('bom/delete-all/', views.bom_delete_all, name='bom_delete_all'),
     path('bom/calculate/', views.bom_calculate, name='bom_calculate'),
     path('bom/calculate/jobs/', bom_jobs.start, name='bom_job_start'),
     path('bom/calculate/jobs/<uuid:job_id>/step/', bom_jobs.step, name='bom_job_step'),
@@ -199,6 +196,4 @@ urlpatterns = [
     path('mold/repair/<int:pk>/detail/', views.mold_repair_detail, name='mold_repair_detail'),
 
     # 발주 요청
-    path('purchase-request/', views.purchase_request_status, name='purchase_request_status'),
-    path('api/purchase-request/create/', views.api_purchase_request_create, name='api_purchase_request_create'),
 ]

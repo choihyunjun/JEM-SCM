@@ -3429,7 +3429,7 @@ def user_permission_manage(request):
         ],
         'WMS — BOM 관리': [
             ('can_wms_bom_list', '📋 BOM 조회'),
-            ('can_wms_bom_upload', '⬆️ BOM 업로드'),
+            ('can_wms_bom_upload', '🔄 BOM 동기화'),
             ('can_wms_bom_calc', '🔢 소요량 계산'),
         ],
         'WMS — ERP/보관 관리': [
