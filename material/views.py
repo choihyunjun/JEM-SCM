@@ -2976,6 +2976,14 @@ def api_process_tag_cancel_scan(request):
 # 4. 기타 메뉴
 # =============================================================================
 
+def _internal_corrections():
+    """예전 자동 보정이 남긴 내부 기록 (316만 건). ERP 재고조정 전표(ERP 번호 있음)는 보여준다."""
+    return (Q(transaction_type__in=['ADJ_ERP_IN', 'ADJ_ERP_OUT'], erp_incoming_no__isnull=True,
+              remark__startswith='ERP 재고동기화')
+            | Q(transaction_type='LOT_CORRECT', remark__startswith='ERP정합')
+            | Q(transaction_type='LOT_CORRECT', remark__startswith='음수 LOT 정리'))
+
+
 @wms_permission_required('can_wms_transaction_history')
 def transaction_history(request):
     """
@@ -3035,9 +3043,7 @@ def transaction_history(request):
                 part=selected_part,
                 date__date__gte=start_dt,
                 date__date__lte=end_dt
-            ).exclude(
-                transaction_type__in=['ADJ_ERP_IN', 'ADJ_ERP_OUT']
-            )
+            ).exclude(_internal_corrections())
 
             # LOT 필터 적용
             if lot_no:
@@ -3113,7 +3119,7 @@ def transaction_history_excel(request):
             part=selected_part,
             date__date__gte=start_dt,
             date__date__lte=end_dt
-        )
+        ).exclude(_internal_corrections())  # 화면과 같은 기준
 
         # LOT 필터 적용
         if lot_no:
@@ -7524,6 +7530,11 @@ def api_raw_material_auto_stock(request):
     )
     usage_map = {u['part_id']: abs(u['total']) for u in usage_qs}
 
+    def suggest(total):
+        """월평균 사용량 기준: 안전재고 40%, 경고재고 30% (25 단위). 상한 없음."""
+        monthly_avg = total / 3
+        return round(monthly_avg * 4 / 10 / 25) * 25, round(monthly_avg * 3 / 10 / 25) * 25
+
     if request.method == 'GET':
         results = []
         for s in settings_qs:
@@ -7531,14 +7542,14 @@ def api_raw_material_auto_stock(request):
             if total == 0:
                 continue
             monthly_avg = total / 3
-            calc_base = min(monthly_avg, 1000)
+            safety, warning = suggest(total)
             results.append({
                 'part_id': s.part_id,
                 'part_no': s.part.part_no,
                 'part_name': s.part.part_name,
                 'monthly_avg': round(monthly_avg),
-                'suggested_safety': round(calc_base * 0.4 / 25) * 25,
-                'suggested_warning': round(calc_base * 0.3 / 25) * 25,
+                'suggested_safety': safety,
+                'suggested_warning': warning,
                 'current_safety': s.safety_stock,
                 'current_warning': s.warning_stock,
             })
@@ -7554,11 +7565,8 @@ def api_raw_material_auto_stock(request):
         total = usage_map.get(pid, 0)
         if total == 0:
             continue
-        calc_base = min(total / 3, 1000)
-        RawMaterialSetting.objects.filter(part_id=pid).update(
-            safety_stock=round(calc_base * 0.4 / 25) * 25,
-            warning_stock=round(calc_base * 0.3 / 25) * 25,
-        )
+        safety, warning = suggest(total)
+        RawMaterialSetting.objects.filter(part_id=pid).update(safety_stock=safety, warning_stock=warning)
         updated += 1
     return JsonResponse({'updated': updated})
 
@@ -8164,20 +8172,12 @@ def cancel_stock_move(request, trx_id):
                 status='PRINTED', used_at=None, used_by=None, used_warehouse=None, used_transaction=None
             )
 
-            # 4. ERP 재고이동 삭제
-            erp_no = trx.erp_incoming_no
-            erp_msg = ''
-            if erp_no:
-                try:
-                    from .erp_api import delete_erp_stock_move
-                    erp_ok, erp_err = delete_erp_stock_move(erp_no)
-                    if erp_ok:
-                        erp_msg = f' (ERP 삭제 완료: {erp_no})'
-                    else:
-                        erp_msg = f' (ERP 삭제 실패: {erp_err})'
-                except Exception as e:
-                    logger.error(f'ERP 재고이동 삭제 예외: {e}')
-                    erp_msg = f' (ERP 삭제 오류: {e})'
+            # 4. ERP 재고이동 되돌리기: 미전송이면 전송 취소, 등록됐으면 삭제 요청을 대기열에 (같이 커밋)
+            from .erp_outbox import cancel_move
+            erp_ok, erp_err = cancel_move(trx)
+            if not erp_ok:
+                raise ValueError(erp_err)
+            erp_msg = ' (ERP 삭제는 전송 대기열에서 처리, ERP 연동 관리에서 확인)' if trx.erp_incoming_no else ''
 
             # 5. 트랜잭션 삭제
             trx.delete()
@@ -8274,6 +8274,11 @@ def erp_stock_manage(request):
 
     from .models import StockSyncRun
     context['stock_sync_latest'] = StockSyncRun.objects.first()
+    # 마지막 ERP 현재고 반영 결과 (수불 가져오기 실패 기록과 구분)
+    context['stock_check'] = StockSyncRun.objects.filter(summary__has_key='checked').first()
+    if context['stock_check']:
+        _s = context['stock_check'].summary
+        context['stock_check_todo'] = len(_s.get('lot_diffs', [])) + len(_s.get('changed', []))
     # partial = the ERP balance was applied; only some items/ledgers need review.
     context['stock_sync_success'] = StockSyncRun.objects.filter(status__in=['success', 'partial']).first()
 
@@ -12017,9 +12022,7 @@ def transfer_request_approve(request, pk):
         lot_str = request.POST.get(f'lot_{line.pk}', '').strip()
         qty_str = request.POST.get(f'qty_{line.pk}', '').strip()
         try:
-            qty = int(qty_str)
-            if qty <= 0:
-                raise ValueError
+            qty = input_quantity(qty_str)
         except (ValueError, TypeError):
             messages.error(request, f'{line.part.part_no}: 승인수량이 올바르지 않습니다.')
             return redirect('material:transfer_request_approve', pk=pk)
@@ -12037,20 +12040,17 @@ def transfer_request_approve(request, pk):
                 messages.error(request, f'{line.part.part_no}: 화면을 새로고침한 뒤 LOT를 다시 선택해주세요.')
                 return redirect('material:transfer_request_approve', pk=pk)
 
-        if is_fifo:
-            total_avail = MaterialStock.objects.filter(
-                warehouse=from_wh, part=line.part, quantity__gt=0
-            ).aggregate(total=Sum('quantity'))['total'] or 0
-            if total_avail < qty:
-                messages.error(request, f'{line.part.part_no}: 재고 부족 (전체 가용 {total_avail}, 신청 {qty})')
-                return redirect('material:transfer_request_approve', pk=pk)
-        else:
-            available = MaterialStock.objects.filter(
-                pk=stock_id, warehouse=from_wh, part=line.part
-            ).aggregate(total=Sum('quantity'))['total'] or 0
-            if available < qty:
-                messages.error(request, f'{line.part.part_no}: 선택한 LOT 재고 부족 (가용 {available}, 신청 {qty})')
-                return redirect('material:transfer_request_approve', pk=pk)
+        available = stock_total(MaterialStock.objects.filter(
+            warehouse=from_wh, part=line.part, quantity__gt=0, **({} if is_fifo else {'pk': stock_id})
+        ).aggregate(total=Sum('quantity'))['total'])
+        try:
+            human_quantity(qty, full=available)  # 사람 입력은 정수, 소수 잔량은 [전량]으로만
+        except ValueError as e:
+            messages.error(request, f'{line.part.part_no}: {e}')
+            return redirect('material:transfer_request_approve', pk=pk)
+        if available < qty:
+            messages.error(request, f'{line.part.part_no}: 재고 부족 (가용 {available.normalize():f}, 신청 {qty.normalize():f})')
+            return redirect('material:transfer_request_approve', pk=pk)
 
         line_inputs.append((line, stock_id, qty, is_fifo))
 
@@ -12241,8 +12241,7 @@ def transfer_request_revoke(request, pk):
         return redirect('material:transfer_request_list')
 
     from material.models import MaterialTransferRequest, MaterialTransaction
-    from material.erp_api import delete_erp_stock_move
-    import re
+    from material.erp_outbox import cancel_move
 
     req = get_object_or_404(MaterialTransferRequest, pk=pk, status='APPROVED')
 
@@ -12255,12 +12254,14 @@ def transfer_request_revoke(request, pk):
         remark__startswith=f'이동요청 {req.request_no} 승인'
     ).select_related('part', 'warehouse_from', 'warehouse_to'))
 
-    erp_messages = [t.erp_sync_message for t in trxs]
-
     try:
         with transaction.atomic():
             req = MaterialTransferRequest.objects.select_for_update().get(pk=req.pk, status='APPROVED')
             for trx in trxs:
+                # ERP 이동: 미전송이면 전송 취소, 등록됐으면 삭제 요청 (같이 커밋, 실패하면 전체 취소)
+                ok, err = cancel_move(trx)
+                if not ok:
+                    raise ValueError(f'{trx.part.part_no}: {err}')
                 # 재고 역산: from_wh +=, to_wh -= (LOT 관리품목은 배치까지 일치)
                 from_stock, _ = MaterialStock.objects.get_or_create(
                     warehouse=trx.warehouse_from, part=trx.part, lot_no=trx.lot_no,
@@ -12292,14 +12293,6 @@ def transfer_request_revoke(request, pk):
         logger.exception('transfer_request_revoke error')
         messages.error(request, f'취소 중 오류: {e}')
         return redirect('material:transfer_request_list')
-
-    # ERP 삭제 (atomic 밖 — best effort)
-    for msg in erp_messages:
-        match = re.search(r'ERP 재고이동번호:\s*(\S+)', msg or '')
-        if match:
-            ok, err = delete_erp_stock_move(match.group(1))
-            if not ok:
-                logger.warning(f'ERP 이동취소 실패: {err}')
 
     messages.success(request, f'{req.request_no} 승인이 취소되었습니다. 대기중으로 복원됩니다.')
     return redirect('material:transfer_request_list')
@@ -12369,7 +12362,7 @@ def api_transfer_request_lots(request):
     if not stocks:
         return JsonResponse({'ok': True, 'lots': []})
 
-    total_qty = float(sum(s.quantity for s in stocks))
+    total_qty = float(stock_total(sum(s.quantity for s in stocks)))
     lots = [{'lot_no': '__FIFO__', 'lot_label': f'전체 (FIFO 자동분할)', 'qty': total_qty, 'fifo': True}]
     for s in stocks:
         if s.lot_no:

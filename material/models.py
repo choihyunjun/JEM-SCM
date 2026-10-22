@@ -241,7 +241,8 @@ class ERPIncomingOperation(models.Model):
     import uuid as _uuid
 
     id = models.UUIDField(primary_key=True, default=_uuid.uuid4, editable=False)
-    kind = models.CharField(max_length=10, choices=[('REGISTER', '입고 등록'), ('DELETE', '입고 삭제'), ('MOVE', '재고이동 등록')])
+    kind = models.CharField(max_length=10, choices=[('REGISTER', '입고 등록'), ('DELETE', '입고 삭제'), ('MOVE', '재고이동 등록'),
+                                                    ('MOVE_DEL', '재고이동 삭제')])
     transaction = models.ForeignKey(MaterialTransaction, on_delete=models.SET_NULL, null=True, blank=True,
                                     related_name='erp_operations')
     transaction_no = models.CharField(max_length=30, blank=True)
@@ -267,6 +268,8 @@ class ERPIncomingOperation(models.Model):
                 name='one_active_erp_receipt_request'),
             models.UniqueConstraint(fields=['erp_no'], condition=models.Q(kind='DELETE'),
                 name='one_erp_receipt_delete_request'),
+            models.UniqueConstraint(fields=['erp_no'], condition=models.Q(kind='MOVE_DEL'),
+                name='one_erp_move_delete_request'),
         ]
 
 
@@ -1558,7 +1561,7 @@ class MaterialTransferRequestLine(models.Model):
 
     # 승인 시 채워짐
     lot_no = models.DateField("승인 LOT", null=True, blank=True)
-    approved_qty = models.IntegerField("승인수량", null=True, blank=True)
+    approved_qty = models.DecimalField("승인수량", max_digits=20, decimal_places=4, null=True, blank=True)
     transfer_transaction = models.ForeignKey(
         MaterialTransaction, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='origin_request_lines', verbose_name="이동 트랜잭션"

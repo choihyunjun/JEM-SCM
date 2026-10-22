@@ -18,7 +18,7 @@ from orders.models import Part
 from .erp_api import sync_stock_from_erp, sync_erp_stock_transfer, sync_erp_incoming
 from .erp_sync_lock import erp_sync_lock, ERPSyncBusy
 from .erp_sync_pipeline import sync_inventory
-from .models import MaterialStock, MaterialTransaction, StockSyncRun, Warehouse
+from .models import MaterialStock, MaterialTransaction, ProductionLotItem, StockSyncRun, Warehouse
 from .stock_safety import deduct_stock
 from .views import get_lot_details, manual_outgoing
 
@@ -62,45 +62,63 @@ class StockReconciliationTests(TestCase):
         self.assertFalse(result['sync_needed'])
         self.assertFalse(result['fifo_warning'])
 
-    def test_live_case_normalizes_without_changing_total_and_is_idempotent(self):
-        bucket = self.stock(35716)
-        a = self.stock(-33, date(2026, 6, 20))
-        b = self.stock(-3, date(2026, 6, 21))
+    def lot_managed(self):
+        ProductionLotItem.objects.get_or_create(part=self.part)
+
+    def test_quantity_only_part_mirrors_erp_without_history_and_is_idempotent(self):
+        self.stock(35716)
+        self.stock(-33, date(2026, 6, 20))
+        self.stock(-3, date(2026, 6, 21))
         result = self.sync([self.row(35680)])
         self.assertIsNone(result['error'])
-        self.assertEqual(result['negative_normalized'], 2)
-        bucket.refresh_from_db(); a.refresh_from_db(); b.refresh_from_db()
-        self.assertEqual((bucket.quantity, a.quantity, b.quantity), (35680, 0, 0))
-        self.assertEqual(self.total(), 35680)
-        self.assertEqual(MaterialTransaction.objects.count(), 4)
-        self.assertEqual(MaterialTransaction.objects.aggregate(q=Sum('quantity'))['q'], 0)
+        self.assertEqual(result['mirrored'], 1)
+        self.assertEqual(list(MaterialStock.objects.values_list('lot_no', 'quantity')), [(None, 35680)])
+        self.assertFalse(MaterialTransaction.objects.exists())  # ERP 그대로: 보정 기록 없음
         self.assertEqual(self.sync([self.row(35680)])['adjusted'], 0)
-        self.assertEqual(MaterialTransaction.objects.count(), 4)
         self.assertEqual(StockSyncRun.objects.first().status, 'success')
 
-    def test_undated_batches_are_trimmed_individually_not_overdrawn(self):
+    def test_lot_managed_lots_are_never_trimmed_difference_is_unassigned(self):
+        self.lot_managed()
+        old = self.stock(50, date(2026, 1, 1))
+        recent = self.stock(70, date(2026, 2, 1))
+        self.stock(20)
+        result = self.sync([self.row(90)])
+        old.refresh_from_db(); recent.refresh_from_db()
+        self.assertEqual((old.quantity, recent.quantity, self.total()), (50, 70, 90))
+        self.assertEqual(MaterialStock.objects.get(lot_no=None).quantity, -30)
+        trx = MaterialTransaction.objects.get()
+        self.assertEqual((trx.transaction_type, trx.quantity), ('ADJ_ERP_OUT', 50))
+        self.assertEqual(result['lot_diffs'][0]['diff'], -50)
+        self.assertEqual(self.sync([self.row(90)])['adjusted'], 0)
+        self.assertEqual(MaterialTransaction.objects.count(), 1)
+
+    def test_lot_managed_batches_are_kept_individually(self):
+        self.lot_managed()
         a = self.stock(30, batch='2633511')
         b = self.stock(70, batch='2634511')
         self.sync([self.row(20)])
         a.refresh_from_db(); b.refresh_from_db()
-        self.assertEqual((a.quantity, b.quantity), (0, 20))
-        self.assertFalse(MaterialStock.objects.filter(quantity__lt=0).exists())
-        self.assertEqual(self.total(), 20)
+        self.assertEqual((a.quantity, b.quantity, self.total()), (30, 70, 20))
 
-    def test_fifo_reduces_oldest_lot_and_keeps_recent_lot(self):
-        old = self.stock(50, date(2026, 1, 1))
-        recent = self.stock(70, date(2026, 2, 1))
-        self.stock(20)
-        self.sync([self.row(90)])
-        old.refresh_from_db(); recent.refresh_from_db()
-        self.assertEqual((old.quantity, recent.quantity, self.total()), (20, 70, 90))
-
-    def test_negative_unassigned_balance_is_absorbed_without_changing_total(self):
+    def test_matching_total_is_not_rewritten(self):
+        self.lot_managed()
         lot = self.stock(50, date(2026, 1, 1))
         bucket = self.stock(-20)
-        self.sync([self.row(30)])
+        self.assertEqual(self.sync([self.row(30)])['adjusted'], 0)
         lot.refresh_from_db(); bucket.refresh_from_db()
-        self.assertEqual((lot.quantity, bucket.quantity, self.total()), (30, 0, 30))
+        self.assertEqual((lot.quantity, bucket.quantity), (50, -20))
+
+    def test_part_still_being_sent_to_erp_is_deferred(self):
+        from .models import ERPIncomingOperation
+        self.lot_managed()
+        stock = self.stock(100, date(2026, 1, 1))
+        trx = MaterialTransaction.objects.create(transaction_no='MV', transaction_type='TRANSFER',
+                                                 part=self.part, quantity=10)
+        ERPIncomingOperation.objects.create(kind='MOVE', transaction=trx, status='PENDING')
+        result = self.sync([self.row(90)])
+        self.assertEqual(result['pending'], ['4300/P1'])
+        stock.refresh_from_db()
+        self.assertEqual(stock.quantity, 100)
 
     def test_invalid_row_after_valid_row_prevents_all_corrections(self):
         stock = self.stock(100)
@@ -116,8 +134,8 @@ class StockReconciliationTests(TestCase):
         result = self.sync([dict(whCd='4300', itemCd=other.part_no, invQt1=0)])
         stock.refresh_from_db()
         self.assertEqual(stock.quantity, 25)
-        self.assertEqual(result['skipped_missing'], 1)
-        self.assertEqual(StockSyncRun.objects.first().status, 'partial')
+        self.assertEqual(result['missing'], ['4300/P1'])
+        self.assertEqual(StockSyncRun.objects.first().status, 'success')  # 고정 목록은 실패가 아니다
         self.sync([self.row(0)])
         stock.refresh_from_db()
         self.assertEqual(stock.quantity, 0)
@@ -145,12 +163,13 @@ class StockReconciliationTests(TestCase):
             return True, [self.row(90)], None
         with patch('material.erp_api.fetch_erp_stock', side_effect=fetch):
             result = sync_stock_from_erp()
-        self.assertEqual(result['skipped_changed'], 1)
+        self.assertEqual(len(result['changed']), 1)
         stock.refresh_from_db()
         self.assertEqual(stock.quantity, 70)
         self.assertFalse(MaterialTransaction.objects.exists())
 
-    def test_history_failure_rolls_back_stock_and_negative_normalization(self):
+    def test_history_failure_rolls_back_stock(self):
+        self.lot_managed()
         self.stock(110)
         self.stock(-10, date(2026, 1, 1))
         before = list(MaterialStock.objects.values_list('pk', 'quantity'))

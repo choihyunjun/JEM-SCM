@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from orders.models import Part
 from .models import MaterialStock, ProcessTag, StockSyncRun, Warehouse
-from .stock_safety import deduct_stock, unassigned_stock
+from .stock_safety import unassigned_stock
 from .quantities import stock_quantity
 
 # Incoming-inspection hold and nonconforming stock never reach ERP (ERP receives
@@ -43,145 +43,154 @@ def parse_balances(items):
     return balances
 
 
-def _reconcile_key(warehouse, part, erp_qty, expected):
-    from .erp_api import _create_trx, fifo_sort_key
-    changes = dict(adjusted=0, increased=0, decreased=0, created=0,
-                   lot_trimmed=0, negative_normalized=0)
+def lot_managed_part_ids():
+    """SCM이 LOT를 책임지는 품목: SCM으로 입고·라벨 발행된 품목 + 릴레이(생산 LOT) 품목.
+    나머지는 ERP에 LOT가 없으므로 SCM도 ERP 수량을 그대로 보여준다."""
+    from .models import MaterialTransaction, ProductionLotItem, RawMaterialLabel
+    ids = set(MaterialTransaction.objects.filter(transaction_type__in=['IN_SCM', 'IN_MANUAL'])
+              .values_list('part_id', flat=True).distinct())
+    ids |= set(RawMaterialLabel.objects.values_list('part_id', flat=True).distinct())
+    ids |= set(ProductionLotItem.objects.values_list('part_id', flat=True))
+    ids.discard(None)
+    return ids
+
+
+def pending_part_ids(since):
+    """SCM→ERP 전송이 끝나지 않았거나 비교 도중 끝난 품목: ERP에 아직 안 보일 수 있다."""
+    from django.db.models import Q
+    from .models import ERPIncomingOperation
+    q = Q(status__in=['PENDING', 'RUNNING', 'FAILED', 'REVIEW']) | Q(updated_at__gte=since)
+    return set(ERPIncomingOperation.objects.filter(q).exclude(transaction__isnull=True)
+               .values_list('transaction__part_id', flat=True))
+
+
+def _mark_tags_consumed(warehouse, part, decrease):
+    # Only mark tags consumed from this source warehouse.
+    tags = ProcessTag.objects.filter(
+        part_no=part.part_no, status='USED', stock_reflected=False,
+        used_transaction__warehouse_from=warehouse,
+    ).order_by('used_at', 'pk')
+    remaining = decrease
+    for tag in tags:
+        if remaining < tag.quantity:
+            break
+        ProcessTag.objects.filter(pk=tag.pk).update(stock_reflected=True)
+        remaining -= tag.quantity
+
+
+def _locked_rows(warehouse, part, expected):
+    Part.objects.select_for_update().get(pk=part.pk)
+    rows = list(MaterialStock.objects.select_for_update().filter(warehouse=warehouse, part=part).order_by('pk'))
+    if {s.pk: (s.quantity, s.lot_no, s.production_lot) for s in rows} != expected:
+        raise ValueError('ERP 조회 중 SCM 재고가 변경되어 보정을 보류했습니다.')
+    return rows
+
+
+def _mirror_quantity_only(warehouse, part, erp_qty, expected):
+    """ERP에 LOT가 없는 품목: SCM 재고 = ERP 현재고. 보정 기록을 남기지 않는다 (가비지 방지)."""
     with transaction.atomic():
-        Part.objects.select_for_update().get(pk=part.pk)
-        rows = list(MaterialStock.objects.select_for_update().filter(
-            warehouse=warehouse, part=part,
-        ).order_by('pk'))
-        actual = {s.pk: (s.quantity, s.lot_no, s.production_lot) for s in rows}
-        if actual != expected:
-            raise ValueError('ERP 조회 중 SCM 재고가 변경되어 보정을 보류했습니다.')
-        now = timezone.now()
-
-        def audit(row, delta, reason, kind='LOT_CORRECT'):
-            _create_trx(
-                transaction_type=kind, date=now, part=part,
-                warehouse_to=warehouse if delta > 0 else None,
-                warehouse_from=warehouse if delta < 0 else None,
-                lot_no=row.lot_no, production_lot=row.production_lot,
-                quantity=abs(delta) if kind.startswith('ADJ_ERP') else delta,
-                result_stock=row.quantity, remark=reason,
-            )
-
-        # Move historical LOT deficits into the unassigned bucket as a balanced
-        # pair. This step alone never changes the warehouse/part total.
-        assigned = [s for s in rows if s.lot_no is not None or s.production_lot is not None]
+        rows = _locked_rows(warehouse, part, expected)
+        before = sum((s.quantity for s in rows), Decimal(0))
         bucket = next((s for s in rows if s.lot_no is None and s.production_lot is None), None)
-        negatives = [s for s in assigned if s.quantity < 0]
-        positive_total = sum(max(s.quantity, 0) for s in assigned)
-        if not negatives and positive_total <= max(erp_qty, 0) and (bucket.quantity if bucket else 0) == erp_qty - positive_total:
-            return changes
         if bucket is None:
             bucket = unassigned_stock(warehouse, part)
-            changes['created'] += 1
-        for row in negatives:
-            deficit = -row.quantity
-            old_qty = row.quantity
-            row.quantity = 0
-            row.save(update_fields=['quantity'])
-            bucket.quantity -= deficit
-            bucket.save(update_fields=['quantity'])
-            reason = f'음수 LOT 정리 (재고행={row.pk}, {old_qty}→0, 미지정 역보정, 총량 유지)'
-            audit(row, deficit, reason)
-            audit(bucket, -deficit, reason)
-            changes['negative_normalized'] += 1
+        MaterialStock.objects.filter(pk=bucket.pk).update(quantity=erp_qty)
+        MaterialStock.objects.filter(warehouse=warehouse, part=part).exclude(pk=bucket.pk).delete()
+        if erp_qty < before:
+            _mark_tags_consumed(warehouse, part, before - erp_qty)
+    return erp_qty - before
 
-        # Retain actual production batches even when their date is unknown.
-        excess = max(positive_total - erp_qty, 0)
-        for row in sorted((s for s in assigned if s.quantity > 0), key=fifo_sort_key):
-            if excess <= 0:
-                break
-            take = min(row.quantity, excess)
-            deduct_stock(row, take)
-            row.quantity -= take
-            excess -= take
-            audit(row, -take, f'ERP정합 LOT축소 (ERP={erp_qty}, FIFO 차감={take})')
-            changes['lot_trimmed'] = 1
 
-        target = erp_qty - sum(s.quantity for s in assigned)
+def _settle_lot_managed(warehouse, part, erp_qty, expected):
+    """SCM이 LOT를 책임지는 품목: LOT는 깎지 않는다. 설명 안 되는 차이만 미지정(LOT 미확인)에
+    넣고 기록 1건을 남긴다. 총량은 ERP와 같아진다."""
+    from .erp_api import _create_trx
+    with transaction.atomic():
+        rows = _locked_rows(warehouse, part, expected)
+        lots = [s for s in rows if s.lot_no is not None or s.production_lot is not None]
+        bucket = next((s for s in rows if s.lot_no is None and s.production_lot is None), None)
+        if bucket is None:
+            bucket = unassigned_stock(warehouse, part)
+        target = erp_qty - sum((s.quantity for s in lots), Decimal(0))
         diff = target - bucket.quantity
-        if diff:
-            before = bucket.quantity
-            bucket.quantity = target
-            bucket.save(update_fields=['quantity'])
-            direction = 'IN' if diff > 0 else 'OUT'
-            audit(bucket, diff, f'ERP 재고동기화 (ERP={erp_qty}, 미지정:{before}→{target}, diff={diff:+f})',
-                  kind=f'ADJ_ERP_{direction}')
-            changes['increased' if diff > 0 else 'decreased'] += 1
-            if diff < 0:
-                # Only mark tags consumed from this source warehouse.
-                tags = ProcessTag.objects.filter(
-                    part_no=part.part_no, status='USED', stock_reflected=False,
-                    used_transaction__warehouse_from=warehouse,
-                ).order_by('used_at', 'pk')
-                remaining = -diff
-                for tag in tags:
-                    if remaining < tag.quantity:
-                        break
-                    ProcessTag.objects.filter(pk=tag.pk).update(stock_reflected=True)
-                    remaining -= tag.quantity
-        changes['adjusted'] = 1
-    return changes
+        if not diff:
+            return diff
+        MaterialStock.objects.filter(pk=bucket.pk).update(quantity=target)
+        _create_trx(
+            transaction_type='ADJ_ERP_IN' if diff > 0 else 'ADJ_ERP_OUT', date=timezone.now(), part=part,
+            warehouse_to=warehouse if diff > 0 else None, warehouse_from=warehouse if diff < 0 else None,
+            quantity=abs(diff), result_stock=target,
+            remark=f'ERP 차이 → LOT 미확인 (ERP={erp_qty.normalize():f}, 차이={diff.normalize():+f})',
+        )
+        if diff < 0:
+            _mark_tags_consumed(warehouse, part, -diff)
+    return diff
 
 
 def reconcile_stock():
+    """ERP 현재고 반영. 수량만 품목은 ERP 그대로(기록 없음), LOT 관리 품목은 LOT를 건드리지 않고
+    차이만 'LOT 미확인'으로 남긴다. ERP로 보내는 중인 품목은 다음 회차로 미룬다."""
     from .erp_api import fetch_erp_stock
-    result = dict(adjusted=0, increased=0, decreased=0, created=0, lot_trimmed=0,
-                  negative_normalized=0, skipped_no_part=0, skipped_no_wh=0,
-                  skipped_missing=0, skipped_changed=0, skipped_negative=0, error=None, status='running')
+    result = dict(checked=0, adjusted=0, mirrored=0, lot_diffs=[], pending=[], changed=[],
+                  missing=[], no_master=[], error=None, status='running')
     run = StockSyncRun.objects.create()
     try:
+        snapshot_at = timezone.now()
         # Compare under row locks after the network request; never apply a total
         # to a balance that changed while the ERP response was in flight.
         snapshot = stock_snapshot()
+        lot_managed = lot_managed_part_ids()
         cache.set('erp_sync_progress', {'stage': 'ERP 현재고 조회 중...', 'percent': 5}, 600)
         ok, items, error = fetch_erp_stock(year=str(timezone.localdate().year), month=None, total_fg='0')
         if not ok:
             raise ValueError(error or 'ERP 현재고 조회 실패')
         balances = parse_balances(items)
+        pending = pending_part_ids(snapshot_at)
         parts = {p.part_no: p for p in Part.objects.all()}
         warehouses = {w.code: w for w in Warehouse.objects.all()}
         # Missing is not zero. Only explicit balances (including explicit 0)
         # authorize a correction; unknown API completeness cannot erase stock.
-        missing = [key for key, rows in snapshot.items()
-                   if key[0] not in SCM_ONLY_WAREHOUSE_CODES
-                   and key not in balances and any(value[0] != 0 for value in rows.values())]
-        result['skipped_missing'] = len(missing)
-        issues = [f'ERP 응답 누락 {len(missing)}건: 기존 재고 유지'] if missing else []
+        result['missing'] = sorted(f'{wh}/{code}' for (wh, code), rows in snapshot.items()
+                                   if wh not in SCM_ONLY_WAREHOUSE_CODES and (wh, code) not in balances
+                                   and sum((value[0] for value in rows.values()), Decimal(0)) != 0)
         for index, ((wh, code), qty) in enumerate(sorted(balances.items())):
             if wh in SCM_ONLY_WAREHOUSE_CODES:
                 continue
-            if wh not in warehouses:
-                result['skipped_no_wh'] += 1
+            if wh not in warehouses or code not in parts:
+                result['no_master'].append(f'{wh}/{code}')
                 continue
-            if code not in parts:
-                result['skipped_no_part'] += 1
-                continue
+            result['checked'] += 1
             expected = snapshot.get((wh, code), {})
-            if all(value[0] >= 0 for value in expected.values()) and sum(value[0] for value in expected.values()) == qty:
-                continue  # no write needed; avoid a transaction for every unchanged ERP row
+            part = parts[code]
+            rows = expected.values()
+            # 일치하면 쓰지 않는다. 수량만 품목은 음수가 미지정 칸에만 있을 때 일치로 본다 (ERP 음수 재고).
+            if sum((value[0] for value in rows), Decimal(0)) == qty and (part.pk in lot_managed or all(
+                    value[0] >= 0 or (value[1] is None and value[2] is None) for value in rows)):
+                continue
+            if part.pk in pending:
+                result['pending'].append(f'{wh}/{code}')
+                continue
             try:
-                changes = _reconcile_key(warehouses[wh], parts[code], qty, expected)
+                if part.pk in lot_managed:
+                    diff = _settle_lot_managed(warehouses[wh], part, qty, expected)
+                    if diff:
+                        result['lot_diffs'].append({'wh': wh, 'part_no': code, 'name': part.part_name,
+                                                    'erp': float(qty), 'diff': float(diff)})
+                else:
+                    _mirror_quantity_only(warehouses[wh], part, qty, expected)
+                    result['mirrored'] += 1
+                result['adjusted'] += 1
             except (ValueError, DatabaseError) as exc:
                 # One locked or changed key must not stop the remaining ERP balances.
-                result['skipped_changed'] += 1
-                issues.append(f'{wh}/{code}: {exc}')
-                continue
-            for key, count in changes.items():
-                result[key] += count
+                result['changed'].append(f'{wh}/{code}: {exc}')
             if index % 100 == 0:
                 cache.set('erp_sync_progress', {
-                    'stage': f'총량 보정 중 ({index + 1}/{len(balances)})',
+                    'stage': f'ERP 현재고 반영 중 ({index + 1}/{len(balances)})',
                     'percent': 10 + int(85 * (index + 1) / len(balances)),
                 }, 600)
-        if result['skipped_no_part'] or result['skipped_no_wh']:
-            issues.append(f'마스터 미등록: 품목 {result["skipped_no_part"]}건, 창고 {result["skipped_no_wh"]}건')
-        result['error'] = '; '.join(issues[:10]) or None
-        run.status = 'partial' if issues else 'success'
+        # 응답 누락·마스터 미등록은 매번 같은 고정 항목이라 실패로 보지 않고 목록으로만 남긴다.
+        result['error'] = '; '.join(result['changed'][:10]) or None
+        run.status = 'partial' if result['changed'] else 'success'
     except Exception as exc:
         result['error'] = str(exc)
         run.status = 'failed'
@@ -193,8 +202,8 @@ def reconcile_stock():
         run.error = result['error'] or ''
         run.save(update_fields=['finished_at', 'summary', 'error', 'status'])
         cache.set('erp_sync_progress', {
-            'stage': '확인 필요' if result['error'] else '총량 보정 완료',
+            'stage': '확인 필요' if result['error'] else 'ERP 현재고 반영 완료',
             'percent': 100, 'error': result['error'],
-            'detail': result['error'] or f'조정 {result["adjusted"]}건',
+            'detail': result['error'] or f'반영 {result["adjusted"]}건',
         }, 600)
     return result

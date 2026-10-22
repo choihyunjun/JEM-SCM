@@ -54,9 +54,9 @@ class StockArithmeticTests(TestCase):
         self.assertFalse(MaterialStock.objects.filter(quantity__gt=0).exists())
 
     def test_zr700_correction_then_zero_leaves_no_residue_and_compare_works(self):
-        lot = self.stock(4828)
+        self.stock(4828)
         self.assertIsNone(self.sync('677.3337')['error'])
-        self.assertEqual(raw_quantity(lot.pk), 677.3337)
+        self.assertEqual(raw_quantity(MaterialStock.objects.get().pk), 677.3337)
         self.assertEqual(self.sync('677.3337')['adjusted'], 0)
         self.assertIsNone(self.sync('0')['error'])
         self.assertFalse(MaterialStock.objects.filter(quantity__gt=0).exists())
@@ -106,19 +106,19 @@ class StockArithmeticTests(TestCase):
         self.stock(10)
         MaterialStock.objects.create(part=other, warehouse=self.wh, quantity=10)
         from . import stock_reconciliation
-        original = stock_reconciliation._reconcile_key
+        original = stock_reconciliation._mirror_quantity_only
 
         def locked_first(warehouse, part, erp_qty, expected):
             if part.part_no == 'ZR700':
                 raise OperationalError('database is locked')
             return original(warehouse, part, erp_qty, expected)
-        with patch.object(stock_reconciliation, '_reconcile_key', side_effect=locked_first):
+        with patch.object(stock_reconciliation, '_mirror_quantity_only', side_effect=locked_first):
             result = self.sync('3', extra=[{'whCd': '3000', 'itemCd': 'ZR701', 'invQt1': '4'}])
         self.assertEqual(result['status'], 'partial')
         self.assertIn('database is locked', result['error'])
         self.assertEqual(MaterialStock.objects.get(part=other).quantity, 4)
 
-    def test_warnings_only_correction_is_partial_not_failed(self):
+    def test_unregistered_master_is_listed_not_a_failure(self):
         self.stock(10)
         rows = [{'whCd': '3000', 'itemCd': 'ZR700', 'invQt1': '6'},
                 {'whCd': '3000', 'itemCd': 'UNREGISTERED', 'invQt1': '1'}]
@@ -126,9 +126,9 @@ class StockArithmeticTests(TestCase):
             result = sync_inventory()
         self.assertEqual(MaterialStock.objects.aggregate(t=Sum('quantity'))['t'], 6)
         latest = StockSyncRun.objects.first()
-        self.assertEqual(latest.status, 'partial')
-        self.assertIn('1건 적용', latest.error)
-        self.assertTrue(result['errors'])
+        self.assertEqual(latest.status, 'success')
+        self.assertEqual(latest.summary['no_master'], ['3000/UNREGISTERED'])
+        self.assertFalse(result['errors'])
 
 
 class ExitStackPatches:

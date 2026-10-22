@@ -90,11 +90,15 @@
                 </select>
               </td>
               <td>
-                <input type="number" name="qty_{{ line.pk }}"
-                       class="form-control form-control-sm text-end qty-input"
-                       min="1"
-                       value="{{ line.requested_qty }}"
-                       data-requested="{{ line.requested_qty }}">
+                <div class="input-group input-group-sm">
+                  <input type="number" name="qty_{{ line.pk }}"
+                         class="form-control form-control-sm text-end qty-input"
+                         min="1" step="any"
+                         value="{{ line.requested_qty }}"
+                         data-requested="{{ line.requested_qty }}">
+                  <button type="button" class="btn btn-outline-secondary qty-all"
+                          title="선택한 LOT의 남은 수량 전부 (소수 잔량 포함)">전량</button>
+                </div>
               </td>
               <td class="small text-muted avail-cell" id="avail-{{ line.pk }}">-</td>
             </tr>
@@ -160,6 +164,17 @@
     });
   });
 
+  // [전량]: 선택한 LOT(또는 FIFO 합계)의 남은 수량 전부. 소수 잔량은 이 버튼으로만 옮긴다.
+  document.addEventListener('click', e => {
+    if (!e.target.classList.contains('qty-all')) return;
+    const row = e.target.closest('tr');
+    const sel = row.querySelector('.lot-select');
+    const opt = sel && sel.options[sel.selectedIndex];
+    if (opt && opt.dataset.qty !== undefined) {
+      row.querySelector('.qty-input').value = Number(opt.dataset.qty);
+    }
+  });
+
   document.addEventListener('change', e => {
     if (!e.target.classList.contains('lot-select')) return;
     const lineId = e.target.dataset.lineId;
@@ -173,13 +188,13 @@
     const qtyInput = row.querySelector('.qty-input');
 
     if (opt && opt.dataset.qty !== undefined) {
-      const availQty = parseInt(opt.dataset.qty);
-      const requestedQty = parseInt(qtyInput.dataset.requested);
+      const availQty = Number(opt.dataset.qty);
+      const requestedQty = Number(qtyInput.dataset.requested);
 
       // max를 가용재고로 업데이트
       qtyInput.max = availQty;
       // 현재 입력값이 가용재고 초과면 클램프
-      if (parseInt(qtyInput.value) > availQty) {
+      if (Number(qtyInput.value) > availQty) {
         qtyInput.value = availQty;
       }
 
@@ -192,7 +207,7 @@
 
       // 요청수량 초과 안내
       qtyInput.oninput = function () {
-        const v = parseInt(this.value) || 0;
+        const v = Number(this.value) || 0;
         let hint = row.querySelector('.qty-over-hint');
         if (v > requestedQty) {
           if (!hint) {

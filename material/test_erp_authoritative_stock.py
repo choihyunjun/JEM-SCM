@@ -47,9 +47,12 @@ class ERPAuthoritativeStockTests(TestCase):
             self.assertEqual(self.total(), Decimal('677.3337'))
             self.assertEqual(StockSyncRun.objects.first().status, 'partial')
             self.assertEqual(sync_inventory()['stock']['adjusted'], 0)
-        self.assertEqual(MaterialTransaction.objects.get().quantity, Decimal('4150.6663'))
+        # 수량만 품목: ERP 그대로, 보정 기록은 남기지 않는다.
+        self.assertFalse(MaterialTransaction.objects.exists())
 
-    def test_fractional_fifo_preserves_recent_lot_and_audit_then_is_idempotent(self):
+    def test_lot_managed_fractional_difference_keeps_lots_and_is_idempotent(self):
+        from material.models import ProductionLotItem
+        ProductionLotItem.objects.create(part=self.part)
         old = self.stock(1000, date(2026, 1, 1))
         recent = self.stock('500.1234', date(2026, 9, 1))
         self.stock('3327.8766')
@@ -57,19 +60,17 @@ class ERPAuthoritativeStockTests(TestCase):
             self.assertIsNone(sync_stock_from_erp()['error'])
             self.assertEqual(sync_stock_from_erp()['adjusted'], 0)
         old.refresh_from_db(); recent.refresh_from_db()
-        self.assertEqual(old.quantity, Decimal('177.2103'))
-        self.assertEqual(recent.quantity, Decimal('500.1234'))
+        self.assertEqual((old.quantity, recent.quantity), (1000, Decimal('500.1234')))  # LOT는 깎지 않는다
         self.assertEqual(self.total(), Decimal('677.3337'))
-        self.assertTrue(MaterialTransaction.objects.filter(quantity=Decimal('-822.7897')).exists())
+        self.assertEqual(MaterialStock.objects.get(lot_no=None).quantity, Decimal('-822.7897'))
+        self.assertEqual(MaterialTransaction.objects.get().quantity, Decimal('4150.6663'))
 
-    def test_explicit_negative_erp_balance_is_applied_without_negative_assigned_lot(self):
-        lot = self.stock(10, date(2026, 1, 1))
+    def test_explicit_negative_erp_balance_is_mirrored_for_quantity_only_part(self):
+        self.stock(10, date(2026, 1, 1))
         with patch('material.erp_api.fetch_erp_stock', return_value=(True, [self.balance('-0.1234')], None)):
             self.assertIsNone(sync_stock_from_erp()['error'])
             self.assertEqual(sync_stock_from_erp()['adjusted'], 0)
-        lot.refresh_from_db()
-        self.assertEqual(lot.quantity, 0)
-        self.assertEqual(self.total(), Decimal('-0.1234'))
+        self.assertEqual(list(MaterialStock.objects.values_list('lot_no', 'quantity')), [(None, Decimal('-0.1234'))])
 
     def test_precision_or_api_error_never_overwrites_current_stock(self):
         self.stock(4828)

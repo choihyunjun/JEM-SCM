@@ -81,6 +81,32 @@ def enqueue_deletion(erp_no):
     return True, None
 
 
+def cancel_move(trx):
+    """SCM 재고이동 취소에 맞춰 ERP 쪽도 되돌린다. 호출자의 atomic 안에서 부른다.
+    아직 안 보낸 이동은 전송을 취소하고, 이미 등록된 이동은 삭제 요청을 대기열에 넣는다."""
+    job = Operation.objects.select_for_update().filter(transaction=trx, kind='MOVE').order_by('-created_at').first()
+    if job and job.status in ('RUNNING', 'REVIEW', 'FAILED'):
+        return False, 'ERP 재고이동 처리 여부를 먼저 확인해 주세요. (ERP 연동 관리)'
+    if job and job.status == 'PENDING':
+        Operation.objects.filter(pk=job.pk).update(status='CANCELLED', message='SCM 이동 취소로 전송 취소')
+        ERPIncomingEvent.objects.create(operation=job, action='CANCELLED', message='SCM 이동 취소')
+        return True, None
+    erp_no = (job.erp_no if job and job.status == 'SUCCESS' else '') or (trx.erp_incoming_no or '')
+    if not erp_no:
+        return True, None  # ERP로 간 적 없는 이동 (SCM 전용 창고 등)
+    job, created = Operation.objects.get_or_create(
+        kind='MOVE_DEL', erp_no=erp_no,
+        defaults={'transaction': trx, 'transaction_no': trx.transaction_no,
+                  'payload': {'coCd': settings.ERP_COMPANY_CODE, 'moveNb': erp_no}})
+    if job.status in ('RUNNING', 'REVIEW'):
+        return False, 'ERP 재고이동 삭제 처리 여부를 먼저 확인해 주세요.'
+    if job.status != 'SUCCESS':
+        if created:
+            ERPIncomingEvent.objects.create(operation=job, action='QUEUED')
+        _schedule(job)
+    return True, None
+
+
 def guard_receipt_change(trx):
     """Called within the same transaction as cancel/edit. Never erase uncertain work."""
     MaterialTransaction.objects.filter(pk=trx.pk).update(erp_sync_status=F('erp_sync_status'))
@@ -104,6 +130,8 @@ def _finish(job, status, message='', erp_no=''):
             if status == 'SUCCESS':
                 values['erp_incoming_no'] = erp_no
             MaterialTransaction.objects.filter(pk=job.transaction_id).update(**values)
+        elif job.kind == 'MOVE_DEL':
+            pass  # 원 이동 기록은 취소 때 이미 정리됨; 결과는 대기열 화면에서 확인
         elif job.kind == 'DELETE' and status == 'SUCCESS':
             MaterialTransaction.objects.filter(erp_incoming_no=job.erp_no).update(
                 erp_incoming_no=None, erp_sync_status='PENDING', erp_sync_message='ERP 삭제 완료')
@@ -132,13 +160,14 @@ def dispatch(job_id):
         ERPIncomingEvent.objects.create(operation=job, action='DISPATCH')
     # No stock transaction is open while talking to ERP.
     endpoints = {'REGISTER': '/apiproxy/api20A02I00201', 'DELETE': '/apiproxy/api20A02D00201',
-                 'MOVE': '/apiproxy/api20A02I01101'}
+                 'MOVE': '/apiproxy/api20A02I01101', 'MOVE_DEL': '/apiproxy/api20A02D01101'}
     endpoint = endpoints[job.kind]
     try:
         success, data, error = call_erp_api(endpoint, job.payload)
         erp_no = data.get('resultData') if success and isinstance(data, dict) else None
-        if success and (job.kind == 'DELETE' or isinstance(erp_no, str) and erp_no.strip()):
-            _finish(job, 'SUCCESS', 'ERP 처리 완료', erp_no if job.kind != 'DELETE' else job.erp_no)
+        deleting = job.kind in ('DELETE', 'MOVE_DEL')
+        if success and (deleting or isinstance(erp_no, str) and erp_no.strip()):
+            _finish(job, 'SUCCESS', 'ERP 처리 완료', job.erp_no if deleting else erp_no)
         else:
             _finish(job, 'REVIEW', error or 'ERP 처리 결과가 불명확합니다. 전표를 확인해 주세요.')
     except Exception:
@@ -162,6 +191,13 @@ def reconcile(job_id):
         _finish(job, 'REVIEW', '중단된 전송의 ERP 처리 여부를 확인해야 합니다.')
     if job.kind == 'MOVE':
         return _reconcile_move(job)
+    if job.kind == 'MOVE_DEL':
+        from .erp_api import fetch_erp_transfer_details
+        ok, rows, error = fetch_erp_transfer_details(job.erp_no)
+        if ok and isinstance(rows, list) and not rows:
+            _finish(job, 'SUCCESS', 'ERP 조회로 이동 삭제 확인', job.erp_no)
+            return True, '삭제 완료를 확인했습니다.'
+        return False, error or '삭제 완료를 확인하지 못했습니다. ERP에서 이동 전표를 확인해 주세요.'
     if job.kind == 'DELETE':
         ok, rows, error = fetch_erp_incoming_detail(job.erp_no)
         if ok and isinstance(rows, list) and not rows:
