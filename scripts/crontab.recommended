@@ -1,0 +1,17 @@
+# 권장 cron (root). 설치: crontab -l > 백업 후 crontab scripts/crontab.recommended  (기존: crontab -l > 백업 후)
+# 모든 ERP 동기화는 같은 잠금을 쓴다. 겹치면 뒤의 것이 건너뛰므로 시간대를 나눈다.
+P=/var/www/scm_project
+PY=/var/www/scm_project/venv/bin/python
+
+# ④+⑤ 최근 7일 수불 6종 + 현재고 반영·무결성 점검 (10분마다, 02시대는 과거 변경 감지에 양보)
+*/10 0-1,3-23 * * * cd $P && $PY manage.py sync_erp_auto --days 7 >> /var/log/scm_erp_auto.log 2>&1
+
+# 지난 30일 ERP 전표 수정·삭제 감지 (역분개로 반영)
+1 2 * * * cd $P && $PY manage.py detect_past_changes --days 30 >> /var/log/scm_erp_detect.log 2>&1
+
+# SCM → ERP 전송 대기열: 남은 전송 보내기(5분), 결과 불명확 건 ERP 조회로 확인(1시간, 조회만)
+*/5 * * * * cd $P && $PY manage.py process_erp_incoming >> /var/log/scm_erp_outbox.log 2>&1
+17 * * * * cd $P && $PY manage.py process_erp_incoming --reconcile >> /var/log/scm_erp_outbox.log 2>&1
+
+# 생산현장지원(성형 가동률·금형 MT) — 기존 그대로 유지
+0 23 * * * cd $P && $PY manage.py sync_erp_daily >> /var/log/erp_sync.log 2>&1
