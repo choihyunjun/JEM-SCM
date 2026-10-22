@@ -2170,6 +2170,11 @@ def register_erp_stock_move(trx, qty, from_warehouse_code, to_warehouse_code):
     if not from_warehouse_code or not to_warehouse_code:
         return False, None, f'창고코드 누락 (from={from_warehouse_code}, to={to_warehouse_code})'
 
+    # 수입검사 대기(8100)·부적합(8200)은 SCM에만 있는 창고: 그 창고와 오가는 이동은 ERP로 보내지 않는다.
+    from .stock_reconciliation import SCM_ONLY_WAREHOUSE_CODES
+    if from_warehouse_code in SCM_ONLY_WAREHOUSE_CODES or to_warehouse_code in SCM_ONLY_WAREHOUSE_CODES:
+        return True, None, None
+
     # 이동일자 (UTC → KST 변환)
     from django.utils import timezone as tz
     if hasattr(trx.date, 'strftime'):

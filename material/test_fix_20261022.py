@@ -128,3 +128,16 @@ class InternalCorrectionFilterTests(Base):
                                            remark='LOT 수정: 2026-04-01', **common)
         kept = MaterialTransaction.objects.exclude(_internal_corrections()).values_list('transaction_no', flat=True)
         self.assertEqual(sorted(kept), ['C', 'D'])
+
+
+@override_settings(ERP_ENABLED=True, ERP_OUTBOX_AUTODISPATCH=False)
+class ScmOnlyWarehouseTests(Base):
+    def test_moves_to_or_from_8100_8200_never_reach_erp(self):
+        from .erp_api import register_erp_stock_move
+        trx = MaterialTransaction.objects.create(transaction_no='NG', transaction_type='TRANSFER',
+                                                 date=timezone.now(), part=self.part, quantity=5)
+        for pair in (('3200', '8200'), ('8100', '3200')):
+            self.assertEqual(register_erp_stock_move(trx, 5, *pair), (True, None, None))
+        self.assertFalse(ERPIncomingOperation.objects.exists())
+        register_erp_stock_move(trx, 5, '3200', '3000')
+        self.assertEqual(ERPIncomingOperation.objects.get().kind, 'MOVE')
