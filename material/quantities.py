@@ -34,3 +34,10 @@ def erp_quantity(value):
     """ERP payloads keep the integer form for whole quantities."""
     quantity = stock_quantity(value)
     return int(quantity) if quantity == quantity.to_integral_value() else float(quantity)
+
+
+def human_quantity(qty, full=None):
+    """사람이 입력하는 수량은 정수. 소수는 남은 수량 전부(full)를 옮길 때만 허용한다."""
+    if qty != qty.to_integral_value() and (full is None or qty != full):
+        raise ValueError('수량은 정수로 입력하세요. 소수 잔량은 [전량] 버튼으로 처리합니다.')
+    return qty

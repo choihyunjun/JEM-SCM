@@ -1,7 +1,7 @@
 # material/views.py
 import logging
 from .stock_safety import deduct_stock, quantity_change
-from .quantities import input_quantity, stock_quantity, stock_total
+from .quantities import human_quantity, input_quantity, stock_quantity, stock_total
 import re
 
 from django.shortcuts import render, redirect, get_object_or_404
@@ -3555,8 +3555,9 @@ def stock_move(request):
                     if source_stock.part != part_obj:
                         raise ValueError(f"선택한 LOT가 품번[{p_no}]과 일치하지 않습니다.")
 
-                    if int(source_stock.quantity) < qty:
-                        raise ValueError(f"[{p_no}] LOT 재고 부족 (보유: {source_stock.quantity}, 요청: {qty})")
+                    human_quantity(qty, full=source_stock.quantity)
+                    if source_stock.quantity < qty:
+                        raise ValueError(f"[{p_no}] LOT 재고 부족 (보유: {source_stock.quantity.normalize():f}, 요청: {qty.normalize():f})")
 
                     # LOT 정보 저장 (이동 시 동일 LOT/배치 유지)
                     lot_no = source_stock.lot_no
@@ -4163,13 +4164,14 @@ def lot_allocation(request):
                     qty_list = request.POST.getlist(f'qty_{pid}[]')
                     for ls, qs in zip(lot_list, qty_list):
                         ls, qs = ls.strip(), qs.strip()
-                        if ls and qs and int(qs) > 0:
+                        qv = stock_quantity(qs) if qs else 0
+                        if ls and qv > 0:
                             alloc_items_for_print.append({
                                 'part_no': p.part_no,
                                 'part_name': p.part_name,
                                 'part_group': p.part_group or '',
                                 'lot_no': ls,
-                                'quantity': int(qs),
+                                'quantity': float(qv),
                                 'weight_unit': p.weight_unit or 'EA',
                             })
                 if alloc_items_for_print:
@@ -8533,6 +8535,7 @@ def manual_outgoing(request):
                             defaults={'quantity': 0}
                         )
 
+                    human_quantity(qty, full=stock.quantity)
                     deduct_stock(stock, qty)
                     stock.refresh_from_db()
 

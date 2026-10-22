@@ -603,7 +603,7 @@ function deleteFromModal() {
 function doDelete(id) {
     const form = document.createElement('form');
     form.method = 'POST';
-    form.action = `/material/inbound/history/cancel/${id}/`;
+    form.action = "{% url 'material:cancel_incoming_history' 0 %}".replace('/0/', `/${id}/`);
     form.innerHTML = `<input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
                       <input type="hidden" name="cancel_action" value="delete_all">
                       <input type="hidden" name="redirect_to" value="material:incoming_history">`;
@@ -631,7 +631,7 @@ function saveEdit() {
     }
     if (!confirm('이 입고 건을 수정하시겠습니까?')) return;
 
-    fetch(`/material/inbound/history/edit/${id}/`, {
+    fetch("{% url 'material:edit_incoming_history' 0 %}".replace('/0/', `/${id}/`), {
         method: 'POST',
         headers: {
             'X-CSRFToken': '{{ csrf_token }}',
