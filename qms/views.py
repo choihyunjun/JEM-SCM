@@ -1,7 +1,9 @@
 import uuid
-from .access import scoped
+from .access import scoped, menu_permission, visible_menus
+from orders.access import has_permission, vendor_identity
 import datetime
 import logging
+from decimal import Decimal, InvalidOperation
 import os
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
@@ -17,6 +19,43 @@ logger = logging.getLogger(__name__)
 
 _ALLOWED_EXTENSIONS = {'.pdf', '.jpg', '.jpeg', '.png', '.gif', '.xlsx', '.xls', '.doc', '.docx', '.zip'}
 _MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10MB
+
+def _parse_whole_qty(raw, label):
+    """검사·판정 수량은 정수만 받는다.
+
+    '100', '100.0000', '1,000'은 허용(소수부 0), 12.5·빈칸·문자는 이해하기 쉬운 ValueError.
+    label은 '…수량'으로 끝나는 이름(조사 '을/은' 고정).
+    """
+    text = ('' if raw is None else str(raw)).strip().replace(',', '')
+    if not text:
+        raise ValueError(f'{label}을 입력해 주세요.')
+    try:
+        value = Decimal(text)
+    except InvalidOperation:
+        raise ValueError(f'{label}은 숫자로 입력해 주세요. (입력값: {raw})')
+    if not value.is_finite() or value != value.to_integral_value():
+        raise ValueError(f'{label}은 정수(소수점 없이)로 입력해 주세요. (입력값: {raw})')
+    return int(value)
+
+
+def _optional_qty(post, name, label, default=0):
+    """선택 입력 수량: 빈칸이면 default, 값이 있으면 0 이상의 정수만."""
+    raw = post.get(name, '')
+    if raw is None or str(raw).strip() == '':
+        return default
+    value = _parse_whole_qty(raw, label)
+    if value < 0:
+        raise ValueError(f'{label}은 0 이상이어야 합니다.')
+    return value
+
+
+def _whole_or_none(value):
+    """Decimal 수량이 정수면 int, 소수부가 있으면 None."""
+    if value is None:
+        return None
+    value = Decimal(value)
+    return int(value) if value == value.to_integral_value() else None
+
 
 def _validate_file(f):
     """업로드 파일 크기/확장자 검증. 문제 있으면 에러 문자열 반환, 없으면 None."""
@@ -109,7 +148,11 @@ def _get_profile(user):
     except Exception:
         return None
 
-def qms_permission_required(permission_field):
+def qms_permission_required(permission_field, view_post=False):
+    """권한 체크. *_view 권한 화면에 POST하면 *_edit 권한을 요구한다.
+
+    view_post=True: 조회 권한만으로 POST 허용(뷰 안에서 대상 건 단위 권한을 다시 확인하는 경우만).
+    """
     def decorator(view_func):
         @wraps(view_func)
         @login_required
@@ -117,7 +160,8 @@ def qms_permission_required(permission_field):
             from orders.access import has_permission, validate_vendor_assignment, vendor_identity
             from django.http import HttpResponseForbidden
             needed = permission_field
-            if request.method not in ('GET', 'HEAD', 'OPTIONS') and needed.endswith('_view'):
+            if (request.method not in ('GET', 'HEAD', 'OPTIONS') and needed.endswith('_view')
+                    and not view_post):
                 needed = needed[:-5] + '_edit'
             if not has_permission(request.user, needed):
                 return HttpResponseForbidden('해당 동작에 필요한 권한이 없습니다.')
@@ -131,6 +175,11 @@ def qms_permission_required(permission_field):
             return view_func(request, *args, **kwargs)
         return _wrapped_view
     return decorator
+
+
+def qms_menu_required(menu, edit=False, view_post=False):
+    """메뉴 키로 권한 체크. 메뉴 표시와 같은 표(qms.access.QMS_MENU_PERMISSIONS)를 쓴다."""
+    return qms_permission_required(menu_permission(menu, edit), view_post=view_post)
 
 
 # 정식 4M 제출요구서류 템플릿(고정 19개)
@@ -285,7 +334,7 @@ def get_or_create_formal4m(pre: M4Request) -> Formal4MRequest:
         return formal
 
 
-@qms_permission_required('can_qms_4m_view')
+@qms_menu_required('m4')
 def m4_list(request):
     actor = get_actor(request.user)
     requests = scope_m4_queryset(actor, M4Request.objects.all()).order_by("-created_at")
@@ -310,7 +359,7 @@ def m4_list(request):
     return render(request, "qms/m4_list.html", context)
 
 
-@qms_permission_required('can_qms_4m_view')
+@qms_menu_required('m4')
 def m4_detail(request, pk):
     actor = get_actor(request.user)
     item = get_object_or_404(M4Request, pk=pk)
@@ -320,7 +369,8 @@ def m4_detail(request, pk):
     vendor_review = None
     vendor_form = None
     if can_vendor_respond(actor, item):
-        vendor_review = get_or_create_vendor_review(actor, item)
+        # 조회(GET)만으로 회신 행을 만들지 않는다. 기존 회신이 있으면 그 내용으로 폼을 채운다.
+        vendor_review = M4Review.objects.filter(request=item, department=actor.org.name[:50]).first()
         vendor_form = M4VendorResponseForm(instance=vendor_review)
 
     formal = None
@@ -340,7 +390,7 @@ def m4_detail(request, pk):
     )
 
 
-@qms_permission_required('can_qms_4m_edit')
+@qms_menu_required('m4', edit=True)
 def m4_create(request):
     actor = get_actor(request.user)
     if actor.is_vendor:
@@ -399,7 +449,7 @@ def m4_create(request):
     return render(request, "qms/m4_form.html", {"form": form, "mode": "create"})
 
 
-@qms_permission_required('can_qms_4m_edit')
+@qms_menu_required('m4', edit=True)
 def m4_submit(request, pk):
     if request.method == "POST":
         item = get_object_or_404(M4Request, pk=pk)
@@ -420,7 +470,7 @@ def m4_submit(request, pk):
     return redirect("qms:m4_detail", pk=pk)
 
 
-@qms_permission_required('can_qms_4m_edit')
+@qms_menu_required('m4', edit=True)
 def m4_update(request, pk):
     actor = get_actor(request.user)
     item = get_object_or_404(M4Request, pk=pk)
@@ -459,7 +509,7 @@ def m4_update(request, pk):
     return render(request, "qms/m4_form.html", {"form": form, "item": item, "mode": "update"})
 
 
-@qms_permission_required('can_qms_4m_edit')
+@qms_menu_required('m4', edit=True)
 def m4_approve(request, pk):
     if request.method == "POST":
         item = get_object_or_404(M4Request, pk=pk)
@@ -499,7 +549,7 @@ def m4_approve(request, pk):
 # 정식 4M (좌측 메뉴: 목록/상세)
 # =========================
 
-@qms_permission_required('can_qms_4m_view')
+@qms_menu_required('m4')
 def formal4m_list(request):
     actor = get_actor(request.user)
     qs = Formal4MRequest.objects.select_related("pre_request").order_by("-created_at")
@@ -507,7 +557,7 @@ def formal4m_list(request):
     return render(request, "qms/formal4m_list.html", {"actor": actor, "items": qs})
 
 
-@qms_permission_required('can_qms_4m_view')
+@qms_menu_required('m4')
 def formal4m_detail_by_id(request, formal_id: int):
     actor = get_actor(request.user)
     formal = get_object_or_404(
@@ -559,7 +609,7 @@ def formal4m_detail_by_id(request, formal_id: int):
     )
 
 
-@qms_permission_required('can_qms_4m_view')
+@qms_menu_required('m4')
 def formal4m_detail(request, pk):
     actor = get_actor(request.user)
     pre = get_object_or_404(M4Request, pk=pk)
@@ -581,7 +631,7 @@ def _formal4m_next_status_on_submit(formal: Formal4MRequest) -> str:
     return "PENDING_APPROVE"
 
 
-@qms_permission_required('can_qms_4m_edit')
+@qms_menu_required('m4', edit=True)
 def formal4m_workflow_set(request, formal_id: int):
     actor = get_actor(request.user)
     formal = get_object_or_404(Formal4MRequest, pk=formal_id)
@@ -604,7 +654,7 @@ def formal4m_workflow_set(request, formal_id: int):
     return redirect("qms:formal4m_detail_by_id", formal_id=formal_id)
 
 
-@qms_permission_required('can_qms_4m_edit')
+@qms_menu_required('m4', edit=True)
 def formal4m_workflow_submit(request, formal_id: int):
     actor = get_actor(request.user)
     formal = get_object_or_404(Formal4MRequest, pk=formal_id)
@@ -648,7 +698,7 @@ def formal4m_workflow_submit(request, formal_id: int):
     return redirect("qms:formal4m_detail_by_id", formal_id=formal_id)
 
 
-@qms_permission_required('can_qms_4m_edit')
+@qms_menu_required('m4', edit=True)
 def formal4m_workflow_approve(request, formal_id: int):
     actor = get_actor(request.user)
     formal = get_object_or_404(Formal4MRequest, pk=formal_id)
@@ -695,7 +745,7 @@ def formal4m_workflow_approve(request, formal_id: int):
     return redirect("qms:formal4m_detail_by_id", formal_id=formal_id)
 
 
-@qms_permission_required('can_qms_4m_edit')
+@qms_menu_required('m4', edit=True)
 def formal4m_workflow_reject(request, formal_id: int):
     actor = get_actor(request.user)
     formal = get_object_or_404(Formal4MRequest, pk=formal_id)
@@ -727,7 +777,7 @@ def formal4m_workflow_reject(request, formal_id: int):
     return redirect("qms:formal4m_detail_by_id", formal_id=formal_id)
 
 
-@qms_permission_required('can_qms_4m_edit')
+@qms_menu_required('m4', edit=True)
 def formal4m_workflow_resubmit(request, formal_id: int):
     actor = get_actor(request.user)
     formal = get_object_or_404(Formal4MRequest, pk=formal_id)
@@ -767,7 +817,7 @@ def formal4m_workflow_resubmit(request, formal_id: int):
     return redirect("qms:formal4m_detail_by_id", formal_id=formal_id)
 
 
-@qms_permission_required('can_qms_4m_edit')
+@qms_menu_required('m4', edit=True)
 def formal4m_workflow_cancel(request, formal_id: int):
     actor = get_actor(request.user)
     formal = get_object_or_404(Formal4MRequest, pk=formal_id)
@@ -829,7 +879,7 @@ def formal4m_workflow_cancel(request, formal_id: int):
     return redirect("qms:formal4m_detail_by_id", formal_id=formal_id)
 
 
-@qms_permission_required('can_qms_4m_edit')
+@qms_menu_required('m4', edit=True)
 def formal4m_set_validity_start(request, formal_id: int):
     actor = get_actor(request.user)
     formal = get_object_or_404(Formal4MRequest, pk=formal_id)
@@ -875,7 +925,7 @@ FORMAL_4M_INSPECTION_TEMPLATE = [
 ]
 
 
-@qms_permission_required('can_qms_4m_edit')
+@qms_menu_required('m4', edit=True)
 def formal4m_upgrade_to_full(request, formal_id: int):
     actor = get_actor(request.user)
     formal = get_object_or_404(
@@ -924,7 +974,7 @@ def formal4m_upgrade_to_full(request, formal_id: int):
     return redirect("qms:formal4m_detail_by_id", formal_id=formal_id)
 
 
-@qms_permission_required('can_qms_4m_edit')
+@qms_menu_required('m4', edit=True)
 def formal4m_inspection_update(request, formal_id: int, row_id: int):
     actor = get_actor(request.user)
     formal = get_object_or_404(Formal4MRequest, pk=formal_id)
@@ -948,7 +998,7 @@ def formal4m_inspection_update(request, formal_id: int, row_id: int):
     return redirect("qms:formal4m_detail_by_id", formal_id=formal.id)
 
 
-@qms_permission_required('can_qms_4m_edit')
+@qms_menu_required('m4', edit=True)
 def formal4m_schedule_update(request, formal_id: int, row_id: int):
     actor = get_actor(request.user)
     formal = get_object_or_404(Formal4MRequest, pk=formal_id)
@@ -972,7 +1022,7 @@ def formal4m_schedule_update(request, formal_id: int, row_id: int):
     return redirect("qms:formal4m_detail_by_id", formal_id=formal.id)
 
 
-@qms_permission_required('can_qms_4m_edit')
+@qms_menu_required('m4', edit=True)
 def formal4m_stage_update(request, formal_id: int, row_id: int):
     actor = get_actor(request.user)
     formal = get_object_or_404(Formal4MRequest, pk=formal_id)
@@ -994,7 +1044,7 @@ def formal4m_stage_update(request, formal_id: int, row_id: int):
     return redirect("qms:formal4m_detail_by_id", formal_id=formal.id)
 
 
-@qms_permission_required('can_qms_4m_edit')
+@qms_menu_required('m4', edit=True)
 def formal4m_approval_update(request, formal_id: int):
     actor = get_actor(request.user)
     formal = get_object_or_404(Formal4MRequest, pk=formal_id)
@@ -1014,45 +1064,7 @@ def formal4m_approval_update(request, formal_id: int):
     return redirect("qms:formal4m_detail_by_id", formal_id=formal.id)
 
 
-@qms_permission_required('can_qms_4m_edit')
-def formal4m_inspection_add(request, formal_id: int):
-    actor = get_actor(request.user)
-    formal = get_object_or_404(Formal4MRequest, pk=formal_id)
-    if not can_view_formal4m(actor, formal): return HttpResponseForbidden("접근 불가.")
-    if not actor.is_internal: return HttpResponseForbidden("내부 전용.")
-    
-    if formal.approval_status in ["PENDING_APPROVE", "APPROVED"]:
-        messages.error(request, "승인 진행 중에는 항목을 추가할 수 없습니다.")
-        return redirect("qms:formal4m_detail_by_id", formal_id=formal_id)
-
-    if request.method == "POST":
-        inspection_item = (request.POST.get("inspection_item") or "").strip()
-        if inspection_item:
-            Formal4MInspectionResult.objects.create(formal_request=formal, inspection_item=inspection_item)
-            messages.success(request, f"검토 항목 '{inspection_item}' 추가됨.")
-    return redirect("qms:formal4m_detail_by_id", formal_id=formal.id)
-
-
-@qms_permission_required('can_qms_4m_edit')
-def formal4m_schedule_add(request, formal_id: int):
-    actor = get_actor(request.user)
-    formal = get_object_or_404(Formal4MRequest, pk=formal_id)
-    if not can_view_formal4m(actor, formal): return HttpResponseForbidden("접근 불가.")
-    if not actor.is_internal: return HttpResponseForbidden("내부 전용.")
-    
-    if formal.approval_status in ["PENDING_APPROVE", "APPROVED"]:
-        messages.error(request, "승인 진행 중에는 항목을 추가할 수 없습니다.")
-        return redirect("qms:formal4m_detail_by_id", formal_id=formal_id)
-
-    if request.method == "POST":
-        item_name = (request.POST.get("item_name") or "").strip()
-        if item_name:
-            Formal4MScheduleItem.objects.create(formal_request=formal, item_name=item_name, is_required=True)
-            messages.success(request, f"일정 항목 '{item_name}' 추가됨.")
-    return redirect("qms:formal4m_detail_by_id", formal_id=formal.id)
-
-
-@qms_permission_required('can_qms_4m_edit')
+@qms_menu_required('m4', edit=True)
 def formal4m_upload(request, formal_id, item_id):
     actor = get_actor(request.user)
     formal = get_object_or_404(Formal4MRequest, pk=formal_id)
@@ -1077,7 +1089,7 @@ def formal4m_upload(request, formal_id, item_id):
     return redirect("qms:formal4m_detail_by_id", formal_id=formal.id)
 
 
-@qms_permission_required('can_qms_4m_edit')
+@qms_menu_required('m4', edit=True)
 def formal4m_review_update(request, formal_id, item_id):
     actor = get_actor(request.user)
     if not actor.is_internal: return HttpResponseForbidden("내부 전용.")
@@ -1094,7 +1106,7 @@ def formal4m_review_update(request, formal_id, item_id):
     return redirect("qms:formal4m_detail_by_id", formal_id=formal.id)
 
 
-@qms_permission_required('can_qms_4m_edit')
+@qms_menu_required('m4', edit=True)
 def add_m4_review(request, pk):
     actor = get_actor(request.user)
     if request.method == "POST":
@@ -1106,7 +1118,7 @@ def add_m4_review(request, pk):
     return redirect("qms:m4_detail", pk=pk)
 
 
-@qms_permission_required('can_qms_4m_edit')
+@qms_menu_required('m4', edit=True)
 def edit_m4_review(request, review_id):
     review = get_object_or_404(M4Review, id=review_id); actor = get_actor(request.user)
     can_post = actor.is_internal and ((review.reviewer_id == request.user.id) or request.user.is_staff)
@@ -1115,25 +1127,41 @@ def edit_m4_review(request, review_id):
     return redirect("qms:m4_detail", pk=review.request.pk)
 
 
-@qms_permission_required('can_qms_4m_edit')
+@qms_menu_required('m4', edit=True)
 def delete_m4_review(request, review_id):
     review = get_object_or_404(M4Review, id=review_id); actor = get_actor(request.user); pk = review.request.pk
     if actor.is_internal and (review.reviewer_id == request.user.id or request.user.is_staff): review.delete(); messages.success(request, "삭제됨.")
     return redirect("qms:m4_detail", pk=pk)
 
 
-@qms_permission_required('can_qms_4m_edit')
+@qms_menu_required('m4', view_post=True)
 def m4_vendor_response(request, pk):
+    """협력사 회신/증빙 업로드.
+
+    설계: 문서에 대상 협력사(vendor_org)로 등록된 협력사 계정이면 4M '조회' 권한만으로 회신할 수 있다.
+    (can_vendor_respond가 건 단위로 다시 확인하므로 다른 협력사·미지정 문서는 막힌다.)
+    """
     actor = get_actor(request.user); item = get_object_or_404(M4Request, pk=pk)
     if not can_vendor_respond(actor, item): return HttpResponseForbidden("권한 없음.")
-    review = get_or_create_vendor_review(actor, item)
     if request.method == "POST":
+        upload = request.FILES.get("evidence_file")
+        err = _validate_file(upload) if upload else None
+        if err:
+            messages.error(request, err)
+            return redirect("qms:m4_detail", pk=pk)
+        review = get_or_create_vendor_review(actor, item)
         form = M4VendorResponseForm(request.POST, request.FILES, instance=review)
-        if form.is_valid(): updated = form.save(commit=False); updated.reviewer, updated.received_at = request.user, timezone.now(); updated.save(); messages.success(request, "답변 등록됨.")
+        if form.is_valid():
+            updated = form.save(commit=False)
+            updated.reviewer, updated.received_at = request.user, timezone.now()
+            updated.save()
+            messages.success(request, "답변 등록됨.")
+        else:
+            messages.error(request, f"답변 저장 실패: {form.errors.as_text()}")
     return redirect("qms:m4_detail", pk=pk)
 
 
-@qms_permission_required('can_qms_4m_edit')
+@qms_menu_required('m4', edit=True)
 def m4_reject(request, pk):
     if request.method == "POST":
         item = get_object_or_404(M4Request, pk=pk)
@@ -1145,7 +1173,7 @@ def m4_reject(request, pk):
     return redirect("qms:m4_detail", pk=pk)
 
 
-@qms_permission_required('can_qms_4m_edit')
+@qms_menu_required('m4', edit=True)
 def m4_resubmit(request, pk):
     if request.method == "POST":
         item = get_object_or_404(M4Request, pk=pk)
@@ -1155,7 +1183,7 @@ def m4_resubmit(request, pk):
     return redirect("qms:m4_detail", pk=pk)
 
 
-@qms_permission_required('can_qms_4m_edit')
+@qms_menu_required('m4', edit=True)
 def m4_cancel_approval(request, pk):
     if request.method == "POST":
         item = get_object_or_404(M4Request, pk=pk)
@@ -1167,7 +1195,7 @@ def m4_cancel_approval(request, pk):
     return redirect("qms:m4_detail", pk=pk)
 
 
-@qms_permission_required('can_qms_4m_edit')
+@qms_menu_required('m4', edit=True)
 def m4_delete(request, pk):
     item = get_object_or_404(M4Request, pk=pk)
     if item.user == request.user and item.status == "DRAFT" and request.method == "POST": item.delete(); messages.success(request, "삭제됨."); return redirect("qms:m4_list")
@@ -1178,7 +1206,7 @@ def m4_delete(request, pk):
 # [핵심] 수입검사 로직 (WMS & SCM 연동)
 # =============================================================================
 
-@qms_permission_required('can_qms_inspection_view')
+@qms_menu_required('inspection')
 def inspection_attachment_list(request):
     """성적서 조회 - 수입검사 첨부파일이 있는 건만 조회"""
     qs = scoped(request, ImportInspection).filter(
@@ -1216,7 +1244,7 @@ def inspection_attachment_list(request):
     })
 
 
-@qms_permission_required('can_qms_inspection_view')
+@qms_menu_required('inspection')
 def import_inspection_list(request):
     """
     [QMS] 수입검사 대기/완료 목록 조회 (필터 + 페이징)
@@ -1249,7 +1277,9 @@ def import_inspection_list(request):
 
     # ===== 상태 필터 =====
     if status_filter == "PASSED":
-        qs = qs.filter(status="APPROVED")
+        qs = qs.filter(status="APPROVED", qty_bad__lte=0)
+    elif status_filter == "PARTIAL":
+        qs = qs.filter(status="APPROVED", qty_bad__gt=0)
     elif status_filter == "FAILED":
         qs = qs.filter(status="REJECTED")
     elif status_filter:
@@ -1276,16 +1306,18 @@ def import_inspection_list(request):
             "end_date": end_date,
             "status_filter": status_filter,
             "q": q,
+            "can_judge": has_permission(request.user, menu_permission('inspection', edit=True)),
         },
     )
 
 
 # qms/views.py 의 import_inspection_detail 함수 교체
 
-@qms_permission_required('can_qms_inspection_edit')
+@qms_menu_required('inspection')
 def import_inspection_detail(request, pk):
     """
     [QMS] 수입검사 상세 및 판정 (양품/불량 분할)
+    - 조회 권한: 상세 보기(읽기 전용). 판정/정정(POST)은 데코레이터가 검사 판정 권한을 요구.
     - 양품: WH_MAT로 이동 + SCM Incoming.confirmed_qty 반영
     - 불량: 8200(부적합창고)로 이동 + ReturnLog 생성
     """
@@ -1322,12 +1354,16 @@ def import_inspection_detail(request, pk):
                     messages.error(request, "이미 판정이 완료된 건입니다.")
                     return redirect("qms:import_inspection_detail", pk=pk)
 
-                # 1) 수량 입력
+                # 1) 수량 입력 (정수만)
+                if _whole_or_none(origin_trx.quantity) is None:
+                    messages.error(request, f"입고 수량({origin_trx.quantity.normalize():f})이 정수가 아니어서 판정할 수 없습니다. "
+                                            "입고 수량을 정수로 정정한 뒤 판정해 주세요.")
+                    return redirect("qms:import_inspection_detail", pk=pk)
                 try:
-                    qty_good = int(request.POST.get("qty_good", 0))
-                    qty_bad = int(request.POST.get("qty_bad", 0))
-                except ValueError:
-                    messages.error(request, "수량은 숫자만 입력 가능합니다.")
+                    qty_good = _parse_whole_qty(request.POST.get("qty_good", 0), "양품 수량")
+                    qty_bad = _parse_whole_qty(request.POST.get("qty_bad", 0), "불량 수량")
+                except ValueError as e:
+                    messages.error(request, str(e))
                     return redirect("qms:import_inspection_detail", pk=pk)
 
                 if qty_good < 0 or qty_bad < 0 or qty_good > origin_trx.quantity or qty_bad > origin_trx.quantity:
@@ -1337,7 +1373,7 @@ def import_inspection_detail(request, pk):
                 if total_input != origin_trx.quantity:
                     messages.error(
                         request,
-                        f"입력 수량 합계({total_input})가 입고 수량({origin_trx.quantity})과 다릅니다.",
+                        f"입력 수량 합계({total_input})가 입고 수량({_whole_or_none(origin_trx.quantity)})과 다릅니다.",
                     )
                     return redirect("qms:import_inspection_detail", pk=pk)
 
@@ -1542,6 +1578,7 @@ def import_inspection_detail(request, pk):
             messages.error(request, f"오류 발생: {str(e)}")
             return redirect("qms:import_inspection_detail", pk=pk)
 
+    whole_qty = _whole_or_none(origin_trx.quantity)
     return render(
         request,
         "qms/import_inspection_detail.html",
@@ -1549,637 +1586,24 @@ def import_inspection_detail(request, pk):
             "inspection": inspection,
             "display_ref_no": display_ref_no,
             "is_scm_linked": is_scm_linked,
+            "can_judge": has_permission(request.user, menu_permission('inspection', edit=True)),
+            "whole_qty": whole_qty,
+            "fractional_qty": whole_qty is None,
+            "editable": (inspection.status == "PENDING" and whole_qty is not None
+                         and has_permission(request.user, menu_permission('inspection', edit=True))),
         },
     )
 
 
 # ============================================================================
-# 새로운 4M 변경점 관리 시스템 (v2)
+# 4M 변경관리(v2) — 폐지 (2026-10 운영 0건, 사전/정식 4M으로 일원화)
+#   모델/마이그레이션(ChangeRequest 등)은 DB 일관성을 위해 남겨 둔다.
 # ============================================================================
 
-from .models import (
-    ChangeRequest, ApprovalStep, VendorResponse, VendorResponseAttachment,
-    ChangeDocument, ChangeHistory
-)
-
-
-def _is_vendor_user(user):
-    from orders.access import vendor_identity
-    return vendor_identity(user)[0]
-
-
-def _get_user_vendor_org(user):
-    from orders.access import vendor_identity
-    return vendor_identity(user)[2]
-
-
-def _log_change(change_request, action, description, user, field_name='', old_value='', new_value=''):
-    """변경 이력 기록"""
-    ChangeHistory.objects.create(
-        change_request=change_request,
-        action=action,
-        description=description,
-        actor=user,
-        field_name=field_name,
-        old_value=old_value,
-        new_value=new_value
-    )
-
-
-@qms_permission_required('can_qms_4m_view')
-def change_request_list(request):
-    """4M 변경 신청 목록"""
-    user = request.user
-    qs = scoped(request, ChangeRequest).select_related('vendor', 'created_by')
-
-    # 협력사 사용자는 자신의 협력사 건만 조회
-    vendor_org = _get_user_vendor_org(user)
-    if vendor_org:
-        qs = qs.filter(vendor=vendor_org)
-
-    # 필터링
-    phase = request.GET.get('phase', '')
-    change_type = request.GET.get('type', '')
-    q = request.GET.get('q', '')
-
-    if phase:
-        qs = qs.filter(phase=phase)
-    if change_type:
-        qs = qs.filter(change_type=change_type)
-    if q:
-        qs = qs.filter(
-            models.Q(request_no__icontains=q) |
-            models.Q(part_no__icontains=q) |
-            models.Q(part_name__icontains=q)
-        )
-
-    # 내 결재 대기 건 수
-    my_pending_count = scoped(request, ApprovalStep).filter(
-        assignee=user, status='PENDING'
-    ).count()
-
-    return render(request, 'qms/change_request_list.html', {
-        'requests': qs[:100],
-        'phase_choices': ChangeRequest.PHASE_CHOICES,
-        'type_choices': ChangeRequest.TYPE_CHOICES,
-        'selected_phase': phase,
-        'selected_type': change_type,
-        'q': q,
-        'my_pending_count': my_pending_count,
-        'is_vendor': bool(vendor_org),
-    })
-
-
-@qms_permission_required('can_qms_4m_edit')
-def change_request_create(request):
-    """4M 변경 신청 작성"""
-    user = request.user
-    vendor_org = _get_user_vendor_org(user)
-
-    # 협력사 목록 (내부 사용자용)
-    vendors = []
-    if not vendor_org:
-        vendors = scoped(request, Organization).filter(org_type='VENDOR').order_by('name')
-
-    # 결재자 목록 (내부 사용자들)
-    approvers = User.objects.filter(
-        is_active=True,
-        profile__org__org_type='INTERNAL'
-    ).exclude(id=user.id).select_related('profile').order_by('username')
-
-    if request.method == 'POST':
-        # 기본 정보
-        factory = request.POST.get('factory', '2공장').strip()
-        change_type = request.POST.get('change_type')
-        change_grade = request.POST.get('change_grade') or None
-        part_no = request.POST.get('part_no', '').strip()
-        part_name = request.POST.get('part_name', '').strip()
-        part_group = request.POST.get('part_group', '').strip()  # 품목군 (model_name 필드로 저장)
-        is_internal = request.POST.get('is_internal') == '1'
-        is_external = request.POST.get('is_external') == '1'
-
-        # 협력사
-        if vendor_org:
-            vendor = vendor_org
-        else:
-            vendor_id = request.POST.get('vendor_id')
-            vendor = scoped(request, Organization).get(id=vendor_id)
-
-        # 변경 내용
-        reason = request.POST.get('reason', '').strip()
-        content_before = request.POST.get('content_before', '').strip()
-        content_after = request.POST.get('content_after', '').strip()
-        affected_items = request.POST.get('affected_items', '').strip()
-
-        # 일정
-        target_date = request.POST.get('target_date') or None
-
-        # 생성
-        cr = scoped(request, ChangeRequest).create(
-            factory=factory,
-            change_type=change_type,
-            change_grade=change_grade,
-            part_no=part_no,
-            part_name=part_name,
-            model_name=part_group,  # 품목군 저장
-            is_internal=is_internal,
-            is_external=is_external,
-            vendor=vendor,
-            created_by=user,
-            reason=reason,
-            content_before=content_before,
-            content_after=content_after,
-            affected_items=affected_items,
-            target_date=target_date,
-            phase='DRAFT'
-        )
-
-        # 결재 단계 설정
-        reviewer_id = request.POST.get('reviewer_id')
-        reviewer2_id = request.POST.get('reviewer2_id')  # 검토2 추가
-        approver_id = request.POST.get('approver_id')
-
-        step_order = 1
-        if reviewer_id:
-            scoped(request, ApprovalStep).create(
-                change_request=cr,
-                step_order=step_order,
-                step_type='REVIEW',
-                step_name='검토1',
-                assignee_id=reviewer_id,
-                status='WAITING'
-            )
-            step_order += 1
-
-        if reviewer2_id:
-            scoped(request, ApprovalStep).create(
-                change_request=cr,
-                step_order=step_order,
-                step_type='REVIEW',
-                step_name='검토2',
-                assignee_id=reviewer2_id,
-                status='WAITING'
-            )
-            step_order += 1
-
-        if approver_id:
-            scoped(request, ApprovalStep).create(
-                change_request=cr,
-                step_order=step_order,
-                step_type='APPROVE',
-                step_name='승인',
-                assignee_id=approver_id,
-                status='WAITING'
-            )
-
-        _log_change(cr, 'CREATE', '4M 변경신청서 작성', user)
-
-        messages.success(request, f'4M 변경신청서가 작성되었습니다. ({cr.request_no})')
-        return redirect('qms:change_request_detail', pk=cr.pk)
-
-    return render(request, 'qms/change_request_form.html', {
-        'vendors': vendors,
-        'approvers': approvers,
-        'type_choices': ChangeRequest.TYPE_CHOICES,
-        'grade_choices': ChangeRequest.GRADE_CHOICES,
-        'is_vendor': bool(vendor_org),
-        'vendor_org': vendor_org,
-        'mode': 'create',
-    })
-
-
-@qms_permission_required('can_qms_4m_view')
-def change_request_detail(request, pk):
-    """4M 변경 신청 상세"""
-    user = request.user
-    cr = get_object_or_404(scoped(request, ChangeRequest).select_related('vendor', 'created_by'), pk=pk)
-
-    vendor_org = _get_user_vendor_org(user)
-
-    # 협력사는 자신의 건만 조회 가능
-    if vendor_org and cr.vendor != vendor_org:
-        messages.error(request, '접근 권한이 없습니다.')
-        return redirect('qms:change_request_list')
-
-    # 결재 단계
-    approval_steps = cr.approval_steps.select_related('assignee').order_by('step_order')
-
-    # 현재 사용자가 결재 가능한지
-    my_pending_step = approval_steps.filter(assignee=user, status='PENDING').first()
-
-    # 협력사 회신 목록
-    vendor_responses = cr.vendor_responses.select_related('requested_by', 'responded_by').prefetch_related('attachments')
-
-    # 제출 서류
-    documents = cr.documents.select_related('reviewed_by').order_by('id')
-
-    # 변경 이력
-    history = cr.history.select_related('actor').order_by('-created_at')[:20]
-
-    return render(request, 'qms/change_request_detail.html', {
-        'cr': cr,
-        'approval_steps': approval_steps,
-        'my_pending_step': my_pending_step,
-        'vendor_responses': vendor_responses,
-        'documents': documents,
-        'history': history,
-        'is_vendor': bool(vendor_org),
-        'can_edit': cr.can_edit and (cr.created_by == user or user.is_superuser),
-        'can_submit': cr.phase == 'DRAFT' and approval_steps.exists(),
-    })
-
-
-@qms_permission_required('can_qms_4m_edit')
-def change_request_edit(request, pk):
-    """4M 변경 신청 수정"""
-    user = request.user
-    cr = get_object_or_404(scoped(request, ChangeRequest), pk=pk)
-
-    if not cr.can_edit:
-        messages.error(request, '수정할 수 없는 상태입니다.')
-        return redirect('qms:change_request_detail', pk=pk)
-
-    if cr.created_by != user and not user.is_superuser:
-        messages.error(request, '수정 권한이 없습니다.')
-        return redirect('qms:change_request_detail', pk=pk)
-
-    vendor_org = _get_user_vendor_org(user)
-    vendors = []
-    if not vendor_org:
-        vendors = scoped(request, Organization).filter(org_type='VENDOR').order_by('name')
-
-    approvers = User.objects.filter(
-        is_active=True,
-        profile__org__org_type='INTERNAL'
-    ).exclude(id=user.id).select_related('profile').order_by('username')
-
-    # step_name 기준으로 구분 (검토1, 검토2, 승인)
-    existing_steps = {s.step_name: s for s in cr.approval_steps.all()}
-
-    if request.method == 'POST':
-        # 업데이트
-        cr.factory = request.POST.get('factory', '2공장').strip()
-        cr.change_type = request.POST.get('change_type')
-        cr.change_grade = request.POST.get('change_grade') or None
-        cr.part_no = request.POST.get('part_no', '').strip()
-        cr.part_name = request.POST.get('part_name', '').strip()
-        cr.model_name = request.POST.get('part_group', '').strip()  # 품목군
-        cr.is_internal = request.POST.get('is_internal') == '1'
-        cr.is_external = request.POST.get('is_external') == '1'
-        cr.reason = request.POST.get('reason', '').strip()
-        cr.content_before = request.POST.get('content_before', '').strip()
-        cr.content_after = request.POST.get('content_after', '').strip()
-        cr.affected_items = request.POST.get('affected_items', '').strip()
-        cr.target_date = request.POST.get('target_date') or None
-
-        if not vendor_org:
-            vendor_id = request.POST.get('vendor_id')
-            cr.vendor_id = vendor_id
-
-        # 반려 상태에서 수정 시 DRAFT로 변경
-        if cr.phase == 'REJECTED':
-            cr.phase = 'DRAFT'
-            cr.reject_reason = ''
-            # 결재 단계 초기화
-            cr.approval_steps.update(status='WAITING', comment='', processed_at=None)
-
-        cr.save()
-
-        # 결재자 업데이트
-        reviewer_id = request.POST.get('reviewer_id')
-        reviewer2_id = request.POST.get('reviewer2_id')  # 검토2 추가
-        approver_id = request.POST.get('approver_id')
-
-        # 기존 단계 삭제 후 재생성
-        cr.approval_steps.all().delete()
-        step_order = 1
-        if reviewer_id:
-            scoped(request, ApprovalStep).create(
-                change_request=cr, step_order=step_order,
-                step_type='REVIEW', step_name='검토1',
-                assignee_id=reviewer_id, status='WAITING'
-            )
-            step_order += 1
-        if reviewer2_id:
-            scoped(request, ApprovalStep).create(
-                change_request=cr, step_order=step_order,
-                step_type='REVIEW', step_name='검토2',
-                assignee_id=reviewer2_id, status='WAITING'
-            )
-            step_order += 1
-        if approver_id:
-            scoped(request, ApprovalStep).create(
-                change_request=cr, step_order=step_order,
-                step_type='APPROVE', step_name='승인',
-                assignee_id=approver_id, status='WAITING'
-            )
-
-        _log_change(cr, 'UPDATE', '4M 변경신청서 수정', user)
-
-        messages.success(request, '수정되었습니다.')
-        return redirect('qms:change_request_detail', pk=pk)
-
-    return render(request, 'qms/change_request_form.html', {
-        'cr': cr,
-        'vendors': vendors,
-        'approvers': approvers,
-        'type_choices': ChangeRequest.TYPE_CHOICES,
-        'grade_choices': ChangeRequest.GRADE_CHOICES,
-        'is_vendor': bool(vendor_org),
-        'vendor_org': vendor_org,
-        'mode': 'edit',
-        'existing_reviewer': existing_steps.get('검토1') or existing_steps.get('검토'),  # 기존 호환성
-        'existing_reviewer2': existing_steps.get('검토2'),
-        'existing_approver': existing_steps.get('승인'),
-    })
-
-
-@qms_permission_required('can_qms_4m_edit')
-@require_POST
-def change_request_submit(request, pk):
-    """4M 변경 신청 상신"""
-    user = request.user
-    cr = get_object_or_404(scoped(request, ChangeRequest), pk=pk)
-
-    if cr.phase != 'DRAFT':
-        messages.error(request, '상신할 수 없는 상태입니다.')
-        return redirect('qms:change_request_detail', pk=pk)
-
-    if cr.created_by != user and not user.is_superuser:
-        messages.error(request, '상신 권한이 없습니다.')
-        return redirect('qms:change_request_detail', pk=pk)
-
-    # 첫 번째 결재 단계 활성화
-    first_step = cr.approval_steps.order_by('step_order').first()
-    if not first_step:
-        messages.error(request, '결재자가 지정되지 않았습니다.')
-        return redirect('qms:change_request_detail', pk=pk)
-
-    first_step.status = 'PENDING'
-    first_step.save()
-
-    cr.phase = 'REVIEW'
-    cr.save()
-
-    _log_change(cr, 'SUBMIT', '결재 상신', user)
-
-    messages.success(request, '결재 상신되었습니다.')
-    return redirect('qms:change_request_detail', pk=pk)
-
-
-@qms_permission_required('can_qms_4m_edit')
-@require_POST
-def approval_step_process(request, pk):
-    """결재 처리 (승인/반려)"""
-    user = request.user
-    step = get_object_or_404(scoped(request, ApprovalStep).select_related('change_request'), pk=pk)
-    cr = step.change_request
-
-    if step.assignee != user:
-        messages.error(request, '결재 권한이 없습니다.')
-        return redirect('qms:change_request_detail', pk=cr.pk)
-
-    if step.status != 'PENDING':
-        messages.error(request, '결재할 수 없는 상태입니다.')
-        return redirect('qms:change_request_detail', pk=cr.pk)
-
-    action = request.POST.get('action')
-    comment = request.POST.get('comment', '').strip()
-
-    if action == 'approve':
-        step.approve(user, comment)
-        _log_change(cr, 'APPROVE', f'{step.step_name} 승인: {comment or "(의견없음)"}', user)
-        messages.success(request, '승인되었습니다.')
-    elif action == 'reject':
-        if not comment:
-            messages.error(request, '반려 사유를 입력해주세요.')
-            return redirect('qms:change_request_detail', pk=cr.pk)
-        step.reject(user, comment)
-        _log_change(cr, 'REJECT', f'{step.step_name} 반려: {comment}', user)
-        messages.warning(request, '반려되었습니다.')
-    else:
-        messages.error(request, '잘못된 요청입니다.')
-
-    return redirect('qms:change_request_detail', pk=cr.pk)
-
-
-@qms_permission_required('can_qms_4m_edit')
-@require_POST
-def change_request_phase_change(request, pk):
-    """단계 전환 (APPROVED → FORMAL → VALIDATION → CLOSED)"""
-    user = request.user
-    cr = get_object_or_404(scoped(request, ChangeRequest), pk=pk)
-
-    if _is_vendor_user(user):
-        messages.error(request, '단계 전환 권한이 없습니다.')
-        return redirect('qms:change_request_detail', pk=pk)
-
-    new_phase = request.POST.get('new_phase')
-    valid_transitions = {
-        'APPROVED': ['FORMAL'],
-        'FORMAL': ['VALIDATION'],
-        'VALIDATION': ['CLOSED'],
-    }
-
-    if new_phase not in valid_transitions.get(cr.phase, []):
-        messages.error(request, f'현재 상태({cr.get_phase_display()})에서 {new_phase}로 전환할 수 없습니다.')
-        return redirect('qms:change_request_detail', pk=pk)
-
-    old_phase = cr.phase
-    cr.phase = new_phase
-
-    if new_phase == 'FORMAL':
-        cr.formal_start_date = timezone.localdate()
-        # 유효성 평가 기한 = 3개월 후 (약 90일)
-        import datetime
-        cr.validation_due_date = cr.formal_start_date + datetime.timedelta(days=90)
-        # 기본 제출 서류 생성
-        for doc_name in ChangeDocument.DEFAULT_DOCUMENTS:
-            scoped(request, ChangeDocument).get_or_create(
-                change_request=cr, doc_name=doc_name,
-                defaults={'is_required': doc_name in ['검사성적서', '공정흐름도', '관리계획서']}
-            )
-    elif new_phase == 'CLOSED':
-        cr.closed_date = timezone.localdate()
-
-    cr.save()
-
-    _log_change(cr, 'PHASE_CHANGE', f'단계 전환: {old_phase} → {new_phase}', user)
-
-    messages.success(request, f'{cr.get_phase_display()} 단계로 전환되었습니다.')
-    return redirect('qms:change_request_detail', pk=pk)
-
-
-@qms_permission_required('can_qms_4m_edit')
-@require_POST
-def vendor_response_create(request, pk):
-    """협력사 회신 요청 생성 (내부 → 협력사)"""
-    user = request.user
-    cr = get_object_or_404(scoped(request, ChangeRequest), pk=pk)
-
-    if _is_vendor_user(user):
-        messages.error(request, '요청 권한이 없습니다.')
-        return redirect('qms:change_request_detail', pk=pk)
-
-    title = request.POST.get('request_title', '').strip()
-    content = request.POST.get('request_content', '').strip()
-
-    if not title or not content:
-        messages.error(request, '요청 제목과 내용을 입력해주세요.')
-        return redirect('qms:change_request_detail', pk=pk)
-
-    scoped(request, VendorResponse).create(
-        change_request=cr,
-        request_title=title,
-        request_content=content,
-        requested_by=user
-    )
-
-    _log_change(cr, 'VENDOR_REQUEST', f'협력사 회신 요청: {title}', user)
-
-    messages.success(request, '협력사에 회신 요청을 보냈습니다.')
-    return redirect('qms:change_request_detail', pk=pk)
-
-
-@qms_permission_required('can_qms_4m_edit')
-@require_POST
-def vendor_response_submit(request, pk):
-    """협력사 회신 제출"""
-    user = request.user
-    vr = get_object_or_404(scoped(request, VendorResponse).select_related('change_request'), pk=pk)
-    cr = vr.change_request
-
-    vendor_org = _get_user_vendor_org(user)
-    if not vendor_org or cr.vendor != vendor_org:
-        messages.error(request, '회신 권한이 없습니다.')
-        return redirect('qms:change_request_detail', pk=cr.pk)
-
-    content = request.POST.get('response_content', '').strip()
-    if not content:
-        messages.error(request, '회신 내용을 입력해주세요.')
-        return redirect('qms:change_request_detail', pk=cr.pk)
-
-    vr.response_content = content
-    vr.responded_by = user
-    vr.responded_at = timezone.now()
-    vr.status = 'RESPONDED'
-    vr.save()
-
-    # 첨부파일 처리
-    files = request.FILES.getlist('attachments')
-    for f in files:
-        err = _validate_file(f)
-        if err:
-            messages.warning(request, f'{f.name}: {err}')
-            continue
-        VendorResponseAttachment.objects.create(
-            response=vr,
-            file=f,
-            file_name=f.name
-        )
-
-    _log_change(cr, 'VENDOR_RESPONSE', f'협력사 회신: {vr.request_title}', user)
-
-    messages.success(request, '회신이 제출되었습니다.')
-    return redirect('qms:change_request_detail', pk=cr.pk)
-
-
-@qms_permission_required('can_qms_4m_edit')
-@require_POST
-def document_upload(request, pk):
-    """제출 서류 업로드"""
-    user = request.user
-    doc = get_object_or_404(scoped(request, ChangeDocument).select_related('change_request'), pk=pk)
-    cr = doc.change_request
-
-    # 협력사 또는 내부 모두 업로드 가능
-    vendor_org = _get_user_vendor_org(user)
-    if vendor_org and cr.vendor != vendor_org:
-        messages.error(request, '업로드 권한이 없습니다.')
-        return redirect('qms:change_request_detail', pk=cr.pk)
-
-    file = request.FILES.get('file')
-    if not file:
-        messages.error(request, '파일을 선택해주세요.')
-        return redirect('qms:change_request_detail', pk=cr.pk)
-
-    err = _validate_file(file)
-    if err:
-        messages.error(request, err)
-        return redirect('qms:change_request_detail', pk=cr.pk)
-
-    doc.file = file
-    doc.uploaded_at = timezone.now()
-    doc.review_status = 'PENDING'
-    doc.save()
-
-    _log_change(cr, 'DOC_UPLOAD', f'서류 업로드: {doc.doc_name}', user)
-
-    messages.success(request, '파일이 업로드되었습니다.')
-    return redirect('qms:change_request_detail', pk=cr.pk)
-
-
-@qms_permission_required('can_qms_4m_edit')
-@require_POST
-def document_review(request, pk):
-    """제출 서류 검토 (내부)"""
-    user = request.user
-    doc = get_object_or_404(scoped(request, ChangeDocument).select_related('change_request'), pk=pk)
-    cr = doc.change_request
-
-    if _is_vendor_user(user):
-        messages.error(request, '검토 권한이 없습니다.')
-        return redirect('qms:change_request_detail', pk=cr.pk)
-
-    status = request.POST.get('review_status')
-    comment = request.POST.get('review_comment', '').strip()
-
-    if status not in ['OK', 'REJECT']:
-        messages.error(request, '잘못된 요청입니다.')
-        return redirect('qms:change_request_detail', pk=cr.pk)
-
-    doc.review_status = status
-    doc.review_comment = comment
-    doc.reviewed_by = user
-    doc.reviewed_at = timezone.now()
-    doc.save()
-
-    _log_change(cr, 'DOC_REVIEW', f'서류 검토: {doc.doc_name} - {doc.get_review_status_display()}', user)
-
-    messages.success(request, '검토 결과가 저장되었습니다.')
-    return redirect('qms:change_request_detail', pk=cr.pk)
-
-
-@qms_permission_required('can_qms_4m_edit')
-@require_POST
-def validity_evaluation(request, pk):
-    """유효성 평가 결과 입력"""
-    user = request.user
-    cr = get_object_or_404(scoped(request, ChangeRequest), pk=pk)
-
-    if _is_vendor_user(user):
-        messages.error(request, '평가 권한이 없습니다.')
-        return redirect('qms:change_request_detail', pk=pk)
-
-    if cr.phase != 'VALIDATION':
-        messages.error(request, '유효성 평가 단계가 아닙니다.')
-        return redirect('qms:change_request_detail', pk=pk)
-
-    result = request.POST.get('validity_result')
-    remark = request.POST.get('validity_remark', '').strip()
-
-    if result not in ['PASS', 'FAIL']:
-        messages.error(request, '평가 결과를 선택해주세요.')
-        return redirect('qms:change_request_detail', pk=pk)
-
-    cr.validity_result = result
-    cr.validity_remark = remark
-    cr.save()
-
-    _log_change(cr, 'UPDATE', f'유효성 평가: {cr.get_validity_result_display()}', user)
-
-    messages.success(request, '유효성 평가 결과가 저장되었습니다.')
-    return redirect('qms:change_request_detail', pk=pk)
+@login_required
+def change_request_retired(request, *args, **kwargs):
+    """옛 /qms/change/ 주소(즐겨찾기 등)로 들어오면 폐지 안내만 보여준다."""
+    return render(request, 'qms/change_request_retired.html')
 
 
 # ============================================================================
@@ -2188,7 +1612,7 @@ def validity_evaluation(request, pk):
 
 from .models import OutgoingInspection, NonConformance, CorrectiveAction, VendorClaim, VendorRating, ISIR, ISIRItem
 
-@qms_permission_required('can_qms_inspection_view')
+@qms_menu_required('inspection')
 def outgoing_inspection_list(request):
     """출하검사 목록"""
     qs = OutgoingInspection.objects.all()
@@ -2228,31 +1652,39 @@ def outgoing_inspection_list(request):
     })
 
 
-@qms_permission_required('can_qms_inspection_edit')
+@qms_menu_required('inspection', edit=True)
 def outgoing_inspection_create(request):
     """출하검사 등록"""
     if request.method == 'POST':
+        try:
+            total_qty = _parse_whole_qty(request.POST.get('total_qty'), '검사수량')
+            if total_qty < 0:
+                raise ValueError('검사수량은 0 이상이어야 합니다.')
+            sample_qty = _optional_qty(request.POST, 'sample_qty', '샘플 수량')
+        except ValueError as e:
+            messages.error(request, str(e))
+            return render(request, 'qms/outgoing_inspection_form.html', {'mode': 'create'})
         oi = OutgoingInspection(
             inspection_date=request.POST.get('inspection_date'),
             part_no=request.POST.get('part_no'),
             part_name=request.POST.get('part_name'),
             lot_no=request.POST.get('lot_no', ''),
-            total_qty=int(request.POST.get('total_qty', 0)),
-            sample_qty=int(request.POST.get('sample_qty', 0)),
+            total_qty=total_qty,
+            sample_qty=sample_qty,
             customer_name=request.POST.get('customer_name', ''),
             delivery_date=request.POST.get('delivery_date') or None,
             inspector=request.user,
         )
         oi.save()
         messages.success(request, f'출하검사 {oi.inspection_no}가 등록되었습니다.')
-        return redirect('qms:outgoing_inspection_detail', pk=oi.pk)
+        return redirect('qms:outgoing_detail', pk=oi.pk)
 
     return render(request, 'qms/outgoing_inspection_form.html', {
         'mode': 'create',
     })
 
 
-@qms_permission_required('can_qms_inspection_view')
+@qms_menu_required('inspection')
 def outgoing_inspection_detail(request, pk):
     """출하검사 상세"""
     oi = get_object_or_404(OutgoingInspection, pk=pk)
@@ -2267,8 +1699,12 @@ def outgoing_inspection_detail(request, pk):
             oi.check_function = request.POST.get('check_function') == 'on'
             oi.check_packing = request.POST.get('check_packing') == 'on'
             oi.check_label = request.POST.get('check_label') == 'on'
-            oi.pass_qty = int(request.POST.get('pass_qty', 0))
-            oi.fail_qty = int(request.POST.get('fail_qty', 0))
+            try:
+                oi.pass_qty = _optional_qty(request.POST, 'pass_qty', '합격 수량')
+                oi.fail_qty = _optional_qty(request.POST, 'fail_qty', '불합격 수량')
+            except ValueError as e:
+                messages.error(request, str(e))
+                return redirect('qms:outgoing_detail', pk=oi.pk)
             oi.remark = request.POST.get('remark', '')
             oi.status = request.POST.get('status', 'PENDING')
 
@@ -2288,7 +1724,7 @@ def outgoing_inspection_detail(request, pk):
 # 부적합품 관리 (Non-conformance)
 # ============================================================================
 
-@qms_permission_required('can_qms_nc_view')
+@qms_menu_required('nc')
 def nc_list(request):
     """부적합품 목록"""
     qs = scoped(request, NonConformance).select_related('vendor', 'reported_by', 'assigned_to').all()
@@ -2338,7 +1774,7 @@ def nc_list(request):
     })
 
 
-@qms_permission_required('can_qms_nc_edit')
+@qms_menu_required('nc', edit=True)
 def nc_create(request):
     """부적합품 등록"""
     if request.method == 'POST':
@@ -2369,7 +1805,7 @@ def nc_create(request):
     })
 
 
-@qms_permission_required('can_qms_nc_view')
+@qms_menu_required('nc')
 def nc_detail(request, pk):
     """부적합품 상세"""
     nc = get_object_or_404(scoped(request, NonConformance).select_related('vendor', 'reported_by', 'assigned_to'), pk=pk)
@@ -2428,7 +1864,7 @@ def nc_detail(request, pk):
 # 시정조치 (CAPA)
 # ============================================================================
 
-@qms_permission_required('can_qms_nc_view')
+@qms_menu_required('nc')
 def capa_list(request):
     """시정조치 목록"""
     qs = scoped(request, CorrectiveAction).select_related('vendor', 'requested_by', 'non_conformance').all()
@@ -2472,9 +1908,16 @@ def capa_list(request):
     })
 
 
-@qms_permission_required('can_qms_nc_edit')
+def _is_vendor_account(user):
+    """협력사 계정 여부 (orders.access.vendor_identity 기준)."""
+    return vendor_identity(user)[0]
+
+
+@qms_menu_required('nc', edit=True)
 def capa_create(request):
-    """시정조치 등록"""
+    """시정조치 등록 (내부 전용: 협력사에 요청하는 문서)"""
+    if _is_vendor_account(request.user):
+        return HttpResponseForbidden('시정조치 요청은 내부 사용자만 등록할 수 있습니다.')
     if request.method == 'POST':
         capa = CorrectiveAction(
             capa_type=request.POST.get('capa_type', 'CA'),
@@ -2499,16 +1942,31 @@ def capa_create(request):
     })
 
 
-@qms_permission_required('can_qms_nc_view')
+@qms_menu_required('nc')
 def capa_detail(request, pk):
     """시정조치 상세"""
     capa = get_object_or_404(scoped(request, CorrectiveAction).select_related('vendor', 'requested_by', 'non_conformance'), pk=pk)
+    # 권한 분리 (기존 '부적합/CAPA 등록/처리' 권한 + 협력사 여부):
+    # - 협력사 회신: 해당 협력사 계정(scoped로 자기 건만) 또는 내부(회신 대리 입력)
+    # - 효과검증·상태 변경(완료 처리): 내부만
+    is_vendor = _is_vendor_account(request.user)
+    can_edit = has_permission(request.user, menu_permission('nc', edit=True))
+    can_reply = can_edit and capa.status != 'CLOSED'
+    can_verify = can_edit and not is_vendor
 
     if request.method == 'POST':
         action = request.POST.get('action')
+        if action in ('update_status', 'verify') and not can_verify:
+            return HttpResponseForbidden('효과검증·상태 변경은 내부 사용자만 할 수 있습니다.')
+        if action == 'vendor_response' and not can_reply:
+            return HttpResponseForbidden('완료된 시정조치에는 회신할 수 없습니다.')
 
         if action == 'update_status':
-            capa.status = request.POST.get('status', capa.status)
+            status = request.POST.get('status', capa.status)
+            if status not in dict(CorrectiveAction.STATUS_CHOICES):
+                messages.error(request, '알 수 없는 상태입니다.')
+                return redirect('qms:capa_detail', pk=pk)
+            capa.status = status
             if capa.status == 'CLOSED' and not capa.closed_date:
                 capa.closed_date = timezone.localdate()
             capa.save()
@@ -2523,6 +1981,10 @@ def capa_detail(request, pk):
             capa.response_date = timezone.localdate()
 
             if request.FILES.get('attachment'):
+                err = _validate_file(request.FILES['attachment'])
+                if err:
+                    messages.error(request, err)
+                    return redirect('qms:capa_detail', pk=pk)
                 capa.attachment = request.FILES['attachment']
 
             if capa.status in ('REQUESTED', 'RECEIVED'):
@@ -2536,13 +1998,21 @@ def capa_detail(request, pk):
             capa.verification_result = request.POST.get('verification_result', '')
             capa.is_effective = request.POST.get('is_effective') == 'yes'
             capa.verified_date = timezone.localdate()
-            capa.status = 'VERIFYING'
+            if capa.is_effective:
+                capa.status = 'VERIFYING'
+                messages.success(request, '검증 결과가 저장되었습니다.')
+            else:
+                # 효과 없음: 대책 재수립으로 되돌려 기한초과 집계에서 빠지지 않게 한다.
+                capa.status = 'ACTION'
+                messages.warning(request, '효과 없음으로 저장했습니다. 상태를 [대책수립]으로 되돌렸습니다.')
             capa.save()
-            messages.success(request, '검증 결과가 저장되었습니다.')
 
     return render(request, 'qms/capa_detail.html', {
         'capa': capa,
         'status_choices': CorrectiveAction.STATUS_CHOICES,
+        'can_reply': can_reply,
+        'can_verify': can_verify,
+        'is_vendor': is_vendor,
     })
 
 
@@ -2550,7 +2020,7 @@ def capa_detail(request, pk):
 # 협력사 클레임 (Vendor Claim)
 # ============================================================================
 
-@qms_permission_required('can_qms_claim_view')
+@qms_menu_required('claim')
 def claim_list(request):
     """클레임 목록"""
     qs = scoped(request, VendorClaim).select_related('vendor', 'issued_by', 'non_conformance').all()
@@ -2597,7 +2067,7 @@ def claim_list(request):
     })
 
 
-@qms_permission_required('can_qms_claim_edit')
+@qms_menu_required('claim', edit=True)
 def claim_create(request):
     """클레임 등록"""
     if request.method == 'POST':
@@ -2627,7 +2097,7 @@ def claim_create(request):
     })
 
 
-@qms_permission_required('can_qms_claim_view')
+@qms_menu_required('claim')
 def claim_detail(request, pk):
     """클레임 상세"""
     claim = get_object_or_404(scoped(request, VendorClaim).select_related('vendor', 'issued_by', 'non_conformance'), pk=pk)
@@ -2674,7 +2144,91 @@ def claim_detail(request, pk):
 # 협력사 평가 (Vendor Rating)
 # ============================================================================
 
-@qms_permission_required('can_qms_rating_view')
+def _match_order_for_incoming(linked_vendor, inc):
+    """입고 1건에 해당하는 발주 찾기.
+
+    1) 입고에 ERP 발주번호(+순번)가 있으면 그 발주.
+    2) 없으면 같은 협력사·품번 발주 중 납기일이 입고일과 가장 가까운 발주(같으면 이른 납기).
+    발주를 못 찾으면 None (납기 집계에서 제외 — 무조건 '준수'로 세지 않는다).
+    """
+    from orders.models import Order
+    orders = Order.objects.filter(vendor=linked_vendor)
+    if inc.erp_order_no:
+        by_erp = orders.filter(erp_order_no=inc.erp_order_no)
+        if inc.erp_order_seq:
+            by_erp = by_erp.filter(erp_order_seq=inc.erp_order_seq)
+        order = by_erp.order_by('due_date').first()
+        if order:
+            return order
+    candidates = list(orders.filter(part_no=inc.part.part_no).only('id', 'due_date'))
+    if not candidates:
+        return None
+    return min(candidates, key=lambda o: (abs((o.due_date - inc.in_date).days), o.due_date))
+
+
+def _collect_vendor_rating(request, rating):
+    """협력사 평가 지표 집계 (생성/재계산 공용). 점수는 rating.calculate_scores()에서."""
+    from django.db.models import Count, Sum
+    from orders.models import Incoming
+
+    linked_vendor = rating.vendor.linked_vendor
+    year, month = rating.year, rating.month
+
+    # 1. 수입검사 합격률: 판정 끝난 건만. 일부 불량(부분 합격)은 합격으로 세지 않는다.
+    stats = {'total': 0, 'passed': 0, 'total_qty': 0, 'defect_qty': 0}
+    if linked_vendor:
+        stats = scoped(request, ImportInspection).filter(
+            inbound_transaction__part__vendor=linked_vendor,
+            inbound_transaction__date__year=year,
+            inbound_transaction__date__month=month,
+            status__in=['APPROVED', 'REJECTED'],
+        ).aggregate(
+            total=Count('id'),
+            passed=Count('id', filter=Q(status='APPROVED', qty_bad__lte=0)),
+            total_qty=Sum('inbound_transaction__quantity'),
+            defect_qty=Sum('qty_bad'),
+        )
+    rating.incoming_total = stats['total'] or 0
+    rating.incoming_pass = stats['passed'] or 0
+    rating.incoming_fail = rating.incoming_total - rating.incoming_pass
+    rating.incoming_rate = (rating.incoming_pass / rating.incoming_total * 100) if rating.incoming_total else 100
+
+    # 2. PPM
+    rating.total_incoming_qty = int(stats.get('total_qty') or 0)
+    rating.defect_qty = int(stats.get('defect_qty') or 0)
+    rating.calculate_ppm()
+
+    # 3. 납기준수율: 입고일 <= 발주 납기일이면 준수. 발주를 못 찾은 입고는 제외.
+    delivery_total = delivery_ontime = 0
+    if linked_vendor:
+        incomings = Incoming.objects.filter(
+            part__vendor=linked_vendor, in_date__year=year, in_date__month=month,
+        ).select_related('part')
+        for inc in incomings:
+            order = _match_order_for_incoming(linked_vendor, inc)
+            if not order:
+                continue
+            delivery_total += 1
+            if inc.in_date <= order.due_date:
+                delivery_ontime += 1
+    rating.delivery_total = delivery_total
+    rating.delivery_ontime = delivery_ontime
+    rating.delivery_late = delivery_total - delivery_ontime
+    rating.delivery_rate = (delivery_ontime / delivery_total * 100) if delivery_total else 100
+
+    # 4. 클레임 (보상금액이 있으면 보상금액, 없으면 청구금액)
+    claim_stats = scoped(request, VendorClaim).filter(
+        vendor_id=rating.vendor_id, issue_date__year=year, issue_date__month=month,
+    ).aggregate(
+        count=Count('id'),
+        total_claim=Sum('claim_amount'),
+        total_compensation=Sum('compensation_amount'),
+    )
+    rating.claim_count = claim_stats['count'] or 0
+    rating.claim_amount = claim_stats['total_compensation'] or claim_stats['total_claim'] or 0
+
+
+@qms_menu_required('rating')
 def vendor_rating_list(request):
     """협력사 평가 목록"""
     qs = scoped(request, VendorRating).select_related('vendor', 'evaluated_by').all()
@@ -2715,7 +2269,7 @@ def vendor_rating_list(request):
     })
 
 
-@qms_permission_required('can_qms_rating_edit')
+@qms_menu_required('rating', edit=True)
 def vendor_rating_create(request):
     """협력사 평가 등록/계산"""
     if request.method == 'POST':
@@ -2723,110 +2277,14 @@ def vendor_rating_create(request):
         year = int(request.POST.get('year'))
         month = int(request.POST.get('month'))
 
+        vendor = get_object_or_404(scoped(request, Organization), pk=vendor_id)
+
         # 기존 평가 확인
         rating, created = scoped(request, VendorRating).get_or_create(
-            vendor_id=vendor_id, year=year, month=month,
+            vendor_id=vendor.pk, year=year, month=month,
             defaults={'evaluated_by': request.user}
         )
-
-        # Organization과 연결된 Vendor 가져오기
-        vendor = scoped(request, Organization).get(pk=vendor_id)
-        linked_vendor = vendor.linked_vendor  # Organization -> Vendor 연결
-
-        from django.db.models import Count, Sum
-        from orders.models import Order, Incoming
-
-        # ====================================
-        # 1. 수입검사 합격률 집계 (ImportInspection)
-        # ====================================
-        if linked_vendor:
-            import_stats = scoped(request, ImportInspection).filter(
-                inbound_transaction__part__vendor=linked_vendor,
-                inbound_transaction__date__year=year,
-                inbound_transaction__date__month=month,
-            ).aggregate(
-                total=Count('id'),
-                approved=Count('id', filter=Q(status='APPROVED')),
-                rejected=Count('id', filter=Q(status='REJECTED')),
-                total_qty=Sum('inbound_transaction__quantity'),
-                defect_qty=Sum('qty_bad'),  # 불량수량
-            )
-        else:
-            import_stats = {'total': 0, 'approved': 0, 'rejected': 0, 'total_qty': 0, 'defect_qty': 0}
-
-        rating.incoming_total = import_stats['total'] or 0
-        rating.incoming_pass = import_stats['approved'] or 0
-        rating.incoming_fail = import_stats['rejected'] or 0
-        rating.incoming_rate = (rating.incoming_pass / rating.incoming_total * 100) if rating.incoming_total > 0 else 100
-
-        # ====================================
-        # 2. PPM 계산
-        # ====================================
-        rating.total_incoming_qty = import_stats.get('total_qty') or 0
-        rating.defect_qty = import_stats.get('defect_qty') or 0
-        if rating.total_incoming_qty > 0:
-            rating.ppm = (rating.defect_qty / rating.total_incoming_qty) * 1000000
-        else:
-            rating.ppm = 0
-
-        # ====================================
-        # 3. 납기준수율 집계 (Order + Incoming 비교)
-        # ====================================
-        if linked_vendor:
-            # 해당 월에 입고된 건 조회
-            incoming_list = Incoming.objects.filter(
-                part__vendor=linked_vendor,
-                in_date__year=year,
-                in_date__month=month,
-            ).select_related('part')
-
-            delivery_total = 0
-            delivery_ontime = 0
-            delivery_late = 0
-
-            for inc in incoming_list:
-                delivery_total += 1
-                # 연결된 발주의 납기일 찾기
-                order = Order.objects.filter(
-                    vendor=linked_vendor,
-                    part_no=inc.part.part_no,
-                    due_date__lte=inc.in_date,  # 납기일 이전 또는 당일
-                ).order_by('-due_date').first()
-
-                if order:
-                    if inc.in_date <= order.due_date:
-                        delivery_ontime += 1
-                    else:
-                        delivery_late += 1
-                else:
-                    # 발주 없으면 정시로 간주
-                    delivery_ontime += 1
-
-            rating.delivery_total = delivery_total
-            rating.delivery_ontime = delivery_ontime
-            rating.delivery_late = delivery_late
-            rating.delivery_rate = (delivery_ontime / delivery_total * 100) if delivery_total > 0 else 100
-        else:
-            rating.delivery_total = 0
-            rating.delivery_ontime = 0
-            rating.delivery_late = 0
-            rating.delivery_rate = 100
-
-        # ====================================
-        # 4. 클레임 집계
-        # ====================================
-        claim_stats = scoped(request, VendorClaim).filter(
-            vendor_id=vendor_id,
-            issue_date__year=year,
-            issue_date__month=month,
-        ).aggregate(
-            count=Count('id'),
-            total_claim=Sum('claim_amount'),  # 클레임 청구금액
-            total_compensation=Sum('compensation_amount'),  # 실제 보상금액
-        )
-        rating.claim_count = claim_stats['count'] or 0
-        # 보상금액이 있으면 보상금액, 없으면 클레임금액 사용
-        rating.claim_amount = claim_stats['total_compensation'] or claim_stats['total_claim'] or 0
+        _collect_vendor_rating(request, rating)
 
         # ====================================
         # 5. 점수 계산 및 저장
@@ -2856,7 +2314,7 @@ def vendor_rating_create(request):
     })
 
 
-@qms_permission_required('can_qms_rating_view')
+@qms_menu_required('rating')
 def vendor_rating_detail(request, pk):
     """협력사 평가 상세"""
     rating = get_object_or_404(scoped(request, VendorRating).select_related('vendor', 'evaluated_by'), pk=pk)
@@ -2886,93 +2344,9 @@ def vendor_rating_detail(request, pk):
 
         elif action == 'recalculate':
             # 데이터 재집계
-            from django.db.models import Count, Sum
-            from orders.models import Order, Incoming
-
             vendor = rating.vendor
-            linked_vendor = vendor.linked_vendor
-            year = rating.year
-            month = rating.month
-
-            # 1. 수입검사 합격률 집계
-            if linked_vendor:
-                import_stats = scoped(request, ImportInspection).filter(
-                    inbound_transaction__part__vendor=linked_vendor,
-                    inbound_transaction__date__year=year,
-                    inbound_transaction__date__month=month,
-                ).aggregate(
-                    total=Count('id'),
-                    approved=Count('id', filter=Q(status='APPROVED')),
-                    rejected=Count('id', filter=Q(status='REJECTED')),
-                    total_qty=Sum('inbound_transaction__quantity'),
-                    defect_qty=Sum('qty_bad'),
-                )
-            else:
-                import_stats = {'total': 0, 'approved': 0, 'rejected': 0, 'total_qty': 0, 'defect_qty': 0}
-
-            rating.incoming_total = import_stats['total'] or 0
-            rating.incoming_pass = import_stats['approved'] or 0
-            rating.incoming_fail = import_stats['rejected'] or 0
-            rating.incoming_rate = (rating.incoming_pass / rating.incoming_total * 100) if rating.incoming_total > 0 else 100
-
-            # 2. PPM 계산
-            rating.total_incoming_qty = import_stats.get('total_qty') or 0
-            rating.defect_qty = import_stats.get('defect_qty') or 0
-            if rating.total_incoming_qty > 0:
-                rating.ppm = (rating.defect_qty / rating.total_incoming_qty) * 1000000
-            else:
-                rating.ppm = 0
-
-            # 3. 납기준수율 집계
-            if linked_vendor:
-                incoming_list = Incoming.objects.filter(
-                    part__vendor=linked_vendor,
-                    in_date__year=year,
-                    in_date__month=month,
-                ).select_related('part')
-
-                delivery_total = 0
-                delivery_ontime = 0
-                delivery_late = 0
-
-                for inc in incoming_list:
-                    delivery_total += 1
-                    order = Order.objects.filter(
-                        vendor=linked_vendor,
-                        part_no=inc.part.part_no,
-                        due_date__lte=inc.in_date,
-                    ).order_by('-due_date').first()
-
-                    if order:
-                        if inc.in_date <= order.due_date:
-                            delivery_ontime += 1
-                        else:
-                            delivery_late += 1
-                    else:
-                        delivery_ontime += 1
-
-                rating.delivery_total = delivery_total
-                rating.delivery_ontime = delivery_ontime
-                rating.delivery_late = delivery_late
-                rating.delivery_rate = (delivery_ontime / delivery_total * 100) if delivery_total > 0 else 100
-            else:
-                rating.delivery_total = 0
-                rating.delivery_ontime = 0
-                rating.delivery_late = 0
-                rating.delivery_rate = 100
-
-            # 4. 클레임 집계
-            claim_stats = scoped(request, VendorClaim).filter(
-                vendor_id=vendor.id,
-                issue_date__year=year,
-                issue_date__month=month,
-            ).aggregate(
-                count=Count('id'),
-                total_claim=Sum('claim_amount'),
-                total_compensation=Sum('compensation_amount'),
-            )
-            rating.claim_count = claim_stats['count'] or 0
-            rating.claim_amount = claim_stats['total_compensation'] or claim_stats['total_claim'] or 0
+            year, month = rating.year, rating.month
+            _collect_vendor_rating(request, rating)
 
             # 5. 점수 계산 및 저장
             rating.calculate_scores()
@@ -3003,7 +2377,10 @@ def vendor_rating_detail(request, pk):
 
 @login_required
 def qms_dashboard(request):
-    """QMS 통합 대시보드"""
+    """QMS 통합 대시보드 (QMS 메뉴 중 하나라도 열 수 있는 사용자만)"""
+    menus = visible_menus(request.user)
+    if not any(menus.values()):
+        return HttpResponseForbidden('QMS 메뉴 권한이 없습니다.')
     today = timezone.localdate()
 
     # 수입검사 통계
@@ -3051,10 +2428,15 @@ def qms_dashboard(request):
         due_date__lt=today
     ).exclude(status__in=['CLOSED', 'VERIFYING']).order_by('due_date')[:5]
 
-    # 4M 변경 통계
+    # 4M 통계: 사전 4M 결재 진행중 + 정식 4M 미승인(작성중/결재중/반려)
+    actor = get_actor(request.user)
     change_stats = {
-        'review': scoped(request, ChangeRequest).filter(phase='REVIEW').count(),
-        'formal': scoped(request, ChangeRequest).filter(phase='FORMAL').count(),
+        'review': scope_m4_queryset(actor, M4Request.objects.all()).filter(
+            status__in=['PENDING_REVIEW', 'PENDING_REVIEW2', 'PENDING_APPROVE']
+        ).count(),
+        'formal': scope_formal4m_queryset(actor, Formal4MRequest.objects.all()).exclude(
+            approval_status='APPROVED'
+        ).count(),
     }
 
     # ISIR 통계
@@ -3071,6 +2453,7 @@ def qms_dashboard(request):
         'capa_stats': capa_stats,
         'claim_stats': claim_stats,
         'change_stats': change_stats,
+        'menus': menus,
         'isir_stats': isir_stats,
         'recent_ncs': recent_ncs,
         'overdue_capas': overdue_capas,
@@ -3081,7 +2464,7 @@ def qms_dashboard(request):
 # ISIR (Initial Sample Inspection Report) - 초도품 검사
 # ============================================================================
 
-@qms_permission_required('can_qms_isir_view')
+@qms_menu_required('isir')
 def isir_list(request):
     """ISIR 목록"""
     qs = scoped(request, ISIR).select_related('vendor', 'inspector', 'approved_by').all()
@@ -3127,7 +2510,7 @@ def isir_list(request):
     })
 
 
-@qms_permission_required('can_qms_isir_edit')
+@qms_menu_required('isir', edit=True)
 def isir_create(request):
     """ISIR 등록"""
     if request.method == 'POST':
@@ -3196,7 +2579,7 @@ def isir_create(request):
     })
 
 
-@qms_permission_required('can_qms_isir_view')
+@qms_menu_required('isir')
 def isir_detail(request, pk):
     """ISIR 상세"""
     isir = get_object_or_404(
@@ -3368,7 +2751,7 @@ def isir_detail(request, pk):
     })
 
 
-@qms_permission_required('can_qms_isir_view')
+@qms_menu_required('isir')
 def isir_pdf(request, pk):
     """ISIR PDF 출력"""
     from django.http import HttpResponse
@@ -3424,7 +2807,7 @@ def isir_pdf(request, pk):
 # VOC 관리 (Voice of Customer)
 # ============================================================================
 
-@qms_permission_required('can_qms_inspection_view')
+@qms_menu_required('inspection')
 def voc_list(request):
     """VOC 목록"""
     qs = scoped(request, VOC).select_related('linked_vendor', 'received_by', 'assigned_to').all()
@@ -3482,7 +2865,7 @@ def voc_list(request):
     })
 
 
-@qms_permission_required('can_qms_inspection_edit')
+@qms_menu_required('inspection', edit=True)
 def voc_create(request):
     """VOC 등록"""
     if request.method == 'POST':
@@ -3529,7 +2912,7 @@ def voc_create(request):
     })
 
 
-@qms_permission_required('can_qms_inspection_view')
+@qms_menu_required('inspection')
 def voc_detail(request, pk):
     """VOC 상세"""
     voc = get_object_or_404(
@@ -3616,7 +2999,7 @@ def voc_detail(request, pk):
 # 계측기 관리 (Gauge Management)
 # ============================================================================
 
-@qms_permission_required('can_qms_gauge_view')
+@qms_menu_required('gauge')
 def gauge_list(request):
     """계측기 목록"""
     qs = Gauge.objects.select_related('manager').all()
@@ -3682,7 +3065,7 @@ def gauge_list(request):
     })
 
 
-@qms_permission_required('can_qms_gauge_edit')
+@qms_menu_required('gauge', edit=True)
 def gauge_create(request):
     """계측기 등록"""
     if request.method == 'POST':
@@ -3737,7 +3120,7 @@ def gauge_create(request):
     })
 
 
-@qms_permission_required('can_qms_gauge_view')
+@qms_menu_required('gauge')
 def gauge_detail(request, pk):
     """계측기 상세"""
     gauge = get_object_or_404(Gauge.objects.select_related('manager'), pk=pk)
@@ -3810,7 +3193,7 @@ def gauge_detail(request, pk):
 # 품질문서 관리 (Quality Document Management)
 # ============================================================================
 
-@qms_permission_required('can_qms_doc_view')
+@qms_menu_required('qdoc')
 def qdoc_list(request):
     """품질문서 목록"""
     qs = QualityDocument.objects.select_related('created_by', 'approved_by').all()
@@ -3853,7 +3236,7 @@ def qdoc_list(request):
     })
 
 
-@qms_permission_required('can_qms_doc_edit')
+@qms_menu_required('qdoc', edit=True)
 def qdoc_create(request):
     """품질문서 등록"""
     if request.method == 'POST':
@@ -3889,75 +3272,97 @@ def qdoc_create(request):
     })
 
 
-@qms_permission_required('can_qms_doc_view')
+@qms_menu_required('qdoc')
 def qdoc_detail(request, pk):
-    """품질문서 상세"""
+    """품질문서 상세 (POST는 데코레이터가 품질문서 등록/수정 권한을 요구)"""
     doc = get_object_or_404(
         QualityDocument.objects.select_related('created_by', 'reviewed_by', 'approved_by'),
         pk=pk
     )
-    revisions = doc.revisions.all()
+    revisions = doc.revisions.select_related('revised_by').all()
 
     if request.method == 'POST':
         action = request.POST.get('action')
 
-        if action == 'submit_review':
-            # 검토 제출
-            doc.status = 'REVIEW'
+        if action == 'update_status':
+            status = request.POST.get('status')
+            if status not in dict(QualityDocument.STATUS_CHOICES):
+                messages.error(request, '알 수 없는 문서 상태입니다.')
+                return redirect('qms:qdoc_detail', pk=pk)
+            doc.status = status
+            if status == 'REVIEW':
+                doc.reviewed_by, doc.reviewed_at = request.user, timezone.now()
+            elif status == 'APPROVED':
+                doc.approved_by, doc.approved_at = request.user, timezone.now()
             doc.save()
-            messages.success(request, '문서가 검토 제출되었습니다.')
+            messages.success(request, f'문서 상태가 [{doc.get_status_display()}](으)로 변경되었습니다.')
 
-        elif action == 'approve':
-            # 승인
-            doc.status = 'APPROVED'
-            doc.approved_by = request.user
-            doc.approved_at = timezone.now()
-            doc.save()
-            messages.success(request, '문서가 승인되었습니다.')
-
-        elif action == 'revise':
-            # 개정
-            # 1. 기존 파일 백업
-            old_file = doc.file
-            old_version = doc.version
-            old_revision = doc.revision
-
-            # 2. 개정이력 생성
-            rev = DocumentRevision(
-                document=doc,
-                revision=old_revision,
-                version=old_version,
-                change_reason=request.POST.get('change_reason'),
-                change_detail=request.POST.get('change_detail'),
-                revised_by=request.user,
-            )
-            if old_file:
-                rev.previous_file = old_file
-            rev.save()
-
-            # 3. 문서 업데이트
-            doc.revision = old_revision + 1
-            doc.version = request.POST.get('new_version', f'{old_revision + 1}.0')
-            doc.status = 'DRAFT'
-            doc.effective_date = request.POST.get('new_effective_date', timezone.localdate())
-
-            if request.FILES.get('new_file'):
-                doc.file = request.FILES['new_file']
-                doc.file_name = request.FILES['new_file'].name
-
-            doc.save()
+        elif action == 'add_revision':
+            # 개정: 현재 판(버전·파일)을 이력으로 보관하고 개정차수 +1, 작성중으로 되돌린다.
+            reason = (request.POST.get('change_reason') or request.POST.get('change_summary') or '').strip()
+            if not reason:
+                messages.error(request, '개정 내용을 입력해 주세요.')
+                return redirect('qms:qdoc_detail', pk=pk)
+            new_file = request.FILES.get('revision_file')
+            if new_file:
+                err = _validate_file(new_file)
+                if err:
+                    messages.error(request, err)
+                    return redirect('qms:qdoc_detail', pk=pk)
+            with transaction.atomic():
+                DocumentRevision.objects.create(
+                    document=doc, revision=doc.revision, version=doc.version,
+                    change_reason=reason,
+                    change_detail=(request.POST.get('change_detail') or reason).strip(),
+                    previous_file=doc.file or None, revised_by=request.user,
+                )
+                doc.revision += 1
+                doc.version = (request.POST.get('new_version') or '').strip() or f'{doc.revision}.0'
+                doc.status = 'DRAFT'
+                effective = request.POST.get('revision_date') or request.POST.get('new_effective_date')
+                if effective:
+                    doc.effective_date = effective
+                if new_file:
+                    doc.file, doc.file_name = new_file, new_file.name
+                doc.save()
             messages.success(request, f'문서가 Rev.{doc.revision}으로 개정되었습니다.')
 
-        elif action == 'obsolete':
-            # 폐기
-            doc.status = 'OBSOLETE'
+        elif action == 'update':
+            doc_no = (request.POST.get('doc_no') or '').strip()
+            doc_name = (request.POST.get('doc_name') or '').strip()
+            if not doc_no or not doc_name:
+                messages.error(request, '문서번호와 문서명은 비울 수 없습니다.')
+                return redirect('qms:qdoc_detail', pk=pk)
+            if QualityDocument.objects.filter(doc_no=doc_no).exclude(pk=doc.pk).exists():
+                messages.error(request, f'문서번호 {doc_no}는 이미 사용 중입니다.')
+                return redirect('qms:qdoc_detail', pk=pk)
+            new_file = request.FILES.get('file')
+            if new_file:
+                err = _validate_file(new_file)
+                if err:
+                    messages.error(request, err)
+                    return redirect('qms:qdoc_detail', pk=pk)
+                doc.file, doc.file_name = new_file, new_file.name
+            doc.doc_no, doc.doc_name = doc_no, doc_name
+            if request.POST.get('category') in dict(QualityDocument.CATEGORY_CHOICES):
+                doc.category = request.POST['category']
+            if request.POST.get('effective_date'):
+                doc.effective_date = request.POST['effective_date']
+            doc.expiry_date = request.POST.get('expiry_date') or None
+            doc.description = request.POST.get('description', '')
+            doc.related_part_no = request.POST.get('related_part_no', '')
+            doc.related_process = request.POST.get('related_process', '')
             doc.save()
-            messages.success(request, '문서가 폐기 처리되었습니다.')
+            messages.success(request, '문서 정보가 수정되었습니다.')
+
+        else:
+            messages.error(request, '알 수 없는 요청입니다.')
 
         return redirect('qms:qdoc_detail', pk=pk)
 
     return render(request, 'qms/qdoc_detail.html', {
         'doc': doc,
+        'document': doc,  # 템플릿 호환 (document/doc 둘 다 사용)
         'revisions': revisions,
         'status_choices': QualityDocument.STATUS_CHOICES,
         'category_choices': QualityDocument.CATEGORY_CHOICES,
@@ -3970,7 +3375,7 @@ def qdoc_detail(request, pk):
 
 # ── 출하검사 ──
 
-@qms_permission_required('can_qms_inspection_edit')
+@qms_menu_required('inspection', edit=True)
 def outgoing_inspection_edit(request, pk):
     """출하검사 수정"""
     oi = get_object_or_404(OutgoingInspection, pk=pk)
@@ -3979,8 +3384,12 @@ def outgoing_inspection_edit(request, pk):
         oi.part_no = request.POST.get('part_no', oi.part_no)
         oi.part_name = request.POST.get('part_name', oi.part_name)
         oi.lot_no = request.POST.get('lot_no', '')
-        oi.total_qty = int(request.POST.get('total_qty', oi.total_qty))
-        oi.sample_qty = int(request.POST.get('sample_qty', oi.sample_qty))
+        try:
+            oi.total_qty = _optional_qty(request.POST, 'total_qty', '검사수량', oi.total_qty)
+            oi.sample_qty = _optional_qty(request.POST, 'sample_qty', '샘플 수량')
+        except ValueError as e:
+            messages.error(request, str(e))
+            return redirect('qms:outgoing_edit', pk=pk)
         oi.customer_name = request.POST.get('customer_name', '')
         oi.delivery_date = request.POST.get('delivery_date') or None
         oi.save()
@@ -3991,7 +3400,7 @@ def outgoing_inspection_edit(request, pk):
     })
 
 
-@qms_permission_required('can_qms_inspection_edit')
+@qms_menu_required('inspection', edit=True)
 @require_POST
 def outgoing_inspection_delete(request, pk):
     """출하검사 삭제"""
@@ -4003,7 +3412,7 @@ def outgoing_inspection_delete(request, pk):
 
 # ── 부적합품 ──
 
-@qms_permission_required('can_qms_nc_edit')
+@qms_menu_required('nc', edit=True)
 def nc_edit(request, pk):
     """부적합품 수정"""
     nc = get_object_or_404(scoped(request, NonConformance), pk=pk)
@@ -4031,7 +3440,7 @@ def nc_edit(request, pk):
     })
 
 
-@qms_permission_required('can_qms_nc_edit')
+@qms_menu_required('nc', edit=True)
 @require_POST
 def nc_delete(request, pk):
     """부적합품 삭제"""
@@ -4043,9 +3452,11 @@ def nc_delete(request, pk):
 
 # ── 시정조치 (CAPA) ──
 
-@qms_permission_required('can_qms_nc_edit')
+@qms_menu_required('nc', edit=True)
 def capa_edit(request, pk):
-    """시정조치 수정"""
+    """시정조치 수정 (요청 내용은 내부만 수정)"""
+    if _is_vendor_account(request.user):
+        return HttpResponseForbidden('시정조치 요청 내용은 내부 사용자만 수정할 수 있습니다.')
     capa = get_object_or_404(scoped(request, CorrectiveAction), pk=pk)
     if request.method == 'POST':
         capa.capa_type = request.POST.get('capa_type', capa.capa_type)
@@ -4069,10 +3480,12 @@ def capa_edit(request, pk):
     })
 
 
-@qms_permission_required('can_qms_nc_edit')
+@qms_menu_required('nc', edit=True)
 @require_POST
 def capa_delete(request, pk):
-    """시정조치 삭제"""
+    """시정조치 삭제 (내부 전용)"""
+    if _is_vendor_account(request.user):
+        return HttpResponseForbidden('시정조치는 내부 사용자만 삭제할 수 있습니다.')
     capa = get_object_or_404(scoped(request, CorrectiveAction), pk=pk)
     capa.delete()
     messages.success(request, '시정조치가 삭제되었습니다.')
@@ -4081,7 +3494,7 @@ def capa_delete(request, pk):
 
 # ── 협력사 클레임 ──
 
-@qms_permission_required('can_qms_claim_edit')
+@qms_menu_required('claim', edit=True)
 def claim_edit(request, pk):
     """클레임 수정"""
     claim = get_object_or_404(scoped(request, VendorClaim), pk=pk)
@@ -4110,7 +3523,7 @@ def claim_edit(request, pk):
     })
 
 
-@qms_permission_required('can_qms_claim_edit')
+@qms_menu_required('claim', edit=True)
 @require_POST
 def claim_delete(request, pk):
     """클레임 삭제"""
@@ -4122,7 +3535,7 @@ def claim_delete(request, pk):
 
 # ── 협력사 평가 ──
 
-@qms_permission_required('can_qms_rating_edit')
+@qms_menu_required('rating', edit=True)
 @require_POST
 def vendor_rating_delete(request, pk):
     """협력사 평가 삭제"""
@@ -4134,7 +3547,7 @@ def vendor_rating_delete(request, pk):
 
 # ── ISIR (초도품검사) ──
 
-@qms_permission_required('can_qms_isir_edit')
+@qms_menu_required('isir', edit=True)
 def isir_edit(request, pk):
     """ISIR 수정"""
     isir = get_object_or_404(scoped(request, ISIR), pk=pk)
@@ -4187,7 +3600,7 @@ def isir_edit(request, pk):
     })
 
 
-@qms_permission_required('can_qms_isir_edit')
+@qms_menu_required('isir', edit=True)
 @require_POST
 def isir_delete(request, pk):
     """ISIR 삭제"""
@@ -4199,7 +3612,7 @@ def isir_delete(request, pk):
 
 # ── VOC (고객의 소리) ──
 
-@qms_permission_required('can_qms_inspection_edit')
+@qms_menu_required('inspection', edit=True)
 def voc_edit(request, pk):
     """VOC 수정"""
     voc = get_object_or_404(scoped(request, VOC), pk=pk)
@@ -4238,7 +3651,7 @@ def voc_edit(request, pk):
     })
 
 
-@qms_permission_required('can_qms_inspection_edit')
+@qms_menu_required('inspection', edit=True)
 @require_POST
 def voc_delete(request, pk):
     """VOC 삭제"""
@@ -4250,7 +3663,7 @@ def voc_delete(request, pk):
 
 # ── 계측기 ──
 
-@qms_permission_required('can_qms_gauge_edit')
+@qms_menu_required('gauge', edit=True)
 def gauge_edit(request, pk):
     """계측기 수정"""
     gauge = get_object_or_404(Gauge, pk=pk)
@@ -4294,7 +3707,7 @@ def gauge_edit(request, pk):
     })
 
 
-@qms_permission_required('can_qms_gauge_edit')
+@qms_menu_required('gauge', edit=True)
 @require_POST
 def gauge_delete(request, pk):
     """계측기 삭제"""
@@ -4306,7 +3719,7 @@ def gauge_delete(request, pk):
 
 # ── 품질문서 ──
 
-@qms_permission_required('can_qms_doc_edit')
+@qms_menu_required('qdoc', edit=True)
 def qdoc_edit(request, pk):
     """품질문서 수정"""
     doc = get_object_or_404(QualityDocument, pk=pk)
@@ -4337,7 +3750,7 @@ def qdoc_edit(request, pk):
     })
 
 
-@qms_permission_required('can_qms_doc_edit')
+@qms_menu_required('qdoc', edit=True)
 @require_POST
 def qdoc_delete(request, pk):
     """품질문서 삭제"""

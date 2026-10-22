@@ -1,0 +1,13 @@
+{% extends 'qms/qms_base.html' %}
+{% block title %}4M 변경관리(v2) 폐지{% endblock %}
+
+{% block qms_content %}
+<div class="dtl-wrap">
+    <div class="dtl-title">4M 변경관리(v2)는 더 이상 사용하지 않습니다</div>
+    <div class="dtl-subtitle">4M 변경은 사전 4M에서 기안하고, 최종 승인되면 정식 4M이 자동으로 만들어집니다.</div>
+    <div class="d-flex gap-2 mt-3">
+        <a href="{% url 'qms:m4_list' %}" class="dtl-btn-dark"><i class="bi bi-arrow-right me-1"></i>사전 4M으로 이동</a>
+        <a href="{% url 'qms:formal4m_list' %}" class="dtl-btn-outline">정식 4M</a>
+    </div>
+</div>
+{% endblock %}

@@ -19,7 +19,8 @@ from django.contrib.auth.models import User
 from django.db import models
 from django.db.models import QuerySet
 
-from orders.models import UserProfile
+from orders.access import vendor_identity
+from orders.models import Organization, UserProfile
 from .models import M4Request, M4Review, Formal4MRequest
 
 
@@ -27,6 +28,10 @@ from .models import M4Request, M4Review, Formal4MRequest
 class Actor:
     user: User
     profile: Optional[UserProfile]
+    # orders.access.vendor_identity 기준 협력사 여부/소속 협력사(Organization).
+    # SCM 화면과 같은 기준을 써야 협력사 계정이 내부로 오인되지 않는다.
+    restricted: bool = False
+    org: Optional[Organization] = None
 
     @property
     def is_internal(self) -> bool:
@@ -40,6 +45,9 @@ class Actor:
         - role=VENDOR 또는 account_type=VENDOR인 계정은 무조건 협력사로 취급
         - is_jinyoung_staff=True 이고 role이 VENDOR가 아닌 경우만 내부
         """
+        # 협력사로 묶인 계정(vendor_identity)은 어떤 플래그가 있어도 내부가 아니다.
+        if self.restricted:
+            return False
         # UserProfile이 없어도, Django 기본 플래그가 있으면 내부로 간주
         if getattr(self.user, "is_superuser", False) or getattr(self.user, "is_staff", False):
             return True
@@ -63,14 +71,13 @@ class Actor:
 
     @property
     def is_vendor(self) -> bool:
-        # 내부로 판정되는 계정은 협력사로 취급하지 않는다.
-        if self.is_internal:
-            return False
-        if not self.profile:
-            return False
-        return bool(
-            self.profile.account_type == "VENDOR" or getattr(self.profile, "role", None) == "VENDOR"
-        )
+        """협력사 계정 여부 (orders.access.vendor_identity 기준)."""
+        return self.restricted
+
+    @property
+    def org_id(self) -> Optional[int]:
+        """협력사 계정의 소속 협력사(Organization) id. 내부/미연결 계정은 None."""
+        return self.org.pk if self.restricted and self.org else None
 
 
 def _safe_get_profile(user: User) -> Optional[UserProfile]:
@@ -97,9 +104,10 @@ def _safe_get_profile(user: User) -> Optional[UserProfile]:
 
 
 def get_actor(user: User) -> Actor:
-    """항상 안전하게 profile을 가져온다."""
+    """항상 안전하게 profile과 협력사 소속을 가져온다."""
     profile = _safe_get_profile(user)
-    return Actor(user=user, profile=profile)
+    restricted, _vendor, org = vendor_identity(user)
+    return Actor(user=user, profile=profile, restricted=restricted, org=org)
 
 
 def scope_m4_queryset(actor: Actor, qs: QuerySet[M4Request]) -> QuerySet[M4Request]:
@@ -107,19 +115,23 @@ def scope_m4_queryset(actor: Actor, qs: QuerySet[M4Request]) -> QuerySet[M4Reque
     if actor.is_internal:
         return qs
 
-    # 협력사: 자기 org에 해당하는 문서 또는 본인이 작성한 문서만
-    if actor.is_vendor and actor.profile and actor.profile.org_id:
-        return qs.filter(models.Q(vendor_org_id=actor.profile.org_id) | models.Q(user_id=actor.user.id))
+    # 협력사: 문서에 대상 협력사로 등록된 건(vendor_org) 또는 본인이 작성한 문서만
+    if actor.org_id:
+        return qs.filter(models.Q(vendor_org_id=actor.org_id) | models.Q(user_id=actor.user.id))
 
     # profile/org가 없는 협력사 계정은 안전하게 본인 작성 건만
     return qs.filter(user_id=actor.user.id)
 
 
 def can_view_m4(actor: Actor, item: M4Request) -> bool:
+    """사전 4M 열람: 내부 전체, 협력사는 문서에 등록된 대상 협력사(또는 본인 작성)일 때만.
+
+    대상 협력사가 비어 있는 문서는 내부(및 작성자)만 본다.
+    """
     if actor.is_internal:
         return True
-    if actor.is_vendor and actor.profile and actor.profile.org_id:
-        return (item.vendor_org_id == actor.profile.org_id) or (item.user_id == actor.user.id)
+    if actor.org_id and item.vendor_org_id == actor.org_id:
+        return True
     return item.user_id == actor.user.id
 
 
@@ -154,10 +166,10 @@ def can_add_internal_review(actor: Actor) -> bool:
 
 
 def can_vendor_respond(actor: Actor, item: M4Request) -> bool:
-    """협력사 답변(회신/증빙업로드) 가능 여부."""
-    if not actor.is_vendor or not actor.profile or not actor.profile.org_id:
+    """협력사 답변(회신/증빙업로드) 가능 여부: 문서에 등록된 대상 협력사 계정만."""
+    if not actor.org_id or not item.vendor_org_id:
         return False
-    return item.vendor_org_id == actor.profile.org_id
+    return item.vendor_org_id == actor.org_id
 
 
 def get_or_create_vendor_review(actor: Actor, item: M4Request) -> M4Review:
@@ -166,8 +178,8 @@ def get_or_create_vendor_review(actor: Actor, item: M4Request) -> M4Review:
     - department: 협력사명
     - reviewer_name: 프로필 display_name이 있으면 사용
     """
-    dept = actor.profile.org.name if actor.profile and actor.profile.org else "협력사"
-    reviewer_name = actor.profile.display_name if actor.profile else ""
+    dept = (actor.org.name if actor.org else "협력사")[:50]  # M4Review.department max_length
+    reviewer_name = getattr(actor.profile, "display_name", "") if actor.profile else ""
     review, _ = M4Review.objects.get_or_create(
         request=item,
         department=dept,
@@ -184,14 +196,14 @@ def get_or_create_vendor_review(actor: Actor, item: M4Request) -> M4Review:
 def scope_formal4m_queryset(actor: Actor, qs: QuerySet[Formal4MRequest]) -> QuerySet[Formal4MRequest]:
     if actor.is_internal:
         return qs
-    if actor.is_vendor and actor.profile and actor.profile.org_id:
-        return qs.filter(pre_request__vendor_org_id=actor.profile.org_id)
+    if actor.org_id:
+        return qs.filter(pre_request__vendor_org_id=actor.org_id)
     return qs.none()
 
 
 def can_view_formal4m(actor: Actor, formal: Formal4MRequest) -> bool:
     if actor.is_internal:
         return True
-    if actor.is_vendor and actor.profile and actor.profile.org_id:
-        return formal.pre_request.vendor_org_id == actor.profile.org_id
+    if actor.org_id:
+        return formal.pre_request.vendor_org_id == actor.org_id
     return False

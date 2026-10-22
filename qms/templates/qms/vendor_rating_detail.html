@@ -38,7 +38,7 @@
             <div class="dtl-card mb-0 text-center p-4">
                 <div class="dtl-field-label">품질점수</div>
                 <div class="h2 fw-bold mb-0" style="color:#4338ca;">{{ rating.quality_score|floatformat:1 }}</div>
-                <div class="text-muted small">가중치 60%</div>
+                <div class="text-muted small">가중치 60% · 합격률 {{ rating.incoming_rate|floatformat:1 }} − PPM {{ rating.ppm_penalty|floatformat:1 }} − 클레임 {{ rating.claim_penalty|floatformat:0 }}</div>
             </div>
         </div>
         <div class="col-md-4">
@@ -65,8 +65,8 @@
                 <div class="dtl-card-body">
                     <table class="table table-borderless dtl-info-table">
                         <tr><th>수입검사 건수</th><td class="text-end">{{ rating.incoming_total }}</td></tr>
-                        <tr><th>합격</th><td class="text-end" style="color:#047857;">{{ rating.incoming_pass }}</td></tr>
-                        <tr><th>불합격</th><td class="text-end" style="color:#b91c1c;">{{ rating.incoming_fail }}</td></tr>
+                        <tr><th>합격 (전량 양품)</th><td class="text-end" style="color:#047857;">{{ rating.incoming_pass }}</td></tr>
+                        <tr><th>불합격·부분 합격</th><td class="text-end" style="color:#b91c1c;">{{ rating.incoming_fail }}</td></tr>
                         <tr>
                             <th>수입검사 합격률</th>
                             <td class="text-end h5 fw-bold mb-0 {% if rating.incoming_rate >= 98 %}text-success{% elif rating.incoming_rate >= 95 %}text-warning{% else %}text-danger{% endif %}">

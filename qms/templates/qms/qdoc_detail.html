@@ -39,9 +39,9 @@
             <div class="dtl-card">
                 <div class="dtl-card-header d-flex justify-content-between align-items-center">
                     <span><i class="bi bi-info-circle"></i>문서 정보</span>
-                    <button class="dtl-btn-outline btn-sm" data-bs-toggle="modal" data-bs-target="#editDocModal">
+                    {% if user|has_perm:'can_qms_doc_edit' %}<button class="dtl-btn-outline btn-sm" data-bs-toggle="modal" data-bs-target="#editDocModal">
                         <i class="bi bi-pencil me-1"></i>수정
-                    </button>
+                    </button>{% endif %}
                 </div>
                 <div class="dtl-card-body">
                     <div class="row g-3">
@@ -75,20 +75,20 @@
                     <hr style="border-color:#eef0f2;">
                     <div class="row g-3">
                         <div class="col-md-3">
-                            <span class="dtl-field-label">개정번호</span>
-                            <div><span class="dtl-pill slate">Rev.{{ document.revision }}</span></div>
-                        </div>
-                        <div class="col-md-3">
-                            <span class="dtl-field-label">관리부서</span>
-                            <div>{{ document.department|default:"-" }}</div>
+                            <span class="dtl-field-label">개정번호 / 버전</span>
+                            <div><span class="dtl-pill slate">Rev.{{ document.revision }}</span> v{{ document.version }}</div>
                         </div>
                         <div class="col-md-3">
                             <span class="dtl-field-label">작성자</span>
-                            <div>{{ document.author|default:"-" }}</div>
+                            <div>{{ document.created_by.username|default:"-" }}</div>
+                        </div>
+                        <div class="col-md-3">
+                            <span class="dtl-field-label">검토자</span>
+                            <div>{{ document.reviewed_by.username|default:"-" }}</div>
                         </div>
                         <div class="col-md-3">
                             <span class="dtl-field-label">승인자</span>
-                            <div>{{ document.approver|default:"-" }}</div>
+                            <div>{{ document.approved_by.username|default:"-" }}{% if document.approved_at %} <span class="small text-muted">({{ document.approved_at|date:"Y-m-d" }})</span>{% endif %}</div>
                         </div>
                     </div>
                     <hr style="border-color:#eef0f2;">
@@ -98,12 +98,12 @@
                             <div>{{ document.effective_date|default:"-" }}</div>
                         </div>
                         <div class="col-md-4">
-                            <span class="dtl-field-label">검토예정일</span>
-                            <div>{{ document.review_date|default:"-" }}</div>
+                            <span class="dtl-field-label">만료일</span>
+                            <div>{{ document.expiry_date|default:"-" }}</div>
                         </div>
                         <div class="col-md-4">
-                            <span class="dtl-field-label">폐기일</span>
-                            <div>{{ document.obsolete_date|default:"-" }}</div>
+                            <span class="dtl-field-label">관리문서</span>
+                            <div>{% if document.is_controlled %}예{% else %}아니오{% endif %}</div>
                         </div>
                     </div>
                     {% if document.description %}
@@ -120,15 +120,15 @@
             <div class="dtl-card mb-0">
                 <div class="dtl-card-header d-flex justify-content-between align-items-center">
                     <span><i class="bi bi-clock-history"></i>개정 이력</span>
-                    <button class="dtl-btn-outline btn-sm" data-bs-toggle="modal" data-bs-target="#addRevisionModal">
+                    {% if user|has_perm:'can_qms_doc_edit' %}<button class="dtl-btn-outline btn-sm" data-bs-toggle="modal" data-bs-target="#addRevisionModal">
                         <i class="bi bi-plus-lg me-1"></i>개정 등록
-                    </button>
+                    </button>{% endif %}
                 </div>
                 <div class="table-responsive">
                     <table class="table table-hover mb-0 dtl-table">
                         <thead>
                             <tr>
-                                <th style="width: 80px;">개정</th>
+                                <th style="width: 110px;">개정(이전 판)</th>
                                 <th style="width: 100px;">개정일</th>
                                 <th>개정 내용</th>
                                 <th style="width: 100px;">개정자</th>
@@ -138,13 +138,13 @@
                         <tbody>
                             {% for rev in revisions %}
                             <tr>
-                                <td><span class="dtl-pill slate">Rev.{{ rev.revision_no }}</span></td>
-                                <td class="small">{{ rev.revision_date }}</td>
-                                <td>{{ rev.change_summary }}</td>
-                                <td class="small">{{ rev.revised_by|default:"-" }}</td>
+                                <td><span class="dtl-pill slate">Rev.{{ rev.revision }}</span> <span class="small text-muted">v{{ rev.version }}</span></td>
+                                <td class="small">{{ rev.revised_at|date:"Y-m-d" }}</td>
+                                <td>{{ rev.change_reason }}{% if rev.change_detail and rev.change_detail != rev.change_reason %}<div class="small text-muted">{{ rev.change_detail }}</div>{% endif %}</td>
+                                <td class="small">{{ rev.revised_by.username|default:"-" }}</td>
                                 <td>
-                                    {% if rev.file %}
-                                    <a href="{{ rev.file.url }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                                    {% if rev.previous_file %}
+                                    <a href="{{ rev.previous_file.url }}" target="_blank" class="btn btn-sm btn-outline-secondary">
                                         <i class="bi bi-download"></i>
                                     </a>
                                     {% else %}-{% endif %}
@@ -210,20 +210,20 @@
             <div class="dtl-card">
                 <div class="dtl-card-header"><i class="bi bi-link-45deg"></i>관련 정보</div>
                 <div class="dtl-card-body small">
-                    {% if document.parent_doc_no %}
+                    {% if document.related_part_no %}
                     <div class="d-flex justify-content-between mb-2">
-                        <span class="text-muted">상위 문서</span>
-                        <span class="fw-bold">{{ document.parent_doc_no }}</span>
+                        <span class="text-muted">관련 품번</span>
+                        <span class="fw-bold">{{ document.related_part_no }}</span>
                     </div>
                     {% endif %}
-                    {% if document.related_doc_nos %}
+                    {% if document.related_process %}
                     <div class="d-flex justify-content-between mb-2">
-                        <span class="text-muted">관련 문서</span>
-                        <span>{{ document.related_doc_nos }}</span>
+                        <span class="text-muted">관련 공정</span>
+                        <span>{{ document.related_process }}</span>
                     </div>
                     {% endif %}
-                    {% if not document.parent_doc_no and not document.related_doc_nos %}
-                    <div class="text-muted text-center py-2">관련 문서 없음</div>
+                    {% if not document.related_part_no and not document.related_process %}
+                    <div class="text-muted text-center py-2">관련 정보 없음</div>
                     {% endif %}
                 </div>
             </div>
@@ -272,18 +272,25 @@
                         <i class="bi bi-info-circle me-1"></i>
                         현재 문서의 개정번호: <strong>Rev.{{ document.revision }}</strong>
                         → 새 개정번호: <strong>Rev.{{ document.revision|add:1 }}</strong>
+                        <div class="mt-1">현재 판(버전·파일)은 개정 이력으로 보관되고, 문서는 '작성중'으로 돌아갑니다.</div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">새 시행일</label>
+                            <input type="date" name="revision_date" class="form-control">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">새 버전</label>
+                            <input type="text" name="new_version" class="form-control" placeholder="{{ document.revision|add:1 }}.0">
+                        </div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">개정일 <span class="text-danger">*</span></label>
-                        <input type="date" name="revision_date" class="form-control" required>
+                        <label class="form-label">개정 사유 <span class="text-danger">*</span></label>
+                        <textarea name="change_reason" class="form-control" rows="2" required placeholder="개정 사유를 간략히 기술하세요."></textarea>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">개정 내용 <span class="text-danger">*</span></label>
-                        <textarea name="change_summary" class="form-control" rows="3" required placeholder="변경된 내용을 간략히 기술하세요."></textarea>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">개정자</label>
-                        <input type="text" name="revised_by" class="form-control" placeholder="개정 담당자">
+                        <label class="form-label">개정 내용</label>
+                        <textarea name="change_detail" class="form-control" rows="2" placeholder="변경된 내용"></textarea>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">개정 문서파일</label>
@@ -332,24 +339,20 @@
                             </select>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">관리부서</label>
-                            <input type="text" name="department" class="form-control" value="{{ document.department|default:'' }}">
+                            <label class="form-label">관련 품번</label>
+                            <input type="text" name="related_part_no" class="form-control" value="{{ document.related_part_no|default:'' }}">
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">승인자</label>
-                            <input type="text" name="approver" class="form-control" value="{{ document.approver|default:'' }}">
+                            <label class="form-label">관련 공정</label>
+                            <input type="text" name="related_process" class="form-control" value="{{ document.related_process|default:'' }}">
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">시행일</label>
                             <input type="date" name="effective_date" class="form-control" value="{{ document.effective_date|date:'Y-m-d' }}">
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">검토예정일</label>
-                            <input type="date" name="review_date" class="form-control" value="{{ document.review_date|date:'Y-m-d' }}">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">폐기일</label>
-                            <input type="date" name="obsolete_date" class="form-control" value="{{ document.obsolete_date|date:'Y-m-d' }}">
+                            <label class="form-label">만료일</label>
+                            <input type="date" name="expiry_date" class="form-control" value="{{ document.expiry_date|date:'Y-m-d' }}">
                         </div>
                         <div class="col-12">
                             <label class="form-label">문서 설명</label>

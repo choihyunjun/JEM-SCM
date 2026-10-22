@@ -115,14 +115,14 @@
                 <div class="dtl-card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <div class="small text-muted mb-1">4M 검토중</div>
+                            <div class="small text-muted mb-1">사전 4M 결재중</div>
                             <div class="h3 fw-bold mb-0 erp-kpi-neutral" style="color:#6d28d9;">{{ change_stats.review }}</div>
                         </div>
                         <div class="p-3 rounded" style="background:#f5f3ff;">
                             <i class="bi bi-arrow-repeat fs-4" style="color:#6d28d9;"></i>
                         </div>
                     </div>
-                    <div class="small text-muted mt-2">정식 진행중: {{ change_stats.formal }}건</div>
+                    <div class="small text-muted mt-2">정식 4M 진행중(미승인): {{ change_stats.formal }}건</div>
                 </div>
             </div>
         </div>
@@ -249,48 +249,48 @@
                 <div class="dtl-card-header"><i class="bi bi-grid"></i>빠른 바로가기</div>
                 <div class="dtl-card-body">
                     <div class="row g-3">
-                        <div class="col-md-2 col-sm-4 col-6">
+                        {% if menus.inspection %}<div class="col-md-2 col-sm-4 col-6">
                             <a href="{% url 'qms:import_inspection_list' %}" class="dtl-btn-outline w-100 py-3 d-block text-center">
                                 <i class="bi bi-clipboard-check d-block fs-4 mb-1"></i>
                                 <small>수입검사</small>
                             </a>
-                        </div>
-                        <div class="col-md-2 col-sm-4 col-6">
+                        </div>{% endif %}
+                        {% if menus.inspection %}<div class="col-md-2 col-sm-4 col-6">
                             <a href="{% url 'qms:outgoing_list' %}" class="dtl-btn-outline w-100 py-3 d-block text-center">
                                 <i class="bi bi-truck d-block fs-4 mb-1"></i>
                                 <small>출하검사</small>
                             </a>
-                        </div>
-                        <div class="col-md-2 col-sm-4 col-6">
+                        </div>{% endif %}
+                        {% if menus.nc %}<div class="col-md-2 col-sm-4 col-6">
                             <a href="{% url 'qms:nc_create' %}" class="dtl-btn-outline w-100 py-3 d-block text-center">
                                 <i class="bi bi-plus-circle d-block fs-4 mb-1"></i>
                                 <small>부적합 등록</small>
                             </a>
-                        </div>
-                        <div class="col-md-2 col-sm-4 col-6">
+                        </div>{% endif %}
+                        {% if menus.nc %}<div class="col-md-2 col-sm-4 col-6">
                             <a href="{% url 'qms:capa_create' %}" class="dtl-btn-outline w-100 py-3 d-block text-center">
                                 <i class="bi bi-tools d-block fs-4 mb-1"></i>
                                 <small>CAPA 요청</small>
                             </a>
-                        </div>
-                        <div class="col-md-2 col-sm-4 col-6">
+                        </div>{% endif %}
+                        {% if menus.claim %}<div class="col-md-2 col-sm-4 col-6">
                             <a href="{% url 'qms:claim_list' %}" class="dtl-btn-outline w-100 py-3 d-block text-center">
                                 <i class="bi bi-file-earmark-x d-block fs-4 mb-1"></i>
                                 <small>클레임 관리</small>
                             </a>
-                        </div>
-                        <div class="col-md-2 col-sm-4 col-6">
+                        </div>{% endif %}
+                        {% if menus.rating %}<div class="col-md-2 col-sm-4 col-6">
                             <a href="{% url 'qms:rating_list' %}" class="dtl-btn-outline w-100 py-3 d-block text-center">
                                 <i class="bi bi-star d-block fs-4 mb-1"></i>
                                 <small>협력사 평가</small>
                             </a>
-                        </div>
-                        <div class="col-md-2 col-sm-4 col-6">
+                        </div>{% endif %}
+                        {% if menus.isir %}<div class="col-md-2 col-sm-4 col-6">
                             <a href="{% url 'qms:isir_list' %}" class="dtl-btn-outline w-100 py-3 d-block text-center">
                                 <i class="bi bi-file-earmark-check d-block fs-4 mb-1"></i>
                                 <small>ISIR 관리</small>
                             </a>
-                        </div>
+                        </div>{% endif %}
                     </div>
                 </div>
             </div>

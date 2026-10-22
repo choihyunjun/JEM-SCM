@@ -70,6 +70,11 @@
     <div class="dtl-card">
         <div class="dtl-card-header"><i class="bi bi-clipboard-check"></i>검사 결과 및 판정</div>
         <div class="dtl-card-body">
+            {% if inspection.status == 'PENDING' and not can_judge %}
+            <div class="alert alert-secondary small"><i class="bi bi-eye me-1"></i>조회 전용입니다. 판정은 '검사 등록/판정' 권한이 있는 사용자만 할 수 있습니다.</div>
+            {% elif inspection.status == 'PENDING' and fractional_qty %}
+            <div class="alert alert-warning small"><i class="bi bi-exclamation-triangle me-1"></i>입고 수량({{ inspection.inbound_transaction.quantity|floatformat:"-4" }})이 정수가 아니어서 판정할 수 없습니다. 판정 수량은 정수만 받습니다. 입고 수량을 정수로 정정한 뒤 판정해 주세요.</div>
+            {% endif %}
             <form method="post" enctype="multipart/form-data">
                 {% csrf_token %}
 
@@ -77,15 +82,15 @@
                     <div class="dtl-section-label"><span class="dtl-section-num">1</span>검사 항목 확인</div>
                     <div class="dtl-check-row">
                         <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="check_report" id="chk1" {% if inspection.check_report %}checked{% endif %} {% if inspection.status != 'PENDING' %}disabled{% endif %}>
+                            <input class="form-check-input" type="checkbox" name="check_report" id="chk1" {% if inspection.check_report %}checked{% endif %} {% if not editable %}disabled{% endif %}>
                             <label class="form-check-label" for="chk1">성적서 확인</label>
                         </div>
                         <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="check_visual" id="chk2" {% if inspection.check_visual %}checked{% endif %} {% if inspection.status != 'PENDING' %}disabled{% endif %}>
+                            <input class="form-check-input" type="checkbox" name="check_visual" id="chk2" {% if inspection.check_visual %}checked{% endif %} {% if not editable %}disabled{% endif %}>
                             <label class="form-check-label" for="chk2">외관 검사</label>
                         </div>
                         <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="check_dimension" id="chk3" {% if inspection.check_dimension %}checked{% endif %} {% if inspection.status != 'PENDING' %}disabled{% endif %}>
+                            <input class="form-check-input" type="checkbox" name="check_dimension" id="chk3" {% if inspection.check_dimension %}checked{% endif %} {% if not editable %}disabled{% endif %}>
                             <label class="form-check-label" for="chk3">치수/기능 검사</label>
                         </div>
                     </div>
@@ -98,7 +103,7 @@
                             <div class="col-md-4">
                                 <div class="dtl-qty-tile neutral">
                                     <span class="dtl-qty-caption">총 입고 수량</span>
-                                    <input type="number" class="dtl-qty-input" value="{{ inspection.inbound_transaction.quantity|floatformat:"-4" }}" readonly id="totalQty">
+                                    <input type="{% if fractional_qty %}text{% else %}number{% endif %}" class="dtl-qty-input" value="{% if fractional_qty %}{{ inspection.inbound_transaction.quantity|floatformat:"-4" }}{% else %}{{ whole_qty }}{% endif %}" readonly id="totalQty">
                                 </div>
                             </div>
                             <div class="col-md-1 text-center dtl-qty-arrow"><i class="bi bi-arrow-right"></i></div>
@@ -106,21 +111,21 @@
                                 <div class="dtl-qty-tile good">
                                     <span class="dtl-qty-caption">양품 (합격)</span>
                                     <input type="number" name="qty_good" id="qtyGood" class="dtl-qty-input"
-                                           value="{% if inspection.status != 'PENDING' %}{{ inspection.qty_good }}{% else %}{{ inspection.inbound_transaction.quantity|floatformat:"-4" }}{% endif %}" required min="0"
-                                           {% if inspection.status != 'PENDING' %}disabled{% endif %} oninput="calcBadQty()">
+                                           value="{% if inspection.status != 'PENDING' %}{{ inspection.qty_good }}{% elif whole_qty is not None %}{{ whole_qty }}{% endif %}" required min="0" step="1" inputmode="numeric"
+                                           {% if not editable %}disabled{% endif %} oninput="calcBadQty()">
                                 </div>
                             </div>
                             <div class="col-md-3">
                                 <div class="dtl-qty-tile bad">
                                     <span class="dtl-qty-caption">불량 (부적합)</span>
                                     <input type="number" name="qty_bad" id="qtyBad" class="dtl-qty-input"
-                                           value="{% if inspection.status != 'PENDING' %}{{ inspection.qty_bad }}{% else %}0{% endif %}" required min="0" readonly>
+                                           value="{% if inspection.status != 'PENDING' %}{{ inspection.qty_bad }}{% else %}0{% endif %}" required min="0" step="1" readonly>
                                 </div>
                             </div>
                         </div>
-                        {% if inspection.status == 'PENDING' %}
+                        {% if editable %}
                         <div class="form-text mt-2 text-end" style="font-size:0.78rem;">
-                            <i class="bi bi-info-circle"></i> 양품 수량을 입력하면 불량 수량은 자동 계산됩니다.
+                            <i class="bi bi-info-circle"></i> 양품 수량(정수)을 입력하면 불량 수량은 자동 계산됩니다.
                         </div>
                         {% endif %}
                     </div>
@@ -129,14 +134,14 @@
                 <div class="row g-3 mb-4">
                     <div class="col-md-12">
                         <div class="dtl-section-label"><span class="dtl-section-num">3</span>종합 의견 / 불량 사유</div>
-                        <textarea name="remark" class="form-control dtl-form-control" rows="2" placeholder="특이사항이나 불량 사유를 입력하세요." {% if inspection.status != 'PENDING' %}readonly{% endif %}>{{ inspection.remark|default:'' }}</textarea>
+                        <textarea name="remark" class="form-control dtl-form-control" rows="2" placeholder="특이사항이나 불량 사유를 입력하세요." {% if not editable %}readonly{% endif %}>{{ inspection.remark|default:'' }}</textarea>
                     </div>
                     <div class="col-md-12">
                         <span class="dtl-field-label">증빙 파일</span>
                         {% if inspection.attachment %}
                             <div class="mb-2"><a href="{{ inspection.attachment.url }}" target="_blank" class="btn btn-sm btn-outline-secondary"><i class="bi bi-file-earmark-text"></i> {{ inspection.attachment.name }}</a></div>
                         {% endif %}
-                        {% if inspection.status == 'PENDING' %}
+                        {% if editable %}
                             <input type="file" name="attachment" class="form-control">
                         {% endif %}
                     </div>
@@ -145,15 +150,19 @@
                 <hr style="border-color:#eef0f2;">
 
                 {% if inspection.status == 'PENDING' %}
+                {% if editable %}
                 <div class="d-flex justify-content-center pt-1">
                     <button type="submit" name="decision" value="COMPLETE" class="dtl-btn-dark" onclick="return confirm('판정을 완료하시겠습니까?\n(양품은 자재창고로, 불량은 부적합창고로 이동됩니다)')">
                         <i class="bi bi-check-lg me-2"></i>판정 확정
                     </button>
                 </div>
+                {% endif %}
                 {% else %}
                 <div class="dtl-status-box {% if inspection.status == 'APPROVED' %}pass{% else %}fail{% endif %}">
-                    {% if inspection.status == 'APPROVED' %}
-                        <i class="bi bi-check-circle-fill me-2"></i>판정 완료 (합격 포함)
+                    {% if inspection.is_partial %}
+                        <i class="bi bi-exclamation-circle-fill me-2"></i>부분 합격 (양품 {{ inspection.qty_good }} / 불량 {{ inspection.qty_bad }})
+                    {% elif inspection.status == 'APPROVED' %}
+                        <i class="bi bi-check-circle-fill me-2"></i>합격 (전량 양품)
                     {% else %}
                         <i class="bi bi-x-circle-fill me-2"></i>전량 불량 판정
                     {% endif %}
@@ -165,7 +174,7 @@
         </div>
     </div>
 
-    {% if inspection.status != 'PENDING' %}
+    {% if inspection.status != 'PENDING' and can_judge %}
     <div class="card mt-3"><div class="card-body">
         <h6>판정 정정</h6>
         <p class="small text-muted">입력 오류가 있으면 검사대기로 되돌린 뒤 다시 판정할 수 있습니다. 이미 반출·이동·사용된 LOT은 정정할 수 없습니다.</p>

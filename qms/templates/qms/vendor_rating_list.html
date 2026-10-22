@@ -158,6 +158,11 @@
             <div class="row">
                 <div class="col-md-6">
                     <h6>종합점수 = (품질점수 x 60%) + (납기점수 x 40%)</h6>
+                    <ul class="list-unstyled small text-muted">
+                        <li>품질점수 = 수입검사 합격률 − PPM 감점(1,000 PPM당 1점, 최대 10점) − 클레임 감점(건당 5점, 최대 20점)</li>
+                        <li>합격률은 판정 완료 건 기준이며, 일부 불량(부분 합격)은 합격으로 세지 않습니다.</li>
+                        <li>납기점수 = 납기준수율(입고일 ≤ 발주 납기일). 발주를 찾지 못한 입고는 집계에서 제외합니다.</li>
+                    </ul>
                     <ul class="list-unstyled">
                         <li><span class="dtl-pill green me-2">A등급</span> 95점 이상 (우수)</li>
                         <li><span class="dtl-pill blue me-2">B등급</span> 85점 이상 (양호)</li>

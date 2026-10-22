@@ -602,6 +602,20 @@ class ImportInspection(models.Model):
     def __str__(self):
         return f"검사요청: {self.inbound_transaction.part.part_name}"
 
+    # 저장 상태(status)는 재고·입고취소 등 다른 코드가 쓰므로 그대로 두고,
+    # 화면/집계에서는 일부 불량을 '부분 합격'으로 구분한다.
+    @property
+    def is_partial(self):
+        return self.status == 'APPROVED' and (self.qty_bad or 0) > 0
+
+    @property
+    def result_label(self):
+        if self.status == 'PENDING':
+            return '검사대기'
+        if self.status == 'REJECTED':
+            return '불합격'
+        return '부분 합격' if self.is_partial else '합격'
+
 
 # ============================================================================
 # 새로운 4M 변경점 관리 시스템 (v2)
@@ -1482,10 +1496,25 @@ class VendorRating(models.Model):
     def __str__(self):
         return f"[{self.year}-{self.month:02d}] {self.vendor.name} - {self.grade}"
 
+    # 품질점수 감점 기준 (클레임·PPM을 점수/등급에 반영)
+    PPM_PENALTY_PER_1000 = 1     # 불량 1,000 PPM당 1점
+    PPM_PENALTY_MAX = 10
+    CLAIM_PENALTY_EACH = 5       # 클레임 1건당 5점
+    CLAIM_PENALTY_MAX = 20
+
+    @property
+    def ppm_penalty(self):
+        return min(self.PPM_PENALTY_MAX, float(self.ppm or 0) / 1000 * self.PPM_PENALTY_PER_1000)
+
+    @property
+    def claim_penalty(self):
+        return min(self.CLAIM_PENALTY_MAX, (self.claim_count or 0) * self.CLAIM_PENALTY_EACH)
+
     def calculate_scores(self):
         """점수 자동 계산"""
-        # 품질점수 (합격률 기반)
-        self.quality_score = float(self.incoming_rate)
+        # 품질점수 = 수입검사 합격률 - PPM 감점 - 클레임 감점 (0~100)
+        quality = float(self.incoming_rate) - self.ppm_penalty - self.claim_penalty
+        self.quality_score = round(max(0.0, min(100.0, quality)), 2)
 
         # 납기점수 (준수율 기반)
         self.delivery_score = float(self.delivery_rate)

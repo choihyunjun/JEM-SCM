@@ -204,11 +204,11 @@ class M4RequestForm(forms.ModelForm):    # [결재선] 내부 사용자만 노�
         # - 협력사: (만약 접근하더라도) 협력사 선택을 임의로 바꾸지 못하게 잠금
         if self._actor_user is not None:
             actor = get_actor(self._actor_user)
-            if actor.is_vendor and actor.profile:
+            if actor.is_vendor:
                 self.fields["vendor_org"].disabled = True
                 self.fields["vendor_org"].required = False
-                if actor.profile.org_id:
-                    self.fields["vendor_org"].initial = actor.profile.org_id
+                if actor.org_id:
+                    self.fields["vendor_org"].initial = actor.org_id
 
 
 

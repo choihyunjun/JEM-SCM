@@ -55,6 +55,7 @@
                     <option value="">전체 보기</option>
                     <option value="PENDING" {% if status_filter == 'PENDING' %}selected{% endif %}>검사대기</option>
                     <option value="PASSED" {% if status_filter == 'PASSED' %}selected{% endif %}>합격</option>
+                    <option value="PARTIAL" {% if status_filter == 'PARTIAL' %}selected{% endif %}>부분 합격</option>
                     <option value="FAILED" {% if status_filter == 'FAILED' %}selected{% endif %}>불합격</option>
                 </select>
             </div>
@@ -103,7 +104,7 @@
                                 {% if item.status == 'PENDING' %}
                                     <span class="iil-pill amber">검사대기</span>
                                 {% elif item.status == 'APPROVED' %}
-                                    {% if item.qty_bad %}<span class="iil-pill amber">부분 부적합</span>{% else %}<span class="iil-pill green">합격</span>{% endif %}
+                                    <span class="iil-pill {% if item.is_partial %}amber{% else %}green{% endif %}">{{ item.result_label }}</span>
                                 {% elif item.status == 'REJECTED' %}
                                     <span class="iil-pill red">불합격</span>
                                 {% endif %}
@@ -129,7 +130,7 @@
                                 {% endif %}
                             </td>
                             <td>
-                                {% if item.status == 'PENDING' %}
+                                {% if item.status == 'PENDING' and can_judge %}
                                     <a href="{% url 'qms:import_inspection_detail' item.id %}" class="iil-btn-dark py-0 px-2" style="font-size: 0.78rem;">
                                         판정하기
                                     </a>

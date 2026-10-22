@@ -18,10 +18,10 @@
             </span>
         </div>
         <div class="d-flex gap-2 dtl-actions">
-            {% if user|has_perm:'can_qms_nc_edit' %}<a href="{% url 'qms:capa_edit' pk=capa.pk %}" class="btn btn-outline-secondary btn-sm">
+            {% if can_verify %}<a href="{% url 'qms:capa_edit' pk=capa.pk %}" class="btn btn-outline-secondary btn-sm">
                 <i class="bi bi-pencil me-1"></i>수정
             </a>{% endif %}
-            {% if user|has_perm:'can_qms_nc_edit' %}<button type="button" class="btn btn-outline-danger btn-sm" onclick="if(confirm('정말 삭제하시겠습니까?')) document.getElementById('deleteForm').submit();">
+            {% if can_verify %}<button type="button" class="btn btn-outline-danger btn-sm" onclick="if(confirm('정말 삭제하시겠습니까?')) document.getElementById('deleteForm').submit();">
                 <i class="bi bi-trash me-1"></i>삭제
             </button>{% endif %}
             <a href="{% url 'qms:capa_list' %}" class="btn btn-outline-secondary btn-sm">
@@ -82,7 +82,8 @@
     <div class="dtl-card">
         <div class="dtl-card-header"><i class="bi bi-reply"></i>협력사 회신</div>
         <div class="dtl-card-body">
-            <form method="post" enctype="multipart/form-data"><fieldset {% if not user|has_perm:'can_qms_nc_edit' %}disabled class="qms-readonly"{% endif %}>
+            {% if can_reply and not is_vendor %}<div class="small text-muted mb-2"><i class="bi bi-info-circle me-1"></i>협력사에서 받은 회신을 내부에서 대리 입력하는 칸입니다.</div>{% endif %}
+            <form method="post" enctype="multipart/form-data"><fieldset {% if not can_reply %}disabled class="qms-readonly"{% endif %}>
                 {% csrf_token %}
                 <input type="hidden" name="action" value="vendor_response">
 
@@ -137,7 +138,7 @@
     <div class="dtl-card">
         <div class="dtl-card-header"><i class="bi bi-clipboard-check"></i>효과 검증 (내부)</div>
         <div class="dtl-card-body">
-            <form method="post"><fieldset {% if not user|has_perm:'can_qms_nc_edit' %}disabled class="qms-readonly"{% endif %}>
+            <form method="post"><fieldset {% if not can_verify %}disabled class="qms-readonly"{% endif %}>
                 {% csrf_token %}
                 <input type="hidden" name="action" value="verify">
 
@@ -175,7 +176,7 @@
     <div class="dtl-card mb-0">
         <div class="dtl-card-header"><i class="bi bi-gear"></i>상태 변경</div>
         <div class="dtl-card-body">
-            <form method="post" class="d-flex gap-3 align-items-center"><fieldset {% if not user|has_perm:'can_qms_nc_edit' %}disabled class="qms-readonly"{% endif %}>
+            <form method="post" class="d-flex gap-3 align-items-center"><fieldset {% if not can_verify %}disabled class="qms-readonly"{% endif %}>
                 {% csrf_token %}
                 <input type="hidden" name="action" value="update_status">
                 <label class="dtl-form-label mb-0">상태:</label>

@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, re_path
 from . import views
 
 app_name = 'qms'
@@ -46,36 +46,15 @@ urlpatterns = [
     path('formal/<int:formal_id>/schedule/<int:row_id>/update/', views.formal4m_schedule_update, name='formal4m_schedule_update'),
     path('formal/<int:formal_id>/stage/<int:row_id>/update/', views.formal4m_stage_update, name='formal4m_stage_update'),
     path('formal/<int:formal_id>/approval/update/', views.formal4m_approval_update, name='formal4m_approval_update'),
-    path('formal/<int:formal_id>/inspection/add/', views.formal4m_inspection_add, name='formal4m_inspection_add'),
-    path('formal/<int:formal_id>/schedule/add/', views.formal4m_schedule_add, name='formal4m_schedule_add'),
 
     path('inspection/list/', views.import_inspection_list, name='import_inspection_list'),
     path('inspection/attachments/', views.inspection_attachment_list, name='inspection_attachment_list'),
     path('inspection/<int:pk>/', views.import_inspection_detail, name='import_inspection_detail'),
 
-    # ============================================
-    # 새로운 4M 변경점 관리 (v2)
-    # ============================================
-    path('change/', views.change_request_list, name='change_request_list'),
-    path('change/create/', views.change_request_create, name='change_request_create'),
-    path('change/<int:pk>/', views.change_request_detail, name='change_request_detail'),
-    path('change/<int:pk>/edit/', views.change_request_edit, name='change_request_edit'),
-    path('change/<int:pk>/submit/', views.change_request_submit, name='change_request_submit'),
-    path('change/<int:pk>/phase/', views.change_request_phase_change, name='change_request_phase_change'),
-
-    # 결재
-    path('approval/<int:pk>/process/', views.approval_step_process, name='approval_step_process'),
-
-    # 협력사 회신
-    path('change/<int:pk>/vendor-request/', views.vendor_response_create, name='vendor_response_create'),
-    path('vendor-response/<int:pk>/submit/', views.vendor_response_submit, name='vendor_response_submit'),
-
-    # 제출 서류
-    path('document/<int:pk>/upload/', views.document_upload, name='document_upload'),
-    path('document/<int:pk>/review/', views.document_review, name='document_review'),
-
-    # 유효성 평가
-    path('change/<int:pk>/validity/', views.validity_evaluation, name='validity_evaluation'),
+    # 4M 변경관리(v2)는 폐지됨. 옛 주소는 안내 화면만 보여준다.
+    # change_request_create 이름은 orders/test_ui_pages.py 가 아직 참조하므로 유지(테스트 정리 후 삭제 가능).
+    path('change/create/', views.change_request_retired, name='change_request_create'),
+    re_path(r'^change/', views.change_request_retired, name='change_request_retired'),
 
     # ============================================
     # QMS 대시보드

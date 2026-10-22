@@ -49,8 +49,9 @@
                     </a>
                 </li>
                 {% endif %}
-                {# QMS 탭 - QMS 관련 권한 중 하나라도 있으면 표시 #}
-                {% if user|has_perm:'can_qms_4m_view' or user|has_perm:'can_qms_4m' or user|has_perm:'can_qms_inspection_view' or user|has_perm:'can_qms_inspection' %}
+                {# QMS 탭 - QMS 메뉴 중 하나라도 열 수 있으면 표시 (메뉴/화면 권한표: qms/access.py QMS_MENU_PERMISSIONS) #}
+                {% load qms_menu qms_menu_edit qms_any_menu from qms_extras %}
+                {% if user|qms_any_menu %}
                 <li class="nav-item">
                     <a class="nav-link {% if request.resolver_match.app_name == 'qms' %}active-system{% endif %}" href="{% url 'qms:dashboard' %}">
                        <i class="bi bi-shield-check me-1"></i>품질관리(QMS)
@@ -106,7 +107,7 @@
             <i class="bi bi-cart-check me-1"></i>SCM
         </a>
         {% endif %}
-        {% if user|has_perm:'can_qms_4m_view' or user|has_perm:'can_qms_4m' or user|has_perm:'can_qms_inspection_view' or user|has_perm:'can_qms_inspection' %}
+        {% if user|qms_any_menu %}
         <a href="{% url 'qms:dashboard' %}" class="mobile-system-tab {% if request.resolver_match.app_name == 'qms' %}active-system{% endif %}">
             <i class="bi bi-shield-check me-1"></i>QMS
         </a>
@@ -148,19 +149,19 @@
                                 QMS 대시보드
                             </a>
 
-                            {# 4M 변경점 관리 - can_qms_4m_view 또는 can_qms_4m 권한 필요 #}
-                            {% if user|has_perm:'can_qms_4m_view' or user|has_perm:'can_qms_4m' %}
-                            <a class="nav-link collapsed {% if 'm4' in request.resolver_match.url_name or 'formal' in request.resolver_match.url_name or 'change_request' in request.resolver_match.url_name %}active{% endif %}"
+                            {# 4M 변경점 관리 #}
+                            {% if user|qms_menu:'m4' %}
+                            <a class="nav-link collapsed {% if 'm4' in request.resolver_match.url_name or 'formal' in request.resolver_match.url_name %}active{% endif %}"
                                href="#"
                                data-bs-toggle="collapse"
                                data-bs-target="#collapse4M"
-                               aria-expanded="{% if 'm4' in request.resolver_match.url_name or 'formal' in request.resolver_match.url_name or 'change_request' in request.resolver_match.url_name %}true{% else %}false{% endif %}"
+                               aria-expanded="{% if 'm4' in request.resolver_match.url_name or 'formal' in request.resolver_match.url_name %}true{% else %}false{% endif %}"
                                aria-controls="collapse4M">
                                 <div class="sb-nav-link-icon"><i class="bi bi-gear-wide-connected"></i></div>
                                 4M 변경관리
                                 <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
                             </a>
-                            <div class="collapse {% if 'm4' in request.resolver_match.url_name or 'formal' in request.resolver_match.url_name or 'change_request' in request.resolver_match.url_name %}show{% endif %}"
+                            <div class="collapse {% if 'm4' in request.resolver_match.url_name or 'formal' in request.resolver_match.url_name %}show{% endif %}"
                                  id="collapse4M"
                                  aria-labelledby="heading4M"
                                  data-bs-parent="#sidenavAccordion">
@@ -173,16 +174,12 @@
                                        href="{% url 'qms:formal4m_list' %}">
                                        정식 4M
                                     </a>
-                                    <a class="nav-link {% if 'change_request' in request.resolver_match.url_name %}active{% endif %}"
-                                       href="{% url 'qms:change_request_list' %}">
-                                       4M 변경관리(v2)
-                                    </a>
                                 </nav>
                             </div>
                             {% endif %}
 
-                            {# 검사 관리 - can_qms_inspection_view 또는 can_qms_inspection 권한 필요 #}
-                            {% if user|has_perm:'can_qms_inspection_view' or user|has_perm:'can_qms_inspection' %}
+                            {# 검사 관리 #}
+                            {% if user|qms_menu:'inspection' %}
                             <a class="nav-link collapsed {% if 'inspection' in request.resolver_match.url_name or 'outgoing' in request.resolver_match.url_name or 'attachment' in request.resolver_match.url_name %}active{% endif %}"
                                href="#"
                                data-bs-toggle="collapse"
@@ -208,8 +205,8 @@
                             </div>
                             {% endif %}
 
-                            {# 부적합/시정조치 - can_qms_nc_view 권한 필요 #}
-                            {% if user|has_perm:'can_qms_nc_view' or user|has_perm:'can_qms_inspection_view' or user|has_perm:'can_qms_inspection' %}
+                            {# 부적합/시정조치 #}
+                            {% if user|qms_menu:'nc' %}
                             <a class="nav-link collapsed {% if 'nc' in request.resolver_match.url_name or 'capa' in request.resolver_match.url_name %}active{% endif %}"
                                href="#"
                                data-bs-toggle="collapse"
@@ -233,8 +230,8 @@
                             </div>
                             {% endif %}
 
-                            {# 협력사 품질관리 - can_qms_claim_view 또는 can_qms_rating_view 권한 필요 #}
-                            {% if user|has_perm:'can_qms_claim_view' or user|has_perm:'can_qms_rating_view' or user|has_perm:'can_qms_inspection_view' or user|has_perm:'can_qms_inspection' %}
+                            {# 협력사 품질관리 - 클레임/평가 중 하나라도 #}
+                            {% if user|qms_any_menu:'claim,rating' %}
                             <a class="nav-link collapsed {% if 'claim' in request.resolver_match.url_name or 'rating' in request.resolver_match.url_name %}active{% endif %}"
                                href="#"
                                data-bs-toggle="collapse"
@@ -250,16 +247,16 @@
                                  aria-labelledby="headingVendorQms"
                                  data-bs-parent="#sidenavAccordion">
                                 <nav class="sb-sidenav-menu-nested nav">
-                                    <a class="nav-link {% if 'claim' in request.resolver_match.url_name %}active{% endif %}"
-                                       href="{% url 'qms:claim_list' %}">클레임 관리</a>
-                                    <a class="nav-link {% if 'rating' in request.resolver_match.url_name %}active{% endif %}"
-                                       href="{% url 'qms:rating_list' %}">협력사 평가</a>
+                                    {% if user|qms_menu:'claim' %}<a class="nav-link {% if 'claim' in request.resolver_match.url_name %}active{% endif %}"
+                                       href="{% url 'qms:claim_list' %}">클레임 관리</a>{% endif %}
+                                    {% if user|qms_menu:'rating' %}<a class="nav-link {% if 'rating' in request.resolver_match.url_name %}active{% endif %}"
+                                       href="{% url 'qms:rating_list' %}">협력사 평가</a>{% endif %}
                                 </nav>
                             </div>
                             {% endif %}
 
-                            {# 초도품검사(ISIR) - can_qms_isir_view 권한 필요 #}
-                            {% if user|has_perm:'can_qms_isir_view' or user|has_perm:'can_qms_inspection_view' or user|has_perm:'can_qms_inspection' %}
+                            {# 초도품검사(ISIR) #}
+                            {% if user|qms_menu:'isir' %}
                             <a class="nav-link collapsed {% if 'isir' in request.resolver_match.url_name %}active{% endif %}"
                                href="#"
                                data-bs-toggle="collapse"
@@ -276,13 +273,13 @@
                                  data-bs-parent="#sidenavAccordion">
                                 <nav class="sb-sidenav-menu-nested nav">
                                     <a class="nav-link {% if request.resolver_match.url_name == 'isir_list' %}active{% endif %}" href="{% url 'qms:isir_list' %}">ISIR 현황</a>
-                                    <a class="nav-link {% if request.resolver_match.url_name == 'isir_create' %}active{% endif %}" href="{% url 'qms:isir_create' %}">ISIR 등록</a>
+                                    {% if user|qms_menu_edit:'isir' %}<a class="nav-link {% if request.resolver_match.url_name == 'isir_create' %}active{% endif %}" href="{% url 'qms:isir_create' %}">ISIR 등록</a>{% endif %}
                                 </nav>
                             </div>
                             {% endif %}
 
                             {# 계측기 관리 #}
-                            {% if user|has_perm:'can_qms_inspection_view' or user|has_perm:'can_qms_inspection' %}
+                            {% if user|qms_menu:'gauge' %}
                             <a class="nav-link {% if 'gauge' in request.resolver_match.url_name %}active{% endif %}"
                                href="{% url 'qms:gauge_list' %}">
                                 <div class="sb-nav-link-icon"><i class="bi bi-speedometer"></i></div>
@@ -291,7 +288,7 @@
                             {% endif %}
 
                             {# 품질문서 관리 #}
-                            {% if user|has_perm:'can_qms_inspection_view' or user|has_perm:'can_qms_inspection' %}
+                            {% if user|qms_menu:'qdoc' %}
                             <a class="nav-link {% if 'qdoc' in request.resolver_match.url_name %}active{% endif %}"
                                href="{% url 'qms:qdoc_list' %}">
                                 <div class="sb-nav-link-icon"><i class="bi bi-file-earmark-text"></i></div>
