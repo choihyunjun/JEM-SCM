@@ -3433,7 +3433,7 @@ def user_permission_manage(request):
             ('can_wms_bom_calc', '🔢 소요량 계산'),
         ],
         'WMS — ERP/보관 관리': [
-            ('can_wms_erp_sync', '🔄 기초재고 동기화'),
+            ('can_wms_erp_sync', '🔄 ERP 재고 관리'),
             ('can_wms_storage_layout', '🗺️ 창고 레이아웃'),
             ('can_wms_storage_rack', '📐 랙 위치 관리'),
             ('can_wms_storage_setting', '⚙️ 품목 설정'),
