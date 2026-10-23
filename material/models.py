@@ -578,7 +578,8 @@ class ProcessTag(models.Model):
         prefix = f"TAG-{today}-"
 
         with transaction.atomic():
-            qs = cls.objects.filter(tag_id__startswith=prefix).order_by('-tag_id')
+            qs = cls.objects.filter(tag_id__startswith=prefix).annotate(
+                _len=models.functions.Length('tag_id')).order_by('-_len', '-tag_id')  # 9999 다음 10000
             if connection.vendor != 'sqlite':
                 qs = qs.select_for_update()
             last_tag = qs.first()
@@ -934,7 +935,8 @@ class RawMaterialLabel(models.Model):
         prefix = f"RM-{today}-"
 
         with transaction.atomic():
-            qs = cls.objects.filter(label_id__startswith=prefix).order_by('-label_id')
+            qs = cls.objects.filter(label_id__startswith=prefix).annotate(
+                _len=models.functions.Length('label_id')).order_by('-_len', '-label_id')  # 9999 다음 10000
             if connection.vendor != 'sqlite':
                 qs = qs.select_for_update()
             last_label = qs.first()
@@ -956,7 +958,8 @@ class RawMaterialLabel(models.Model):
         prefix = f"PLT-{today}-"
 
         with transaction.atomic():
-            qs = cls.objects.filter(label_id__startswith=prefix).order_by('-label_id')
+            qs = cls.objects.filter(label_id__startswith=prefix).annotate(
+                _len=models.functions.Length('label_id')).order_by('-_len', '-label_id')  # 9999 다음 10000
             if connection.vendor != 'sqlite':
                 qs = qs.select_for_update()
             last_label = qs.first()

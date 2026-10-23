@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from orders.models import Part
 from .models import MaterialStock, ProcessTag, StockSyncRun, Warehouse
-from .stock_safety import unassigned_stock
+from .stock_safety import quantity_change, unassigned_stock
 from .quantities import stock_quantity
 
 # Incoming-inspection hold and nonconforming stock never reach ERP (ERP receives
@@ -102,15 +102,34 @@ def _mirror_quantity_only(warehouse, part, erp_qty, expected):
 
 
 def _settle_lot_managed(warehouse, part, erp_qty, expected):
-    """SCM이 LOT를 책임지는 품목: LOT는 깎지 않는다. 설명 안 되는 차이만 미지정(LOT 미확인)에
-    넣고 기록 1건을 남긴다. 총량은 ERP와 같아진다."""
-    from .erp_api import _create_trx
+    """SCM이 LOT를 책임지는 품목.
+    - ERP가 더 적으면(생산출고·출고로 쓰인 양): 오래된 LOT부터 뺀다 (선입선출 소진, 근거는 ERP 출고 이력).
+    - 그래도 남거나 ERP가 더 많으면: 설명 안 되는 차이만 미지정(LOT 미확인)에 넣고 기록 1건.
+    총량은 ERP와 같아진다. 돌려주는 값 = 미지정에 넣은 차이 (0이면 설명된 소진뿐)."""
+    from .erp_api import _create_trx, fifo_sort_key
     with transaction.atomic():
         rows = _locked_rows(warehouse, part, expected)
         lots = [s for s in rows if s.lot_no is not None or s.production_lot is not None]
         bucket = next((s for s in rows if s.lot_no is None and s.production_lot is None), None)
         if bucket is None:
             bucket = unassigned_stock(warehouse, part)
+        used = sum((s.quantity for s in rows), Decimal(0)) - erp_qty
+        consumed = Decimal(0)
+        if used > 0:
+            pool = sorted((s for s in lots if s.quantity > 0), key=fifo_sort_key)
+            if bucket.quantity > 0:
+                pool.append(bucket)  # LOT 모르는 양은 마지막에
+            for row in pool:
+                take = min(row.quantity, used - consumed)
+                if take <= 0:
+                    break
+                MaterialStock.objects.filter(pk=row.pk).update(quantity=quantity_change(-take))
+                row.quantity -= take
+                consumed += take
+            MaterialStock.objects.filter(warehouse=warehouse, part=part, quantity=0).exclude(
+                lot_no__isnull=True, production_lot__isnull=True).delete()  # 다 쓴 LOT 행은 남기지 않는다
+            if consumed:
+                _mark_tags_consumed(warehouse, part, consumed)
         target = erp_qty - sum((s.quantity for s in lots), Decimal(0))
         diff = target - bucket.quantity
         if not diff:
@@ -128,8 +147,8 @@ def _settle_lot_managed(warehouse, part, erp_qty, expected):
 
 
 def reconcile_stock():
-    """ERP 현재고 반영. 수량만 품목은 ERP 그대로(기록 없음), LOT 관리 품목은 LOT를 건드리지 않고
-    차이만 'LOT 미확인'으로 남긴다. ERP로 보내는 중인 품목은 다음 회차로 미룬다."""
+    """ERP 현재고 반영. 수량만 품목은 ERP 그대로(기록 없음). LOT 관리 품목은 쓰인 양을 오래된 LOT부터
+    빼고, 설명 안 되는 차이만 'LOT 미확인'으로 남긴다. ERP로 보내는 중인 품목은 다음 회차로 미룬다."""
     from .erp_api import fetch_erp_stock
     result = dict(checked=0, adjusted=0, mirrored=0, lot_diffs=[], pending=[], changed=[],
                   missing=[], no_master=[], error=None, status='running')

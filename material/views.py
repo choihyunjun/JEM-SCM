@@ -2131,10 +2131,10 @@ def api_process_tag_scan(request):
             if not lot_no:
                 return JsonResponse({'success': False, 'error': f'라벨에 LOT 정보가 없습니다. ({rm_label.label_id})'})
 
-            # FIFO 검증 (출발 창고에 같은 품번의 더 오래된 LOT가 남아 있으면 차단)
+            # FIFO 검증: 원재료창고(3200)에서 꺼낼 때만 (더 오래된 LOT가 남아 있으면 차단)
             older = MaterialStock.objects.filter(
                 warehouse=wh_from, part=rm_label.part, lot_no__lt=lot_no, quantity__gt=0
-            ).order_by('lot_no').first()
+            ).order_by('lot_no').first() if wh_from.code == '3200' else None
             if older:
                 return JsonResponse({
                     'success': False,
@@ -2796,6 +2796,9 @@ def api_process_tag_cancel_scan(request):
                 return JsonResponse({'success': False, 'error': '이미 생산에 소진된 라벨은 취소할 수 없습니다.'})
             if not last_trx or last_trx.warehouse_to_id != rm_label.warehouse_id or not last_trx.warehouse_from_id:
                 return JsonResponse({'success': False, 'error': '되돌릴 스캔 이동이 없습니다.'})
+            if (not last_trx.transaction_no.startswith('RM-SCAN-')
+                    or RawMaterialLabel.objects.filter(used_transaction=last_trx).count() != 1):
+                return JsonResponse({'success': False, 'error': '재고이동 화면에서 함께 옮긴 건입니다. 재고이동 내역에서 취소하세요.'})
             wh_back, wh_now = last_trx.warehouse_from, last_trx.warehouse_to
             qty = last_trx.quantity
             from .erp_outbox import cancel_move
@@ -3514,8 +3517,8 @@ def stock_move(request):
                         remark=f"재고이동 ({from_wh.name} -> {to_wh.name}) [LOT: {lot_display}]{fifo_remark}"
                     )
 
-                    # 제조현장 이동 시 선택된 라벨 USED 처리 (RM + TAG)
-                    if to_wh.is_production and i < len(label_ids_list):
+                    # 고른 라벨: 원재료 라벨은 받는 창고로 함께 옮기고, 현품표는 제조현장 이동 때만 사용 처리
+                    if i < len(label_ids_list):
                         import json
                         try:
                             raw_label_data = json.loads(label_ids_list[i]) if label_ids_list[i] else []
@@ -3537,6 +3540,7 @@ def stock_move(request):
 
                             if rm_ids:
                                 RawMaterialLabel.objects.filter(
+                                    Q(warehouse=from_wh) | Q(warehouse__isnull=True),
                                     id__in=rm_ids,
                                     part_no=p_no,
                                     lot_no=lot_no,
@@ -3549,7 +3553,7 @@ def stock_move(request):
                                     used_transaction=trx_obj,
                                 )
 
-                            if tag_ids:
+                            if tag_ids and to_wh.is_production:
                                 ProcessTag.objects.filter(
                                     id__in=tag_ids,
                                     part_no=p_no,
@@ -7578,6 +7582,8 @@ def raw_material_label_print(request):
     QR 라벨 출력 화면
     """
     ids = request.GET.get('ids', '')
+    if request.GET.get('batch') == 'reissue':  # 일괄 재발행분 (장수가 많아 주소 대신 세션)
+        ids = request.session.get('reissue_bags', '')
     label_ids = [int(i) for i in ids.split(',') if i.isdigit()]
 
     labels = RawMaterialLabel.objects.filter(id__in=label_ids).select_related('part').order_by('id')

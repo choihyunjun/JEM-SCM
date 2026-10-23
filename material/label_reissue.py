@@ -33,7 +33,8 @@ def _bags(qty, unit):
 def _new_labels(part, warehouse, lot_no, qty, setting, previous, user):
     pallet = setting is not None and setting.label_unit == 'PALLET'
     unit = setting.unit_weight if setting and setting.unit_weight and setting.unit_weight > 0 else Decimal(25)
-    expiry = (lot_no + timedelta(days=setting.shelf_life_days)) if setting else (previous.expiry_date if previous else None)
+    expiry = (previous.expiry_date if previous and previous.expiry_date
+              else (lot_no + timedelta(days=setting.shelf_life_days)) if setting else None)
     labels = []
     for size in ([qty] if pallet else _bags(qty, unit)):
         labels.append(RawMaterialLabel.objects.create(
@@ -65,9 +66,10 @@ def label_reissue(request):
                         made[label.label_type].append(label.pk)
         messages.success(request, f"{warehouse.code} 창고: 새 라벨 {len(made['PACKAGE']) + len(made['PALLET'])}장 발행, "
                                   f"기존 라벨 {disposed}장 폐기 처리")
-        # 새로고침으로 다시 발행되지 않게 결과는 주소로 넘긴다 (POST 후 이동)
-        return redirect(f"{reverse('material:label_reissue')}?warehouse={warehouse.code}"
-                        f"&bags={','.join(map(str, made['PACKAGE']))}&pallets={','.join(map(str, made['PALLET']))}")
+        # 새로고침으로 다시 발행되지 않게 POST 후 이동. 라벨 번호는 장수가 많을 수 있어 세션에 둔다.
+        request.session['reissue_bags'] = ','.join(map(str, made['PACKAGE']))
+        request.session['reissue_pallets'] = ','.join(map(str, made['PALLET']))
+        return redirect(f"{reverse('material:label_reissue')}?warehouse={warehouse.code}&done=1")
 
     rows = []
     if warehouse:
@@ -89,10 +91,12 @@ def label_reissue(request):
                          'qty': r['q'], 'lots': r['lots'], 'live': live.get(r['part_id'], 0),
                          'unit': '파렛트' if pallet else f'포대 {unit.normalize():f}',
                          'new': r['lots'] if pallet else math.ceil(r['q'] / unit) if unit else 0})
-    bags, pallets = request.GET.get('bags', ''), request.GET.get('pallets', '')
+    done = request.GET.get('done') == '1'
+    bags = request.session.get('reissue_bags', '') if done else ''
+    pallets = request.session.get('reissue_pallets', '') if done else ''
     return render(request, 'material/label_reissue.html', {
         'rows': rows, 'warehouse': warehouse, 'warehouses': Warehouse.objects.filter(code__in=WAREHOUSES),
-        'bag_url': f"{reverse('material:raw_material_label_print')}?ids={bags}" if bags else '',
+        'bag_url': f"{reverse('material:raw_material_label_print')}?batch=reissue" if bags else '',
         'pallet_url': f"{reverse('material:pallet_label_print')}?ids={pallets}" if pallets else '',
         'bag_count': len([i for i in bags.split(',') if i]), 'pallet_count': len([i for i in pallets.split(',') if i]),
     })

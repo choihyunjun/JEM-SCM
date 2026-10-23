@@ -77,28 +77,38 @@ class StockReconciliationTests(TestCase):
         self.assertEqual(self.sync([self.row(35680)])['adjusted'], 0)
         self.assertEqual(StockSyncRun.objects.first().status, 'success')
 
-    def test_lot_managed_lots_are_never_trimmed_difference_is_unassigned(self):
+    def test_lot_managed_usage_is_taken_from_oldest_lot_without_records(self):
+        # 현재 버전은 ERP 생산출고를 이력으로만 받는다: 쓰인 양은 재고 맞추기가 오래된 LOT부터 뺀다.
         self.lot_managed()
-        old = self.stock(50, date(2026, 1, 1))
+        self.stock(50, date(2026, 1, 1))
         recent = self.stock(70, date(2026, 2, 1))
         self.stock(20)
         result = self.sync([self.row(90)])
-        old.refresh_from_db(); recent.refresh_from_db()
-        self.assertEqual((old.quantity, recent.quantity, self.total()), (50, 70, 90))
-        self.assertEqual(MaterialStock.objects.get(lot_no=None).quantity, -30)
-        trx = MaterialTransaction.objects.get()
-        self.assertEqual((trx.transaction_type, trx.quantity), ('ADJ_ERP_OUT', 50))
-        self.assertEqual(result['lot_diffs'][0]['diff'], -50)
+        self.assertFalse(MaterialStock.objects.filter(lot_no=date(2026, 1, 1)).exists())  # 다 쓴 LOT
+        recent.refresh_from_db()
+        self.assertEqual((recent.quantity, self.total()), (70, 90))
+        self.assertFalse(MaterialTransaction.objects.exists())  # 근거는 ERP 출고 이력
+        self.assertEqual(result['lot_diffs'], [])
         self.assertEqual(self.sync([self.row(90)])['adjusted'], 0)
-        self.assertEqual(MaterialTransaction.objects.count(), 1)
 
-    def test_lot_managed_batches_are_kept_individually(self):
+    def test_lot_managed_unexplained_increase_is_recorded_once(self):
         self.lot_managed()
-        a = self.stock(30, batch='2633511')
+        self.stock(50, date(2026, 1, 1))
+        result = self.sync([self.row(80)])
+        self.assertEqual(MaterialStock.objects.get(lot_no=None).quantity, 30)
+        trx = MaterialTransaction.objects.get()
+        self.assertEqual((trx.transaction_type, trx.quantity), ('ADJ_ERP_IN', 30))
+        self.assertEqual(result['lot_diffs'][0]['diff'], 30)
+        self.assertEqual(self.sync([self.row(80)])['adjusted'], 0)
+
+    def test_lot_managed_batches_are_used_in_batch_order(self):
+        self.lot_managed()
+        self.stock(30, batch='2633511')
         b = self.stock(70, batch='2634511')
         self.sync([self.row(20)])
-        a.refresh_from_db(); b.refresh_from_db()
-        self.assertEqual((a.quantity, b.quantity, self.total()), (30, 70, 20))
+        b.refresh_from_db()
+        self.assertEqual((b.quantity, self.total()), (20, 20))
+        self.assertFalse(MaterialStock.objects.filter(production_lot='2633511').exists())
 
     def test_matching_total_is_not_rewritten(self):
         self.lot_managed()
@@ -174,7 +184,7 @@ class StockReconciliationTests(TestCase):
         self.stock(-10, date(2026, 1, 1))
         before = list(MaterialStock.objects.values_list('pk', 'quantity'))
         with patch('material.erp_api._create_trx', side_effect=RuntimeError('history failed')):
-            result = self.sync([self.row(80)])
+            result = self.sync([self.row(150)])  # 설명 안 되는 증가분은 기록이 필요하다
         self.assertTrue(result['error'])
         self.assertEqual(list(MaterialStock.objects.values_list('pk', 'quantity')), before)
         self.assertEqual(StockSyncRun.objects.first().status, 'failed')

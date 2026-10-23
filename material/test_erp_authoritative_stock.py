@@ -50,7 +50,7 @@ class ERPAuthoritativeStockTests(TestCase):
         # 수량만 품목: ERP 그대로, 보정 기록은 남기지 않는다.
         self.assertFalse(MaterialTransaction.objects.exists())
 
-    def test_lot_managed_fractional_difference_keeps_lots_and_is_idempotent(self):
+    def test_lot_managed_fractional_usage_takes_oldest_lots_and_is_idempotent(self):
         from material.models import ProductionLotItem
         ProductionLotItem.objects.create(part=self.part)
         old = self.stock(1000, date(2026, 1, 1))
@@ -59,11 +59,11 @@ class ERPAuthoritativeStockTests(TestCase):
         with patch('material.erp_api.fetch_erp_stock', return_value=(True, [self.balance('677.3337')], None)):
             self.assertIsNone(sync_stock_from_erp()['error'])
             self.assertEqual(sync_stock_from_erp()['adjusted'], 0)
-        old.refresh_from_db(); recent.refresh_from_db()
-        self.assertEqual((old.quantity, recent.quantity), (1000, Decimal('500.1234')))  # LOT는 깎지 않는다
+        # 쓰인 4150.6663: 오래된 LOT 1000 → 다음 LOT 500.1234 → LOT 모르는 양 순서로 뺀다
+        self.assertFalse(MaterialStock.objects.filter(lot_no__isnull=False).exists())
+        self.assertEqual(MaterialStock.objects.get(lot_no=None).quantity, Decimal('677.3337'))
         self.assertEqual(self.total(), Decimal('677.3337'))
-        self.assertEqual(MaterialStock.objects.get(lot_no=None).quantity, Decimal('-822.7897'))
-        self.assertEqual(MaterialTransaction.objects.get().quantity, Decimal('4150.6663'))
+        self.assertFalse(MaterialTransaction.objects.exists())
 
     def test_explicit_negative_erp_balance_is_mirrored_for_quantity_only_part(self):
         self.stock(10, date(2026, 1, 1))

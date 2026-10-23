@@ -239,3 +239,87 @@ class ReissueTests(Base):
         self.client.post(reverse('material:label_reissue'), {'warehouse': '3200', 'part_ids': [self.part.pk]})
         self.assertEqual(sorted(RawMaterialLabel.objects.filter(status='INSTOCK').values_list('label_type', 'quantity')),
                          [('PALLET', D(25)), ('PALLET', D(60))])
+
+
+@override_settings(ERP_ENABLED=True, ERP_OUTBOX_AUTODISPATCH=False)
+class LabelReviewRegressionTests(Base):
+    """2차 리뷰(2026-10-23)에서 재현된 문제의 회귀 테스트."""
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(User.objects.create(username='pda2', is_superuser=True))
+        from .models import RawMaterialSetting
+        RawMaterialSetting.objects.create(part=self.part)  # LOT 관리 원재료
+
+    def scan(self, label, target='3000'):
+        return self.client.post(reverse('material:api_process_tag_scan'),
+                                json.dumps({'tag_id': label.label_id, 'target_warehouse_code': target}),
+                                content_type='application/json').json()
+
+    def reconcile(self, balances):
+        from .stock_reconciliation import reconcile_stock
+        rows = [{'whCd': wh, 'itemCd': 'ZR700', 'invQt1': q} for wh, q in balances]
+        with patch('material.erp_api.fetch_erp_stock', return_value=(True, rows, None)):
+            return reconcile_stock()
+
+    def test_production_issue_uses_up_the_label_on_the_shop_floor(self):
+        self.stock(self.raw, 50)
+        bag = self.labels(2, self.raw)[0]
+        self.assertTrue(self.scan(bag)['success'])
+        ERPIncomingOperation.objects.update(status='SUCCESS')
+        MaterialTransaction.objects.update(date='2026-01-01T00:00:00Z')  # 오래전에 끝난 전송
+        ERPIncomingOperation.objects.update(updated_at='2026-01-01T00:00:00Z')
+        result = self.reconcile([('3200', 25), ('3000', 0)])  # ERP 생산출고로 현장 25 다 씀
+        bag.refresh_from_db()
+        self.assertEqual(bag.status, 'USED')
+        self.assertEqual(result['labels']['consumed'], 1)
+
+    def test_label_numbers_continue_past_9999(self):
+        from django.utils import timezone
+        prefix = f"RM-{timezone.now():%Y%m%d}-"
+        for seq in (9999, 10000):
+            RawMaterialLabel.objects.create(label_id=f'{prefix}{seq}', part=self.part, part_no='ZR700',
+                                            part_name='R', lot_no=self.lot, quantity=1, status='INSTOCK')
+        self.assertEqual(RawMaterialLabel.generate_label_id(), f'{prefix}10001')
+
+    def test_return_scan_from_shop_floor_is_not_blocked_by_fifo(self):
+        self.stock(self.feed, 10, date(2026, 1, 1))     # 현장에 더 오래된 LOT
+        self.stock(self.feed, 25)
+        bag = self.labels(1, self.feed)[0]
+        self.assertTrue(self.scan(bag, '3200')['success'])
+
+    def test_scan_cancel_refuses_moves_made_on_the_stock_move_screen(self):
+        from django.utils import timezone
+        self.stock(self.feed, 50)
+        a, b = self.labels(2, self.feed)
+        move = MaterialTransaction.objects.create(transaction_no='TRX-1', transaction_type='TRANSFER',
+                                                  date=timezone.now(), part=self.part, quantity=50, lot_no=self.lot,
+                                                  warehouse_from=self.raw, warehouse_to=self.feed)
+        RawMaterialLabel.objects.filter(pk__in=[a.pk, b.pk]).update(used_transaction=move)
+        result = self.client.post(reverse('material:api_process_tag_cancel_scan'),
+                                  json.dumps({'tag_id': a.label_id}), content_type='application/json').json()
+        self.assertFalse(result['success'])
+        self.assertIn('재고이동 내역에서 취소', result['error'])
+
+    def test_consuming_a_scanned_label_keeps_its_scan_time(self):
+        from django.utils import timezone
+        self.stock(self.feed, 0.0001)
+        old, newer = self.labels(2, self.feed)   # 남은 양은 최근 포대 1장 몫: 오래된 포대가 소진된다
+        scanned = timezone.now().replace(year=2026, month=4, day=2)
+        RawMaterialLabel.objects.filter(pk=old.pk).update(used_at=scanned)
+        sync_labels(self.part)
+        old.refresh_from_db()
+        self.assertEqual((old.status, old.used_at), ('USED', scanned))
+
+    def test_reissue_keeps_entered_expiry_and_prints_from_session(self):
+        self.stock(self.raw, 30)
+        old = self.labels(1, self.raw)[0]
+        RawMaterialLabel.objects.filter(pk=old.pk).update(expiry_date=date(2027, 1, 31))
+        response = self.client.post(reverse('material:label_reissue'), {'warehouse': '3200', 'part_ids': [self.part.pk]})
+        new = RawMaterialLabel.objects.filter(status='INSTOCK')
+        self.assertEqual({l.expiry_date for l in new}, {date(2027, 1, 31)})
+        page = self.client.get(response.url)
+        self.assertContains(page, '?batch=reissue')
+        printed = self.client.get(reverse('material:raw_material_label_print') + '?batch=reissue')
+        for label in new:
+            self.assertContains(printed, label.label_id)

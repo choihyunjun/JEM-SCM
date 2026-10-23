@@ -100,13 +100,17 @@ def sync_labels(part, lot_no=None):
             target = next((wh for wh, q in need.items() if q > 0), None)
             if target is None:
                 break
-            RawMaterialLabel.objects.filter(pk=label.pk).update(warehouse_id=target, status='INSTOCK')
+            if RawMaterialLabel.objects.filter(pk=label.pk, warehouse_id=label.warehouse_id, status__in=LIVE).update(
+                    warehouse_id=target, status='INSTOCK') != 1:
+                continue  # 그 사이 스캔으로 옮겨진 라벨
             need[target] -= label.quantity
             surplus.remove(label)
             moved += 1
-        if surplus:
-            RawMaterialLabel.objects.filter(pk__in=[l.pk for l in surplus]).update(status='USED', used_at=now)
-            consumed += len(surplus)
+        for label in surplus:
+            done = RawMaterialLabel.objects.filter(pk=label.pk, warehouse_id=label.warehouse_id, status__in=LIVE)
+            if done.update(status='USED') == 1:
+                RawMaterialLabel.objects.filter(pk=label.pk, used_at__isnull=True).update(used_at=now)
+                consumed += 1
     return moved, consumed
 
 
