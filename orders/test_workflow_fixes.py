@@ -372,7 +372,8 @@ class ScanAndERPWriterFixTests(TestCase):
         self.assertEqual(self.stock.quantity, 100)
 
     def test_debit_failure_rolls_back_label_claim(self):
-        with patch('material.views.deduct_stock', side_effect=ValueError('simulated stock change')):
+        # 라벨을 옮긴 뒤 이력 저장에서 실패해도 라벨 위치·재고가 함께 되돌아가야 한다.
+        with patch('material.views.MaterialTransaction.objects.create', side_effect=ValueError('simulated failure')):
             self.assertFalse(self.scan().json()['success'])
         self.label.refresh_from_db()
         self.stock.refresh_from_db()

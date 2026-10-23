@@ -2,6 +2,7 @@
 import logging
 from .stock_safety import deduct_stock, quantity_change
 from .quantities import human_quantity, input_quantity, stock_quantity, stock_total
+from decimal import Decimal
 import re
 
 from django.shortcuts import render, redirect, get_object_or_404
@@ -2078,9 +2079,10 @@ def api_process_tag_scan(request):
                 'error': '태그 ID가 누락되었습니다.'
             }, status=400)
 
-        # RM/PLT 라벨 스캔 처리 (원재료 라벨)
+        # RM/PLT 라벨 스캔 처리 (원재료 라벨): 라벨이 놓인 창고 → 도착 창고로 이동.
+        # 현장(3000·4300)으로 옮기는 것이 곧 투입이다. 소진은 ERP 생산출고가 정한다(labels.sync_labels).
         if tag_id.startswith('RM-') or tag_id.startswith('PLT-'):
-            rm_label = RawMaterialLabel.objects.filter(label_id=tag_id).first()
+            rm_label = RawMaterialLabel.objects.select_related('warehouse').filter(label_id=tag_id).first()
             if not rm_label:
                 return JsonResponse({
                     'success': False,
@@ -2089,190 +2091,101 @@ def api_process_tag_scan(request):
                 })
 
             label_kind = '파렛트' if tag_id.startswith('PLT-') else '원재료'
-
             if rm_label.status == 'USED':
-                # 이미 투입된 라벨 → 에러 반환 (취소는 이력 ✕ 버튼으로만 가능)
-                return JsonResponse({
-                    'success': False,
-                    'already_used': True,
-                    'error': '이미 투입된 라벨입니다. 투입 이력의 ✕ 버튼을 눌러 취소하세요.',
-                    'tag_id': rm_label.label_id,
-                })
-            elif rm_label.status == 'CANCELLED':
-                return JsonResponse({
-                    'success': False,
-                    'error': f'취소된 라벨입니다. ({rm_label.label_id})',
-                })
-            if rm_label.used_transaction_id or rm_label.used_at:
-                return JsonResponse({'success': False, 'already_used': True,
-                    'error': '이미 이동한 라벨입니다. 원본 이동을 취소한 뒤 다시 스캔해주세요.'})
+                return JsonResponse({'success': False, 'already_used': True, 'tag_id': rm_label.label_id,
+                                     'error': f'이미 생산에 소진된 라벨입니다. ({rm_label.label_id})'})
+            if rm_label.status in ('CANCELLED', 'EXPIRED', 'DISPOSED'):
+                return JsonResponse({'success': False,
+                                     'error': f'{rm_label.get_status_display()}된 라벨입니다. ({rm_label.label_id})'})
 
-            # 3200 원재료창고 (출발) / 도착 창고 조회
-            wh_from = Warehouse.objects.filter(code='3200').first()
+            wh_from = rm_label.warehouse or Warehouse.objects.filter(code='3200').first()
             wh_to = Warehouse.objects.filter(code=target_warehouse_code).first()
             if not wh_from:
-                return JsonResponse({
-                    'success': False,
-                    'error': '3200 원재료창고가 등록되어 있지 않습니다.',
-                })
+                return JsonResponse({'success': False, 'error': '라벨 위치(창고)를 알 수 없습니다.'})
             if not wh_to:
                 return JsonResponse({
                     'success': False,
                     'error': f'도착 창고({target_warehouse_code})가 등록되어 있지 않습니다.',
                 })
             if wh_from.pk == wh_to.pk:
-                return JsonResponse({'success': False, 'error': '출발 창고와 도착 창고가 같습니다.'})
+                return JsonResponse({'success': False, 'already_used': True,
+                                     'error': f'이미 {wh_to.code} 창고에 있는 라벨입니다.'})
 
-            # 목적지에 따라 표시 문구만 구분한다. 중복 방지는 모든 이동에 적용한다.
-            mark_used = (target_warehouse_code == '3000')
-
-            # FIFO 검증 (3200 창고에서 같은 품번 더 오래된 LOT가 남아있으면 차단)
-            if rm_label.lot_no:
-                older = MaterialStock.objects.filter(
-                    warehouse=wh_from, part=rm_label.part,
-                    lot_no__lt=rm_label.lot_no, quantity__gt=0
-                ).order_by('lot_no').first()
-                if older:
-                    return JsonResponse({
-                        'success': False,
-                        'error': f'[FIFO 위반] 더 오래된 LOT {older.lot_no} 재고({older.quantity})가 남아있습니다. 먼저 소진해주세요.',
-                        'tag_info': {
-                            'tag_id': rm_label.label_id,
-                            'part_no': rm_label.part_no,
-                            'lot_no': str(rm_label.lot_no),
-                            'quantity': float(rm_label.quantity),
-                        }
-                    })
-
-            # 3200 창고의 해당 LOT 재고 조회 (3200은 LOT 필수 창고)
-            from django.db.models import F as _F
             lot_no = rm_label.lot_no
-
-            # 라벨에 LOT가 없으면 차단
             if not lot_no:
+                return JsonResponse({'success': False, 'error': f'라벨에 LOT 정보가 없습니다. ({rm_label.label_id})'})
+
+            # FIFO 검증 (출발 창고에 같은 품번의 더 오래된 LOT가 남아 있으면 차단)
+            older = MaterialStock.objects.filter(
+                warehouse=wh_from, part=rm_label.part, lot_no__lt=lot_no, quantity__gt=0
+            ).order_by('lot_no').first()
+            if older:
                 return JsonResponse({
                     'success': False,
-                    'error': f'라벨에 LOT 정보가 없습니다. ({rm_label.label_id})',
+                    'error': f'[FIFO 위반] 더 오래된 LOT {older.lot_no} 재고({older.quantity})가 남아있습니다. 먼저 소진해주세요.',
+                    'tag_info': {'tag_id': rm_label.label_id, 'part_no': rm_label.part_no,
+                                 'lot_no': str(lot_no), 'quantity': float(rm_label.quantity)},
                 })
 
-            src_stock = MaterialStock.objects.filter(
-                warehouse=wh_from, part=rm_label.part, lot_no=lot_no
-            ).first()
-
-            available_lot = src_stock.quantity if src_stock else 0
-
-            # LOT 일치 재고가 없으면 라벨 사용 불가
-            if available_lot <= 0:
-                # 같은 품번의 다른 LOT 재고 조회
+            src_stock = MaterialStock.objects.filter(warehouse=wh_from, part=rm_label.part, lot_no=lot_no).first()
+            available_total = src_stock.quantity if src_stock and src_stock.quantity > 0 else Decimal(0)
+            if available_total <= 0:
                 other_lots = MaterialStock.objects.filter(
                     warehouse=wh_from, part=rm_label.part, lot_no__isnull=False, quantity__gt=0
                 ).exclude(lot_no=lot_no).values_list('lot_no', flat=True)[:3]
-
-                if src_stock is not None:
-                    # 해당 LOT 레코드는 있지만 수량 0 → 재고 없음
-                    err_msg = f'[재고 없음] 라벨 LOT({lot_no})의 3200 창고 재고가 0입니다.'
-                else:
-                    # 해당 LOT 레코드 자체가 없음 → LOT 불일치
-                    err_msg = f'[LOT 불일치] 라벨 LOT({lot_no}) 재고가 3200 창고에 없습니다.'
+                err_msg = (f'[재고 없음] 라벨 LOT({lot_no})의 {wh_from.code} 창고 재고가 0입니다.' if src_stock
+                           else f'[LOT 불일치] 라벨 LOT({lot_no}) 재고가 {wh_from.code} 창고에 없습니다.')
                 if other_lots:
                     err_msg += f' (창고 내 다른 LOT: {", ".join(str(l) for l in other_lots)})'
-                return JsonResponse({
-                    'success': False,
-                    'error': err_msg,
-                    'tag_info': {
-                        'tag_id': rm_label.label_id,
-                        'part_no': rm_label.part_no,
-                        'lot_no': str(lot_no),
-                        'quantity': float(rm_label.quantity),
-                    }
-                })
+                return JsonResponse({'success': False, 'error': err_msg,
+                                     'tag_info': {'tag_id': rm_label.label_id, 'part_no': rm_label.part_no,
+                                                  'lot_no': str(lot_no), 'quantity': float(rm_label.quantity)}})
 
-            # NULL LOT은 더 이상 사용 안 함 (3200은 LOT 필수)
-            null_stock = None
-            available_null = 0
-            available_total = max(available_lot, 0)
-
-            label_qty = float(rm_label.quantity)
-
-            # 사용자가 조정 수량을 입력하지 않았는데 재고 부족 → 조정 입력 요청
+            label_qty = rm_label.quantity
             if override_qty is None and available_total < label_qty:
                 return JsonResponse({
                     'success': False,
                     'need_adjust': True,
                     'available_qty': float(available_total),
-                    'label_qty': label_qty,
-                    'error': f'재고 부족: 라벨 수량 {label_qty} > 재고 {available_total}',
-                    'tag_info': {
-                        'tag_id': rm_label.label_id,
-                        'part_no': rm_label.part_no,
-                        'part_name': rm_label.part_name,
-                        'quantity': label_qty,
-                        'lot_no': str(lot_no) if lot_no else '',
-                    }
+                    'label_qty': float(label_qty),
+                    'error': f'재고 부족: 라벨 수량 {label_qty.normalize():f} > 재고 {available_total.normalize():f}',
+                    'tag_info': {'tag_id': rm_label.label_id, 'part_no': rm_label.part_no,
+                                 'part_name': rm_label.part_name, 'quantity': float(label_qty),
+                                 'lot_no': str(lot_no)},
                 })
-
-            # 실제 이동할 수량 결정
             if override_qty is not None:
                 try:
-                    move_qty = float(override_qty)
+                    # 사람이 넣는 수량은 정수, 소수는 남은 재고 전부일 때만
+                    move_qty = human_quantity(input_quantity(override_qty), full=stock_total(available_total))
                 except (ValueError, TypeError):
-                    return JsonResponse({'success': False, 'error': '이동 수량이 올바르지 않습니다.'})
-                if move_qty <= 0:
-                    return JsonResponse({'success': False, 'error': '이동 수량은 0보다 커야 합니다.'})
+                    return JsonResponse({'success': False, 'error': '이동 수량은 정수로 입력하세요. (소수 잔량은 전량만)'})
                 if move_qty > available_total:
-                    return JsonResponse({'success': False, 'error': f'이동 수량({move_qty})이 재고({available_total})보다 큽니다.'})
+                    return JsonResponse({'success': False, 'error': f'이동 수량({move_qty.normalize():f})이 재고({available_total.normalize():f})보다 큽니다.'})
             else:
-                move_qty = label_qty
+                move_qty = stock_quantity(label_qty)
 
-            # 트랜잭션: 3200 차감 → 3000 추가 → 라벨 USED → 이력 생성
+            from .erp_api import register_erp_stock_move
             with transaction.atomic():
-                # Claim the label using current DB state, not the pre-transaction read.
-                # Even nonproduction moves consume this scan until explicitly cancelled.
-                claimed = RawMaterialLabel.objects.exclude(status__in=['USED', 'CANCELLED', 'EXPIRED', 'DISPOSED']).filter(
-                    pk=rm_label.pk, used_at__isnull=True, used_transaction__isnull=True,
-                ).update(used_at=timezone.now(), used_by=request.user)
+                # 라벨을 지금 위치에서 도착 창고로 옮긴다 (같은 라벨 동시 스캔은 한 번만 성공)
+                claimed = RawMaterialLabel.objects.filter(
+                    Q(warehouse=wh_from) | Q(warehouse__isnull=True),
+                    pk=rm_label.pk, status__in=['PRINTED', 'INSTOCK'],
+                ).update(warehouse=wh_to, status='INSTOCK', used_at=timezone.now(), used_by=request.user)
                 if claimed != 1:
                     return JsonResponse({'success': False, 'already_used': True,
                         'error': '이미 이동했거나 사용할 수 없는 라벨입니다. 이력을 다시 조회해주세요.'})
-                # float - Decimal raises TypeError when the LOT holds the whole label.
-                remaining = stock_quantity(move_qty)
-                # LOT 재고 우선 차감
-                if lot_no and src_stock and src_stock.quantity > 0:
-                    deduct_lot = min(src_stock.quantity, remaining)
-                    deduct_stock(src_stock, deduct_lot)
-                    remaining -= deduct_lot
-                # NULL LOT 차감
-                if remaining > 0 and null_stock and null_stock.quantity > 0:
-                    deduct_null = min(null_stock.quantity, remaining)
-                    deduct_stock(null_stock, deduct_null)
-                    remaining -= deduct_null
-                # 조회 이후 재고가 바뀌었으면 전체 이동을 취소한다.
-                if remaining > 0:
-                    if null_stock:
-                        deduct_stock(null_stock, remaining)
-                    else:
-                        raise ValueError('라벨 LOT 재고가 부족합니다. 다시 조회해 주세요.')
-
-                # 3000 창고에 추가 (LOT 유지)
+                if MaterialStock.objects.filter(pk=src_stock.pk, quantity__gte=move_qty).update(
+                        quantity=quantity_change(-move_qty)) != 1:
+                    raise ValueError('라벨 LOT 재고가 부족합니다. 다시 조회해 주세요.')
                 tgt_stock, _created = MaterialStock.objects.get_or_create(
-                    warehouse=wh_to, part=rm_label.part, lot_no=lot_no,
+                    warehouse=wh_to, part=rm_label.part, lot_no=lot_no, production_lot=None,
                     defaults={'quantity': 0}
                 )
-                MaterialStock.objects.filter(pk=tgt_stock.pk).update(
-                    quantity=quantity_change(move_qty)
-                )
+                MaterialStock.objects.filter(pk=tgt_stock.pk).update(quantity=quantity_change(move_qty))
                 tgt_stock.refresh_from_db()
 
-                # A label represents one movement, regardless of destination warehouse.
-                rm_label.status = 'USED'
-                rm_label.used_at = timezone.now()
-                rm_label.used_by = request.user
-                rm_label.save(update_fields=['status', 'used_at', 'used_by'])
-
-                # 이력 생성
                 trx_no = f"RM-SCAN-{timezone.now().strftime('%y%m%d%H%M%S%f')}-{request.user.id}"
-                lot_display = lot_no.strftime('%Y-%m-%d') if lot_no else 'NO LOT'
-                action_label = '스캔 투입' if mark_used else '재고 이동'
+                action_label = '스캔 투입' if wh_to.code in ('3000', '4300') else '재고 이동'
                 trx_for_erp = MaterialTransaction.objects.create(
                     transaction_no=trx_no,
                     transaction_type='TRANSFER',
@@ -2284,39 +2197,28 @@ def api_process_tag_scan(request):
                     warehouse_to=wh_to,
                     result_stock=tgt_stock.quantity,
                     actor=request.user,
-                    remark=f"[{label_kind} 라벨 {action_label}] {rm_label.label_id} (LOT: {lot_display})"
+                    remark=f"[{label_kind} 라벨 {action_label}] {rm_label.label_id} (LOT: {lot_no:%Y-%m-%d})"
                 )
                 RawMaterialLabel.objects.filter(pk=rm_label.pk).update(used_transaction=trx_for_erp)
-                if getattr(settings, 'ERP_ENABLED', False):
-                    from .erp_api import register_erp_stock_move
-                    register_erp_stock_move(trx_for_erp, move_qty, wh_from.code, wh_to.code)
+                # ERP 재고이동은 같은 처리 단위에서 전송 대기열에 한 번만 넣는다 (커밋 후 전송)
+                ok_erp, _erp_no, err_erp = register_erp_stock_move(trx_for_erp, move_qty, wh_from.code, wh_to.code)
 
-            # ERP 재고이동 등록 (atomic 밖 - ERP 실패가 SCM 롤백하지 않도록)
             erp_msg = ''
-            try:
-                from .erp_api import register_erp_stock_move
-                ok_erp, erp_no, err_erp = register_erp_stock_move(
-                    trx_for_erp, move_qty, wh_from.code, wh_to.code
-                )
-                if not ok_erp:
-                    erp_msg = f' (ERP 연동 실패: {err_erp})'
-                    logger.warning(f'RM 스캔 ERP 이동 실패: {err_erp}')
-            except Exception as _e:
-                erp_msg = f' (ERP 연동 예외)'
-                logger.warning(f'RM 스캔 ERP 이동 예외: {_e}')
+            if not ok_erp and err_erp and not str(err_erp).startswith(('ERP 전송 대기', 'ERP 비활성화')):
+                erp_msg = f' (ERP 연동 확인 필요: {err_erp})'
+                logger.warning(f'RM 스캔 ERP 이동 확인 필요: {err_erp}')
 
-            msg = f'{wh_to.name}(으)로 이동 완료 ({move_qty})' + erp_msg
             return JsonResponse({
                 'success': True,
                 'is_first_scan': True,
-                'message': msg,
+                'message': f'{wh_to.name}(으)로 이동 완료 ({move_qty.normalize():f})' + erp_msg,
                 'tag_info': {
                     'tag_id': rm_label.label_id,
                     'part_no': rm_label.part_no,
                     'part_name': rm_label.part_name,
-                    'quantity': move_qty,
-                    'lot_no': str(lot_no) if lot_no else '',
-                    'status': rm_label.get_status_display(),
+                    'quantity': float(move_qty),
+                    'lot_no': str(lot_no),
+                    'status': '재고',
                     'scan_count': 1,
                     'printed_at': timezone.localtime(rm_label.printed_at).strftime('%Y-%m-%d %H:%M') if rm_label.printed_at else '',
                     'used_at': timezone.now().strftime('%Y-%m-%d %H:%M'),
@@ -2652,6 +2554,16 @@ def api_process_tag_scan(request):
 
 
 @wms_permission_required('can_wms_stock_view')
+def api_label_lookup(request, label_id):
+    """PDA로 찍은 라벨 번호 → 품번·수량·LOT·위치 (QR에는 번호만 들어 있다)."""
+    from .labels import lookup, scan_id
+    info = lookup(label_id)
+    if not info:
+        return JsonResponse({'success': False, 'error': f'등록되지 않은 라벨입니다: {scan_id(label_id)}'})
+    return JsonResponse({'success': True, 'label': info})
+
+
+@wms_permission_required('can_wms_stock_view')
 def api_process_tag_info(request, tag_id):
     """
     현품표 정보 조회 API (GET)
@@ -2858,88 +2770,43 @@ def api_process_tag_cancel_scan(request):
         if not tag_id:
             return JsonResponse({'success': False, 'error': '태그 ID가 누락되었습니다.'}, status=400)
 
-        # ── RM / PLT 라벨 취소 ──
+        # ── RM / PLT 라벨 취소: 마지막 스캔 이동을 되돌린다 (재고·라벨 위치·ERP 이동) ──
         if tag_id.startswith('RM-') or tag_id.startswith('PLT-'):
             rm_label = RawMaterialLabel.objects.filter(label_id=tag_id).first()
             if not rm_label:
                 return JsonResponse({'success': False, 'error': f'등록되지 않은 라벨: {tag_id}'}, status=404)
-            if rm_label.status != 'USED':
-                return JsonResponse({'success': False, 'error': '투입 상태가 아닙니다.'})
-
-            wh_3200 = Warehouse.objects.filter(code='3200').first()
-            if not wh_3200:
-                return JsonResponse({'success': False, 'error': '출발 창고(3200)가 없습니다.'})
-
-            last_trx = rm_label.used_transaction or MaterialTransaction.objects.filter(
-                part=rm_label.part,
-                transaction_type='TRANSFER',
-                warehouse_from=wh_3200,
-                # Legacy labels have no FK; match the full token, never an ID prefix.
-                remark__contains=f'] {rm_label.label_id} (LOT:',
-            ).order_by('-date').first()
-            if (not last_trx or not last_trx.warehouse_to_id or last_trx.part_id != rm_label.part_id
-                    or last_trx.lot_no != rm_label.lot_no or last_trx.warehouse_from_id != wh_3200.pk):
-                return JsonResponse({'success': False, 'error': '원본 라벨 이동 이력을 확인할 수 없습니다.'})
-            wh_3000 = last_trx.warehouse_to  # Restore from the actual destination, including nonproduction.
-            cancel_qty = float(last_trx.quantity)
-            lot_no_cancel = rm_label.lot_no
-
-            from django.db.models import F as _F
-            with transaction.atomic():
-                claimed = RawMaterialLabel.objects.filter(pk=rm_label.pk, status='USED',
-                    used_at=rm_label.used_at, used_transaction_id=rm_label.used_transaction_id).update(
-                        status='INSTOCK', used_at=None, used_by=None, used_transaction=None)
-                if claimed != 1:
-                    return JsonResponse({'success': False, 'error': '이미 취소되거나 변경된 라벨입니다. 다시 조회해주세요.'})
-                src_3000 = MaterialStock.objects.filter(
-                    warehouse=wh_3000, part=rm_label.part, lot_no=lot_no_cancel
-                ).first()
-                if src_3000:
-                    deduct_stock(src_3000, cancel_qty)
-                else:
-                    raise ValueError('투입처 LOT 재고가 부족하여 취소할 수 없습니다.')
-
-                tgt_3200, _ = MaterialStock.objects.get_or_create(
-                    warehouse=wh_3200, part=rm_label.part, lot_no=lot_no_cancel, defaults={'quantity': 0}
-                )
-                MaterialStock.objects.filter(pk=tgt_3200.pk).update(quantity=quantity_change(cancel_qty))
-                tgt_3200.refresh_from_db()
-
-                rm_label.status = 'INSTOCK'
-                rm_label.used_at = None
-                rm_label.used_by = None
-                rm_label.save(update_fields=['status', 'used_at', 'used_by'])
-
-                trx_no = f"RM-CANCEL-{timezone.now().strftime('%y%m%d%H%M%S%f')}-{request.user.id}"
-                lot_disp = lot_no_cancel.strftime('%Y-%m-%d') if lot_no_cancel else 'NO LOT'
-                label_kind_c = '파렛트' if tag_id.startswith('PLT-') else '원재료'
-                cancel_trx = MaterialTransaction.objects.create(
-                    transaction_no=trx_no,
-                    transaction_type='TRANSFER',
-                    date=timezone.now(),
-                    part=rm_label.part,
-                    quantity=cancel_qty,
-                    lot_no=lot_no_cancel,
-                    warehouse_from=wh_3000,
-                    warehouse_to=wh_3200,
-                    result_stock=tgt_3200.quantity,
-                    actor=request.user,
-                    remark=f"[{label_kind_c} 라벨 투입취소] {rm_label.label_id} (LOT: {lot_disp})"
-                )
-                if getattr(settings, 'ERP_ENABLED', False):
-                    from .erp_api import register_erp_stock_move
-                    register_erp_stock_move(cancel_trx, cancel_qty, wh_3000.code, wh_3200.code)
-
-            erp_msg = ''
+            last_trx = rm_label.used_transaction
+            if rm_label.status == 'USED':
+                return JsonResponse({'success': False, 'error': '이미 생산에 소진된 라벨은 취소할 수 없습니다.'})
+            if not last_trx or last_trx.warehouse_to_id != rm_label.warehouse_id or not last_trx.warehouse_from_id:
+                return JsonResponse({'success': False, 'error': '되돌릴 스캔 이동이 없습니다.'})
+            wh_back, wh_now = last_trx.warehouse_from, last_trx.warehouse_to
+            qty = last_trx.quantity
+            from .erp_outbox import cancel_move
             try:
-                from .erp_api import register_erp_stock_move
-                ok_erp, _, err_erp = register_erp_stock_move(cancel_trx, cancel_qty, wh_3000.code, wh_3200.code)
-                if not ok_erp:
-                    erp_msg = f' (ERP 연동 실패: {err_erp})'
-            except Exception as _e:
-                erp_msg = ' (ERP 연동 예외)'
-
-            return JsonResponse({'success': True, 'message': f'{tag_id} 투입 취소 완료' + erp_msg})
+                with transaction.atomic():
+                    orig = MaterialTransaction.objects.select_for_update().get(pk=last_trx.pk)
+                    if RawMaterialLabel.objects.filter(pk=rm_label.pk, warehouse=wh_now, used_transaction=orig).update(
+                            warehouse=wh_back, status='INSTOCK', used_at=None, used_by=None,
+                            used_transaction=None) != 1:
+                        raise ValueError('이미 취소되거나 변경된 라벨입니다. 다시 조회해주세요.')
+                    src = MaterialStock.objects.filter(warehouse=wh_now, part=rm_label.part, lot_no=rm_label.lot_no,
+                                                       production_lot=None).first()
+                    if not src or MaterialStock.objects.filter(pk=src.pk, quantity__gte=qty).update(
+                            quantity=quantity_change(-qty)) != 1:
+                        raise ValueError('이미 생산에 사용된 수량이 있어 취소할 수 없습니다. (현장 LOT 재고 부족)')
+                    back, _ = MaterialStock.objects.get_or_create(
+                        warehouse=wh_back, part=rm_label.part, lot_no=rm_label.lot_no, production_lot=None,
+                        defaults={'quantity': 0})
+                    MaterialStock.objects.filter(pk=back.pk).update(quantity=quantity_change(qty))
+                    # ERP 이동: 미전송이면 전송 취소, 등록됐으면 삭제 요청 (원 이동 기록은 재고이동 취소와 같이 지움)
+                    ok, err = cancel_move(orig)
+                    if not ok:
+                        raise ValueError(err)
+                    orig.delete()
+            except ValueError as exc:
+                return JsonResponse({'success': False, 'error': str(exc)})
+            return JsonResponse({'success': True, 'message': f'{tag_id} 스캔 이동 취소 완료 ({wh_now.code}→{wh_back.code})'})
 
         # ── ProcessTag 취소 ──
         tag = ProcessTag.objects.filter(tag_id=tag_id).first()

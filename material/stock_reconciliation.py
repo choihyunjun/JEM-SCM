@@ -188,6 +188,12 @@ def reconcile_stock():
                     'stage': f'ERP 현재고 반영 중 ({index + 1}/{len(balances)})',
                     'percent': 10 + int(85 * (index + 1) / len(balances)),
                 }, 600)
+        # 재고가 정해진 뒤 라벨을 맞춘다: 재고를 따라 옮기고, 다 쓴 포대 라벨은 소진 처리.
+        try:
+            from .labels import sync_all
+            result['labels'] = sync_all()
+        except Exception as exc:  # 라벨 정리는 재고 반영 결과를 바꾸지 않는다
+            result['labels'] = {'error': str(exc)}
         # 응답 누락·마스터 미등록은 매번 같은 고정 항목이라 실패로 보지 않고 목록으로만 남긴다.
         result['error'] = '; '.join(result['changed'][:10]) or None
         run.status = 'partial' if result['changed'] else 'success'

@@ -44,6 +44,7 @@ urlpatterns = [
     # 현품표 스캔 API (중복 스캔 확인)
     path('api/tag/scan/', views.api_process_tag_scan, name='api_process_tag_scan'),
     path('api/tag/cancel-scan/', views.api_process_tag_cancel_scan, name='api_process_tag_cancel_scan'),
+    path('api/label/<str:label_id>/', views.api_label_lookup, name='api_label_lookup'),
     path('api/tag/<str:tag_id>/', views.api_process_tag_info, name='api_process_tag_info'),
     path('api/scan-history/', views.api_scan_history_by_part, name='api_scan_history_by_part'),
     

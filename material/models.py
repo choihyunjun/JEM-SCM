@@ -819,6 +819,9 @@ class RawMaterialSetting(models.Model):
     shelf_life_days = models.IntegerField("보관기간(일)", default=365, help_text="입고일로부터 유효기간")
     unit_weight = models.DecimalField("단위중량(kg)", max_digits=10, decimal_places=2, default=25,
                                        help_text="포대당 중량 (기본 25kg)")
+    LABEL_UNIT_CHOICES = [('PACKAGE', '포대'), ('PALLET', '파렛트')]
+    label_unit = models.CharField("라벨 단위", max_length=10, choices=LABEL_UNIT_CHOICES, default='PACKAGE',
+                                  help_text="파렛트: 파렛트 라벨만 발행하고 포대 라벨은 발행하지 않음")
 
     remark = models.TextField("비고", blank=True)
 
@@ -845,7 +848,7 @@ class RawMaterialLabel(models.Model):
     STATUS_CHOICES = [
         ('PRINTED', '발행'),
         ('INSTOCK', '재고'),
-        ('USED', '사용완료'),
+        ('USED', '소진'),
         ('CANCELLED', '취소'),
         ('EXPIRED', '유효기간만료'),
         ('DISPOSED', '폐기'),
@@ -891,6 +894,9 @@ class RawMaterialLabel(models.Model):
     # 현재 위치
     current_rack = models.ForeignKey(RawMaterialRack, on_delete=models.SET_NULL, null=True, blank=True,
                                       verbose_name="현재 위치")
+    # 라벨이 놓인 창고: 상태는 위치(창고)와 소진으로만 판단한다 (투입 개념 없음)
+    warehouse = models.ForeignKey(Warehouse, on_delete=models.SET_NULL, null=True, blank=True,
+                                  related_name='raw_labels', verbose_name="창고")
 
     # 발행 정보
     printed_at = models.DateTimeField("발행일시", auto_now_add=True)
@@ -912,6 +918,13 @@ class RawMaterialLabel(models.Model):
 
     def __str__(self):
         return f"[{self.label_id}] {self.part_no} / {self.lot_no} / {self.quantity}{self.get_unit_display()}"
+
+    def save(self, *args, **kwargs):
+        # 새 라벨은 그 LOT 재고가 있는 창고(원재료창고 3200 우선)에 둔다.
+        if self._state.adding and self.warehouse_id is None:
+            from .labels import initial_warehouse
+            self.warehouse = initial_warehouse(self)
+        super().save(*args, **kwargs)
 
     @classmethod
     def generate_label_id(cls):
