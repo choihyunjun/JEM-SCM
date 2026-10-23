@@ -661,10 +661,25 @@
         var EXCLUDE = ['/accounts/login/', '/accounts/logout/', '/login-success/'];
 
         function load() {
-            try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch(e) { return []; }
+            // 메뉴 화면만 탭으로 둔다: 예전 방식으로 쌓인(상세·승인 화면 등) 탭은 한 번 정리된다
+            try { return JSON.parse(localStorage.getItem(KEY) || '[]').filter(function(p){ return p.menu; }); }
+            catch(e) { return []; }
         }
         function save(pages) {
-            localStorage.setItem(KEY, JSON.stringify(pages));
+            try { localStorage.setItem(KEY, JSON.stringify(pages)); } catch(e) {}
+        }
+
+        // 지금 화면이 왼쪽(또는 상단) 메뉴에 있는 화면이면 그 메뉴 링크를 돌려준다
+        function menuLink() {
+            var links = document.querySelectorAll('#sidenavAccordion a[href], .sb-topnav a[href], .admin-sidebar a[href]');
+            for (var i = 0; i < links.length; i++) {
+                var href = links[i].getAttribute('href');
+                if (!href || href === '#' || href.indexOf('javascript:') === 0) continue;
+                var path;
+                try { path = new URL(links[i].href, location.href).pathname; } catch(e) { continue; }
+                if (path === location.pathname) return links[i];
+            }
+            return null;
         }
 
         function getPageLabel() {
@@ -680,13 +695,16 @@
         }
 
         function track() {
-            var url = location.pathname + location.search;
+            var url = location.pathname;
             if (EXCLUDE.some(function(p){ return url.startsWith(p); })) return;
-            var label = getPageLabel();
-            // 기존에 같은 URL 있으면 제거 (끝으로 이동시키기 위해)
+            var link = menuLink();
+            if (!link) return;  // 메뉴 안쪽 화면(상세·승인·출력 등)은 탭으로 남기지 않는다
+            var label = link.textContent.replace(/\s+/g, ' ').trim() || getPageLabel();
+            label = label.length > 18 ? label.substring(0, 18) + '…' : label;
+            // 기존에 같은 메뉴 있으면 제거 (끝으로 이동시키기 위해)
             var pages = load().filter(function(p){ return p.url !== url; });
             // 끝에 추가 (가장 최신)
-            pages.push({ url: url, label: label });
+            pages.push({ url: url, label: label, menu: true });
             // MAX 초과 시 가장 오래된 것(맨 앞)을 하나씩 제거
             while (pages.length > MAX) pages.shift();
             save(pages);
@@ -703,7 +721,7 @@
             var bar = document.getElementById('recentTabsBar');
             if (!bar) return;
             if (!pages.length) { bar.style.display = 'none'; return; }
-            var cur = location.pathname + location.search;
+            var cur = location.pathname;
             bar.style.display = 'flex';
             bar.innerHTML = pages.map(function(p) {
                 var active = p.url === cur ? ' active' : '';
