@@ -2676,7 +2676,7 @@ def api_scan_history_by_part(request):
                 'stock_reflected': False,
             })
         used_labels_all = visible_history(RawMaterialLabel.objects.filter(
-            status='USED'
+            used_transaction__isnull=False
         )).select_related('used_by').order_by('-used_at')[:50]
         for lbl in used_labels_all:
             items_all.append({
@@ -2728,9 +2728,9 @@ def api_scan_history_by_part(request):
             'stock_reflected': False,
         })
 
-    # 2) RM/PLT 라벨 - 현재 USED 상태만 표시 (취소되어 INSTOCK 복구된 건 자동 제외)
+    # 2) RM/PLT 라벨 - 스캔으로 옮긴 라벨 (취소하면 이동 기록이 지워져 자동 제외)
     used_labels = visible_history(RawMaterialLabel.objects.filter(
-        part_no=part_no, status='USED'
+        part_no=part_no, used_transaction__isnull=False
     )).select_related('used_by', 'part').order_by('-used_at')[:30]
     for lbl in used_labels:
         items.append({
@@ -3542,7 +3542,8 @@ def stock_move(request):
                                     lot_no=lot_no,
                                     status__in=['INSTOCK', 'PRINTED']
                                 ).update(
-                                    status='USED',
+                                    warehouse=to_wh,  # 라벨은 놓인 창고가 상태 (소진은 생산출고가 정함)
+                                    status='INSTOCK',
                                     used_at=transfer_datetime,
                                     used_by=request.user,
                                     used_transaction=trx_obj,
@@ -7947,6 +7948,9 @@ def api_labels_for_lot(request):
         lot_no=lot_date,
         status__in=['INSTOCK', 'PRINTED']
     ).order_by('printed_at')
+    warehouse_code = (request.GET.get('warehouse_code') or '').strip()
+    if warehouse_code:  # 보내는 창고에 놓인 라벨만 고를 수 있다
+        rm_labels = rm_labels.filter(Q(warehouse__code=warehouse_code) | Q(warehouse__isnull=True))
 
     # 공정현품표(TAG) 조회
     tags = ProcessTag.objects.filter(
@@ -8059,11 +8063,11 @@ def cancel_stock_move(request, trx_id):
                 quantity=quantity_change(trx.quantity)
             )
 
-            # 3. 연결된 라벨 원복 (USED → INSTOCK / PRINTED)
+            # 3. 연결된 라벨을 보내던 창고로 되돌린다
             RawMaterialLabel.objects.filter(
-                used_transaction=trx, status='USED'
+                used_transaction=trx, status__in=['USED', 'INSTOCK']
             ).update(
-                status='INSTOCK', used_at=None, used_by=None, used_transaction=None
+                status='INSTOCK', warehouse=trx.warehouse_from, used_at=None, used_by=None, used_transaction=None
             )
             ProcessTag.objects.filter(
                 used_transaction=trx, status='USED'

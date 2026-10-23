@@ -202,3 +202,40 @@ class ProductTagOnlyTests(Base):
                  {'part_no': 'PRD-1', 'quantity': 100, 'lot_no': '2026-04-01'}]
         self.client.post(reverse('material:lot_allocation_print'), {'items': json.dumps(items)})
         self.assertEqual(list(ProcessTag.objects.values_list('part_no', flat=True)), ['PRD-1'])
+
+
+class ReissueTests(Base):
+    """전환용 일괄 재발행: 실재고 LOT대로 새 라벨, 그 창고 기존 라벨은 폐기."""
+
+    def setUp(self):
+        super().setUp()
+        from .models import RawMaterialSetting
+        self.client.force_login(User.objects.create(username='reissue', is_superuser=True))
+        RawMaterialSetting.objects.create(part=self.part, unit_weight=25, shelf_life_days=180)
+        self.stock(self.raw, 60)
+        self.stock(self.raw, 25, date(2026, 5, 1))
+        self.old = self.labels(9, self.raw)   # 실물과 안 맞는 예전 라벨
+
+    def test_new_labels_follow_lot_stock_and_old_ones_are_disposed(self):
+        url = reverse('material:label_reissue')
+        page = self.client.get(url, {'warehouse': '3200'})
+        self.assertContains(page, 'ZR700')
+        response = self.client.post(url, {'warehouse': '3200', 'part_ids': [self.part.pk]})
+        self.assertEqual(response.status_code, 302)
+        live = RawMaterialLabel.objects.filter(status='INSTOCK').order_by('lot_no', 'quantity')
+        self.assertEqual([(l.lot_no.month, l.quantity) for l in live],
+                         [(4, D(10)), (4, D(25)), (4, D(25)), (5, D(25))])  # 60 = 25+25+10, 25
+        self.assertEqual(live[0].expiry_date, date(2026, 9, 28))     # LOT + 보관기간 180일
+        self.assertEqual(RawMaterialLabel.objects.filter(status='DISPOSED').count(), 9)
+        result = self.client.get(response.url)
+        self.assertContains(result, '포대 라벨 출력 (4장)')
+        disposed = self.client.post(reverse('material:api_process_tag_scan'),
+                                    json.dumps({'tag_id': self.old[0].label_id}), content_type='application/json').json()
+        self.assertIn('폐기', disposed['error'])
+
+    def test_pallet_items_get_one_pallet_label_per_lot(self):
+        from .models import RawMaterialSetting
+        RawMaterialSetting.objects.filter(part=self.part).update(label_unit='PALLET')
+        self.client.post(reverse('material:label_reissue'), {'warehouse': '3200', 'part_ids': [self.part.pk]})
+        self.assertEqual(sorted(RawMaterialLabel.objects.filter(status='INSTOCK').values_list('label_type', 'quantity')),
+                         [('PALLET', D(25)), ('PALLET', D(60))])

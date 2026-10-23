@@ -787,7 +787,8 @@
         document.getElementById('labelModalPartInfo').textContent = `${partNo} / LOT: ${lotNo}`;
 
         try {
-            const url = "{% url 'material:api_labels_for_lot' %}?part_no=" + encodeURIComponent(partNo) + "&lot_no=" + encodeURIComponent(lotNo);
+            const url = "{% url 'material:api_labels_for_lot' %}?part_no=" + encodeURIComponent(partNo) + "&lot_no=" + encodeURIComponent(lotNo)
+                + "&warehouse_code=" + encodeURIComponent(document.getElementById('selFromLoc').value || '');
             const res = await fetch(url);
             const data = await res.json();
 

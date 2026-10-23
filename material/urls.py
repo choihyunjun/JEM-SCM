@@ -1,6 +1,7 @@
 from django.urls import path
 from . import views
 from . import erp_recovery
+from . import label_reissue
 from . import bom_jobs
 
 app_name = 'material'
@@ -122,6 +123,7 @@ urlpatterns = [
     path('raw-material/expiry/<int:trx_id>/edit/', views.edit_movement_expiry, name='edit_movement_expiry'),
     path('raw-material/expiry/<int:trx_id>/visibility/', views.set_movement_visibility, name='set_movement_visibility'),
     path('raw-material/label-print/', views.raw_material_label_print, name='raw_material_label_print'),
+    path('raw-material/label-reissue/', label_reissue.label_reissue, name='label_reissue'),
     path('raw-material/pallet-label/create/', views.pallet_label_create, name='pallet_label_create'),
     path('raw-material/pallet-label/print/', views.pallet_label_print, name='pallet_label_print'),
     path('api/raw-material-labels/', views.api_raw_material_labels, name='api_raw_material_labels'),

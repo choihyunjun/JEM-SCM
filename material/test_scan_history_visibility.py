@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta
+from django.utils import timezone
 from zoneinfo import ZoneInfo
 
 from django.contrib.auth.models import User
@@ -44,8 +45,12 @@ class ScanHistoryVisibilityTests(TestCase):
         if kind == 'TAG':
             ProcessTag.objects.create(**fields, tag_id=identifier, used_warehouse=self.warehouse)
         else:
+            # 스캔으로 옮긴 라벨 = 이동 기록이 붙은 라벨 (상태는 위치 기준이라 '재고')
+            move = MaterialTransaction.objects.create(
+                transaction_no=f'MV-{identifier}', transaction_type='TRANSFER', part=self.part,
+                quantity=fields['quantity'], date=timestamp or timezone.now(), warehouse_to=self.warehouse)
             RawMaterialLabel.objects.create(
-                **fields, label_id=identifier,
+                **dict(fields, status='INSTOCK'), label_id=identifier, used_transaction=move,
                 label_type='PALLET' if kind == 'PLT' else 'PACKAGE',
             )
         return identifier
