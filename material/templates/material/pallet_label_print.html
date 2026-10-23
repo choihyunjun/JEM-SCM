@@ -256,7 +256,7 @@
     <script>
         var allLabels = [
             {% for lbl in labels %}
-            { idx: {{ forloop.counter0 }}, data: "{{ lbl.label_id }}|{{ lbl.part_no }}|{{ lbl.quantity }}{{ lbl.get_unit_display }}|{{ lbl.lot_no|date:'Y-m-d' }}" },
+            { idx: {{ forloop.counter0 }}, data: "{{ lbl.label_id }}" },
             {% endfor %}
         ];
         allLabels.forEach(function(l) {

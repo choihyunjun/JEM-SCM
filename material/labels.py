@@ -14,7 +14,6 @@ from django.utils import timezone
 
 LIVE = ('PRINTED', 'INSTOCK')
 RAW_PREFIXES = ('RM-', 'PLT-')
-TAG_PREFIX = 'TAG-'
 
 
 def scan_id(raw):
@@ -54,17 +53,15 @@ def lookup(label_id):
             'warehouse': label.warehouse.code if label.warehouse_id else '',
             'status': label.status, 'status_display': label.get_status_display(),
         }
-    if label_id.startswith(TAG_PREFIX):
-        tag = ProcessTag.objects.filter(tag_id=label_id).first()
-        if not tag:
-            return None
+    tag = ProcessTag.objects.filter(tag_id=label_id).first() if label_id else None
+    if tag:
         return {
-            'kind': 'TAG', 'id': tag.pk, 'label_id': tag.tag_id, 'part_no': tag.part_no, 'part_name': tag.part_name,
+            'kind': 'DLV' if label_id.startswith('DLV-') else 'TAG', 'id': tag.pk, 'label_id': tag.tag_id, 'part_no': tag.part_no, 'part_name': tag.part_name,
             'quantity': float(tag.quantity), 'unit': '', 'lot_no': tag.lot_no.isoformat() if tag.lot_no else '',
             'expiry_date': '', 'warehouse': tag.used_warehouse.code if tag.used_warehouse_id else '',
             'status': tag.status, 'status_display': tag.get_status_display(),
         }
-    return None
+    return None  # 등록되지 않은 번호
 
 
 def sync_labels(part, lot_no=None):

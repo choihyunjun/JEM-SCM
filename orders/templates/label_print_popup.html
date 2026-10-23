@@ -219,9 +219,9 @@
 
     <script>
         window.onload = function() {
-            // QR 코드 생성 - WMS 현품표와 동일한 형식: TAG_ID|품번|수량|LOT
+            // QR에는 박스 라벨 번호만 (WMS 라벨과 같은 규칙)
             {% for item in box_count %}
-            const qrData_{{ forloop.counter }} = "{{ item.tag_id }}|{{ item.part_no }}|{{ item.snp }}|{{ item.lot_str|default:'' }}";
+            const qrData_{{ forloop.counter }} = "{{ item.tag_id }}";
             new QRCode(document.getElementById("qr_{{ forloop.counter }}"), {
                 text: qrData_{{ forloop.counter }},
                 width: 75,

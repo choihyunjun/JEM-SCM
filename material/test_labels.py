@@ -134,3 +134,12 @@ class ScanTests(Base):
         result = self.scan()
         self.assertFalse(result['success'])
         self.assertIn('소진', result['error'])
+
+
+class VendorBoxLabelTests(Base):
+    def test_vendor_box_label_number_is_looked_up_like_any_label(self):
+        from .models import ProcessTag
+        ProcessTag.objects.create(tag_id='DLV-00001-00001-001', part=self.part, part_no='ZR700',
+                                  part_name='Resin', quantity=100, lot_no=self.lot)
+        info = lookup('dlv-00001-00001-001')
+        self.assertEqual((info['kind'], info['quantity'], info['lot_no']), ('DLV', 100, '2026-04-01'))

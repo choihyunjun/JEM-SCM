@@ -290,11 +290,8 @@
         ];
 
         tagList.forEach(tag => {
-            // QR 데이터: TAG_ID|품번|수량|LOT
-            const pno = multiMode ? tag.part_no : '{{ part_no }}';
-            const qty = multiMode ? tag.quantity : '{{ quantity }}';
-            const lot = multiMode ? tag.lot_no : '{{ lot_no }}';
-            const qrData = `${tag.tag_id}|${pno}|${qty}|${lot}`;
+            // QR에는 현품표 번호만 (품번·수량·LOT는 스캔 시 시스템에서 조회)
+            const qrData = tag.tag_id;
             new QRCode(document.getElementById(`qr_${tag.index}`), {
                 text: qrData,
                 width: qrSize,

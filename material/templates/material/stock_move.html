@@ -482,19 +482,25 @@
             return;
         }
 
-        const parts = qrData.split('|').map(p => p.trim());
+        // QR에는 라벨 번호만 있다: 번호로 품번·수량·LOT를 조회한다 (원재료·파렛트·현품표·협력사 박스 라벨 공통)
         let partNo, qty, lotNo;
-
-        if (parts.length === 4) {
-            // TAG_ID|품번|수량|LOT (현품표, 원자재라벨, 수주라벨)
-            [, partNo, qty, lotNo] = parts;
-        } else if (parts.length === 3) {
-            // 품번|수량|LOT (레거시)
-            [partNo, qty, lotNo] = parts;
-        } else {
-            alert('올바른 QR 코드 형식이 아닙니다.\n형식: ID|품번|수량|LOT 또는 품번|수량|LOT');
+        try {
+            const labelNo = qrData.split('|')[0].trim();
+            const res = await fetch("{% url 'material:api_label_lookup' 'LABEL_NO' %}".replace('LABEL_NO', encodeURIComponent(labelNo)));
+            const found = await res.json();
+            if (!found.success) {
+                alert(found.error || '등록되지 않은 라벨입니다.');
+                qrInput.value = '';
+                qrInput.focus();
+                isProcessingQR = false;
+                return;
+            }
+            partNo = found.label.part_no;
+            qty = found.label.quantity;
+            lotNo = found.label.lot_no;
+        } catch (e) {
+            alert('라벨 조회에 실패했습니다. 다시 스캔해 주세요.');
             qrInput.value = '';
-            qrInput.focus();
             isProcessingQR = false;
             return;
         }

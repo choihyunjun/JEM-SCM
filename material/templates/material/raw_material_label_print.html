@@ -597,7 +597,7 @@
                 const el = document.getElementById('qr_' + label.index);
                 if (el) {
                     el.innerHTML = '';
-                    const qrData = label.label_id + '|' + label.part_no + '|' + label.quantity + label.unit + '|' + label.lot_no;
+                    const qrData = label.label_id;  // QR에는 라벨 번호만 (나머지는 스캔 시 시스템에서 조회)
                     new QRCode(el, {
                         text: qrData,
                         width: qrPixels,
