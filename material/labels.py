@@ -9,6 +9,7 @@
 from collections import defaultdict
 from decimal import Decimal
 
+from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 
@@ -122,7 +123,8 @@ def sync_all():
         'part_id', flat=True).distinct()
     moved = consumed = 0
     for part in Part.objects.filter(pk__in=list(part_ids)):
-        m, c = sync_labels(part)
+        with transaction.atomic():  # 품목 단위로 한 번에 커밋 (라벨 수천 장도 빠르게)
+            m, c = sync_labels(part)
         moved += m
         consumed += c
     return {'moved': moved, 'consumed': consumed}
