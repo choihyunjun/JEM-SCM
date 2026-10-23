@@ -30,7 +30,7 @@
             {% else %}<span class="dtl-pill green">일치</span> ERP와 SCM 재고: {{ s.checked|intcomma }}건 모두 일치{% endif %}
             <span class="ms-auto fw-normal text-muted small">{{ stock_check.finished_at|date:"m-d H:i" }} 기준</span>
         </div>
-        {% if s.lot_diffs or s.pending or s.changed or s.missing or s.no_master %}
+        {% if s.lot_diffs or s.pending or s.changed or s.missing or s.zeroed or s.no_master %}
         <div class="card-body small">
             {% if s.lot_diffs %}
             <div class="mb-2"><strong>LOT 관리 품목에서 ERP와 다른 수량</strong> — SCM 총량은 ERP에 맞췄고, LOT는 건드리지 않았습니다. 차이만큼은 'LOT 미지정'으로 표시됩니다.
@@ -39,6 +39,7 @@
             {% endif %}
             {% if s.pending %}<div class="mb-2"><strong>ERP로 보내는 중</strong> (다음 회차에 다시 비교): {{ s.pending|join:", " }}</div>{% endif %}
             {% if s.changed %}<div class="mb-2"><strong>비교 중 재고 변경</strong> (다음 회차에 다시 비교): {{ s.changed|join:" / " }}</div>{% endif %}
+            {% if s.zeroed %}<div class="mb-2 text-muted">ERP에서 사라진 창고 재고를 0으로 맞춤 (그 품목은 ERP의 다른 창고에 있음): {{ s.zeroed|join:", " }}</div>{% endif %}
             {% if s.missing %}<div class="mb-2 text-muted">ERP 응답에 없는 SCM 재고 (유지): {{ s.missing|join:", " }}</div>{% endif %}
             {% if s.no_master %}<div class="text-muted">SCM에 없는 품목·창고 (기준정보 동기화 필요): {{ s.no_master|join:", " }}</div>{% endif %}
         </div>

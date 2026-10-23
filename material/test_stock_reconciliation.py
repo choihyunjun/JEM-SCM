@@ -150,6 +150,25 @@ class StockReconciliationTests(TestCase):
         stock.refresh_from_db()
         self.assertEqual(stock.quantity, 0)
 
+    def test_warehouse_missing_for_an_item_erp_still_reports_is_zero(self):
+        # ERP에서 입고 창고를 4300→2000으로 바꾸면 ERP는 4300 행을 아예 보내지 않는다
+        other = Warehouse.objects.create(code='2000', name='Store')
+        self.stock(2449)
+        result = self.sync([dict(whCd='2000', itemCd='P1', invQt1=2249)])
+        self.assertEqual(result['zeroed'], ['4300/P1'])
+        self.assertEqual(result['missing'], [])
+        self.assertEqual(list(MaterialStock.objects.filter(warehouse=self.wh).values_list('quantity', flat=True)), [0])
+        self.assertEqual(MaterialStock.objects.get(warehouse=other).quantity, 2249)
+        self.assertFalse(MaterialTransaction.objects.exists())
+
+    def test_lot_managed_missing_warehouse_is_only_listed(self):
+        self.lot_managed()
+        Warehouse.objects.create(code='2000', name='Store')
+        self.stock(50, date(2026, 1, 1))
+        result = self.sync([dict(whCd='2000', itemCd='P1', invQt1=10)])
+        self.assertEqual((result['missing'], result['zeroed']), (['4300/P1'], []))
+        self.assertEqual(MaterialStock.objects.get(warehouse=self.wh).quantity, 50)
+
     def test_bad_empty_failed_responses_do_not_erase_stock(self):
         stock = self.stock(25)
         for rows in ([], [self.row('bad')], [dict(whCd='4300', itemCd='P1')], [self.row('NaN')]):

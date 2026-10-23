@@ -151,7 +151,7 @@ def reconcile_stock():
     빼고, 설명 안 되는 차이만 'LOT 미확인'으로 남긴다. ERP로 보내는 중인 품목은 다음 회차로 미룬다."""
     from .erp_api import fetch_erp_stock
     result = dict(checked=0, adjusted=0, mirrored=0, lot_diffs=[], pending=[], changed=[],
-                  missing=[], no_master=[], error=None, status='running')
+                  missing=[], zeroed=[], no_master=[], error=None, status='running')
     run = StockSyncRun.objects.create()
     try:
         snapshot_at = timezone.now()
@@ -207,6 +207,26 @@ def reconcile_stock():
                     'stage': f'ERP 현재고 반영 중 ({index + 1}/{len(balances)})',
                     'percent': 10 + int(85 * (index + 1) / len(balances)),
                 }, 600)
+        # ERP 응답에 없는 창고: 그 품목이 다른 창고로는 나왔다면 이번 응답에 품목 정보가 다 온 것이므로
+        # 빠진 창고는 ERP 0이다 (예: ERP에서 입고 전표의 창고를 바꾼 경우). 수량만 품목만 맞추고,
+        # 품목 자체가 없거나 LOT 관리 품목이면 지우지 않고 목록으로만 남긴다.
+        erp_codes = {code for (_wh, code) in balances}
+        still_missing = []
+        for key in result['missing']:
+            wh, code = key.split('/', 1)
+            part, warehouse = parts.get(code), warehouses.get(wh)
+            if (code not in erp_codes or part is None or warehouse is None
+                    or part.pk in lot_managed or part.pk in pending):
+                still_missing.append(key)
+                continue
+            try:
+                _mirror_quantity_only(warehouse, part, Decimal(0), snapshot.get((wh, code), {}))
+                result['zeroed'].append(key)
+                result['adjusted'] += 1
+            except (ValueError, DatabaseError) as exc:
+                result['changed'].append(f'{key}: {exc}')
+        result['missing'] = still_missing
+
         # 재고가 정해진 뒤 라벨을 맞춘다: 재고를 따라 옮기고, 다 쓴 포대 라벨은 소진 처리.
         try:
             from .labels import sync_all
