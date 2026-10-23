@@ -8198,8 +8198,11 @@ def erp_stock_manage(request):
                              f"다음 수불 동기화(재고이동)에서 들어오면 자동으로 사라집니다.")
         context['lot_diff_rows'] = rows
     # 수불 이력 가져오기 오류 (재고 맞추기 결과와 별개)
+    # 수불 이력 가져오기 오류: 마지막 재고 맞추기 이후에 난 것만 (이미 지난 회차의 오류는 숨김)
+    since = max(timezone.now() - timedelta(hours=24),
+                context['stock_check'].started_at if context['stock_check'] else timezone.now() - timedelta(hours=24))
     context['ledger_error'] = StockSyncRun.objects.filter(
-        summary__has_key='synced', started_at__gte=timezone.now() - timedelta(hours=24)).exclude(status='success').first()
+        summary__has_key='synced', started_at__gte=since).exclude(status='success').first()
     # partial = the ERP balance was applied; only some items/ledgers need review.
     context['stock_sync_success'] = StockSyncRun.objects.filter(status__in=['success', 'partial']).first()
 
