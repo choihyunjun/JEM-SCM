@@ -37,6 +37,15 @@ def initial_warehouse(label):
     return raw
 
 
+def raw_material_part_nos(part_nos):
+    """원재료로 보는 품번: 보관관리 품목 설정에 있거나 원재료·파렛트 라벨을 발행한 적이 있는 품목."""
+    from .models import RawMaterialLabel, RawMaterialSetting
+    part_nos = set(part_nos)
+    raw = set(RawMaterialSetting.objects.filter(part__part_no__in=part_nos).values_list('part__part_no', flat=True))
+    raw |= set(RawMaterialLabel.objects.filter(part_no__in=part_nos).values_list('part_no', flat=True))
+    return raw
+
+
 def lookup(label_id):
     """라벨 번호 → 화면에서 쓰는 정보. 없으면 None."""
     from .models import ProcessTag, RawMaterialLabel

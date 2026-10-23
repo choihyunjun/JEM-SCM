@@ -143,3 +143,62 @@ class VendorBoxLabelTests(Base):
                                   part_name='Resin', quantity=100, lot_no=self.lot)
         info = lookup('dlv-00001-00001-001')
         self.assertEqual((info['kind'], info['quantity'], info['lot_no']), ('DLV', 100, '2026-04-01'))
+
+
+class PalletRuleTests(Base):
+    """파렛트 품목(A안): 파렛트 라벨만 발행하고 포대 라벨은 발행하지 않는다."""
+
+    def setUp(self):
+        super().setUp()
+        from django.utils import timezone
+        from qms.models import ImportInspection
+        from .models import RawMaterialSetting
+        self.client.force_login(User.objects.create(username='label-admin', is_superuser=True))
+        self.setting = RawMaterialSetting.objects.create(part=self.part, label_unit='PALLET')
+        hold = Warehouse.objects.create(code='8100', name='Inspection')
+        trx = MaterialTransaction.objects.create(transaction_no='IN-1', transaction_type='IN_MANUAL', part=self.part,
+                                                 warehouse_to=hold, quantity=1000, lot_no=timezone.localdate())
+        self.inspection = ImportInspection.objects.create(inbound_transaction=trx, status='APPROVED', qty_good=1000)
+
+    def test_bag_labels_refused_pallet_labels_issued(self):
+        url = reverse('material:raw_material_incoming')
+        self.client.post(url, {'action': 'print_labels', 'inspection_id': self.inspection.pk,
+                               'unit': 'KG', 'pkg_qty': '25', 'pkg_count': '40', 'expiry_date': ''})
+        self.assertFalse(RawMaterialLabel.objects.exists())
+        data = self.client.post(reverse('material:pallet_label_create'),
+                                {'inspection_id': self.inspection.pk}).json()
+        self.assertTrue(data['success'], data)
+        self.assertEqual(list(RawMaterialLabel.objects.values_list('label_type', 'quantity')), [('PALLET', 1000)])
+        page = self.client.get(url).content.decode()
+        self.assertNotIn("openLabelModal('%d'" % self.inspection.pk, page)  # 포대 라벨 버튼 없음
+
+    def test_label_unit_is_saved_from_item_setting(self):
+        self.client.post(reverse('material:raw_material_setting'), {
+            'part_id': self.part.pk, 'safety_stock': 0, 'warning_stock': 0, 'shelf_life_days': 365,
+            'unit_weight': 25, 'label_unit': 'PACKAGE'})
+        self.setting.refresh_from_db()
+        self.assertEqual(self.setting.label_unit, 'PACKAGE')
+
+
+class ProductTagOnlyTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(User.objects.create(username='tag-admin', is_superuser=True))
+        self.product = Part.objects.create(part_no='PRD-1', part_name='Product')
+        from .models import RawMaterialSetting
+        RawMaterialSetting.objects.create(part=self.part)
+
+    def test_product_tag_refused_for_raw_material(self):
+        from .models import ProcessTag
+        url = reverse('material:process_tag_print')
+        self.client.post(url, {'part_no': 'ZR700', 'quantity': '25', 'lot_no': '2026-04-01', 'print_count': 1})
+        self.assertFalse(ProcessTag.objects.exists())
+        self.client.post(url, {'part_no': 'PRD-1', 'quantity': '100', 'lot_no': '2026-04-01', 'print_count': 2})
+        self.assertEqual(ProcessTag.objects.filter(part_no='PRD-1').count(), 2)
+
+    def test_lot_allocation_tags_skip_raw_materials(self):
+        from .models import ProcessTag
+        items = [{'part_no': 'ZR700', 'quantity': 25, 'lot_no': '2026-04-01'},
+                 {'part_no': 'PRD-1', 'quantity': 100, 'lot_no': '2026-04-01'}]
+        self.client.post(reverse('material:lot_allocation_print'), {'items': json.dumps(items)})
+        self.assertEqual(list(ProcessTag.objects.values_list('part_no', flat=True)), ['PRD-1'])

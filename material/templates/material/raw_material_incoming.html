@@ -146,7 +146,7 @@
                                                     onclick="openReprintModal('{{ insp.id }}', '{{ insp.inbound_transaction.part.part_no }}', '{{ insp.inbound_transaction.part.part_name|truncatechars:20 }}')" title="RM 재출력">
                                                 <i class="bi bi-printer"></i> 재출력
                                             </button>
-                                            {% else %}
+                                            {% elif insp.label_unit != 'PALLET' %}
                                             <button type="button" class="btn btn-success btn-print"
                                                     onclick="openLabelModal('{{ insp.id }}', '{{ insp.inbound_transaction.part.part_no }}', '{{ insp.inbound_transaction.part.part_name|truncatechars:30 }}', {{ insp.inbound_transaction.quantity|floatformat:"-4" }}, {{ insp.has_setting|yesno:'true,false' }}, {{ insp.setting_unit_weight }}, {{ insp.setting_shelf_life }}, '{{ insp.inbound_transaction.lot_no|date:"Y-m-d" }}')">
                                                 <i class="bi bi-qr-code"></i> 라벨발행
@@ -170,10 +170,12 @@
                                         </div>
                                         {% else %}
                                         <div class="btn-group btn-group-sm">
+                                            {% if insp.label_unit != 'PALLET' %}
                                             <button type="button" class="btn btn-success btn-print"
                                                     onclick="openLabelModal('{{ insp.id }}', '{{ insp.inbound_transaction.part.part_no }}', '{{ insp.inbound_transaction.part.part_name|truncatechars:30 }}', {{ insp.inbound_transaction.quantity|floatformat:"-4" }}, {{ insp.has_setting|yesno:'true,false' }}, {{ insp.setting_unit_weight }}, {{ insp.setting_shelf_life }}, '{{ insp.inbound_transaction.lot_no|date:"Y-m-d" }}')">
                                                 <i class="bi bi-qr-code"></i> 라벨발행
                                             </button>
+                                            {% endif %}
                                             <button type="button" class="btn btn-outline-primary btn-print"
                                                     onclick="createPalletLabel('{{ insp.id }}')" title="파렛트 라벨">
                                                 <i class="bi bi-box-seam"></i> 파렛트

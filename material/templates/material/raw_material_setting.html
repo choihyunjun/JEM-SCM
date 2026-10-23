@@ -77,6 +77,15 @@
                             <div class="form-text">라벨 발행 시 포대 수 계산에 사용</div>
                         </div>
 
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">라벨 단위</label>
+                            <select name="label_unit" class="form-select">
+                                <option value="PACKAGE">포대 (포대마다 라벨)</option>
+                                <option value="PALLET">파렛트 (파렛트 라벨만, 포대 라벨 없음)</option>
+                            </select>
+                            <div class="form-text">파렛트째 현장에 넣는 원재료는 '파렛트'로 두세요.</div>
+                        </div>
+
                         <button type="submit" class="dtl-btn-dark w-100" id="submitBtn" disabled>
                             <i class="bi bi-check-lg me-1"></i>저장
                         </button>
@@ -103,21 +112,23 @@
                                     <th class="text-end">경고재고</th>
                                     <th class="text-end">보관기간</th>
                                     <th class="text-end">단위중량</th>
+                                    <th class="text-center">라벨</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for setting in settings %}
-                                <tr style="cursor:pointer;" onclick="loadSetting({{ setting.part.id }}, '{{ setting.part.part_no }}', '{{ setting.part.part_name|truncatechars:25 }}', {{ setting.safety_stock }}, {{ setting.warning_stock }}, {{ setting.shelf_life_days }}, {{ setting.unit_weight }})">
+                                <tr style="cursor:pointer;" onclick="loadSetting({{ setting.part.id }}, '{{ setting.part.part_no }}', '{{ setting.part.part_name|truncatechars:25 }}', {{ setting.safety_stock }}, {{ setting.warning_stock }}, {{ setting.shelf_life_days }}, {{ setting.unit_weight }}, '{{ setting.label_unit }}')">
                                     <td class="fw-bold">{{ setting.part.part_no }}</td>
                                     <td>{{ setting.part.part_name|truncatechars:20 }}</td>
                                     <td class="text-end">{{ setting.safety_stock|intcomma }} kg</td>
                                     <td class="text-end">{{ setting.warning_stock|intcomma }} kg</td>
                                     <td class="text-end">{{ setting.shelf_life_days }}일</td>
                                     <td class="text-end">{{ setting.unit_weight }} kg</td>
+                                    <td class="text-center">{{ setting.get_label_unit_display }}</td>
                                 </tr>
                                 {% empty %}
                                 <tr>
-                                    <td colspan="6" class="text-center py-4 text-muted">
+                                    <td colspan="7" class="text-center py-4 text-muted">
                                         설정된 품목이 없습니다.
                                     </td>
                                 </tr>
@@ -160,6 +171,7 @@ searchInput.addEventListener('input', function() {
                     warning_stock: p.warning_stock,
                     shelf_life_days: p.shelf_life_days,
                     unit_weight: p.unit_weight,
+                    label_unit: p.label_unit,
                 };
             });
 
@@ -193,6 +205,7 @@ function selectPartWithSetting(id, partNo, partName) {
         if (s.warning_stock !== null) document.querySelector('[name=warning_stock]').value = s.warning_stock;
         if (s.shelf_life_days !== null) document.querySelector('[name=shelf_life_days]').value = s.shelf_life_days;
         if (s.unit_weight !== null) document.querySelector('[name=unit_weight]').value = s.unit_weight;
+        document.querySelector('[name=label_unit]').value = s.label_unit || 'PACKAGE';
     }
 }
 
@@ -225,12 +238,13 @@ function clearSelection() {
 }
 
 // 기존 설정 클릭 → 폼에 로드 (수정용)
-function loadSetting(partId, partNo, partName, safety, warning, shelf, weight) {
+function loadSetting(partId, partNo, partName, safety, warning, shelf, weight, labelUnit) {
     selectPart(partId, partNo, partName);
     document.querySelector('[name=safety_stock]').value = safety;
     document.querySelector('[name=warning_stock]').value = warning;
     document.querySelector('[name=shelf_life_days]').value = shelf;
     document.querySelector('[name=unit_weight]').value = weight;
+    document.querySelector('[name=label_unit]').value = labelUnit || 'PACKAGE';
 }
 
 // ── 자동계산 모달 ────────────────────────────────────────────────

@@ -1745,6 +1745,12 @@ def process_tag_print(request):
         # Part 조회 (없으면 None)
         part = Part.objects.filter(part_no=part_no).first()
 
+        # 현품표는 생산품 전용: 원재료는 원재료 라벨(포대·파렛트)을 쓴다
+        from .labels import raw_material_part_nos
+        if raw_material_part_nos([part_no]):
+            messages.error(request, f'{part_no}는 원재료입니다. 현품표 대신 입고라벨(원재료·파렛트 라벨)을 발행하세요.')
+            return redirect('material:process_tag_form')
+
         # LOT 날짜 파싱
         lot_date = None
         if lot_no:
@@ -1846,6 +1852,16 @@ def lot_allocation_print(request):
     else:
         label_w_mm = label_h_mm = 0
         sheet_cols = per_page = 0
+
+    # 현품표는 생산품 전용: 원재료 품목은 빼고 원재료·파렛트 라벨로 안내
+    from .labels import raw_material_part_nos
+    raw = raw_material_part_nos(item['part_no'] for item in items)
+    if raw:
+        messages.warning(request, f'원재료 {len(raw)}개 품목({", ".join(sorted(raw)[:5])})은 현품표에서 제외했습니다. '
+                                  f'원재료 라벨 또는 파렛트 라벨로 출력하세요.')
+        items = [item for item in items if item['part_no'] not in raw]
+        if not items:
+            return redirect('material:lot_allocation')
 
     # 각 아이템별 ProcessTag 생성
     all_tags = []
@@ -6947,6 +6963,12 @@ def raw_material_incoming(request):
                 lot = trx.lot_no or timezone.now().date()
                 vendor = trx.vendor
 
+                setting = RawMaterialSetting.objects.filter(part=part).first()
+                if setting and setting.label_unit == 'PALLET':
+                    messages.error(request, f'{part.part_no}는 파렛트 단위 품목입니다. 포대 라벨 대신 파렛트 라벨을 발행하세요. '
+                                            f'(보관관리 > 품목 설정에서 변경 가능)')
+                    return redirect('material:raw_material_incoming')
+
                 # 이미 라벨이 발행된 건인지 확인 (중복 방지)
                 existing_labels = RawMaterialLabel.objects.filter(incoming_transaction=trx)
                 if existing_labels.exists():
@@ -7041,10 +7063,12 @@ def raw_material_incoming(request):
                 insp.setting_unit_weight = float(setting.unit_weight)
                 insp.setting_shelf_life = setting.shelf_life_days
                 insp.has_setting = True
+                insp.label_unit = setting.label_unit
             except RawMaterialSetting.DoesNotExist:
                 insp.setting_unit_weight = 0
                 insp.setting_shelf_life = 365
                 insp.has_setting = False
+                insp.label_unit = 'PACKAGE'
 
     # 수입검사 대기중인 건 목록 - 전체 품목
     pending_inspections = []
@@ -7140,6 +7164,9 @@ def bulk_print_raw_material_labels(request):
 
         if RawMaterialLabel.objects.filter(incoming_transaction=trx).exists():
             fail_details.append(f'{part.part_no}: 이미 라벨이 발행된 건입니다.')
+            continue
+        if RawMaterialSetting.objects.filter(part=part, label_unit='PALLET').exists():
+            fail_details.append(f'{part.part_no}: 파렛트 단위 품목은 파렛트 라벨로 발행하세요.')
             continue
 
         try:
@@ -7329,6 +7356,9 @@ def raw_material_setting(request):
         warning_stock = request.POST.get('warning_stock', 0)
         shelf_life_days = request.POST.get('shelf_life_days', 365)
         unit_weight = request.POST.get('unit_weight', 25)
+        label_unit = request.POST.get('label_unit', 'PACKAGE')
+        if label_unit not in dict(RawMaterialSetting.LABEL_UNIT_CHOICES):
+            label_unit = 'PACKAGE'
 
         try:
             part = Part.objects.get(id=part_id)
@@ -7342,6 +7372,7 @@ def raw_material_setting(request):
                 'warning_stock': int(warning_stock),
                 'shelf_life_days': int(shelf_life_days),
                 'unit_weight': float(unit_weight),
+                'label_unit': label_unit,
             }
         )
         messages.success(request, f'{part.part_no} 설정 저장 완료')
@@ -7884,6 +7915,7 @@ def api_part_search(request):
             'warning_stock': s.warning_stock if s else None,
             'shelf_life_days': s.shelf_life_days if s else None,
             'unit_weight': float(s.unit_weight) if s and s.unit_weight is not None else None,
+            'label_unit': s.label_unit if s else 'PACKAGE',
         })
 
     return JsonResponse({'results': results})
