@@ -3,6 +3,8 @@
 
 {% block material_content %}
 <style>
+    /* LOT 달력용 date 입력: 보이지 않지만 그려져 있어야 브라우저가 달력을 연다 (d-none 금지) */
+    .lot-date-picker { position: absolute; right: 0; bottom: 0; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; pointer-events: none; }
     /* ERP 전용 커스텀 스타일 */
     .form-label { font-weight: 600; font-size: 0.9rem; color: #495057; margin-bottom: 0.4rem; }
     .card { border: none; box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.05); border-radius: 0.5rem; }
@@ -107,7 +109,7 @@
                             <button class="btn btn-outline-secondary" type="button" id="btnCalendar" title="달력에서 선택">
                                 <i class="bi bi-calendar3"></i>
                             </button>
-                            <input type="date" id="hiddenDatePicker" class="d-none">
+                            <input type="date" id="hiddenDatePicker" class="lot-date-picker" tabindex="-1" aria-hidden="true">
                         </div>
                     </div>
                     <div class="col-6 col-lg-1">
@@ -397,7 +399,7 @@
                                 <div class="input-group edit-field" style="display:none;">
                                     <input type="text" id="editLot" class="form-control form-control-sm" placeholder="YYYY-MM-DD">
                                     <button class="btn btn-outline-secondary btn-sm" type="button" id="btnEditLotCalendar"><i class="bi bi-calendar3"></i></button>
-                                    <input type="date" id="hiddenEditDatePicker" class="d-none">
+                                    <input type="date" id="hiddenEditDatePicker" class="lot-date-picker" tabindex="-1" aria-hidden="true">
                                 </div>
                             </td>
                         </tr>
@@ -951,8 +953,16 @@
             hiddenPicker.value = currentValue;
         }
 
-        // date picker 클릭 (브라우저 기본 달력 UI 표시)
-        hiddenPicker.click();
+        showDatePicker(hiddenPicker);
+    }
+
+    // 브라우저 기본 달력 열기 (showPicker 미지원 브라우저는 클릭으로 대체)
+    function showDatePicker(picker) {
+        try {
+            if (typeof picker.showPicker === 'function') { picker.showPicker(); return; }
+        } catch (e) { /* 아래 대체 방식 */ }
+        picker.focus();
+        picker.click();
     }
 
     // === 입고처리 내역: 상세 모달 ===
@@ -1169,7 +1179,7 @@
                 var picker = document.getElementById('hiddenEditDatePicker');
                 var currentVal = document.getElementById('editLot').value;
                 if (/^\d{4}-\d{2}-\d{2}$/.test(currentVal)) picker.value = currentVal;
-                picker.click();
+                showDatePicker(picker);
             });
         }
         var editDatePicker = document.getElementById('hiddenEditDatePicker');
