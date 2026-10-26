@@ -25,13 +25,14 @@ def scan_id(raw):
 def initial_warehouse(label):
     """새 라벨의 창고: 그 LOT 재고가 있는 곳, 원재료창고(3200) 우선."""
     from .models import MaterialStock, Warehouse
+    from .stock_reconciliation import SCM_ONLY_WAREHOUSE_CODES
     raw = Warehouse.objects.filter(code='3200').first()
     holders = list(MaterialStock.objects.filter(part_id=label.part_id, lot_no=label.lot_no, quantity__gt=0)
                    .values_list('warehouse_id', flat=True).distinct()) if label.part_id else []
     if raw and raw.pk in holders:
         return raw
     dest = label.incoming_transaction.warehouse_to if label.incoming_transaction_id else None
-    if dest and dest.code not in ('8100', '8200'):
+    if dest and dest.code not in SCM_ONLY_WAREHOUSE_CODES:
         return dest
     if len(holders) == 1:
         return Warehouse.objects.get(pk=holders[0])

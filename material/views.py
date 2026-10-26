@@ -453,7 +453,7 @@ def stock_list(request):
                 'part__part_name',
                 'part__part_group',
                 'part__vendor__name'
-            ).annotate(total_qty=Sum('quantity')).order_by('part__part_no')
+            ).annotate(total_qty=Sum('quantity')).filter(Q(total_qty__gt=0.00005) | Q(total_qty__lt=-0.00005))  # 합계 0은 표시 안 함.order_by('part__part_no')
         else:
             # 창고별 상세 모드: 창고별 품목별 합계 (LOT 합산)
             stock_data = stocks.values(
@@ -465,7 +465,7 @@ def stock_list(request):
                 'part__part_name',
                 'part__part_group',
                 'part__vendor__name'
-            ).annotate(total_qty=Sum('quantity')).order_by('warehouse__code', 'part__part_no')
+            ).annotate(total_qty=Sum('quantity')).filter(Q(total_qty__gt=0.00005) | Q(total_qty__lt=-0.00005))  # 합계 0은 표시 안 함.order_by('warehouse__code', 'part__part_no')
 
         # 4. ERP 총량 비교 (show_erp=1 일 때, 30분 캐시)
         if show_erp:

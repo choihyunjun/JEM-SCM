@@ -13,7 +13,8 @@ from .quantities import stock_quantity
 
 # Incoming-inspection hold and nonconforming stock never reach ERP (ERP receives
 # only the accepted quantity), so ERP balances must not overwrite them.
-SCM_ONLY_WAREHOUSE_CODES = ('8100', '8200')
+# 1000 수입검사 대기장 · 8100 수입검사 대기창고 · 8200 부적합 창고: ERP에 없는 SCM 전용 창고.
+SCM_ONLY_WAREHOUSE_CODES = ('1000', '8100', '8200')
 
 
 def stock_snapshot():

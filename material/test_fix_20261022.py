@@ -141,3 +141,43 @@ class ScmOnlyWarehouseTests(Base):
         self.assertFalse(ERPIncomingOperation.objects.exists())
         register_erp_stock_move(trx, 5, '3200', '3000')
         self.assertEqual(ERPIncomingOperation.objects.get().kind, 'MOVE')
+
+
+class InspectionWaitingWarehouseTests(Base):
+    """1000 수입검사 대기장: SCM 전용 창고로 명시, 합계 0인 상쇄 행은 목록·정리 대상."""
+
+    def test_1000_is_scm_only_and_never_sent_to_erp(self):
+        from .stock_reconciliation import SCM_ONLY_WAREHOUSE_CODES
+        from .erp_api import register_erp_stock_move
+        self.assertIn('1000', SCM_ONLY_WAREHOUSE_CODES)
+        trx = MaterialTransaction.objects.create(transaction_no='W1', transaction_type='TRANSFER',
+                                                 date=timezone.now(), part=self.part, quantity=5)
+        with override_settings(ERP_ENABLED=True, ERP_OUTBOX_AUTODISPATCH=False):
+            self.assertEqual(register_erp_stock_move(trx, 5, '1000', '3200'), (True, None, None))
+        self.assertFalse(ERPIncomingOperation.objects.exists())
+
+    def test_stock_list_hides_items_whose_rows_cancel_out(self):
+        from django.test import Client
+        from django.urls import reverse
+        waiting = Warehouse.objects.create(code='1000', name='Waiting')
+        MaterialStock.objects.create(warehouse=waiting, part=self.part, quantity=850)
+        MaterialStock.objects.create(warehouse=waiting, part=self.part, lot_no=date(2026, 5, 17), quantity=-850)
+        MaterialStock.objects.create(warehouse=self.src, part=self.part, lot_no=self.day, quantity=575)
+        client = Client()
+        client.force_login(self.user)
+        response = client.get(reverse('material:stock_list'), {'q': 'ZR700', 'search_triggered': 'yes'})
+        shown = [(row['warehouse__code'], row['total_qty']) for row in response.context['stocks']]
+        self.assertEqual(shown, [('3200', 575)])  # 1000의 +850/-850은 합계 0이라 표시 안 함
+
+    def test_cleanup_migration_removes_only_zero_sum_rows(self):
+        from importlib import import_module
+        from django.apps import apps
+        waiting = Warehouse.objects.create(code='1000', name='Waiting')
+        other = Part.objects.create(part_no='ZR711', part_name='PP')
+        MaterialStock.objects.create(warehouse=waiting, part=self.part, quantity=850)
+        MaterialStock.objects.create(warehouse=waiting, part=self.part, lot_no=date(2026, 5, 17), quantity=-850)
+        MaterialStock.objects.create(warehouse=waiting, part=other, lot_no=date(2026, 10, 22), quantity=100)
+        MaterialStock.objects.create(warehouse=waiting, part=other, lot_no=date(2026, 5, 4), quantity=0)
+        import_module('material.migrations.0066_clean_inspection_waiting_rows').forwards(apps, None)
+        self.assertEqual(list(MaterialStock.objects.filter(warehouse=waiting).values_list('part__part_no', 'quantity')),
+                         [('ZR711', 100)])  # 실제 대기 재고는 그대로
