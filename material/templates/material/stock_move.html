@@ -91,7 +91,6 @@
                     <div class="col-md-1">
                         <label class="dtl-form-label">수량</label>
                         <input type="number" id="inputQty" class="form-control dtl-form-control text-end fw-bold" placeholder="0" min="1" step="any">
-                        <button type="button" class="btn btn-outline-secondary btn-sm mt-1" id="btnQtyAll" title="선택한 LOT의 남은 수량 전부 (소수 잔량 포함)" onclick="(function(){var s=document.querySelector('#selLot option:checked');if(s&&s.dataset.quantity){document.getElementById('inputQty').value=Number(s.dataset.quantity);}})()">전량</button>
                     </div>
 
                     <div class="col-md-1">
@@ -112,18 +111,19 @@
                 <table class="table table-bordered table-hover mb-0 text-center align-middle" id="transferTable">
                     <thead class="table-light">
                         <tr>
-                            <th width="15%">품번</th>
-                            <th width="15%">LOT 번호</th>
-                            <th width="20%">보내는 곳 (From)</th>
+                            <th width="10%">처리일</th>
+                            <th width="13%">품번</th>
+                            <th width="13%">LOT 번호</th>
+                            <th width="18%">보내는 곳 (From)</th>
                             <th width="5%">➡</th>
-                            <th width="20%">받는 곳 (To)</th>
+                            <th width="18%">받는 곳 (To)</th>
                             <th width="10%" class="erp-number">수량</th>
                             <th width="10%">삭제</th>
                         </tr>
                     </thead>
                     <tbody id="tableBody">
                         <tr id="emptyRow">
-                            <td colspan="7" class="text-muted py-4">이동할 항목을 상단에서 추가해주세요.</td>
+                            <td colspan="8" class="text-muted py-4">이동할 항목을 상단에서 추가해주세요.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -693,6 +693,7 @@
         const toVal = toSel.value;
         const toText = toSel.options[toSel.selectedIndex].text;
 
+        if(!document.getElementById('transferDate').value) { alert('이동 처리일을 선택해주세요.'); return; }
         if(!partNo) { alert('품번을 입력해주세요.'); return; }
         if(!fromVal) { alert('보내는 창고를 선택해주세요.'); return; }
         if(!lotSel.value) { alert('LOT를 선택해주세요.'); return; }
@@ -892,6 +893,9 @@
         const parsedLabels = JSON.parse(labelIdsJson);
         const labelCount = parsedLabels.length;
 
+        // 이동 처리일은 [추가]를 누른 시점의 날짜로 행마다 고정
+        const moveDate = document.getElementById('transferDate').value;
+
         const fifoBadge = fifoReason ? `<span class="dtl-pill red ms-1" title="FIFO 위반: ${fifoReason}"><i class="bi bi-exclamation-triangle"></i> FIFO</span>` : '';
 
         // 라벨 뱃지: RM/TAG 구분 표시
@@ -904,6 +908,10 @@
         if (qrRawData) tr.dataset.qrData = qrRawData;
 
         tr.innerHTML = `
+            <td>
+                ${moveDate}
+                <input type="hidden" name="move_date[]" value="${moveDate}">
+            </td>
             <td class="fw-bold text-primary">
                 ${partNo}
                 <input type="hidden" name="part_no[]" value="${partNo}">
@@ -953,7 +961,7 @@
         tr.remove();
         const tbody = document.getElementById('tableBody');
         if(tbody.children.length === 0) {
-            tbody.innerHTML = `<tr id="emptyRow"><td colspan="7" class="text-muted py-4">이동할 항목을 상단에서 추가해주세요.</td></tr>`;
+            tbody.innerHTML = `<tr id="emptyRow"><td colspan="8" class="text-muted py-4">이동할 항목을 상단에서 추가해주세요.</td></tr>`;
         }
         updateCount();
     }

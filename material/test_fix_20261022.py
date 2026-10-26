@@ -12,7 +12,7 @@ from django.utils import timezone
 from orders.models import Part
 from .models import (ERPIncomingOperation, MaterialStock, MaterialTransaction, MaterialTransferRequest,
                      MaterialTransferRequestLine, RawMaterialSetting, Warehouse)
-from .views import (api_raw_material_auto_stock, cancel_stock_move, transfer_request_approve,
+from .views import (api_raw_material_auto_stock, cancel_stock_move, stock_move, transfer_request_approve,
                     transfer_request_revoke, _internal_corrections)
 
 
@@ -181,3 +181,19 @@ class InspectionWaitingWarehouseTests(Base):
         import_module('material.migrations.0066_clean_inspection_waiting_rows').forwards(apps, None)
         self.assertEqual(list(MaterialStock.objects.filter(warehouse=waiting).values_list('part__part_no', 'quantity')),
                          [('ZR711', 100)])  # 실제 대기 재고는 그대로
+
+
+class StockMovePerRowDateTests(Base):
+    def test_each_row_keeps_the_date_it_was_added_with(self):
+        lot = MaterialStock.objects.create(warehouse=self.src, part=self.part, lot_no=self.day, quantity=30)
+        row = {'part_no[]': 'ZR700', 'stock_id[]': lot.pk, 'from_loc[]': '3200', 'to_loc[]': '3000',
+               'label_ids[]': '[]', 'fifo_reason[]': ''}
+        data = {k: [v, v] for k, v in row.items()}
+        data.update({'move_qty[]': ['10', '5'], 'move_date[]': ['2026-10-21', '2026-10-25'],
+                     'transfer_date': '2026-10-25'})
+        with patch('material.erp_api.register_erp_stock_move', return_value=(True, None, None)):
+            stock_move(self.request(data=data))
+        dates = sorted((timezone.localtime(t.date).date().isoformat(), t.quantity)
+                       for t in MaterialTransaction.objects.filter(transaction_type='TRANSFER'))
+        self.assertEqual(dates, [('2026-10-21', 10), ('2026-10-25', 5)])
+        self.assertEqual((self.qty(self.src), self.qty(self.dst)), (15, 15))

@@ -95,7 +95,6 @@
                     <div class="col-6 col-lg-1">
                         <label class="dtl-form-label" style="color:#b91c1c;">수량</label>
                         <input type="number" id="inputQty" class="form-control dtl-form-control text-end fw-bold" placeholder="0" min="1" step="any">
-                        <button type="button" class="btn btn-outline-secondary btn-sm mt-1" id="btnQtyAll" title="선택한 LOT의 남은 수량 전부 (소수 잔량 포함)" onclick="(function(){var s=document.querySelector('#selLot option:checked');if(s&&s.dataset.quantity){document.getElementById('inputQty').value=Number(s.dataset.quantity);}})()">전량</button>
                     </div>
                     <div class="col-12 col-lg-4">
                         <label class="dtl-form-label">비고 (선택)</label>

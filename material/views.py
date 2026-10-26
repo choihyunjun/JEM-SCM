@@ -3381,18 +3381,25 @@ def stock_move(request):
         move_qtys = request.POST.getlist('move_qty[]')
         label_ids_list = request.POST.getlist('label_ids[]')  # 라벨 선택 (JSON 문자열 리스트)
         fifo_reasons = request.POST.getlist('fifo_reason[]')  # FIFO 위반 사유
+        move_dates = request.POST.getlist('move_date[]')  # 행별 이동 처리일 ([추가] 시점의 날짜)
 
-        # 이동 처리일 (사용자 선택, 미선택 시 오늘)
+        # 이동 처리일 (행별 날짜 우선, 없으면 화면의 날짜, 그것도 없으면 오늘)
         from datetime import datetime as dt_cls
-        transfer_date_str = request.POST.get('transfer_date', '').strip()
-        if transfer_date_str:
+
+        def parse_move_datetime(value):
+            value = (value or '').strip()
+            if not value:
+                return None
             try:
-                transfer_date = dt_cls.strptime(transfer_date_str, '%Y-%m-%d').date()
-                transfer_datetime = timezone.make_aware(dt_cls.combine(transfer_date, timezone.localtime().time()))
+                move_date = dt_cls.strptime(value, '%Y-%m-%d').date()
             except ValueError:
-                transfer_datetime = timezone.now()
-        else:
-            transfer_datetime = timezone.now()
+                raise ValueError(f'이동 처리일이 올바르지 않습니다: [{value}]')
+            return timezone.make_aware(dt_cls.combine(move_date, timezone.localtime().time()))
+
+        try:
+            default_datetime = parse_move_datetime(request.POST.get('transfer_date')) or timezone.now()
+        except ValueError:
+            default_datetime = timezone.now()
 
         success_count = 0
         erp_pending = []  # ERP 연동 대기 목록 (atomic 밖에서 처리)
@@ -3418,6 +3425,10 @@ def stock_move(request):
 
                     if f_loc_val == t_loc_val:
                         continue
+
+                    transfer_datetime = (
+                        parse_move_datetime(move_dates[i]) if i < len(move_dates) else None
+                    ) or default_datetime
 
                     # 모델 조회
                     try:
