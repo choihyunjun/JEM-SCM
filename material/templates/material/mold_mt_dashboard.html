@@ -932,30 +932,61 @@ document.querySelectorAll('.clickable-row').forEach(row => {
 
                 let barClass = data.mt_progress_pct >= 80 ? 'bar-red' : data.mt_progress_pct >= 60 ? 'bar-yellow' : 'bar-green';
 
-                let shotHtml = '';
-                if (data.shot_records && data.shot_records.length) {
-                    shotHtml = '<h6 class="mt-4 fw-bold">월별 숏트 이력</h6><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>년도</th><th>월</th><th>숏트수</th><th>소스</th></tr></thead><tbody>';
-                    data.shot_records.forEach(r => {
-                        shotHtml += `<tr><td>${r.year}</td><td>${r.month}월</td><td>${r.shots.toLocaleString()}</td><td>${r.source}</td></tr>`;
+                // 월별 숏트 / MT 이력: 탭으로 나눠 팝업이 세로로 끝없이 길어지지 않게 함
+                const shots = data.shot_records || [];
+                const logs = data.mt_logs || [];
+                const MT_LOG_PREVIEW = 10;  // MT 이력은 최근 10건만 먼저 표시
+
+                let shotPane = '<div class="text-muted small py-3 text-center">숏트 이력이 없습니다.</div>';
+                if (shots.length) {
+                    const years = [...new Set(shots.map(r => r.year))].sort((a, b) => b - a);
+                    shotPane = `<div class="d-flex justify-content-end align-items-center gap-2 mb-2">
+                        <label class="small text-muted mb-0">년도</label>
+                        <select class="form-select form-select-sm" style="width:auto;" onchange="filterShotYear(this.value)">
+                            ${years.map(y => `<option value="${y}">${y}</option>`).join('')}
+                        </select>
+                    </div>
+                    <table class="table table-sm table-bordered mb-0"><thead class="table-light"><tr><th>년도</th><th>월</th><th>숏트수</th><th>소스</th></tr></thead><tbody>`;
+                    shots.forEach(r => {
+                        shotPane += `<tr class="shot-row" data-year="${r.year}" data-shots="${r.shots}"><td>${r.year}</td><td>${r.month}월</td><td>${r.shots.toLocaleString()}</td><td>${r.source}</td></tr>`;
                     });
-                    shotHtml += '</tbody></table>';
+                    shotPane += '</tbody><tfoot><tr class="table-light fw-bold"><td colspan="2">연간 합계</td><td id="shotYearTotal"></td><td></td></tr></tfoot></table>';
                 }
 
-                let mtLogHtml = '';
-                if (data.mt_logs && data.mt_logs.length) {
-                    mtLogHtml = `<div class="d-flex justify-content-between align-items-center mt-4 mb-1">
-                        <h6 class="fw-bold mb-0" style="cursor:default;user-select:none;" onclick="mtLogTitleClick(this)">MT 이력</h6>
+                let mtPane = `<div class="d-flex justify-content-between align-items-center mb-1">
+                        <h6 class="fw-bold mb-0 small text-muted" style="cursor:default;user-select:none;" onclick="mtLogTitleClick(this)">MT 이력 (최근순)</h6>
                         <button type="button" class="btn btn-sm btn-outline-secondary d-none" id="recalcMtLogBtn" onclick="recalcMtLog(${data.pk})">
                             <i class="bi bi-arrow-repeat me-1"></i>누적숏트 보정
                         </button>
                     </div>`;
-                    mtLogHtml += '<table class="table table-sm table-bordered"><thead class="table-light"><tr><th>일자</th><th>누적숏트</th><th>담당자</th><th>작업내용</th><th class="d-none mt-log-delete-col" style="width:40px;"></th></tr></thead><tbody>';
-                    data.mt_logs.forEach(r => {
-                        mtLogHtml += `<tr><td>${r.mt_date}</td><td>${r.accumulated_shots.toLocaleString()}</td><td>${r.performed_by || '-'}</td><td>${r.description || '-'}</td>` +
+                if (logs.length) {
+                    mtPane += '<table class="table table-sm table-bordered mb-0"><thead class="table-light"><tr><th>일자</th><th>누적숏트</th><th>담당자</th><th>작업내용</th><th class="d-none mt-log-delete-col" style="width:40px;"></th></tr></thead><tbody>';
+                    logs.forEach((r, idx) => {
+                        mtPane += `<tr class="${idx >= MT_LOG_PREVIEW ? 'mt-log-more d-none' : ''}"><td>${r.mt_date}</td><td>${r.accumulated_shots.toLocaleString()}</td><td>${r.performed_by || '-'}</td><td>${r.description || '-'}</td>` +
                             `<td class="d-none mt-log-delete-col text-center p-0"><button type="button" class="btn btn-sm btn-outline-danger border-0 py-0" onclick="deleteMtLog(${r.id}, ${data.pk})" title="이 MT 이력 삭제"><i class="bi bi-x-lg"></i></button></td></tr>`;
                     });
-                    mtLogHtml += '</tbody></table>';
+                    mtPane += '</tbody></table>';
+                    if (logs.length > MT_LOG_PREVIEW) {
+                        mtPane += `<div class="text-center mt-2"><button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleMtLogMore(this, ${logs.length})">
+                            <i class="bi bi-chevron-down me-1"></i>전체 보기 (${logs.length}건)</button></div>`;
+                    }
+                } else {
+                    mtPane += '<div class="text-muted small py-3 text-center">MT 이력이 없습니다.</div>';
                 }
+
+                const historyHtml = `
+                    <ul class="nav nav-tabs mt-4" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active fw-bold" data-bs-toggle="tab" data-bs-target="#moldShotPane" type="button" role="tab">월별 숏트 <span class="badge rounded-pill bg-light text-secondary border">${shots.length}</span></button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link fw-bold" data-bs-toggle="tab" data-bs-target="#moldMtPane" type="button" role="tab">MT 이력 <span class="badge rounded-pill bg-light text-secondary border">${logs.length}</span></button>
+                        </li>
+                    </ul>
+                    <div class="tab-content border border-top-0 rounded-bottom p-2">
+                        <div class="tab-pane fade show active" id="moldShotPane" role="tabpanel">${shotPane}</div>
+                        <div class="tab-pane fade" id="moldMtPane" role="tabpanel">${mtPane}</div>
+                    </div>`;
 
                 body.innerHTML = `
                     <div class="d-flex justify-content-end gap-2 mb-2">
@@ -1031,9 +1062,9 @@ document.querySelectorAll('.clickable-row').forEach(row => {
                             </div>
                         </form>
                     </div>
-                    ${shotHtml}
-                    ${mtLogHtml}
+                    ${historyHtml}
                 `;
+                if (shots.length) filterShotYear(String(Math.max(...shots.map(r => r.year))));
             })
             .catch(err => {
                 body.innerHTML = '<div class="alert alert-danger">데이터 로딩 실패: ' + err.message + '</div>';
@@ -1099,6 +1130,28 @@ function fullResyncMold(pk) {
         }
     })
     .catch(err => alert('요청 실패: ' + err.message));
+}
+
+// ─── 월별 숏트: 선택한 년도만 표시 + 연간 합계 ───
+function filterShotYear(year) {
+    let total = 0;
+    document.querySelectorAll('#moldShotPane .shot-row').forEach(tr => {
+        const show = tr.dataset.year === String(year);
+        tr.classList.toggle('d-none', !show);
+        if (show) total += parseInt(tr.dataset.shots, 10) || 0;
+    });
+    const cell = document.getElementById('shotYearTotal');
+    if (cell) cell.textContent = total.toLocaleString();
+}
+
+// ─── MT 이력: 최근 10건 외 나머지 펼치기/접기 ───
+function toggleMtLogMore(btn, count) {
+    const rows = document.querySelectorAll('#moldMtPane .mt-log-more');
+    const expand = rows.length && rows[0].classList.contains('d-none');
+    rows.forEach(tr => tr.classList.toggle('d-none', !expand));
+    btn.innerHTML = expand
+        ? '<i class="bi bi-chevron-up me-1"></i>최근 10건만 보기'
+        : `<i class="bi bi-chevron-down me-1"></i>전체 보기 (${count}건)`;
 }
 
 // ─── "MT 이력" 제목 3번 빠르게 클릭 -> 숨겨진 보정 버튼 노출 ───
