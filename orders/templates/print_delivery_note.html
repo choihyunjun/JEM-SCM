@@ -25,7 +25,8 @@
         .info-table { margin-bottom: 20px; border: 2px solid black; }
         .info-label { background: #f0f0f0; font-weight: bold; }
         
-        .list-table { margin-top: 10px; border: 2px solid black; flex-grow: 1; }
+        .list-table { margin-top: 10px; border: 2px solid black; flex-grow: 1; table-layout: fixed; }  /* 품명이 남은 폭을 모두 쓰게 */
+        .list-table td { word-break: keep-all; overflow-wrap: anywhere; }
         .list-table th { background: #f0f0f0; border-bottom: 2px solid black; padding: 8px; }
         .list-table td { padding: 8px; font-size: 13px; }
         
@@ -107,14 +108,14 @@
         <table class="list-table">
             <thead>
                 <tr>
-                    <th style="width: 40px;">No</th>
-                    <th style="width: 130px;">품 번</th>
+                    <th style="width: 34px;">No</th>
+                    <th style="width: 120px;">품 번</th>
                     <th>품 명</th>
-                    <th style="width: 70px;">SNP</th>
-                    <th style="width: 70px;">BOX</th>
-                    <th style="width: 90px;">수 량</th>
-                    <th style="width: 100px;">LOT 번호</th>
-                    <th style="width: 80px;">비 고</th>
+                    <th style="width: 52px;">SNP</th>
+                    <th style="width: 46px;">BOX</th>
+                    <th style="width: 70px;">수 량</th>
+                    <th style="width: 92px;">LOT 번호</th>
+                    <th style="width: 56px;">비 고</th>
                 </tr>
             </thead>
             <tbody>

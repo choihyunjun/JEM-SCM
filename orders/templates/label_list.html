@@ -282,8 +282,8 @@
                         <th style="width: 80px;">납기일</th>
                         <th style="width: 80px;">총 발주</th>
                         <th style="width: 100px;" class="table-primary">납품가능</th>
-                        <th style="width: 80px;">SNP</th>
-                        <th style="width: 65px;">박스</th>
+                        <th style="width: 105px;">SNP</th>
+                        <th style="width: 80px;">박스</th>
                         <th style="width: 115px;" class="table-warning">LOT(생산일)</th>
                         <th style="width: 80px;">총 발행</th>
                         <th style="width: 65px;">기능</th>
@@ -308,12 +308,12 @@
 
                         <td>
                             <input type="number" class="form-control form-control-sm text-end bg-light"
-                                   id="snp-{{ forloop.counter }}" value="0" min="1"
+                                   id="snp-{{ forloop.counter }}" value="0" min="1" style="min-width: 88px;"
                                    oninput="calculateTotal({{ forloop.counter }})">
                         </td>
                         <td>
                             <input type="number" class="form-control form-control-sm text-end"
-                                   id="box-{{ forloop.counter }}" value="1" min="1"
+                                   id="box-{{ forloop.counter }}" value="1" min="1" style="min-width: 64px;"
                                    oninput="calculateTotal({{ forloop.counter }})">
                         </td>
                         <td>
