@@ -84,6 +84,18 @@ class ReportTests(TestCase):
         self.assertAlmostEqual(main['unit_standard'], 12)
         self.assertAlmostEqual(main['total_kg'], 15 + 0.1 + 3.02 + 1.8)  # 총 사용량 = 실제 투입량
 
+    def test_usage_variance_splits_excess_into_defects_and_purge(self):
+        main, mb = self.report()['lines']
+        unit = 10 + 4 / 2  # 기준 원단위 = 제품중량 + 런너 ÷ C/V
+        self.assertEqual(main['good_net_qty'], 1480)  # 양품 1,500 − 검사불량 20
+        self.assertAlmostEqual(main['std_usage_kg'], 1480 * unit / 1000)
+        self.assertAlmostEqual(main['over_bad_kg'], 10 * unit / 1000)
+        self.assertAlmostEqual(main['over_inspect_kg'], 20 * unit / 1000)
+        self.assertAlmostEqual(main['over_scrap_kg'], 1.8)
+        # 실제 − 기준 = 불량품에 들어간 수지(런너 몫 포함) + 파지
+        self.assertAlmostEqual(main['over_kg'], main['over_bad_kg'] + main['over_inspect_kg'] + main['over_scrap_kg'])
+        self.assertEqual(main['main_cause'], '파지')
+
     def test_summaries_count_production_once_and_list_unregistered_parts(self):
         rep = self.report()
         self.assertEqual(rep['totals']['produced'], 1510)
@@ -104,7 +116,7 @@ class ReportTests(TestCase):
             self.assertEqual(resin_yield(request).status_code, 200)
             response = resin_yield_excel(request)
         wb = openpyxl.load_workbook(BytesIO(response.content))
-        self.assertEqual(wb.sheetnames, ['원단위 중량 관리기준', '재질별 집계', '원재료별 사용량', '확인 필요'])
+        self.assertEqual(wb.sheetnames, ['원단위 중량 관리기준', '재질별 집계', '생산량 대비 원재료 사용량', '원재료별 사용량', '확인 필요'])
         ws = wb['원단위 중량 관리기준']
         self.assertEqual((ws['A1'].value, ws['B4'].value), ('생산품목별 원단위 중량 관리기준 자료 (2026년 10월)', 'P-1'))
         self.assertIn('[ 수지별 소계 ]', [ws.cell(r, 1).value for r in range(1, ws.max_row + 1)])

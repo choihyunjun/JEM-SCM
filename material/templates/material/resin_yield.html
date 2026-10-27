@@ -74,6 +74,11 @@
     .ry .ry-sec { padding: 14px 16px 4px; } .ry .ry-sec h6 { font-size: .86rem; font-weight: 800; margin: 0 0 2px; }
     .ry .ry-sec p { font-size: .76rem; color: var(--ry-muted); margin: 0 0 8px; }
     .ry .ry-empty { padding: 36px; text-align: center; font-size: .84rem; color: #94a3b8; }
+    .ry .cause { display: inline-block; border-radius: 6px; padding: 1px 8px; font-size: .72rem; font-weight: 700; }
+    .ry .cause.c-공정불량 { background: #fee2e2; color: #b91c1c; } .ry .cause.c-검사불량 { background: #ffe4e6; color: #9f1239; }
+    .ry .cause.c-파지 { background: #ede9fe; color: #5b21b6; }
+    .ry .seg-insp { background: #f43f5e; }
+    .ry .vtxt { font-size: .7rem; color: var(--ry-muted); margin-top: 3px; white-space: nowrap; }
 </style>
 
 <div class="ry container-fluid" style="max-width: 100%; padding: 16px 20px 24px;">
@@ -125,6 +130,7 @@
 
     <div class="ry-tabs" role="tablist">
         <button class="active" data-bs-toggle="tab" data-bs-target="#ryPart" type="button" role="tab">품번별</button>
+        <button data-bs-toggle="tab" data-bs-target="#ryVariance" type="button" role="tab">생산량 대비 사용량</button>
         <button data-bs-toggle="tab" data-bs-target="#ryResin" type="button" role="tab">재질별</button>
         <button data-bs-toggle="tab" data-bs-target="#ryMaterial" type="button" role="tab">원재료별</button>
         <button data-bs-toggle="tab" data-bs-target="#ryIssue" type="button" role="tab">확인 필요{% if issue_count %}<span class="cnt">{{ issue_count }}</span>{% endif %}</button>
@@ -204,6 +210,60 @@
                     </table>
                 </div>
                 <div class="ry-foot">행을 누르면 중량 상세가 펼쳐집니다 · 기준 스크랩률 = 기준 원단위 중 런너 비중 · 검사불량 = 3공장 창고(3000)→불량창고 이동(양품에서 차감) · ERP 생산실적 {{ report.erp_rows }}건, {{ report.fetched_at }} 조회</div>
+            </div>
+        </div>
+
+        {# 제품 생산량 대비 원재료 사용량 #}
+        <div class="tab-pane fade" id="ryVariance" role="tabpanel">
+            <div class="ry-card">
+                {% with t=report.totals %}
+                <div class="ry-sec" style="padding-bottom: 10px;">
+                    <h6>제품 생산량 대비 원재료 사용량</h6>
+                    <p class="mb-0">양품을 만드는 데 필요한 수지(기준 사용량 = 양품수 × 기준 원단위, 성형 마스터·BOM)와 실제로 쓴 수지를 비교하고, 초과분을 원인별로 나눕니다.
+                    이번 달 기준 <b>{{ t.std_usage_kg|kg }}kg</b> 대비 실제 <b>{{ t.total_kg|kg }}kg</b>, 초과 <b class="loss">{{ t.over_kg|kg }}kg ({{ t.over_pct|pct }}%)</b>
+                    — 공정불량 {{ t.over_bad_kg|kg }} · 검사불량 {{ t.over_inspect_kg|kg }} · 파지 {{ t.over_scrap_kg|kg }} kg</p>
+                </div>
+                {% endwith %}
+                <div class="ry-scroll">
+                    <table class="ry-t">
+                        <thead>
+                            <tr>
+                                <th class="first">품번 / 품명</th>
+                                <th>재료</th>
+                                <th class="r">양품수</th>
+                                <th class="r">기준 원단위<div class="hs">g/EA</div></th>
+                                <th class="r">기준 사용량<div class="hs">kg</div></th>
+                                <th class="r">실제 사용량<div class="hs">kg</div></th>
+                                <th class="r">초과<div class="hs">kg · %</div></th>
+                                <th>원인별 초과
+                                    <div class="legend"><span><i class="seg-bad"></i>공정불량</span><span><i class="seg-insp"></i>검사불량</span><span><i class="seg-scrap"></i>파지</span></div>
+                                </th>
+                                <th class="last">주요 원인</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for r in report.by_variance %}
+                            <tr>
+                                <td class="first"><div class="pno">{{ r.part_no }}</div><div class="pnm">{{ r.part_name|truncatechars:30 }}</div></td>
+                                <td class="mat"><span class="ry-resin" data-r="{{ r.resin }}">{{ r.resin }}</span> {{ r.material_part_no }}{% if r.source == 'BOM' %}<span class="bom{% if r.runner_included %} runner{% endif %}">BOM</span>{% endif %}</td>
+                                <td class="r">{{ r.good_net_qty|ea }}</td>
+                                <td class="r">{{ r.unit_standard|grams }}</td>
+                                <td class="r">{{ r.std_usage_kg|kg }}</td>
+                                <td class="r"><b>{{ r.total_kg|kg }}</b></td>
+                                <td class="r"><span class="loss">{{ r.over_kg|kg }}</span><div class="vtxt">{% if r.over_pct is not None %}+{{ r.over_pct|pct }}%{% else %}양품 없음{% endif %}</div></td>
+                                <td style="min-width: 190px;">
+                                    <div class="ry-bar"><i class="seg-bad" style="width:{{ r.cause_bar.over_bad_kg|stringformat:'.2f' }}%"></i><i class="seg-insp" style="width:{{ r.cause_bar.over_inspect_kg|stringformat:'.2f' }}%"></i><i class="seg-scrap" style="width:{{ r.cause_bar.over_scrap_kg|stringformat:'.2f' }}%"></i></div>
+                                    <div class="vtxt">불량 {{ r.over_bad_kg|kg }} · 검사 {{ r.over_inspect_kg|kg }} · 파지 {{ r.over_scrap_kg|kg }}</div>
+                                </td>
+                                <td class="last">{% if r.main_cause %}<span class="cause c-{{ r.main_cause }}">{{ r.main_cause }}</span>{% else %}<span class="pnm">초과 없음</span>{% endif %}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="9" class="ry-empty">이 달의 성형 생산실적이 없습니다.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="ry-foot">초과 사용량 = 실제 − 기준 = 불량품에 들어간 수지(공정·검사, 런너 몫 포함) + 파지 · 런너는 정상 생산에도 필요하므로 기준에 포함 · 초과량이 큰 순</div>
             </div>
         </div>
 

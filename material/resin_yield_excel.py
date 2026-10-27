@@ -1,7 +1,8 @@
 """원단위 중량 관리 엑셀: 성형팀이 쓰던 '생산품목별 원단위 중량 관리기준 자료' 양식.
 
 시트 1 '원단위 중량 관리기준': 품번별 표 + [수지별 소계] + 합계
-시트 2 '재질별 집계' (기존 월별파지집계 양식), 시트 3 '원재료별 사용량', 시트 4 '확인 필요'
+시트 2 '재질별 집계' (기존 월별파지집계 양식), 시트 3 '생산량 대비 원재료 사용량',
+시트 4 '원재료별 사용량', 시트 5 '확인 필요'
 """
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -218,7 +219,54 @@ def build_workbook(report, year, month):
     _page(ws)
     ws.print_title_rows = '3:4'
 
-    # ── 시트 3: 원재료별 사용량 ──
+    # ── 시트 3: 제품 생산량 대비 원재료 사용량 ──
+    ws = wb.create_sheet('생산량 대비 원재료 사용량')
+    _title(ws, 15, f'◆ 제품 생산량 대비 원재료 사용량 ({year}년 {month}월)', source)
+    top = ['NO', '품번', '품명', '수지명\n(재질)', '재료명', '양품수\n(EA)', '기준 원단위\n(g/EA)', '기준 사용량\n(kg)',
+           '실제 사용량\n(kg)', '초과 사용량\n(kg)', '초과율\n(%)', '원인별 초과 사용량 (kg)', '', '', '주요 원인']
+    sub = ['', '', '', '', '', '', '', '', '', '', '', '공정불량', '검사불량', '파지', '']
+    _header(ws, 3, top)
+    _header(ws, 4, sub)
+    ws.row_dimensions[3].height = 30
+    ws.row_dimensions[4].height = 20
+    for col in list(range(1, 12)) + [15]:
+        ws.merge_cells(start_row=3, start_column=col, end_row=4, end_column=col)
+    ws.merge_cells(start_row=3, start_column=12, end_row=3, end_column=14)
+    formats = {6: EA, 7: G, 8: KG, 9: KG, 10: KG, 11: PCT, 12: KG, 13: KG, 14: KG}
+    fills = {8: FILL_UNIT, 10: FILL_LOSS, 11: FILL_RATE}
+    row = 5
+    for i, r in enumerate(report['by_variance'], 1):
+        rate = r['over_pct'] / 100 if r['over_pct'] is not None else None
+        _write_row(ws, row, [i, r['part_no'], r['part_name'], r['resin'], r['material_name'] or r['material_part_no'],
+                             r['good_net_qty'], r['unit_standard'], r['std_usage_kg'], r['total_kg'], r['over_kg'],
+                             rate if rate is not None else '양품 없음', r['over_bad_kg'], r['over_inspect_kg'],
+                             r['over_scrap_kg'], r['main_cause'] or '-'], formats, fills)
+        ws.cell(row, 15).alignment = Alignment(horizontal='center')
+        if rate is not None:
+            ws.cell(row, 11).font = _rate_font(min(rate, 1))
+        row += 1
+    ws.auto_filter.ref = f'A4:O{max(row - 1, 4)}'
+    t = report['totals']
+    if t:
+        _write_row(ws, row, ['합  계', '', '', '', '', t['good_net_qty'], None,
+                             t['std_usage_kg'], t['total_kg'], t['over_kg'],
+                             t['over_pct'] / 100 if t['over_pct'] is not None else None,
+                             t['over_bad_kg'], t['over_inspect_kg'], t['over_scrap_kg'], t['main_cause'] or '-'],
+                   formats, bold=True, border=TOTAL_BORDER)
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
+        ws.cell(row, 1).alignment = Alignment(horizontal='center')
+        ws.cell(row, 15).alignment = Alignment(horizontal='center')
+        for col in range(1, 16):
+            ws.cell(row, col).fill = FILL_TOTAL
+        row += 2
+        ws.cell(row, 1, '※ 기준 사용량 = 양품수(검사불량 제외) × 기준 원단위(성형 마스터: 제품중량 + 런너÷C/V, 미등록 품번은 BOM 소요량)').font = Font(name=FONT, size=9, color='595959')
+        ws.cell(row + 1, 1, '※ 초과 사용량 = 실제 − 기준 = 불량품에 들어간 수지(공정·검사, 런너 몫 포함) + 파지').font = Font(name=FONT, size=9, color='595959')
+    ws.freeze_panes = 'C5'
+    _widths(ws, [6, 16, 30, 10, 30, 11, 11, 12, 12, 12, 9, 11, 11, 11, 11])
+    _page(ws)
+    ws.print_title_rows = '3:4'
+
+    # ── 시트 4: 원재료별 사용량 ──
     ws = wb.create_sheet('원재료별 사용량')
     headers = ['NO', '재료품번', '재료명', '수지명\n(재질)', '품목 수', '생산수\n(EA)', '양품량\n(kg)', '불량량\n(kg)',
                '런너량\n(kg)', '파지량\n(kg)', '총 수지사용량\n(kg)', '스크랩 발생량\n(kg)', '스크랩률\n(%)']
@@ -248,7 +296,7 @@ def build_workbook(report, year, month):
     _widths(ws, [6, 12, 34, 10, 8, 12, 12, 11, 11, 11, 13, 13, 10])
     _page(ws)
 
-    # ── 시트 4: 확인 필요 ──
+    # ── 시트 5: 확인 필요 ──
     ws = wb.create_sheet('확인 필요')
     headers = ['구분', '품번', '품명', '설비', '실적일', '실적번호', '내용', '처리']
     _title(ws, len(headers), f'원단위 중량 관리 확인 필요 ({year}년 {month}월)',

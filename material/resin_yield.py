@@ -247,12 +247,14 @@ def build_report(year, month, refresh=False):
                                    else _ratio(runner / cavity if cavity else 0, row['unit_standard']) * 100)
             row['loss_gap'] = row['loss_pct'] - row['std_loss_pct'] if row['std_loss_pct'] is not None else None
             row['bar'] = _bar(row)
+            _add_usage_variance(row)
             lines.append(row)
 
     bom_parts = sorted({r['part_no'] for r in lines if r['runner_included']})
     by_material = _summarize(lines, 'material_part_no')
     return {
         'lines': lines,
+        'by_variance': sorted(lines, key=lambda r: -r['over_kg']),
         'by_resin': _summarize(lines, 'resin'),
         'by_material': by_material,
         'unclassified': [g for g in by_material if g['resin'] == '미분류'],
@@ -270,7 +272,34 @@ def build_report(year, month, refresh=False):
     }
 
 
-KG_FIELDS = ('good_kg', 'bad_kg', 'inspect_kg', 'defect_kg', 'runner_kg', 'scrap_kg', 'loss_kg', 'total_kg')
+KG_FIELDS = ('good_kg', 'bad_kg', 'inspect_kg', 'defect_kg', 'runner_kg', 'scrap_kg', 'loss_kg', 'total_kg',
+             'std_usage_kg', 'over_kg', 'over_bad_kg', 'over_inspect_kg', 'over_scrap_kg')
+CAUSES = (('over_bad_kg', '공정불량'), ('over_inspect_kg', '검사불량'), ('over_scrap_kg', '파지'))
+
+
+def _add_usage_variance(row):
+    """제품 생산량 대비 원재료 사용량.
+
+    기준 사용량 = 양품수(검사불량 제외) × 기준 원단위 (런너 포함, 마스터 또는 BOM)
+    초과 사용량 = 실제 사용량 − 기준 사용량 = 불량품에 들어간 수지(공정·검사, 런너 몫 포함) + 파지
+    """
+    unit = row['unit_standard'] or 0
+    good_net = max(row['good_qty'] - row['defect_qty'], 0)
+    row['good_net_qty'] = good_net
+    row['std_usage_kg'] = good_net * unit / 1000
+    row['over_kg'] = row['total_kg'] - row['std_usage_kg']
+    row['over_bad_kg'] = row['bad_qty'] * unit / 1000
+    row['over_inspect_kg'] = min(row['defect_qty'], row['good_qty']) * unit / 1000
+    row['over_scrap_kg'] = row['scrap_kg']
+    _finish_variance(row)
+
+
+def _finish_variance(g):
+    g['over_pct'] = _ratio(g['over_kg'], g['std_usage_kg']) * 100 if g['std_usage_kg'] else None
+    causes = [(g[key], label) for key, label in CAUSES if g[key] > 0.0005]
+    g['main_cause'] = max(causes)[1] if causes else ''
+    over = sum(v for v, _ in causes)
+    g['cause_bar'] = {key: _ratio(g[key], over) * 100 for key, _ in CAUSES}
 
 
 def _bar(row):
@@ -286,11 +315,13 @@ def _summarize(lines, key):
     groups = {}
     for row in lines:
         k = row[key] if key else '합계'
-        g = groups.setdefault(k, {'key': k, 'parts': set(), 'produced': 0.0, **{f: 0.0 for f in KG_FIELDS},
+        g = groups.setdefault(k, {'key': k, 'parts': set(), 'produced': 0.0, 'good_net_qty': 0.0,
+                                  **{f: 0.0 for f in KG_FIELDS},
                                   'material_name': row['material_name'], 'resin': row['resin']})
         if row['part_no'] not in g['parts']:  # 재료가 여러 행인 품번의 생산수는 한 번만
             g['parts'].add(row['part_no'])
             g['produced'] += row['produced']
+            g['good_net_qty'] += row['good_net_qty']
         for f in KG_FIELDS:
             g[f] += row[f]
     result = []
@@ -299,6 +330,7 @@ def _summarize(lines, key):
         g['loss_rate'] = _ratio(g['loss_kg'], g['total_kg'])
         g['loss_pct'] = g['loss_rate'] * 100
         g['bar'] = _bar(g)
+        _finish_variance(g)
         result.append(g)
     largest = result[0]['total_kg'] if result else 0
     for g in result:
