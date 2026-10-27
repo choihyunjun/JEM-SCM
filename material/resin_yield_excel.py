@@ -117,8 +117,7 @@ def _subtotal_values(lines, part_count, produced):
 def build_workbook(report, year, month):
     wb = openpyxl.Workbook()
     lines = report['lines']
-    source = (f"※ 신재투입량, 스크랩 발생량 기준 | 원본: ERP 생산실적({report['fetched_at']} 조회) · 성형 마스터 · "
-              f"3공장 창고→불량창고 이동(검사불량, 양품에서 차감)")
+    source = f"※ 신재투입량, 스크랩 발생량 기준 | 원본: ERP 생산실적({report['fetched_at']} 조회)"
 
     # ── 시트 1: 원단위 중량 관리기준 ──
     ws = wb.active
