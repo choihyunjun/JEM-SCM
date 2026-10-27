@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="{% static 'css/erp-workspaces.css' %}">
 </head>
 
-<body data-erp-page="{{ request.resolver_match.url_name }}" class="sb-nav-fixed {% if request.resolver_match.app_name != 'admin_app' %}erp-ui{% endif %} {% if request.resolver_match.app_name == 'qms' %}is-qms{% elif request.resolver_match.url_name|in_list:'production_main,molding_utilization,molding_analytics,molding_master_list,process_tag_form,stock_check,stock_check_result,mold_mt_dashboard,mold_repair_list' %}is-production{% elif request.resolver_match.app_name == 'material' %}is-wms{% elif request.resolver_match.app_name == 'admin_app' %}is-admin{% else %}is-scm{% endif %}">
+<body data-erp-page="{{ request.resolver_match.url_name }}" class="sb-nav-fixed {% if request.resolver_match.app_name != 'admin_app' %}erp-ui{% endif %} {% if request.resolver_match.app_name == 'qms' %}is-qms{% elif request.resolver_match.url_name|in_list:'production_main,molding_utilization,molding_analytics,molding_master_list,resin_yield,process_tag_form,stock_check,stock_check_result,mold_mt_dashboard,mold_repair_list' %}is-production{% elif request.resolver_match.app_name == 'material' %}is-wms{% elif request.resolver_match.app_name == 'admin_app' %}is-admin{% else %}is-scm{% endif %}">
     <script>
         // SB Admin이 저장한 메뉴 상태를 첫 화면 렌더링 전에 복원한다.
         try {
@@ -61,7 +61,7 @@
                 {# WMS 탭 - WMS 관련 권한 중 하나라도 있으면 표시 #}
                 {% if user|has_perm:'can_wms_stock_list' or user|has_perm:'can_wms_stock_transfer' or user|has_perm:'can_wms_transfer_history' or user|has_perm:'can_wms_transaction_history' or user|has_perm:'can_wms_lot_allocation' or user|has_perm:'can_wms_incoming_process' or user|has_perm:'can_wms_incoming_history' or user|has_perm:'can_wms_incoming_label' or user|has_perm:'can_wms_outgoing_process' or user|has_perm:'can_wms_outgoing_history' or user|has_perm:'can_wms_outbound' or user|has_perm:'can_wms_stock_return' or user|has_perm:'can_wms_bom_list' or user|has_perm:'can_wms_bom_upload' or user|has_perm:'can_wms_bom_calc' or user|has_perm:'can_wms_erp_sync' or user|has_perm:'can_wms_storage_layout' or user|has_perm:'can_wms_storage_rack' or user|has_perm:'can_wms_storage_setting' or user|has_perm:'can_wms_storage_expiry' or user|has_perm:'can_wms_transfer_request' or user|has_perm:'can_wms_stock_view' or user|has_perm:'can_wms_inout_view' or user|has_perm:'can_wms_bom_view' or user|has_perm:'can_wms_inout' %}
                 <li class="nav-item">
-                    <a class="nav-link {% if request.resolver_match.app_name == 'material' and not request.resolver_match.url_name|in_list:'production_main,molding_utilization,molding_analytics,molding_master_list,process_tag_form,stock_check,stock_check_result,mold_mt_dashboard,mold_repair_list' %}active-system{% endif %}" href="{% url 'material:dashboard' %}">
+                    <a class="nav-link {% if request.resolver_match.app_name == 'material' and not request.resolver_match.url_name|in_list:'production_main,molding_utilization,molding_analytics,molding_master_list,resin_yield,process_tag_form,stock_check,stock_check_result,mold_mt_dashboard,mold_repair_list' %}active-system{% endif %}" href="{% url 'material:dashboard' %}">
                        <i class="bi bi-box-seam me-1"></i>자재관리(WMS)
                     </a>
                 </li>
@@ -69,7 +69,7 @@
                 {# 생산현장관리 탭 - 내부 직원/관리자만 #}
                 {% if user.profile.account_type == 'INTERNAL' or user.is_superuser %}
                 <li class="nav-item">
-                    <a class="nav-link {% if request.resolver_match.url_name|in_list:'production_main,molding_utilization,molding_analytics,molding_master_list,process_tag_form,stock_check,stock_check_result,mold_mt_dashboard,mold_repair_list' %}active-system{% endif %}" href="{% url 'material:production_main' %}">
+                    <a class="nav-link {% if request.resolver_match.url_name|in_list:'production_main,molding_utilization,molding_analytics,molding_master_list,resin_yield,process_tag_form,stock_check,stock_check_result,mold_mt_dashboard,mold_repair_list' %}active-system{% endif %}" href="{% url 'material:production_main' %}">
                        <i class="bi bi-building-gear me-1"></i>생산현장관리
                     </a>
                 </li>
@@ -113,12 +113,12 @@
         </a>
         {% endif %}
         {% if user|has_perm:'can_wms_stock_list' or user|has_perm:'can_wms_stock_transfer' or user|has_perm:'can_wms_transfer_history' or user|has_perm:'can_wms_transaction_history' or user|has_perm:'can_wms_lot_allocation' or user|has_perm:'can_wms_incoming_process' or user|has_perm:'can_wms_incoming_history' or user|has_perm:'can_wms_incoming_label' or user|has_perm:'can_wms_outgoing_process' or user|has_perm:'can_wms_outgoing_history' or user|has_perm:'can_wms_outbound' or user|has_perm:'can_wms_stock_return' or user|has_perm:'can_wms_bom_list' or user|has_perm:'can_wms_bom_upload' or user|has_perm:'can_wms_bom_calc' or user|has_perm:'can_wms_erp_sync' or user|has_perm:'can_wms_storage_layout' or user|has_perm:'can_wms_storage_rack' or user|has_perm:'can_wms_storage_setting' or user|has_perm:'can_wms_storage_expiry' or user|has_perm:'can_wms_transfer_request' or user|has_perm:'can_wms_stock_view' or user|has_perm:'can_wms_inout_view' or user|has_perm:'can_wms_bom_view' or user|has_perm:'can_wms_inout' %}
-        <a href="{% url 'material:dashboard' %}" class="mobile-system-tab {% if request.resolver_match.app_name == 'material' and not request.resolver_match.url_name|in_list:'production_main,molding_utilization,molding_analytics,molding_master_list,process_tag_form,stock_check,stock_check_result,mold_mt_dashboard,mold_repair_list' %}active-system{% endif %}">
+        <a href="{% url 'material:dashboard' %}" class="mobile-system-tab {% if request.resolver_match.app_name == 'material' and not request.resolver_match.url_name|in_list:'production_main,molding_utilization,molding_analytics,molding_master_list,resin_yield,process_tag_form,stock_check,stock_check_result,mold_mt_dashboard,mold_repair_list' %}active-system{% endif %}">
             <i class="bi bi-box-seam me-1"></i>WMS
         </a>
         {% endif %}
         {% if user.profile.account_type == 'INTERNAL' or user.is_superuser %}
-        <a href="{% url 'material:production_main' %}" class="mobile-system-tab {% if request.resolver_match.url_name|in_list:'production_main,molding_utilization,molding_analytics,molding_master_list,process_tag_form,stock_check,stock_check_result,mold_mt_dashboard,mold_repair_list' %}active-system{% endif %}">
+        <a href="{% url 'material:production_main' %}" class="mobile-system-tab {% if request.resolver_match.url_name|in_list:'production_main,molding_utilization,molding_analytics,molding_master_list,resin_yield,process_tag_form,stock_check,stock_check_result,mold_mt_dashboard,mold_repair_list' %}active-system{% endif %}">
             <i class="bi bi-building-gear me-1"></i>생산
         </a>
         {% endif %}
@@ -300,7 +300,7 @@
                         {# ====================================================== #}
                         {# 2. WMS 메뉴 (자재관리) #}
                         {# ====================================================== #}
-                        {% elif request.resolver_match.app_name == 'material' and not request.resolver_match.url_name|in_list:'production_main,molding_utilization,molding_analytics,molding_master_list,process_tag_form,stock_check,stock_check_result,mold_mt_dashboard,mold_repair_list' %}
+                        {% elif request.resolver_match.app_name == 'material' and not request.resolver_match.url_name|in_list:'production_main,molding_utilization,molding_analytics,molding_master_list,resin_yield,process_tag_form,stock_check,stock_check_result,mold_mt_dashboard,mold_repair_list' %}
                             {# 메뉴 고정핀 #}
                             <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom border-secondary mb-2">
                                 <small class="text-muted">WMS 메뉴</small>
@@ -446,7 +446,7 @@
                         {# ====================================================== #}
                         {# 2-1. 생산현장관리 메뉴 #}
                         {# ====================================================== #}
-                        {% elif request.resolver_match.url_name|in_list:'production_main,molding_utilization,molding_analytics,molding_master_list,process_tag_form,stock_check,stock_check_result,mold_mt_dashboard,mold_repair_list' %}
+                        {% elif request.resolver_match.url_name|in_list:'production_main,molding_utilization,molding_analytics,molding_master_list,resin_yield,process_tag_form,stock_check,stock_check_result,mold_mt_dashboard,mold_repair_list' %}
                             {# production_base.html의 sidebar_material 블록이 처리 #}
                             {% block sidebar_production %}{% endblock %}
 

@@ -3,8 +3,15 @@ from .models import (
     Warehouse, MaterialStock, MaterialTransaction, Product, BOMItem,
     InventoryCheck,
     ProcessTag, ProcessTagScanLog, InventoryCheckSession, InventoryCheckSessionItem,
-    WMSConfig, MovementExpiryEvent, MovementVisibilityEvent,
+    WMSConfig, MovementExpiryEvent, MovementVisibilityEvent, ResinType,
 )
+
+
+@admin.register(ResinType)
+class ResinTypeAdmin(admin.ModelAdmin):
+    list_display = ('material_part_no', 'resin_type')
+    list_editable = ('resin_type',)
+    search_fields = ('material_part_no', 'resin_type')
 
 
 @admin.register(MovementExpiryEvent)

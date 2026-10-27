@@ -1687,3 +1687,17 @@ class ProductionLotItem(models.Model):
 
     def __str__(self):
         return f"{self.part.part_no} ({'사용' if self.is_active else '미사용'})"
+
+
+class ResinType(models.Model):
+    """원재료(수지) 품번별 재질. 성형 원단위 중량 관리의 재질별 집계 기준."""
+    material_part_no = models.CharField("재료품번", max_length=50, unique=True)
+    resin_type = models.CharField("재질", max_length=30)
+
+    class Meta:
+        verbose_name = "수지 재질"
+        verbose_name_plural = "17. 수지 재질"
+        ordering = ['material_part_no']
+
+    def __str__(self):
+        return f"{self.material_part_no} ({self.resin_type})"

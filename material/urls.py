@@ -2,6 +2,7 @@ from django.urls import path
 from . import views
 from . import erp_recovery
 from . import label_reissue
+from . import resin_yield
 from . import bom_jobs
 
 app_name = 'material'
@@ -157,6 +158,8 @@ urlpatterns = [
 
     # 성형 마스터
     path('molding/master/', views.molding_master_list, name='molding_master_list'),
+    path('molding/resin-yield/', resin_yield.resin_yield, name='resin_yield'),
+    path('molding/resin-yield/excel/', resin_yield.resin_yield_excel, name='resin_yield_excel'),
     path('molding/master/save/', views.molding_master_save, name='molding_master_save'),
     path('molding/master/delete/', views.molding_master_delete, name='molding_master_delete'),
     path('molding/master/upload/', views.molding_master_upload, name='molding_master_upload'),

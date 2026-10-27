@@ -1,0 +1,49 @@
+<div class="table-responsive ry-scroll">
+    <table class="table table-hover table-bordered mb-0 dtl-table ry-table">
+        <thead>
+            <tr class="text-center">
+                <th>{{ key_label }}</th>{% if show_name %}<th>재료명</th><th>재질</th>{% endif %}
+                <th class="num">품번 수</th><th class="num">생산수<br>(EA)</th><th class="num">양품<br>(kg)</th>
+                <th class="num">공정불량<br>(kg)</th><th class="num">검사불량<br>(kg)</th><th class="num">런너<br>(kg)</th>
+                <th class="num">파지<br>(kg)</th><th class="num">총 사용량<br>(kg)</th><th class="num">스크랩<br>(kg)</th>
+                <th class="num">스크랩률</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for g in groups %}
+            <tr>
+                <td class="fw-bold">{{ g.key|default:"(없음)" }}</td>{% if show_name %}<td>{{ g.material_name|truncatechars:36 }}</td><td class="text-center">{{ g.resin }}</td>{% endif %}
+                <td class="num">{{ g.part_count }}</td>
+                <td class="num">{{ g.produced|floatformat:"0g" }}</td>
+                <td class="num">{{ g.good_kg|floatformat:"3g" }}</td>
+                <td class="num">{{ g.bad_kg|floatformat:"3g" }}</td>
+                <td class="num">{{ g.inspect_kg|floatformat:"3g" }}</td>
+                <td class="num">{{ g.runner_kg|floatformat:"3g" }}</td>
+                <td class="num">{{ g.scrap_kg|floatformat:"3g" }}</td>
+                <td class="num fw-bold">{{ g.total_kg|floatformat:"3g" }}</td>
+                <td class="num text-danger">{{ g.loss_kg|floatformat:"3g" }}</td>
+                <td class="num">{{ g.loss_pct|floatformat:1 }}%</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="{% if show_name %}13{% else %}11{% endif %}" class="text-center text-muted py-4">데이터 없음</td></tr>
+            {% endfor %}
+        </tbody>
+        {% if totals %}
+        <tfoot>
+            <tr>
+                <td{% if show_name %} colspan="3"{% endif %}>합계</td>
+                <td class="num">{{ totals.part_count }}</td>
+                <td class="num">{{ totals.produced|floatformat:"0g" }}</td>
+                <td class="num">{{ totals.good_kg|floatformat:"3g" }}</td>
+                <td class="num">{{ totals.bad_kg|floatformat:"3g" }}</td>
+                <td class="num">{{ totals.inspect_kg|floatformat:"3g" }}</td>
+                <td class="num">{{ totals.runner_kg|floatformat:"3g" }}</td>
+                <td class="num">{{ totals.scrap_kg|floatformat:"3g" }}</td>
+                <td class="num">{{ totals.total_kg|floatformat:"3g" }}</td>
+                <td class="num text-danger">{{ totals.loss_kg|floatformat:"3g" }}</td>
+                <td class="num">{{ totals.loss_pct|floatformat:1 }}%</td>
+            </tr>
+        </tfoot>
+        {% endif %}
+    </table>
+</div>
