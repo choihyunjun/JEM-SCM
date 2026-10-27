@@ -104,10 +104,11 @@ class ReportTests(TestCase):
             self.assertEqual(resin_yield(request).status_code, 200)
             response = resin_yield_excel(request)
         wb = openpyxl.load_workbook(BytesIO(response.content))
-        self.assertEqual(wb.sheetnames, ['원단위 중량 관리기준', '원재료별 사용량', '확인 필요'])
+        self.assertEqual(wb.sheetnames, ['원단위 중량 관리기준', '재질별 집계', '원재료별 사용량', '확인 필요'])
         ws = wb['원단위 중량 관리기준']
         self.assertEqual((ws['A1'].value, ws['B4'].value), ('생산품목별 원단위 중량 관리기준 자료 (2026년 10월)', 'P-1'))
         self.assertIn('[ 수지별 소계 ]', [ws.cell(r, 1).value for r in range(1, ws.max_row + 1)])
+        self.assertEqual((wb['재질별 집계']['B5'].value, wb['재질별 집계']['E4'].value), ('M/B', '①양품중량'))
 
     def test_erp_failure_is_reported(self):
         with patch('material.resin_yield.call_erp_api', return_value=(False, None, 'timeout')):

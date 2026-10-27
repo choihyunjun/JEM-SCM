@@ -1,7 +1,7 @@
 """원단위 중량 관리 엑셀: 성형팀이 쓰던 '생산품목별 원단위 중량 관리기준 자료' 양식.
 
 시트 1 '원단위 중량 관리기준': 품번별 표 + [수지별 소계] + 합계
-시트 2 '원재료별 사용량', 시트 3 '확인 필요'
+시트 2 '재질별 집계' (기존 월별파지집계 양식), 시트 3 '원재료별 사용량', 시트 4 '확인 필요'
 """
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -178,7 +178,48 @@ def build_workbook(report, year, month):
     _widths(ws, [6, 16, 30, 10, 30, 6, 10, 10, 10, 12, 12, 11, 11, 11, 13, 13, 10, 20])
     _page(ws)
 
-    # ── 시트 2: 원재료별 사용량 ──
+    # ── 시트 2: 재질별 집계 (기존 '월별파지집계' 양식) ──
+    ws = wb.create_sheet('재질별 집계')
+    _title(ws, 13, f'{year}년 {month}월 재질별 수지 사용량 · 스크랩 발생량', source)
+    top = ['NO', '수지명', '품목 수', '생산수\n(EA)', '원재료 사용량 (kg)', '', '', '', '', '', '',
+           '스크랩량 (kg)\n(②+③+④)', '스크랩률\n(%)']
+    sub = ['', '', '', '', '①양품중량', '공정불량', '검사불량', '②불량중량', '③런너중량', '④파지량', '수지사용량',
+           '', '']
+    _header(ws, 3, top)
+    _header(ws, 4, sub)
+    ws.row_dimensions[3].height = 22
+    ws.row_dimensions[4].height = 22
+    for col in (1, 2, 3, 4, 12, 13):
+        ws.merge_cells(start_row=3, start_column=col, end_row=4, end_column=col)
+    ws.merge_cells(start_row=3, start_column=5, end_row=3, end_column=11)
+    formats = {3: EA, 4: EA, 5: KG, 6: KG, 7: KG, 8: KG, 9: KG, 10: KG, 11: KG, 12: KG, 13: PCT}
+    fills = {11: FILL_UNIT, 12: FILL_LOSS, 13: FILL_RATE}
+
+    def resin_values(s):
+        return [s['part_count'], s['produced'], s['good_kg'], s['bad_kg'], s['inspect_kg'],
+                s['bad_kg'] + s['inspect_kg'], s['runner_kg'], s['scrap_kg'], s['total_kg'], s['loss_kg'],
+                s['loss_rate']]
+
+    row = 5
+    for i, s in enumerate(sorted(report['by_resin'], key=lambda g: g['key']), 1):
+        _write_row(ws, row, [i, s['key']] + resin_values(s), formats, fills, stripe=i % 2 == 0)
+        ws.cell(row, 2).alignment = Alignment(horizontal='center')
+        ws.cell(row, 13).font = _rate_font(s['loss_rate'])
+        row += 1
+    t = report['totals']
+    if t:
+        _write_row(ws, row, ['합  계', ''] + resin_values(t), formats, bold=True, border=TOTAL_BORDER)
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=2)
+        ws.cell(row, 1).alignment = Alignment(horizontal='center')
+        for col in range(1, 14):
+            ws.cell(row, col).fill = FILL_TOTAL
+        ws.cell(row, 13).font = _rate_font(t['loss_rate'], bold=True)
+    ws.freeze_panes = 'C5'
+    _widths(ws, [6, 12, 8, 13, 13, 11, 11, 12, 12, 11, 13, 14, 10])
+    _page(ws)
+    ws.print_title_rows = '3:4'
+
+    # ── 시트 3: 원재료별 사용량 ──
     ws = wb.create_sheet('원재료별 사용량')
     headers = ['NO', '재료품번', '재료명', '수지명\n(재질)', '품목 수', '생산수\n(EA)', '양품량\n(kg)', '불량량\n(kg)',
                '런너량\n(kg)', '파지량\n(kg)', '총 수지사용량\n(kg)', '스크랩 발생량\n(kg)', '스크랩률\n(%)']
@@ -208,7 +249,7 @@ def build_workbook(report, year, month):
     _widths(ws, [6, 12, 34, 10, 8, 12, 12, 11, 11, 11, 13, 13, 10])
     _page(ws)
 
-    # ── 시트 3: 확인 필요 ──
+    # ── 시트 4: 확인 필요 ──
     ws = wb.create_sheet('확인 필요')
     headers = ['구분', '품번', '품명', '설비', '실적일', '실적번호', '내용', '처리']
     _title(ws, len(headers), f'원단위 중량 관리 확인 필요 ({year}년 {month}월)',
