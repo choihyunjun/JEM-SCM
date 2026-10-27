@@ -1,34 +1,92 @@
 {% extends 'material/production_base.html' %}
+{% load resin_yield_tags %}
 {% block title %}원단위 중량 관리{% endblock %}
 
 {% block production_content %}
 <style>
-    .ry-kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
-    .ry-kpi .kpi-card { background: #fff; border-radius: 10px; padding: 14px 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border-left: 4px solid #3182ce; }
-    .ry-kpi .kpi-card.loss { border-left-color: #e53e3e; }
-    .ry-kpi .kpi-card.warn { border-left-color: #d69e2e; }
-    .ry-kpi .kpi-label { font-size: 0.78rem; color: #718096; margin-bottom: 2px; }
-    .ry-kpi .kpi-value { font-size: 1.45rem; font-weight: 700; line-height: 1.2; }
-    .ry-kpi .kpi-unit { font-size: 0.8rem; font-weight: 400; color: #718096; margin-left: 2px; }
-    .ry-table { font-size: 0.74rem; white-space: nowrap; }
-    .ry-table td.num, .ry-table th.num { text-align: right; }
-    .ry-table tfoot td { font-weight: 700; background: #f8fafc; }
-    .ry-scroll { max-height: 68vh; overflow: auto; }
-    .ry-scroll thead th { position: sticky; top: 0; z-index: 2; }
-    .ry-tabs .nav-link { font-weight: 600; font-size: 0.85rem; }
+    .ry { --ry-brand: #8B0000; --ry-line: #e2e8f0; --ry-muted: #64748b; --ry-soft: #f8fafc; color: #1e293b; }
+    .ry .ry-crumb { font-size: .72rem; font-weight: 700; color: var(--ry-brand); letter-spacing: .02em; }
+    .ry h1 { font-size: 1.5rem; font-weight: 800; margin: 2px 0 2px; color: #0f172a; }
+    .ry .ry-sub { font-size: .82rem; color: var(--ry-muted); }
+    .ry .ry-ctl { height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; padding: 0 12px; font-size: .85rem; color: #475569; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+    .ry .ry-ctl:hover { background: #f1f5f9; color: #1e293b; }
+    .ry .ry-primary { background: var(--ry-brand); border-color: var(--ry-brand); color: #fff; font-weight: 700; }
+    .ry .ry-primary:hover { background: #6f0000; color: #fff; }
+    .ry .ry-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    @media (max-width: 992px) { .ry .ry-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    .ry .ry-stat { background: #fff; border: 1px solid var(--ry-line); border-radius: 12px; padding: 16px 20px; }
+    .ry .ry-stat .l { font-size: .75rem; font-weight: 600; color: var(--ry-muted); }
+    .ry .ry-stat .v { font-size: 1.55rem; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 2px; color: #0f172a; }
+    .ry .ry-stat .v small { font-size: .85rem; font-weight: 500; color: #94a3b8; margin-left: 3px; }
+    .ry .ry-stat .v.red { color: #b91c1c; }
+    .ry .ry-stat .s { font-size: .74rem; color: var(--ry-muted); margin-top: 2px; }
+    .ry .ry-notice { margin-top: 12px; border: 1px solid #fde68a; background: #fffbeb; border-radius: 10px; padding: 8px 16px; font-size: .84rem; color: #78350f; }
+    .ry .ry-notice summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .ry .ry-notice summary::-webkit-details-marker { display: none; }
+    .ry .ry-notice .chip { background: #fff; border: 1px solid #fde68a; border-radius: 999px; padding: 1px 10px; font-size: .74rem; }
+    .ry .ry-notice .more { margin-left: auto; font-size: .74rem; color: #b45309; }
+    .ry .ry-notice[open] .more::after { content: ' ▲'; } .ry .ry-notice:not([open]) .more::after { content: ' ▼'; }
+    .ry .ry-notice ul { margin: 8px 0 2px; padding-left: 18px; font-size: .78rem; }
+    .ry .ry-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--ry-line); margin-top: 22px; }
+    .ry .ry-tabs button { background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 8px 16px; font-size: .88rem; font-weight: 700; color: var(--ry-muted); }
+    .ry .ry-tabs button.active { border-bottom-color: var(--ry-brand); color: var(--ry-brand); }
+    .ry .ry-tabs .cnt { margin-left: 5px; background: #fef3c7; color: #92400e; border-radius: 999px; padding: 0 6px; font-size: .72rem; }
+    .ry .ry-card { background: #fff; border: 1px solid var(--ry-line); border-radius: 12px; margin-top: 16px; }
+    .ry .ry-filter { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px; border-bottom: 1px solid #f1f5f9; }
+    .ry .ry-filter input[type=text] { height: 32px; width: 230px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0 12px; font-size: .84rem; }
+    .ry .ry-chip { height: 30px; border: 0; border-radius: 999px; padding: 0 12px; font-size: .76rem; font-weight: 600; background: #f1f5f9; color: #475569; }
+    .ry .ry-chip:hover { background: #e2e8f0; } .ry .ry-chip.on { background: #0f172a; color: #fff; }
+    .ry .ry-sort { margin-left: auto; font-size: .76rem; color: #475569; display: flex; align-items: center; gap: 6px; }
+    .ry table.ry-t { width: 100%; font-size: .84rem; border-collapse: collapse; }
+    .ry .ry-t thead th { font-size: .72rem; font-weight: 700; color: var(--ry-muted); padding: 10px 8px; border-bottom: 1px solid var(--ry-line); white-space: nowrap; vertical-align: bottom; background: #fff; position: sticky; top: 0; z-index: 1; }
+    .ry .ry-t thead th .hs { font-weight: 400; color: #94a3b8; }
+    .ry .ry-t td { padding: 9px 8px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+    .ry .ry-t .r { text-align: right; font-variant-numeric: tabular-nums; }
+    .ry .ry-t .first { padding-left: 16px; } .ry .ry-t .last { padding-right: 16px; }
+    .ry .ry-t tr.main { cursor: pointer; } .ry .ry-t tr.main:hover td, .ry .ry-t tbody.open tr td { background: var(--ry-soft); }
+    .ry .pno { font-weight: 700; color: #0f172a; } .ry .pnm { font-size: .74rem; color: var(--ry-muted); }
+    .ry .ry-resin { display: inline-block; border-radius: 6px; padding: 1px 8px; font-size: .74rem; font-weight: 700; background: #f1f5f9; color: #334155; }
+    .ry .ry-resin[data-r="PA66"] { background: #e0f2fe; color: #075985; } .ry .ry-resin[data-r="PBT"] { background: #ede9fe; color: #5b21b6; }
+    .ry .ry-resin[data-r="PC"] { background: #d1fae5; color: #065f46; } .ry .ry-resin[data-r="PC+ABS"] { background: #ccfbf1; color: #115e59; }
+    .ry .ry-resin[data-r="PA46"] { background: #e0e7ff; color: #3730a3; } .ry .ry-resin[data-r="POM"] { background: #ffedd5; color: #9a3412; }
+    .ry .ry-resin[data-r="PP"] { background: #ecfccb; color: #3f6212; } .ry .ry-resin[data-r="PMMA"] { background: #cffafe; color: #155e75; }
+    .ry .ry-resin[data-r="ABS"] { background: #e7e5e4; color: #292524; } .ry .ry-resin[data-r="미분류"] { background: #fef3c7; color: #92400e; }
+    .ry .mat { font-size: .76rem; color: #475569; white-space: nowrap; }
+    .ry .bom { margin-left: 5px; border-radius: 4px; padding: 0 4px; font-size: .64rem; font-weight: 800; background: #f0f9ff; color: #0369a1; }
+    .ry .bom.runner { background: #fffbeb; color: #b45309; }
+    .ry .unit .std { color: #94a3b8; } .ry .unit b { color: #0f172a; }
+    .ry .diff { font-size: .7rem; color: #94a3b8; } .ry .diff.up { color: #dc2626; }
+    .ry .ry-bar { display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: #f1f5f9; min-width: 150px; }
+    .ry .ry-bar i { display: block; } .ry .seg-good { background: #cbd5e1; } .ry .seg-bad { background: #ef4444; }
+    .ry .seg-runner { background: #fbbf24; } .ry .seg-scrap { background: #8b5cf6; } .ry .seg-total { background: #334155; }
+    .ry .legend { display: flex; gap: 8px; margin-top: 3px; font-weight: 400; font-size: .64rem; color: #94a3b8; }
+    .ry .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 3px; vertical-align: -1px; }
+    .ry .loss { color: #b91c1c; }
+    .ry .pill { display: inline-block; min-width: 54px; text-align: center; border-radius: 999px; padding: 1px 8px; font-size: .74rem; font-weight: 700; background: #f1f5f9; color: #334155; font-variant-numeric: tabular-nums; }
+    .ry .pill.warn { background: #fef3c7; color: #92400e; } .ry .pill.bad { background: #dc2626; color: #fff; }
+    .ry .gap { font-size: .68rem; color: #94a3b8; white-space: nowrap; } .ry .gap.up { color: #dc2626; font-weight: 700; }
+    .ry tr.detail td { padding: 2px 16px 12px; }
+    .ry .dgrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px 20px; font-size: .76rem; color: var(--ry-muted); }
+    @media (max-width: 1200px) { .ry .dgrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    .ry .dgrid b { color: #0f172a; font-variant-numeric: tabular-nums; }
+    .ry .ry-foot { padding: 8px 16px; font-size: .72rem; color: #94a3b8; }
+    .ry .ry-scroll { overflow: auto; max-height: 70vh; }
+    .ry .ry-sec { padding: 14px 16px 4px; } .ry .ry-sec h6 { font-size: .86rem; font-weight: 800; margin: 0 0 2px; }
+    .ry .ry-sec p { font-size: .76rem; color: var(--ry-muted); margin: 0 0 8px; }
+    .ry .ry-empty { padding: 36px; text-align: center; font-size: .84rem; color: #94a3b8; }
 </style>
 
-<div class="container-fluid" style="max-width: 100%; padding: 0 12px;">
-    <div class="d-flex justify-content-between align-items-center mb-3 pt-3 flex-wrap gap-2">
+<div class="ry container-fluid" style="max-width: 100%; padding: 16px 20px 24px;">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-3">
         <div>
-            <span class="dtl-title">원단위 중량 관리 <span class="dtl-pill slate ms-2">{{ year }}년 {{ mon }}월</span></span>
-            <small class="text-muted d-block">ERP 생산실적 · 성형 마스터 · 불량창고 이동 기준 월별 수지 사용량과 스크랩</small>
+            <div class="ry-crumb">생산현장관리 · 성형팀</div>
+            <h1>원단위 중량 관리</h1>
+            <div class="ry-sub">ERP 생산실적과 성형 마스터로 계산한 월별 수지 사용량과 스크랩</div>
         </div>
-        <form method="get" class="d-flex gap-2 align-items-center">
-            <input type="month" name="month" value="{{ month }}" class="form-control form-control-sm dtl-form-control" style="width: 150px;">
-            <button type="submit" class="dtl-btn-dark btn-sm"><i class="bi bi-search"></i> 조회</button>
-            <a href="?month={{ month }}&refresh=1" class="dtl-btn-outline btn-sm" title="ERP 생산실적을 지금 다시 조회합니다"><i class="bi bi-arrow-clockwise"></i> 다시 조회</a>
-            <a href="{% url 'material:resin_yield_excel' %}?month={{ month }}" class="dtl-btn-outline btn-sm"><i class="bi bi-download me-1"></i>엑셀 다운로드</a>
+        <form method="get" class="d-flex align-items-center gap-2">
+            <input type="month" name="month" value="{{ month }}" class="ry-ctl" onchange="this.form.submit()" aria-label="조회 월">
+            <a href="?month={{ month }}&refresh=1" class="ry-ctl" title="ERP 생산실적을 지금 다시 조회합니다"><i class="bi bi-arrow-clockwise"></i>다시 조회</a>
+            <a href="{% url 'material:resin_yield_excel' %}?month={{ month }}" class="ry-ctl ry-primary"><i class="bi bi-download"></i>엑셀 다운로드</a>
         </form>
     </div>
 
@@ -36,175 +94,233 @@
     <div class="alert alert-danger">ERP 생산실적을 불러오지 못했습니다: {{ report.error }}</div>
     {% else %}
     {% with t=report.totals %}
-    <div class="ry-kpi">
-        <div class="kpi-card"><div class="kpi-label">생산수</div><div class="kpi-value">{{ t.produced|default:0|floatformat:"0g" }}<span class="kpi-unit">EA</span></div></div>
-        <div class="kpi-card"><div class="kpi-label">총 수지사용량</div><div class="kpi-value">{{ t.total_kg|default:0|floatformat:"1g" }}<span class="kpi-unit">kg</span></div></div>
-        <div class="kpi-card loss"><div class="kpi-label">스크랩량 (불량+런너+파지)</div><div class="kpi-value">{{ t.loss_kg|default:0|floatformat:"1g" }}<span class="kpi-unit">kg · {{ t.loss_pct|default:0|floatformat:1 }}%</span></div></div>
-        <div class="kpi-card loss"><div class="kpi-label">파지량</div><div class="kpi-value">{{ t.scrap_kg|default:0|floatformat:"1g" }}<span class="kpi-unit">kg</span></div></div>
-        <div class="kpi-card warn"><div class="kpi-label">확인 필요</div><div class="kpi-value">{{ issue_count }}<span class="kpi-unit">건</span></div></div>
+    <div class="ry-stats">
+        <div class="ry-stat"><div class="l">생산수</div><div class="v">{{ t.produced|ea }}<small>EA</small></div><div class="s">성형 설비 실적 {{ t.part_count|default:0 }}개 품번</div></div>
+        <div class="ry-stat"><div class="l">총 수지사용량</div><div class="v">{{ t.total_kg|kg }}<small>kg</small></div><div class="s">양품 {{ t.good_kg|kg }} · 스크랩 {{ t.loss_kg|kg }}</div></div>
+        <div class="ry-stat"><div class="l">스크랩률</div><div class="v red">{{ t.loss_pct|pct }}<small>%</small></div><div class="s">불량 {{ t.defect_kg|kg }} · 런너 {{ t.runner_kg|kg }} · 파지 {{ t.scrap_kg|kg }} kg</div></div>
+        <div class="ry-stat"><div class="l">파지량</div><div class="v">{{ t.scrap_kg|kg }}<small>kg</small></div><div class="s">생산실적 비고 기준</div></div>
     </div>
     {% endwith %}
-    {% if report.unregistered %}
-    <div class="alert alert-warning py-2 small">
-        <i class="bi bi-exclamation-triangle me-1"></i>
-        성형 마스터에 없는 품번 <b>{{ report.unregistered|length }}개</b>(생산 {{ report.unregistered_produced|floatformat:"0g" }}EA, 파지 {{ report.unregistered_scrap_kg|floatformat:"1g" }}kg)는 중량 기준이 없어 위 합계에서 빠졌습니다.
-        [확인 필요] 탭의 품번을 성형 마스터에 등록하면 다음 조회부터 반영됩니다.
-    </div>
-    {% endif %}
-    {% if report.bom_parts %}
-    <div class="alert alert-info py-2 small">
-        <i class="bi bi-info-circle me-1"></i>
-        성형 마스터에 없는 품번 <b>{{ report.bom_parts|length }}개</b>는 BOM 원재료 소요량으로 계산했습니다(표의 <span class="dtl-pill amber">BOM</span>).
-        BOM 수량은 런너를 포함한 총소요량이라 런너가 양품·불량 중량에 들어가 <b>스크랩률이 실제보다 낮게</b> 나옵니다 (M7번대 런너 없는 품번은 제외). 성형 마스터에 등록하면 정확한 계산으로 바뀝니다.
-    </div>
+
+    {% if report.unregistered or report.bom_parts or report.prior_defects or report.issues or report.unclassified %}
+    <details class="ry-notice">
+        <summary>
+            <b>데이터 확인</b>
+            {% if report.unregistered %}<span class="chip">집계 제외 {{ report.unregistered|length }}개 품번</span>{% endif %}
+            {% if report.bom_parts %}<span class="chip">BOM 기준(런너 포함) {{ report.bom_parts|length }}개</span>{% endif %}
+            {% if report.prior_defects %}<span class="chip">이전 생산분 검사불량 {{ report.prior_defects|length }}건</span>{% endif %}
+            {% if report.issues %}<span class="chip">파지 비고 형식 {{ report.issues|length }}건</span>{% endif %}
+            {% if report.unclassified %}<span class="chip">재질 미분류 {{ report.unclassified|length }}개</span>{% endif %}
+            <span class="more">자세히</span>
+        </summary>
+        <ul>
+            {% if report.unregistered %}<li>성형 마스터·BOM 모두 없는 {{ report.unregistered|length }}개 품번(생산 {{ report.unregistered_produced|ea }}EA, 파지 {{ report.unregistered_scrap_kg|kg }}kg)은 합계에서 빠졌습니다.</li>{% endif %}
+            {% if report.bom_parts %}<li>BOM 기준 품번은 런너가 양품·불량 중량에 포함돼 스크랩률이 낮게 나옵니다. M7번대(런너 없음·C/V 1)는 정확합니다.</li>{% endif %}
+            {% if report.prior_defects %}<li>이 달 생산이 없는 품번의 검사불량 {{ report.prior_defect_kg|kg }}kg은 이전 생산분이라 품번별 표·합계에서 뺐습니다.</li>{% endif %}
+            {% if report.unclassified %}<li>재질을 알 수 없는 재료가 있습니다. 관리자 화면 [수지 재질]에 등록하면 재질별 집계에 반영됩니다.</li>{% endif %}
+            <li>세부 목록은 [확인 필요] 탭에 있습니다.</li>
+        </ul>
+    </details>
     {% endif %}
 
-    <ul class="nav nav-tabs ry-tabs mb-0" role="tablist">
-        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabPart" type="button">품번별 원단위 <span class="badge rounded-pill bg-light text-secondary border">{{ report.lines|length }}</span></button></li>
-        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabResin" type="button">재질별 집계</button></li>
-        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabMaterial" type="button">원재료별 사용량</button></li>
-        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabIssue" type="button">확인 필요 <span class="badge rounded-pill bg-warning text-dark">{{ issue_count }}</span></button></li>
-    </ul>
+    <div class="ry-tabs" role="tablist">
+        <button class="active" data-bs-toggle="tab" data-bs-target="#ryPart" type="button" role="tab">품번별</button>
+        <button data-bs-toggle="tab" data-bs-target="#ryResin" type="button" role="tab">재질별</button>
+        <button data-bs-toggle="tab" data-bs-target="#ryMaterial" type="button" role="tab">원재료별</button>
+        <button data-bs-toggle="tab" data-bs-target="#ryIssue" type="button" role="tab">확인 필요{% if issue_count %}<span class="cnt">{{ issue_count }}</span>{% endif %}</button>
+    </div>
 
-    <div class="tab-content dtl-card mb-2" style="border-top-left-radius: 0;">
+    <div class="tab-content">
         {# 품번별 #}
-        <div class="tab-pane fade show active p-2" id="tabPart">
-            <div class="d-flex gap-2 mb-2 align-items-center">
-                <input type="text" id="partFilter" class="form-control form-control-sm dtl-form-control" style="max-width: 240px;" placeholder="품번 / 품명 / 재료 검색">
-                <select id="resinFilter" class="form-select form-select-sm dtl-form-control" style="max-width: 140px;">
-                    <option value="">재질 전체</option>
-                    {% for r in resins %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
-                </select>
-                <small class="text-muted ms-auto">원단위(g/EA): 기준 = 제품중량 + 런너÷C/V, 실적 = 총 수지사용량 ÷ 생산수</small>
-            </div>
-            <div class="table-responsive ry-scroll">
-                <table class="table table-hover table-bordered mb-0 dtl-table ry-table" id="partTable">
-                    <thead>
-                        <tr class="text-center">
-                            <th>품번</th><th>품명</th><th>재질</th><th>재료</th><th>재료품번</th><th>C/V</th>
-                            <th class="num">제품중량<br>(g)</th><th class="num">런너<br>(g/SHOT)</th>
-                            <th class="num">기준 원단위<br>(g/EA)</th><th class="num">실적 원단위<br>(g/EA)</th>
-                            <th class="num">생산수<br>(EA)</th><th class="num">양품<br>(kg)</th><th class="num">공정불량<br>(kg)</th>
-                            <th class="num">검사불량<br>(kg)</th><th class="num">런너<br>(kg)</th><th class="num">파지<br>(kg)</th>
-                            <th class="num">총 사용량<br>(kg)</th><th class="num">스크랩<br>(kg)</th><th class="num">스크랩률</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+        <div class="tab-pane fade show active" id="ryPart" role="tabpanel">
+            <div class="ry-card">
+                <div class="ry-filter">
+                    <input type="text" id="ryQuery" placeholder="품번 · 품명 · 재료 검색" aria-label="검색">
+                    <div class="d-flex flex-wrap gap-1" id="ryResinChips">
+                        <button type="button" class="ry-chip on" data-resin="">전체</button>
+                        {% for r in resins %}<button type="button" class="ry-chip" data-resin="{{ r }}">{{ r }}</button>{% endfor %}
+                    </div>
+                    <label class="ry-sort"><input type="checkbox" id="rySortRate"> 기준 대비 스크랩 높은 순</label>
+                </div>
+                <div class="ry-scroll">
+                    <table class="ry-t" id="ryPartTable">
+                        <thead>
+                            <tr>
+                                <th class="first">품번 / 품명</th>
+                                <th>재질</th>
+                                <th>재료</th>
+                                <th class="r">생산수</th>
+                                <th class="r">원단위 g/EA<div class="hs">기준 → 실적</div></th>
+                                <th class="r">총 사용량</th>
+                                <th>사용량 구성
+                                    <div class="legend"><span><i class="seg-good"></i>양품</span><span><i class="seg-bad"></i>불량</span><span><i class="seg-runner"></i>런너</span><span><i class="seg-scrap"></i>파지</span></div>
+                                </th>
+                                <th class="r">스크랩</th>
+                                <th class="r last">스크랩률<div class="hs">기준 대비</div></th>
+                            </tr>
+                        </thead>
                         {% for r in report.lines %}
-                        <tr data-search="{{ r.part_no|lower }} {{ r.part_name|lower }} {{ r.material_part_no|lower }} {{ r.material_name|lower }}" data-resin="{{ r.resin }}">
-                            <td class="fw-bold">{{ r.part_no }}</td>
-                            <td>{{ r.part_name|truncatechars:32 }}</td>
-                            <td class="text-center">{{ r.resin }}</td>
-                            <td class="text-center">{% if r.source == 'BOM' %}<span class="dtl-pill amber" title="성형 마스터 미등록: BOM 소요량으로 계산{% if r.runner_included %} (런너 포함){% else %} (M7: 런너 없음·C/V 1){% endif %}">BOM</span>{% else %}{{ r.material_type }}{% endif %}</td>
-                            <td title="{{ r.material_name }}">{{ r.material_part_no }}</td>
-                            <td class="text-center">{% if r.runner_included %}-{% elif r.cavity %}{{ r.cavity }}{% else %}<span class="text-danger">-</span>{% endif %}</td>
-                            <td class="num">{% if r.product_weight is None %}-{% else %}{{ r.product_weight|floatformat:"3g" }}{% endif %}</td>
-                            <td class="num">{% if r.runner_weight is None %}-{% else %}{{ r.runner_weight|floatformat:"3g" }}{% endif %}</td>
-                            <td class="num">{{ r.unit_standard|floatformat:"3g" }}</td>
-                            <td class="num fw-bold">{% if r.unit_actual is not None %}{{ r.unit_actual|floatformat:"3g" }}{% else %}-{% endif %}</td>
-                            <td class="num">{{ r.produced|floatformat:"0g" }}</td>
-                            <td class="num">{{ r.good_kg|floatformat:"3g" }}</td>
-                            <td class="num">{{ r.bad_kg|floatformat:"3g" }}</td>
-                            <td class="num">{{ r.inspect_kg|floatformat:"3g" }}</td>
-                            <td class="num">{% if r.runner_included %}<span class="text-muted">포함</span>{% else %}{{ r.runner_kg|floatformat:"3g" }}{% endif %}</td>
-                            <td class="num">{{ r.scrap_kg|floatformat:"3g" }}</td>
-                            <td class="num fw-bold">{{ r.total_kg|floatformat:"3g" }}</td>
-                            <td class="num text-danger">{{ r.loss_kg|floatformat:"3g" }}</td>
-                            <td class="num">{{ r.loss_pct|floatformat:1 }}%</td>
-                        </tr>
+                        <tbody class="ry-row" data-search="{{ r.part_no|lower }} {{ r.part_name|lower }} {{ r.material_part_no|lower }} {{ r.material_name|lower }}"
+                               data-resin="{{ r.resin }}" data-gap="{% if r.loss_gap is not None %}{{ r.loss_gap|stringformat:'.3f' }}{% else %}{{ r.loss_pct|stringformat:'.3f' }}{% endif %}">
+                            <tr class="main" tabindex="0">
+                                <td class="first"><div class="pno">{{ r.part_no }}</div><div class="pnm">{{ r.part_name|truncatechars:34 }}</div></td>
+                                <td><span class="ry-resin" data-r="{{ r.resin }}">{{ r.resin }}</span></td>
+                                <td class="mat">{{ r.material_part_no }}{% if r.source == 'BOM' %}<span class="bom{% if r.runner_included %} runner{% endif %}" title="성형 마스터 미등록: BOM 소요량으로 계산{% if r.runner_included %} (런너 포함){% else %} (M7: 런너 없음·C/V 1){% endif %}">BOM</span>{% endif %}</td>
+                                <td class="r">{{ r.produced|ea }}</td>
+                                <td class="r unit"><span class="std">{{ r.unit_standard|grams }} →</span> <b>{% if r.unit_actual is not None %}{{ r.unit_actual|grams }}{% else %}–{% endif %}</b>
+                                    {% if r.unit_diff_pct is not None %}<div class="diff{% if r.unit_diff_pct > 20 %} up{% endif %}">{% if r.unit_diff_pct >= 0 %}+{% endif %}{{ r.unit_diff_pct|pct:0 }}%</div>{% endif %}</td>
+                                <td class="r"><b>{{ r.total_kg|kg }}</b><span class="pnm"> kg</span></td>
+                                <td><div class="ry-bar" title="양품 {{ r.good_kg|kg }} · 불량 {{ r.defect_kg|kg }} · 런너 {% if r.runner_included %}포함{% else %}{{ r.runner_kg|kg }}{% endif %} · 파지 {{ r.scrap_kg|kg }} kg">
+                                    <i class="seg-good" style="width:{{ r.bar.good|stringformat:'.2f' }}%"></i><i class="seg-bad" style="width:{{ r.bar.bad|stringformat:'.2f' }}%"></i><i class="seg-runner" style="width:{{ r.bar.runner|stringformat:'.2f' }}%"></i><i class="seg-scrap" style="width:{{ r.bar.scrap|stringformat:'.2f' }}%"></i>
+                                </div></td>
+                                <td class="r loss">{{ r.loss_kg|kg }}</td>
+                                <td class="r last">
+                                    <span class="pill{% if r.loss_pct >= 50 %} bad{% elif r.loss_pct >= 30 %} warn{% endif %}">{{ r.loss_pct|pct }}%</span>
+                                    {% if r.std_loss_pct is not None %}<div class="gap{% if r.loss_gap > 10 %} up{% endif %}">기준 {{ r.std_loss_pct|pct }}% · {% if r.loss_gap >= 0 %}+{% endif %}{{ r.loss_gap|pct }}%p</div>
+                                    {% else %}<div class="gap">기준 –</div>{% endif %}
+                                </td>
+                            </tr>
+                            <tr class="detail d-none">
+                                <td colspan="9">
+                                    <div class="dgrid">
+                                        <div>재료명 <b>{{ r.material_name|default:"–" }}</b></div>
+                                        <div>C/V <b>{% if r.runner_included %}–{% else %}{{ r.cavity|default:"–" }}{% endif %}</b></div>
+                                        <div>제품중량 <b>{% if r.runner_included %}–{% else %}{{ r.product_weight|grams }} g{% endif %}</b></div>
+                                        <div>런너중량 <b>{% if r.runner_included %}포함{% else %}{{ r.runner_weight|grams }} g/SHOT{% endif %}</b></div>
+                                        <div>양품 <b>{{ r.good_qty|ea }} EA · {{ r.good_kg|kg }} kg</b></div>
+                                        <div>공정불량 <b>{{ r.bad_qty|ea }} EA · {{ r.bad_kg|kg }} kg</b></div>
+                                        <div>검사불량 <b>{{ r.defect_qty|ea }} EA · {{ r.inspect_kg|kg }} kg</b></div>
+                                        <div>런너 <b>{% if r.runner_included %}포함{% else %}{{ r.runner_kg|kg }} kg{% endif %}</b></div>
+                                        <div>파지 <b>{{ r.scrap_kg|kg }} kg</b></div>
+                                        <div>중량 기준 <b>{% if r.source == 'BOM' %}BOM{% if r.runner_included %} (런너 포함){% else %} (런너 없음){% endif %}{% else %}성형 마스터{% endif %}</b></div>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
                         {% empty %}
-                        <tr><td colspan="19" class="text-center text-muted py-4">이 달의 성형 생산실적이 없습니다.</td></tr>
+                        <tbody><tr><td colspan="9" class="ry-empty">이 달의 성형 생산실적이 없습니다.</td></tr></tbody>
                         {% endfor %}
-                    </tbody>
-                </table>
+                        <tbody id="ryNoMatch" class="d-none"><tr><td colspan="9" class="ry-empty">조건에 맞는 품번이 없습니다.</td></tr></tbody>
+                    </table>
+                </div>
+                <div class="ry-foot">행을 누르면 중량 상세가 펼쳐집니다 · 기준 스크랩률 = 기준 원단위 중 런너 비중 · 검사불량 = 3공장 창고(3000)→불량창고 이동(양품에서 차감) · ERP 생산실적 {{ report.erp_rows }}건, {{ report.fetched_at }} 조회</div>
             </div>
         </div>
 
         {# 재질별 / 원재료별 #}
-        <div class="tab-pane fade p-2" id="tabResin">
-            {% include 'material/resin_yield_summary.html' with groups=report.by_resin totals=report.totals key_label='재질' show_name=False %}
+        <div class="tab-pane fade" id="ryResin" role="tabpanel">
+            <div class="ry-card">{% include 'material/resin_yield_summary.html' with groups=report.by_resin totals=report.totals key_label='재질' show_name=False %}</div>
         </div>
-        <div class="tab-pane fade p-2" id="tabMaterial">
-            {% include 'material/resin_yield_summary.html' with groups=report.by_material totals=report.totals key_label='재료품번' show_name=True %}
+        <div class="tab-pane fade" id="ryMaterial" role="tabpanel">
+            <div class="ry-card">{% include 'material/resin_yield_summary.html' with groups=report.by_material totals=report.totals key_label='재료품번' show_name=True %}</div>
         </div>
 
         {# 확인 필요 #}
-        <div class="tab-pane fade p-2" id="tabIssue">
-            <h6 class="fw-bold mt-1">파지 비고 형식 확인 <span class="text-muted small fw-normal">— 숫자 4~5자리(M7번대 4자리, 그 외 5자리)가 아닌 건</span></h6>
-            <div class="table-responsive mb-3">
-                <table class="table table-sm table-bordered dtl-table ry-table mb-0">
-                    <thead><tr class="text-center"><th>실적일</th><th>설비</th><th>실적번호</th><th>품번</th><th>품명</th><th>비고</th><th>판단</th><th class="num">반영</th></tr></thead>
-                    <tbody>
-                        {% for i in report.issues %}
-                        <tr><td>{{ i.date }}</td><td>{{ i.equip }}</td><td>{{ i.wr_no }}</td><td class="fw-bold">{{ i.part_no }}</td><td>{{ i.part_name|truncatechars:30 }}</td><td><code>{{ i.remark }}</code></td><td>{{ i.issue }}</td><td class="num">{{ i.grams|floatformat:"0g" }} g</td></tr>
-                        {% empty %}<tr><td colspan="8" class="text-center text-muted">없음</td></tr>{% endfor %}
-                    </tbody>
-                </table>
+        <div class="tab-pane fade" id="ryIssue" role="tabpanel">
+            <div class="ry-card pb-2">
+                <div class="ry-sec">
+                    <h6>집계 제외 품번</h6>
+                    <p>성형 마스터와 BOM 모두 없어 중량 기준이 없습니다. 성형 마스터에 등록하면 다음 조회부터 반영됩니다.</p>
+                    <table class="ry-t">
+                        <thead><tr><th>품번</th><th>품명</th><th class="r">생산수</th><th class="r">파지(kg)</th><th class="r">검사불량(EA)</th></tr></thead>
+                        <tbody>{% for u in report.unregistered %}<tr><td class="pno">{{ u.part_no }}</td><td>{{ u.part_name|truncatechars:40 }}</td><td class="r">{{ u.produced|ea }}</td><td class="r">{{ u.scrap_kg|kg }}</td><td class="r">{{ u.defect_qty|ea }}</td></tr>
+                        {% empty %}<tr><td colspan="5" class="ry-empty py-3">없음</td></tr>{% endfor %}</tbody>
+                    </table>
+                </div>
+                <div class="ry-sec">
+                    <h6>재질 미분류 재료</h6>
+                    <p>재질 표에 없고 재료명으로도 알 수 없습니다. 관리자 화면 [수지 재질]에 재료품번(-D 등 접미어 포함)과 재질을 등록하세요.</p>
+                    <table class="ry-t">
+                        <thead><tr><th>재료품번</th><th>재료명</th><th class="r">품번 수</th><th class="r">총 사용량(kg)</th></tr></thead>
+                        <tbody>{% for g in report.unclassified %}<tr><td class="pno">{{ g.key }}</td><td>{{ g.material_name }}</td><td class="r">{{ g.part_count }}</td><td class="r">{{ g.total_kg|kg }}</td></tr>
+                        {% empty %}<tr><td colspan="4" class="ry-empty py-3">없음</td></tr>{% endfor %}</tbody>
+                    </table>
+                </div>
+                <div class="ry-sec">
+                    <h6>파지 비고 형식</h6>
+                    <p>비고가 숫자 4~5자리(M7번대 4자리, 그 외 5자리)가 아닌 생산실적입니다.</p>
+                    <table class="ry-t">
+                        <thead><tr><th>실적일</th><th>설비</th><th>실적번호</th><th>품번</th><th>비고</th><th>판단</th><th class="r">반영</th></tr></thead>
+                        <tbody>{% for i in report.issues %}<tr><td>{{ i.date }}</td><td>{{ i.equip }}</td><td>{{ i.wr_no }}</td><td class="pno">{{ i.part_no }}</td><td><code>{{ i.remark }}</code></td><td>{{ i.issue }}</td><td class="r">{{ i.grams|ea }} g</td></tr>
+                        {% empty %}<tr><td colspan="7" class="ry-empty py-3">없음</td></tr>{% endfor %}</tbody>
+                    </table>
+                </div>
+                {% if report.prior_defects %}
+                <div class="ry-sec">
+                    <h6>이전 생산분 검사불량</h6>
+                    <p>이 달 생산이 없는 품번의 검사불량입니다. 이 달 원단위와 무관해 품번별 표·합계에서 뺐습니다 (합계 {{ report.prior_defect_kg|kg }}kg).</p>
+                    <table class="ry-t">
+                        <thead><tr><th>품번</th><th>품명</th><th>재질</th><th>재료품번</th><th class="r">검사불량(EA)</th><th class="r">중량(kg)</th></tr></thead>
+                        <tbody>{% for d in report.prior_defects %}<tr><td class="pno">{{ d.part_no }}</td><td>{{ d.part_name|truncatechars:30 }}</td><td><span class="ry-resin" data-r="{{ d.resin }}">{{ d.resin }}</span></td><td class="mat">{{ d.material_part_no }}</td><td class="r">{{ d.defect_qty|ea }}</td><td class="r">{{ d.kg|kg }}</td></tr>{% endfor %}</tbody>
+                    </table>
+                </div>
+                {% endif %}
+                {% if report.bom_parts %}
+                <div class="ry-sec">
+                    <h6>BOM 기준(런너 포함) 품번</h6>
+                    <p>성형 마스터에 제품중량·런너중량을 등록하면 런너와 스크랩률이 정확해집니다.</p>
+                    <div class="mat">{{ report.bom_parts|join:" · " }}</div>
+                </div>
+                {% endif %}
+                {% if report.no_cavity %}
+                <div class="ry-sec">
+                    <h6>C/V 미입력</h6>
+                    <p>런너량을 0으로 계산했습니다.</p>
+                    <div class="mat">{% for r in report.no_cavity %}{{ r.part_no }} ({{ r.material_part_no }}){% if not forloop.last %} · {% endif %}{% endfor %}</div>
+                </div>
+                {% endif %}
             </div>
-            <h6 class="fw-bold">성형 마스터 미등록 품번 <span class="text-muted small fw-normal">— 중량 기준이 없어 집계에서 빠짐. 성형 마스터에 등록하면 반영됩니다</span></h6>
-            <div class="table-responsive mb-3">
-                <table class="table table-sm table-bordered dtl-table ry-table mb-0">
-                    <thead><tr class="text-center"><th>품번</th><th>품명</th><th class="num">생산수(EA)</th><th class="num">파지(kg)</th><th class="num">검사불량(EA)</th></tr></thead>
-                    <tbody>
-                        {% for u in report.unregistered %}
-                        <tr><td class="fw-bold">{{ u.part_no }}</td><td>{{ u.part_name|truncatechars:40 }}</td><td class="num">{{ u.produced|floatformat:"0g" }}</td><td class="num">{{ u.scrap_kg|floatformat:"3g" }}</td><td class="num">{{ u.defect_qty|floatformat:"0g" }}</td></tr>
-                        {% empty %}<tr><td colspan="5" class="text-center text-muted">없음</td></tr>{% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            <h6 class="fw-bold">재질 미분류 재료코드 <span class="text-muted small fw-normal">— 재질 표에 없고 재료명으로도 알 수 없음. 관리자 화면 [수지 재질]에 재료품번과 재질을 등록하면 재질별 집계에 반영됩니다</span></h6>
-            <div class="table-responsive mb-3">
-                <table class="table table-sm table-bordered dtl-table ry-table mb-0">
-                    <thead><tr class="text-center"><th>재료품번</th><th>재료명</th><th class="num">품번 수</th><th class="num">총 사용량(kg)</th></tr></thead>
-                    <tbody>
-                        {% for g in report.unclassified %}
-                        <tr><td class="fw-bold">{{ g.key }}</td><td>{{ g.material_name }}</td><td class="num">{{ g.part_count }}</td><td class="num">{{ g.total_kg|floatformat:"1g" }}</td></tr>
-                        {% empty %}<tr><td colspan="4" class="text-center text-muted">없음</td></tr>{% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% if report.bom_parts %}
-            <h6 class="fw-bold">BOM으로 계산한 품번 <span class="text-muted small fw-normal">— 성형 마스터에 제품중량·런너중량을 등록하면 런너·스크랩이 정확해집니다</span></h6>
-            <p class="small">{{ report.bom_parts|join:", " }}</p>
-            {% endif %}
-            {% if report.prior_defects %}
-            <h6 class="fw-bold">이전 생산분 검사불량 <span class="text-muted small fw-normal">— 이 달 생산이 없는 품번의 검사불량. 이 달 원단위와 무관해 품번별 표·합계에서 뺐습니다 (합계 {{ report.prior_defect_kg|floatformat:"2g" }}kg)</span></h6>
-            <div class="table-responsive mb-3">
-                <table class="table table-sm table-bordered dtl-table ry-table mb-0">
-                    <thead><tr class="text-center"><th>품번</th><th>품명</th><th>재질</th><th>재료품번</th><th class="num">검사불량(EA)</th><th class="num">중량(kg)</th></tr></thead>
-                    <tbody>
-                        {% for d in report.prior_defects %}
-                        <tr><td class="fw-bold">{{ d.part_no }}</td><td>{{ d.part_name|truncatechars:30 }}</td><td class="text-center">{{ d.resin }}</td><td>{{ d.material_part_no }}</td><td class="num">{{ d.defect_qty|floatformat:"0g" }}</td><td class="num">{{ d.kg|floatformat:"3g" }}</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% endif %}
-            {% if report.no_cavity %}
-            <h6 class="fw-bold">C/V 미입력 <span class="text-muted small fw-normal">— 런너량을 0으로 계산함</span></h6>
-            <ul class="small">{% for r in report.no_cavity %}<li>{{ r.part_no }} ({{ r.material_part_no }})</li>{% endfor %}</ul>
-            {% endif %}
         </div>
     </div>
-    <small class="text-muted">ERP 생산실적 {{ report.erp_rows }}건 · 조회 {{ report.fetched_at }} (30분간 재사용, [다시 조회]로 즉시 갱신) · 파지 = 생산실적 비고의 g 값 · 검사불량 = 3공장 창고(3000)에서 불량창고로 이동한 수량 × 제품중량 (양품에서 빼서 스크랩으로 계산)</small>
     {% endif %}
 </div>
 
 <script>
 (function () {
-    const text = document.getElementById('partFilter');
-    const resin = document.getElementById('resinFilter');
-    if (!text) return;
+    const table = document.getElementById('ryPartTable');
+    if (!table) return;
+    const rows = Array.from(table.querySelectorAll('tbody.ry-row'));
+    const original = rows.slice();
+    const query = document.getElementById('ryQuery');
+    const sort = document.getElementById('rySortRate');
+    const noMatch = document.getElementById('ryNoMatch');
+    let resin = '';
+
     function apply() {
-        const q = text.value.trim().toLowerCase();
-        const r = resin.value;
-        document.querySelectorAll('#partTable tbody tr[data-search]').forEach(tr => {
-            const ok = (!q || tr.dataset.search.includes(q)) && (!r || tr.dataset.resin === r);
-            tr.classList.toggle('d-none', !ok);
+        const q = query.value.trim().toLowerCase();
+        let shown = 0;
+        rows.forEach(tb => {
+            const ok = (!q || tb.dataset.search.includes(q)) && (!resin || tb.dataset.resin === resin);
+            tb.classList.toggle('d-none', !ok);
+            if (ok) shown += 1;
         });
+        noMatch.classList.toggle('d-none', shown > 0 || rows.length === 0);
     }
-    text.addEventListener('input', apply);
-    resin.addEventListener('change', apply);
+    function order() {
+        const list = sort.checked ? rows.slice().sort((a, b) => parseFloat(b.dataset.gap) - parseFloat(a.dataset.gap)) : original;
+        list.forEach(tb => table.insertBefore(tb, noMatch));
+    }
+    function toggle(tb) {
+        tb.classList.toggle('open');
+        tb.querySelector('tr.detail').classList.toggle('d-none');
+    }
+
+    query.addEventListener('input', apply);
+    sort.addEventListener('change', order);
+    document.querySelectorAll('#ryResinChips .ry-chip').forEach(btn => btn.addEventListener('click', () => {
+        document.querySelectorAll('#ryResinChips .ry-chip').forEach(b => b.classList.remove('on'));
+        btn.classList.add('on');
+        resin = btn.dataset.resin;
+        apply();
+    }));
+    rows.forEach(tb => {
+        const main = tb.querySelector('tr.main');
+        main.addEventListener('click', () => toggle(tb));
+        main.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(tb); } });
+    });
+    document.querySelectorAll('.ry-tabs button').forEach(btn => btn.addEventListener('shown.bs.tab', () => {
+        document.querySelectorAll('.ry-tabs button').forEach(b => b.classList.toggle('active', b === btn));
+    }));
 })();
 </script>
 {% endblock %}

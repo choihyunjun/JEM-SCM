@@ -234,11 +234,19 @@ def build_report(year, month, refresh=False):
                 'no_cavity': not from_bom and not cavity,
                 'runner_included': runner_included,
             }
+            row['defect_kg'] = row['bad_kg'] + row['inspect_kg']
             row['loss_kg'] = row['bad_kg'] + row['inspect_kg'] + row['runner_kg'] + row['scrap_kg']
             row['total_kg'] = row['good_kg'] + row['loss_kg']
             row['loss_rate'] = _ratio(row['loss_kg'], row['total_kg'])
             row['loss_pct'] = row['loss_rate'] * 100
             row['unit_actual'] = row['total_kg'] * 1000 / made if made else None
+            row['unit_diff_pct'] = (_ratio(row['unit_actual'] - row['unit_standard'], row['unit_standard']) * 100
+                                    if row['unit_actual'] is not None and row['unit_standard'] else None)
+            # 기준 스크랩률 = 기준 원단위 중 런너 비중. 불량·파지가 없어도 나오는 스크랩이라 실적과의 차이로 판단한다
+            row['std_loss_pct'] = (None if runner_included or not row['unit_standard']
+                                   else _ratio(runner / cavity if cavity else 0, row['unit_standard']) * 100)
+            row['loss_gap'] = row['loss_pct'] - row['std_loss_pct'] if row['std_loss_pct'] is not None else None
+            row['bar'] = _bar(row)
             lines.append(row)
 
     bom_parts = sorted({r['part_no'] for r in lines if r['runner_included']})
@@ -262,7 +270,16 @@ def build_report(year, month, refresh=False):
     }
 
 
-KG_FIELDS = ('good_kg', 'bad_kg', 'inspect_kg', 'runner_kg', 'scrap_kg', 'loss_kg', 'total_kg')
+KG_FIELDS = ('good_kg', 'bad_kg', 'inspect_kg', 'defect_kg', 'runner_kg', 'scrap_kg', 'loss_kg', 'total_kg')
+
+
+def _bar(row):
+    """사용량 구성 막대의 구간 비율(%): 양품 / 불량(공정+검사) / 런너 / 파지."""
+    total = row['total_kg']
+    return {'good': _ratio(row['good_kg'], total) * 100,
+            'bad': _ratio(row['bad_kg'] + row['inspect_kg'], total) * 100,
+            'runner': _ratio(row['runner_kg'], total) * 100,
+            'scrap': _ratio(row['scrap_kg'], total) * 100}
 
 
 def _summarize(lines, key):
@@ -281,7 +298,11 @@ def _summarize(lines, key):
         g['part_count'] = len(g.pop('parts'))
         g['loss_rate'] = _ratio(g['loss_kg'], g['total_kg'])
         g['loss_pct'] = g['loss_rate'] * 100
+        g['bar'] = _bar(g)
         result.append(g)
+    largest = result[0]['total_kg'] if result else 0
+    for g in result:
+        g['share_pct'] = _ratio(g['total_kg'], largest) * 100  # 가장 많이 쓴 그룹 대비 막대 길이
     return result
 
 
