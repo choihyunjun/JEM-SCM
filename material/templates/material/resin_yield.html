@@ -55,7 +55,7 @@
     <div class="alert alert-info py-2 small">
         <i class="bi bi-info-circle me-1"></i>
         성형 마스터에 없는 품번 <b>{{ report.bom_parts|length }}개</b>는 BOM 원재료 소요량으로 계산했습니다(표의 <span class="dtl-pill amber">BOM</span>).
-        BOM 수량은 런너를 포함한 총소요량이라 런너가 양품·불량 중량에 들어가 <b>스크랩률이 실제보다 낮게</b> 나옵니다. 성형 마스터에 등록하면 정확한 계산으로 바뀝니다.
+        BOM 수량은 런너를 포함한 총소요량이라 런너가 양품·불량 중량에 들어가 <b>스크랩률이 실제보다 낮게</b> 나옵니다 (M7번대 런너 없는 품번은 제외). 성형 마스터에 등록하면 정확한 계산으로 바뀝니다.
     </div>
     {% endif %}
 
@@ -95,9 +95,9 @@
                             <td class="fw-bold">{{ r.part_no }}</td>
                             <td>{{ r.part_name|truncatechars:32 }}</td>
                             <td class="text-center">{{ r.resin }}</td>
-                            <td class="text-center">{% if r.source == 'BOM' %}<span class="dtl-pill amber" title="성형 마스터 미등록: BOM 소요량(런너 포함)으로 계산">BOM</span>{% else %}{{ r.material_type }}{% endif %}</td>
+                            <td class="text-center">{% if r.source == 'BOM' %}<span class="dtl-pill amber" title="성형 마스터 미등록: BOM 소요량으로 계산{% if r.runner_included %} (런너 포함){% else %} (M7: 런너 없음·C/V 1){% endif %}">BOM</span>{% else %}{{ r.material_type }}{% endif %}</td>
                             <td title="{{ r.material_name }}">{{ r.material_part_no }}</td>
-                            <td class="text-center">{% if r.source == 'BOM' %}-{% elif r.cavity %}{{ r.cavity }}{% else %}<span class="text-danger">-</span>{% endif %}</td>
+                            <td class="text-center">{% if r.runner_included %}-{% elif r.cavity %}{{ r.cavity }}{% else %}<span class="text-danger">-</span>{% endif %}</td>
                             <td class="num">{% if r.product_weight is None %}-{% else %}{{ r.product_weight|floatformat:"3g" }}{% endif %}</td>
                             <td class="num">{% if r.runner_weight is None %}-{% else %}{{ r.runner_weight|floatformat:"3g" }}{% endif %}</td>
                             <td class="num">{{ r.unit_standard|floatformat:"3g" }}</td>
@@ -106,7 +106,7 @@
                             <td class="num">{{ r.good_kg|floatformat:"3g" }}</td>
                             <td class="num">{{ r.bad_kg|floatformat:"3g" }}</td>
                             <td class="num">{{ r.inspect_kg|floatformat:"3g" }}</td>
-                            <td class="num">{% if r.source == 'BOM' %}<span class="text-muted">포함</span>{% else %}{{ r.runner_kg|floatformat:"3g" }}{% endif %}</td>
+                            <td class="num">{% if r.runner_included %}<span class="text-muted">포함</span>{% else %}{{ r.runner_kg|floatformat:"3g" }}{% endif %}</td>
                             <td class="num">{{ r.scrap_kg|floatformat:"3g" }}</td>
                             <td class="num fw-bold">{{ r.total_kg|floatformat:"3g" }}</td>
                             <td class="num text-danger">{{ r.loss_kg|floatformat:"3g" }}</td>

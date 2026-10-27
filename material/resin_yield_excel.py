@@ -132,13 +132,14 @@ def build_workbook(report, year, month):
     fills = {9: FILL_UNIT, 16: FILL_LOSS, 17: FILL_RATE}
     row = 4
     for i, r in enumerate(lines, 1):
-        bom = r['source'] == 'BOM'
+        bom = r['runner_included']
         _write_row(ws, row, [
             i, r['part_no'], r['part_name'], r['resin'], r['material_name'] or r['material_part_no'],
             '-' if bom else r['cavity'], '-' if bom else r['product_weight'], '-' if bom else r['runner_weight'],
             r['unit_standard'], r['produced'], r['good_kg'], r['bad_kg'] + r['inspect_kg'],
             '포함' if bom else r['runner_kg'], r['scrap_kg'], r['total_kg'], r['loss_kg'], r['loss_rate'],
-            'BOM 기준 (런너 포함)' if bom else ('C/V 미입력' if r['no_cavity'] else ''),
+            'BOM 기준 (런너 포함)' if bom else 'BOM 중량 (런너 없음·C/V 1)' if r['source'] == 'BOM'
+            else ('C/V 미입력' if r['no_cavity'] else ''),
         ], formats, fills)
         ws.cell(row, 17).font = _rate_font(r['loss_rate'])
         row += 1

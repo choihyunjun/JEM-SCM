@@ -4,7 +4,8 @@
 - 생산수(양품/불량), 파지 중량: ERP 생산실적 API. 파지는 비고(remarkDc)의 숫자 g (M7번대 4자리, 그 외 5자리)
 - 제품중량·런너중량·C/V·총소요량·재료: 성형 마스터 (품번 × 재료구분 행).
   마스터에 없는 품번은 BOM의 원재료(ZR) 필요수량(kg/EA)을 쓴다. BOM 수량은 런너를 포함한 총소요량이라
-  제품·런너 중량을 나눌 수 없어, 런너가 양품·불량 중량에 포함된다 (스크랩률이 낮게 나옴)
+  제품·런너 중량을 나눌 수 없어, 런너가 양품·불량 중량에 포함된다 (스크랩률이 낮게 나옴).
+  단 M7번대 설비(핫런너·1캐비티) 품번은 런너가 없어 BOM 소요량이 곧 제품중량이다
 - 검사불량: 3공장 창고(3000)에서 불량창고로 옮긴 이동 수량 (ERP 재고이동 동기화 + SCM 이동).
   조립 현장 등 다른 창고에서 나온 불량은 성형 원단위에 넣지 않는다
 
@@ -33,6 +34,7 @@ from .models import BOMItem, MaterialTransaction, MoldingMaster, ResinType
 WR_API = '/apiproxy/api20A03S00901'
 CACHE_SECONDS = 30 * 60
 BOM_CACHE_SECONDS = 24 * 3600
+RUNNERLESS_EQUIP = 'M7'  # 런너 없는 1캐비티 설비 (M702, M703 …)
 DEFECT_FROM_WAREHOUSES = ('3000',)  # 검사불량으로 셀 불량창고 이동의 출발 창고 (3공장 창고)
 SCRAP_RE = re.compile(r'^(?:[A-Za-z]\d{3}\s+)?(\d{4,5})$')  # '01475', '6100', 과거 엑셀 형식 'A670 01036'
 KNOWN_RESINS = {'ABS', 'ASA', 'PA', 'PA6', 'PA12', 'PA46', 'PA66', 'PBT', 'PC', 'PC+ABS', 'PMMA', 'POM', 'PP',
@@ -104,10 +106,9 @@ def inspection_defects(year, month):
 
 
 def resin_of(code, name, material_type, mapping):
-    """재질: 재질 표 → 같은 재료의 -D/-H/-J/-W 변형이면 기본 코드 → M/B → 재료명 첫 단어."""
-    base = re.sub(r'-[A-Z]$', '', code or '')
-    if code in mapping or base in mapping:
-        return mapping.get(code) or mapping[base]
+    """재질: 재질 표(재료품번 정확히 일치. ZR253-D ≠ ZR253) → M/B → 재료명 첫 단어."""
+    if code in mapping:
+        return mapping[code]
     if material_type == 'M/B':
         return 'M/B'
     first = (name or '').split(' ')[0].upper()
@@ -162,13 +163,14 @@ def build_report(year, month, refresh=False):
     if err:
         return {'error': err}
 
-    produced = defaultdict(lambda: {'good': 0.0, 'bad': 0.0, 'scrap_g': 0, 'name': ''})
+    produced = defaultdict(lambda: {'good': 0.0, 'bad': 0.0, 'scrap_g': 0, 'name': '', 'equips': set()})
     issues = []
     for r in data['rows']:
         p = produced[r['part_no']]
         p['good'] += r['good']
         p['bad'] += r['bad']
         p['name'] = p['name'] or r['part_name']
+        p['equips'].add(r['equip'])
         grams, issue = parse_scrap(r['remark'], r['equip'])
         p['scrap_g'] += grams
         if issue:
@@ -185,7 +187,7 @@ def build_report(year, month, refresh=False):
 
     lines, unregistered, prior_defects = [], [], []
     for part_no in sorted(part_nos):
-        p = produced.get(part_no) or {'good': 0.0, 'bad': 0.0, 'scrap_g': 0, 'name': ''}
+        p = produced.get(part_no) or {'good': 0.0, 'bad': 0.0, 'scrap_g': 0, 'name': '', 'equips': set()}
         made = p['good'] + p['bad']
         defect_qty = defects.get(part_no, 0.0)
         part_specs = sorted(specs.get(part_no, []), key=lambda sp: sp['sort'])
@@ -205,11 +207,15 @@ def build_report(year, month, refresh=False):
                                      'scrap_kg': p['scrap_g'] / 1000, 'defect_qty': defect_qty})
             continue
         total_grams = sum(sp['grams'] for sp in part_specs)
+        runnerless = bool(p['equips']) and all(e.startswith(RUNNERLESS_EQUIP) for e in p['equips'])
         for sp in part_specs:
             from_bom = sp['source'] == 'BOM'
+            if from_bom and runnerless:  # 런너 없는 1캐비티: BOM 소요량 = 제품중량
+                sp = {**sp, 'product_weight': sp['grams'], 'runner_weight': 0.0, 'cavity': 1}
+            runner_included = from_bom and not runnerless
             cavity = sp['cavity']
             # BOM은 런너 포함 총소요량뿐이라 수량에 그대로 곱한다
-            weight = sp['grams'] if from_bom else sp['product_weight']
+            weight = sp['grams'] if runner_included else sp['product_weight']
             runner = sp['runner_weight'] or 0
             share = _ratio(sp['grams'], total_grams) if total_grams else 1 / len(part_specs)
             row = {
@@ -218,7 +224,7 @@ def build_report(year, month, refresh=False):
                 'material_type': sp['material_type'], 'material_part_no': sp['material_part_no'],
                 'material_name': sp['material_name'], 'cavity': cavity, 'product_weight': sp['product_weight'],
                 'runner_weight': sp['runner_weight'],
-                'unit_standard': sp['grams'] if from_bom else weight + (runner / cavity if cavity else 0),
+                'unit_standard': sp['grams'] if runner_included else weight + (runner / cavity if cavity else 0),
                 'produced': made, 'good_qty': p['good'], 'bad_qty': p['bad'], 'defect_qty': defect_qty,
                 'good_kg': max(p['good'] - defect_qty, 0) * weight / 1000,
                 'bad_kg': p['bad'] * weight / 1000,
@@ -226,6 +232,7 @@ def build_report(year, month, refresh=False):
                 'runner_kg': made * runner / cavity / 1000 if cavity else 0,
                 'scrap_kg': p['scrap_g'] / 1000 * share,
                 'no_cavity': not from_bom and not cavity,
+                'runner_included': runner_included,
             }
             row['loss_kg'] = row['bad_kg'] + row['inspect_kg'] + row['runner_kg'] + row['scrap_kg']
             row['total_kg'] = row['good_kg'] + row['loss_kg']
@@ -234,7 +241,7 @@ def build_report(year, month, refresh=False):
             row['unit_actual'] = row['total_kg'] * 1000 / made if made else None
             lines.append(row)
 
-    bom_parts = sorted({r['part_no'] for r in lines if r['source'] == 'BOM'})
+    bom_parts = sorted({r['part_no'] for r in lines if r['runner_included']})
     by_material = _summarize(lines, 'material_part_no')
     return {
         'lines': lines,

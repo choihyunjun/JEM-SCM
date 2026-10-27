@@ -117,19 +117,32 @@ class ReportTests(TestCase):
 class BomFallbackTests(TestCase):
     def setUp(self):
         cache.clear()
-        ResinType.objects.create(material_part_no='ZR276', resin_type='PC+ABS')
-        product = Product.objects.create(part_no='B-1', part_name='DECO COVER')
-        BOMItem.objects.create(product=product, child_part_no='ZR276-D', child_part_name='PC+ABS HP-1000XL',
-                               required_qty='0.348')
-        BOMItem.objects.create(product=product, child_part_no='SCREW-1', child_part_name='SCREW', required_qty=2)
+        # -D는 기본 코드와 다른 재료다 (ZR253 PA66 / ZR253-D POM): 접미어까지 정확히 일치할 때만 재질 표 사용
+        ResinType.objects.create(material_part_no='ZR276', resin_type='PA66')
+        ResinType.objects.create(material_part_no='ZR276-D', resin_type='PC+ABS')
+        for part_no in ('B-1', 'B-2'):
+            product = Product.objects.create(part_no=part_no, part_name='DECO COVER')
+            BOMItem.objects.create(product=product, child_part_no='ZR276-D', child_part_name='PC+ABS HP-1000XL',
+                                   required_qty='0.348')
+            BOMItem.objects.create(product=product, child_part_no='SCREW-1', child_part_name='SCREW', required_qty=2)
 
-    def test_unregistered_part_uses_bom_resin_quantity_with_runner_included(self):
-        with patch('material.resin_yield.call_erp_api', return_value=erp_rows(('M702', 'B-1', 100, 2, '6100'))):
-            rep = build_report(2026, 10)
-        (row,) = rep['lines']
+    def report(self):
+        with patch('material.resin_yield.call_erp_api', return_value=erp_rows(
+                ('M702', 'B-1', 100, 2, '6100'), ('M311', 'B-2', 100, 2, '01000'))):
+            return build_report(2026, 10)
+
+    def test_m7_part_from_bom_is_runnerless_single_cavity(self):
+        row = next(r for r in self.report()['lines'] if r['part_no'] == 'B-1')
         self.assertEqual((row['source'], row['material_part_no'], row['resin']), ('BOM', 'ZR276-D', 'PC+ABS'))
+        self.assertEqual((row['runner_included'], row['cavity'], row['product_weight'], row['runner_weight']),
+                         (False, 1, 348.0, 0.0))
         self.assertAlmostEqual(row['good_kg'], 34.8)
         self.assertAlmostEqual(row['bad_kg'], 0.696)
-        self.assertEqual(row['runner_kg'], 0)
         self.assertAlmostEqual(row['scrap_kg'], 6.1)
-        self.assertEqual((rep['bom_parts'], rep['unregistered']), (['B-1'], []))
+
+    def test_other_machines_bom_quantity_includes_runner(self):
+        rep = self.report()
+        row = next(r for r in rep['lines'] if r['part_no'] == 'B-2')
+        self.assertTrue(row['runner_included'])
+        self.assertEqual(row['runner_kg'], 0)
+        self.assertEqual((rep['bom_parts'], rep['unregistered']), (['B-2'], []))
