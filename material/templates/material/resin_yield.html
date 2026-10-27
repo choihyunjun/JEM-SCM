@@ -167,13 +167,26 @@
             <h6 class="fw-bold">BOM으로 계산한 품번 <span class="text-muted small fw-normal">— 성형 마스터에 제품중량·런너중량을 등록하면 런너·스크랩이 정확해집니다</span></h6>
             <p class="small">{{ report.bom_parts|join:", " }}</p>
             {% endif %}
+            {% if report.prior_defects %}
+            <h6 class="fw-bold">이전 생산분 검사불량 <span class="text-muted small fw-normal">— 이 달 생산이 없는 품번의 검사불량. 이 달 원단위와 무관해 품번별 표·합계에서 뺐습니다 (합계 {{ report.prior_defect_kg|floatformat:"2g" }}kg)</span></h6>
+            <div class="table-responsive mb-3">
+                <table class="table table-sm table-bordered dtl-table ry-table mb-0">
+                    <thead><tr class="text-center"><th>품번</th><th>품명</th><th>재질</th><th>재료품번</th><th class="num">검사불량(EA)</th><th class="num">중량(kg)</th></tr></thead>
+                    <tbody>
+                        {% for d in report.prior_defects %}
+                        <tr><td class="fw-bold">{{ d.part_no }}</td><td>{{ d.part_name|truncatechars:30 }}</td><td class="text-center">{{ d.resin }}</td><td>{{ d.material_part_no }}</td><td class="num">{{ d.defect_qty|floatformat:"0g" }}</td><td class="num">{{ d.kg|floatformat:"3g" }}</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
             {% if report.no_cavity %}
             <h6 class="fw-bold">C/V 미입력 <span class="text-muted small fw-normal">— 런너량을 0으로 계산함</span></h6>
             <ul class="small">{% for r in report.no_cavity %}<li>{{ r.part_no }} ({{ r.material_part_no }})</li>{% endfor %}</ul>
             {% endif %}
         </div>
     </div>
-    <small class="text-muted">ERP 생산실적 {{ report.erp_rows }}건 · 조회 {{ report.fetched_at }} (30분간 재사용, [다시 조회]로 즉시 갱신) · 파지 = 생산실적 비고의 g 값 · 검사불량 = 불량창고로 이동한 수량 × 제품중량</small>
+    <small class="text-muted">ERP 생산실적 {{ report.erp_rows }}건 · 조회 {{ report.fetched_at }} (30분간 재사용, [다시 조회]로 즉시 갱신) · 파지 = 생산실적 비고의 g 값 · 검사불량 = 3공장 창고(3000)에서 불량창고로 이동한 수량 × 제품중량 (양품에서 빼서 스크랩으로 계산)</small>
     {% endif %}
 </div>
 

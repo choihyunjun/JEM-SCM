@@ -45,14 +45,24 @@ class ReportTests(TestCase):
                                      total_material=1)
         ResinType.objects.create(material_part_no='ZR1', resin_type='PC')
         part = Part.objects.create(part_no='P-1', part_name='CASE')
-        site = Warehouse.objects.create(code='4300', name='제조현장')
+        molding = Warehouse.objects.create(code='3000', name='3공장 창고')
+        assembly = Warehouse.objects.create(code='4300', name='제조현장')
         bad = Warehouse.objects.create(code='8000', name='불량창고')
-        common = dict(part=part, warehouse_from=site, warehouse_to=bad,
+        common = dict(part=part, warehouse_from=molding, warehouse_to=bad,
                       date=timezone.make_aware(datetime(2026, 10, 10)))
         MaterialTransaction.objects.create(transaction_no='MV1', transaction_type='TRF_ERP', quantity=20, **common)
         MaterialTransaction.objects.create(transaction_no='ADJ', transaction_type='ADJ_ERP_IN', quantity=999, **common)
+        # 조립 현장에서 나온 불량은 성형 원단위에 넣지 않는다
+        MaterialTransaction.objects.create(transaction_no='MV3', transaction_type='TRF_ERP', quantity=300,
+                                           **{**common, 'warehouse_from': assembly})
         MaterialTransaction.objects.create(transaction_no='MV2', transaction_type='TRF_ERP', quantity=5,
                                            **{**common, 'part': Part.objects.create(part_no='ASSY-1')})
+        # 이 달 생산이 없는 성형품의 검사불량 (이전 생산분)
+        MoldingMaster.objects.create(part_no='OLD-1', part_name='COVER', material_type='재료1', material_part_no='ZR1',
+                                     material_name='PC TEST', cavity=1, product_weight=50, runner_weight=5,
+                                     total_material=55)
+        MaterialTransaction.objects.create(transaction_no='MV4', transaction_type='TRF_ERP', quantity=4,
+                                           **{**common, 'part': Part.objects.create(part_no='OLD-1')})
 
     def report(self):
         with patch('material.resin_yield.call_erp_api', return_value=erp_rows(
@@ -65,14 +75,14 @@ class ReportTests(TestCase):
         main, mb = rep['lines']
         self.assertEqual((main['material_type'], main['resin'], mb['resin']), ('재료1', 'PC', 'M/B'))
         self.assertEqual(main['produced'], 1510)  # 성형 설비(M*) 실적만
-        self.assertAlmostEqual(main['good_kg'], 15.0)
+        self.assertAlmostEqual(main['good_kg'], (1500 - 20) * 10 / 1000)  # 검사불량은 양품에서 빼서 스크랩으로
         self.assertAlmostEqual(main['bad_kg'], 0.1)
-        self.assertAlmostEqual(main['inspect_kg'], 0.2)  # 재고 맞춤 기록은 제외
+        self.assertAlmostEqual(main['inspect_kg'], 0.2)  # 3000 출발만, 재고 맞춤 기록 제외
         self.assertAlmostEqual(main['runner_kg'], 1510 * 4 / 2 / 1000)
         self.assertAlmostEqual(main['scrap_kg'], 1.8)
         self.assertAlmostEqual(mb['scrap_kg'], 0.2)
         self.assertAlmostEqual(main['unit_standard'], 12)
-        self.assertAlmostEqual(main['total_kg'], 15 + 0.1 + 0.2 + 3.02 + 1.8)
+        self.assertAlmostEqual(main['total_kg'], 15 + 0.1 + 3.02 + 1.8)  # 총 사용량 = 실제 투입량
 
     def test_summaries_count_production_once_and_list_unregistered_parts(self):
         rep = self.report()
@@ -80,6 +90,12 @@ class ReportTests(TestCase):
         self.assertEqual([u['part_no'] for u in rep['unregistered']], ['X-9'])
         self.assertEqual(rep['unregistered_scrap_kg'], 0.5)
         self.assertEqual({g['key'] for g in rep['by_resin']}, {'PC', 'M/B'})
+
+    def test_prior_production_defects_are_kept_out_of_the_table(self):
+        rep = self.report()
+        self.assertNotIn('OLD-1', {r['part_no'] for r in rep['lines']})
+        self.assertEqual([(d['part_no'], d['defect_qty']) for d in rep['prior_defects']], [('OLD-1', 4)])
+        self.assertAlmostEqual(rep['prior_defect_kg'], 0.2)
 
     def test_page_and_excel(self):
         request = RequestFactory().get('/', {'month': '2026-10'})

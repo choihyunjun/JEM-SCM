@@ -117,7 +117,8 @@ def _subtotal_values(lines, part_count, produced):
 def build_workbook(report, year, month):
     wb = openpyxl.Workbook()
     lines = report['lines']
-    source = f"※ 신재투입량, 스크랩 발생량 기준 | 원본: ERP 생산실적({report['fetched_at']} 조회) · 성형 마스터 · 불량창고 이동"
+    source = (f"※ 신재투입량, 스크랩 발생량 기준 | 원본: ERP 생산실적({report['fetched_at']} 조회) · 성형 마스터 · "
+              f"3공장 창고→불량창고 이동(검사불량, 양품에서 차감)")
 
     # ── 시트 1: 원단위 중량 관리기준 ──
     ws = wb.active
@@ -222,6 +223,9 @@ def build_workbook(report, year, month):
             '성형 마스터 등록 권장'] for p in report.get('bom_parts', [])]
         + [['재질 미분류', g['key'], g['material_name'], '', '', '', f"총 사용량 {g['total_kg']:,.1f}kg",
             '관리자 > 수지 재질에 등록'] for g in report.get('unclassified', [])]
+        + [['이전 생산분 검사불량', d['part_no'], d['part_name'], '', '', '',
+            f"{d['material_part_no']} 검사불량 {d['defect_qty']:,.0f}EA = {d['kg']:,.3f}kg (이 달 생산 없음)",
+            '품번별 표·합계에서 제외'] for d in report.get('prior_defects', [])]
         + [['C/V 미입력', r['part_no'], r['part_name'], '', '', '', r['material_part_no'], '런너량 0으로 계산']
            for r in report['no_cavity']]
     )

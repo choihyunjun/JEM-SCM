@@ -5,12 +5,15 @@
 - 제품중량·런너중량·C/V·총소요량·재료: 성형 마스터 (품번 × 재료구분 행).
   마스터에 없는 품번은 BOM의 원재료(ZR) 필요수량(kg/EA)을 쓴다. BOM 수량은 런너를 포함한 총소요량이라
   제품·런너 중량을 나눌 수 없어, 런너가 양품·불량 중량에 포함된다 (스크랩률이 낮게 나옴)
-- 검사불량: 불량창고로 옮긴 이동 수량 (ERP 재고이동 동기화 + SCM 이동)
+- 검사불량: 3공장 창고(3000)에서 불량창고로 옮긴 이동 수량 (ERP 재고이동 동기화 + SCM 이동).
+  조립 현장 등 다른 창고에서 나온 불량은 성형 원단위에 넣지 않는다
 
 계산 (재료 행마다, kg)
-- 양품/공정불량/검사불량 = 수량 × 제품중량, 런너 = 생산수 × 런너중량 ÷ C/V
+- 양품 = (양품수 − 검사불량수) × 제품중량. 검사불량은 생산실적에 양품으로 잡힌 뒤 나온 것이라 양품에서 빼서 스크랩으로 옮긴다
+- 공정불량/검사불량 = 수량 × 제품중량, 런너 = 생산수 × 런너중량 ÷ C/V
 - 파지 = 품번의 비고 합계를 재료 행의 총소요량 비율로 나눔
-- 총 사용량 = 양품 + 불량 + 런너 + 파지, 스크랩 = 불량 + 런너 + 파지
+- 총 사용량 = 양품 + 불량 + 런너 + 파지 (= 실제 투입량), 스크랩 = 불량 + 런너 + 파지
+- 이 달 생산이 없는 품번의 검사불량은 이전 생산분이라 품번별 표·합계에 넣지 않고 따로 보여준다
 """
 import re
 from collections import defaultdict
@@ -30,6 +33,7 @@ from .models import BOMItem, MaterialTransaction, MoldingMaster, ResinType
 WR_API = '/apiproxy/api20A03S00901'
 CACHE_SECONDS = 30 * 60
 BOM_CACHE_SECONDS = 24 * 3600
+DEFECT_FROM_WAREHOUSES = ('3000',)  # 검사불량으로 셀 불량창고 이동의 출발 창고 (3공장 창고)
 SCRAP_RE = re.compile(r'^(?:[A-Za-z]\d{3}\s+)?(\d{4,5})$')  # '01475', '6100', 과거 엑셀 형식 'A670 01036'
 KNOWN_RESINS = {'ABS', 'ASA', 'PA', 'PA6', 'PA12', 'PA46', 'PA66', 'PBT', 'PC', 'PC+ABS', 'PMMA', 'POM', 'PP',
                 'TPE', 'TPO', 'TPU', 'M/B'}
@@ -87,11 +91,12 @@ def fetch_results(year, month, refresh=False):
 
 
 def inspection_defects(year, month):
-    """불량창고로 옮긴 품번별 수량 (재고 맞춤 기록은 제외)."""
+    """3공장 창고에서 불량창고로 옮긴 품번별 수량 (재고 맞춤 기록은 제외)."""
     start, end = month_range(year, month)
     tz = timezone.get_current_timezone()
     qs = MaterialTransaction.objects.filter(
         transaction_type__in=('TRF_ERP', 'TRANSFER'), warehouse_to__name__contains='불량',
+        warehouse_from__code__in=DEFECT_FROM_WAREHOUSES,
         date__gte=datetime(start.year, start.month, 1, tzinfo=tz),
         date__lt=datetime(end.year, end.month, 1, tzinfo=tz),
     ).values('part__part_no').annotate(qty=Sum('quantity'))
@@ -178,12 +183,22 @@ def build_report(year, month, refresh=False):
                 and (produced[k]['good'] + produced[k]['bad'] or produced[k]['scrap_g'])]
     specs.update(bom_specs(need_bom))
 
-    lines, unregistered = [], []
+    lines, unregistered, prior_defects = [], [], []
     for part_no in sorted(part_nos):
         p = produced.get(part_no) or {'good': 0.0, 'bad': 0.0, 'scrap_g': 0, 'name': ''}
         made = p['good'] + p['bad']
         defect_qty = defects.get(part_no, 0.0)
         part_specs = sorted(specs.get(part_no, []), key=lambda sp: sp['sort'])
+        if not made and not p['scrap_g']:
+            # 이 달 생산이 없는 품번의 검사불량 = 이전 생산분. 이 달 원단위와 무관해 따로 둔다
+            for sp in part_specs:
+                weight = sp['grams'] if sp['source'] == 'BOM' else sp['product_weight']
+                prior_defects.append({
+                    'part_no': part_no, 'part_name': sp['part_name'], 'material_part_no': sp['material_part_no'],
+                    'resin': resin_of(sp['material_part_no'], sp['material_name'], sp['material_type'], mapping),
+                    'defect_qty': defect_qty, 'kg': defect_qty * weight / 1000,
+                })
+            continue
         if not part_specs:
             if made or p['scrap_g']:  # 불량창고 이동만 있는 조립품 등 성형품이 아닌 품번은 무시
                 unregistered.append({'part_no': part_no, 'part_name': p['name'], 'produced': made,
@@ -205,7 +220,7 @@ def build_report(year, month, refresh=False):
                 'runner_weight': sp['runner_weight'],
                 'unit_standard': sp['grams'] if from_bom else weight + (runner / cavity if cavity else 0),
                 'produced': made, 'good_qty': p['good'], 'bad_qty': p['bad'], 'defect_qty': defect_qty,
-                'good_kg': p['good'] * weight / 1000,
+                'good_kg': max(p['good'] - defect_qty, 0) * weight / 1000,
                 'bad_kg': p['bad'] * weight / 1000,
                 'inspect_kg': defect_qty * weight / 1000,
                 'runner_kg': made * runner / cavity / 1000 if cavity else 0,
@@ -230,6 +245,8 @@ def build_report(year, month, refresh=False):
         'issues': issues,
         'unregistered': unregistered,
         'bom_parts': bom_parts,
+        'prior_defects': prior_defects,
+        'prior_defect_kg': sum(d['kg'] for d in prior_defects),
         'unregistered_produced': sum(u['produced'] for u in unregistered),
         'unregistered_scrap_kg': sum(u['scrap_kg'] for u in unregistered),
         'no_cavity': [r for r in lines if r['no_cavity'] and r['produced']],
