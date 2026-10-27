@@ -2,7 +2,9 @@
 
 출처
 - 생산수(양품/불량), 파지 중량: ERP 생산실적 API. 파지는 비고(remarkDc)의 숫자 g (M7번대 4자리, 그 외 5자리)
-- 제품중량·런너중량·C/V·총소요량·재료: 성형 마스터 (품번 × 재료구분 행)
+- 제품중량·런너중량·C/V·총소요량·재료: 성형 마스터 (품번 × 재료구분 행).
+  마스터에 없는 품번은 BOM의 원재료(ZR) 필요수량(kg/EA)을 쓴다. BOM 수량은 런너를 포함한 총소요량이라
+  제품·런너 중량을 나눌 수 없어, 런너가 양품·불량 중량에 포함된다 (스크랩률이 낮게 나옴)
 - 검사불량: 불량창고로 옮긴 이동 수량 (ERP 재고이동 동기화 + SCM 이동)
 
 계산 (재료 행마다, kg)
@@ -22,11 +24,12 @@ from django.shortcuts import render
 from django.utils import timezone
 
 from orders.decorators import wms_permission_required
-from .erp_api import call_erp_api
-from .models import MaterialTransaction, MoldingMaster, ResinType
+from .erp_api import call_erp_api, fetch_erp_bom
+from .models import BOMItem, MaterialTransaction, MoldingMaster, ResinType
 
 WR_API = '/apiproxy/api20A03S00901'
 CACHE_SECONDS = 30 * 60
+BOM_CACHE_SECONDS = 24 * 3600
 SCRAP_RE = re.compile(r'^(?:[A-Za-z]\d{3}\s+)?(\d{4,5})$')  # '01475', '6100', 과거 엑셀 형식 'A670 01036'
 KNOWN_RESINS = {'ABS', 'ASA', 'PA', 'PA6', 'PA12', 'PA46', 'PA66', 'PBT', 'PC', 'PC+ABS', 'PMMA', 'POM', 'PP',
                 'TPE', 'TPO', 'TPU', 'M/B'}
@@ -95,14 +98,54 @@ def inspection_defects(year, month):
     return {row['part__part_no']: float(row['qty'] or 0) for row in qs}
 
 
-def resin_of(line, mapping):
-    if line.material_part_no in mapping:
-        return mapping[line.material_part_no]
-    if line.material_type == 'M/B':
+def resin_of(code, name, material_type, mapping):
+    """재질: 재질 표 → 같은 재료의 -D/-H/-J/-W 변형이면 기본 코드 → M/B → 재료명 첫 단어."""
+    base = re.sub(r'-[A-Z]$', '', code or '')
+    if code in mapping or base in mapping:
+        return mapping.get(code) or mapping[base]
+    if material_type == 'M/B':
         return 'M/B'
-    first = (line.material_name or '').split(' ')[0].upper()
+    first = (name or '').split(' ')[0].upper()
     first = 'M/B' if first == 'MB' else first
     return first if first in KNOWN_RESINS else '미분류'
+
+
+def master_specs(part_nos):
+    specs = defaultdict(list)
+    for m in MoldingMaster.objects.filter(part_no__in=part_nos):
+        specs[m.part_no].append({
+            'source': 'MASTER', 'sort': (MATERIAL_ORDER.get(m.material_type, 9), m.pk), 'part_name': m.part_name,
+            'material_type': m.material_type, 'material_part_no': m.material_part_no,
+            'material_name': m.material_name, 'cavity': m.cavity or 0, 'product_weight': float(m.product_weight),
+            'runner_weight': float(m.runner_weight), 'grams': float(m.total_material),
+        })
+    return specs
+
+
+def bom_specs(part_nos):
+    """성형 마스터에 없는 품번의 원재료(ZR) 소요량: SCM에 동기화된 BOM, 없으면 ERP BOM (하루 캐시)."""
+    found = defaultdict(list)
+    for item in BOMItem.objects.filter(product__part_no__in=part_nos, child_part_no__startswith='ZR',
+                                       is_active=True, is_bom_active=True).select_related('product'):
+        qty = float(item.required_qty or item.net_qty or 0)
+        if qty > 0:
+            found[item.product.part_no].append((item.child_part_no, item.child_part_name, qty))
+    for part_no in set(part_nos) - set(found):
+        key = f'resin_yield:bom:{part_no}'
+        children = cache.get(key)
+        if children is None:
+            ok, items, _ = fetch_erp_bom(part_no)
+            if not ok:
+                continue
+            children = [(i.get('itemchildCd', ''), i.get('itemchildNm', ''),
+                         float(i.get('realQt') or i.get('justQt') or 0))
+                        for i in items or [] if str(i.get('itemchildCd', '')).startswith('ZR')]
+            cache.set(key, children, BOM_CACHE_SECONDS)
+        found[part_no].extend(c for c in children if c[2] > 0)
+    return {part_no: [{
+        'source': 'BOM', 'sort': (i,), 'part_name': '', 'material_type': 'BOM', 'material_part_no': code,
+        'material_name': name, 'cavity': None, 'product_weight': None, 'runner_weight': None, 'grams': qty * 1000,
+    } for i, (code, name, qty) in enumerate(children)] for part_no, children in found.items() if children}
 
 
 def _ratio(part, whole):
@@ -128,41 +171,46 @@ def build_report(year, month, refresh=False):
 
     defects = inspection_defects(year, month)
     part_nos = set(produced) | {k for k, v in defects.items() if v}
-    masters = defaultdict(list)
-    for line in MoldingMaster.objects.filter(part_no__in=part_nos):
-        masters[line.part_no].append(line)
+    specs = master_specs(part_nos)
     mapping = dict(ResinType.objects.values_list('material_part_no', 'resin_type'))
+    # 마스터에 없고 이 달 성형 생산·파지가 있는 품번만 BOM으로 채운다 (불량창고 이동만 있는 품번은 성형품이 아닐 수 있음)
+    need_bom = [k for k in part_nos if k not in specs and k in produced
+                and (produced[k]['good'] + produced[k]['bad'] or produced[k]['scrap_g'])]
+    specs.update(bom_specs(need_bom))
 
     lines, unregistered = [], []
     for part_no in sorted(part_nos):
         p = produced.get(part_no) or {'good': 0.0, 'bad': 0.0, 'scrap_g': 0, 'name': ''}
         made = p['good'] + p['bad']
         defect_qty = defects.get(part_no, 0.0)
-        part_lines = sorted(masters.get(part_no, []), key=lambda m: (MATERIAL_ORDER.get(m.material_type, 9), m.pk))
-        if not part_lines:
+        part_specs = sorted(specs.get(part_no, []), key=lambda sp: sp['sort'])
+        if not part_specs:
             if made or p['scrap_g']:  # 불량창고 이동만 있는 조립품 등 성형품이 아닌 품번은 무시
                 unregistered.append({'part_no': part_no, 'part_name': p['name'], 'produced': made,
                                      'scrap_kg': p['scrap_g'] / 1000, 'defect_qty': defect_qty})
             continue
-        total_material = sum(float(m.total_material) for m in part_lines)
-        for m in part_lines:
-            weight = float(m.product_weight)
-            runner = float(m.runner_weight)
-            cavity = m.cavity or 0
-            share = _ratio(float(m.total_material), total_material) if total_material else 1 / len(part_lines)
+        total_grams = sum(sp['grams'] for sp in part_specs)
+        for sp in part_specs:
+            from_bom = sp['source'] == 'BOM'
+            cavity = sp['cavity']
+            # BOM은 런너 포함 총소요량뿐이라 수량에 그대로 곱한다
+            weight = sp['grams'] if from_bom else sp['product_weight']
+            runner = sp['runner_weight'] or 0
+            share = _ratio(sp['grams'], total_grams) if total_grams else 1 / len(part_specs)
             row = {
-                'part_no': part_no, 'part_name': m.part_name or p['name'], 'resin': resin_of(m, mapping),
-                'material_type': m.material_type, 'material_part_no': m.material_part_no,
-                'material_name': m.material_name, 'cavity': cavity, 'product_weight': weight,
-                'runner_weight': runner,
-                'unit_standard': weight + (runner / cavity if cavity else 0),
+                'part_no': part_no, 'part_name': sp['part_name'] or p['name'], 'source': sp['source'],
+                'resin': resin_of(sp['material_part_no'], sp['material_name'], sp['material_type'], mapping),
+                'material_type': sp['material_type'], 'material_part_no': sp['material_part_no'],
+                'material_name': sp['material_name'], 'cavity': cavity, 'product_weight': sp['product_weight'],
+                'runner_weight': sp['runner_weight'],
+                'unit_standard': sp['grams'] if from_bom else weight + (runner / cavity if cavity else 0),
                 'produced': made, 'good_qty': p['good'], 'bad_qty': p['bad'], 'defect_qty': defect_qty,
                 'good_kg': p['good'] * weight / 1000,
                 'bad_kg': p['bad'] * weight / 1000,
                 'inspect_kg': defect_qty * weight / 1000,
                 'runner_kg': made * runner / cavity / 1000 if cavity else 0,
                 'scrap_kg': p['scrap_g'] / 1000 * share,
-                'no_cavity': not cavity,
+                'no_cavity': not from_bom and not cavity,
             }
             row['loss_kg'] = row['bad_kg'] + row['inspect_kg'] + row['runner_kg'] + row['scrap_kg']
             row['total_kg'] = row['good_kg'] + row['loss_kg']
@@ -171,13 +219,17 @@ def build_report(year, month, refresh=False):
             row['unit_actual'] = row['total_kg'] * 1000 / made if made else None
             lines.append(row)
 
+    bom_parts = sorted({r['part_no'] for r in lines if r['source'] == 'BOM'})
+    by_material = _summarize(lines, 'material_part_no')
     return {
         'lines': lines,
         'by_resin': _summarize(lines, 'resin'),
-        'by_material': _summarize(lines, 'material_part_no'),
+        'by_material': by_material,
+        'unclassified': [g for g in by_material if g['resin'] == '미분류'],
         'totals': _summarize(lines, None)[0] if lines else None,
         'issues': issues,
         'unregistered': unregistered,
+        'bom_parts': bom_parts,
         'unregistered_produced': sum(u['produced'] for u in unregistered),
         'unregistered_scrap_kg': sum(u['scrap_kg'] for u in unregistered),
         'no_cavity': [r for r in lines if r['no_cavity'] and r['produced']],
@@ -226,81 +278,22 @@ def resin_yield(request):
     return render(request, 'material/resin_yield.html', {
         'report': report, 'month': f'{year}-{month:02d}', 'year': year, 'mon': month,
         'resins': sorted({r['resin'] for r in report.get('lines', [])}),
-        'issue_count': len(report.get('issues', [])) + len(report.get('unregistered', [])),
+        'issue_count': sum(len(report.get(k, [])) for k in ('issues', 'unregistered', 'unclassified')),
     })
 
 
 @wms_permission_required('can_wms_stock_view')
 def resin_yield_excel(request):
-    import openpyxl
-    from openpyxl.styles import Alignment, Font, PatternFill
-    from openpyxl.utils import get_column_letter
+    from .resin_yield_excel import build_workbook
 
     year, month = _month_param(request)
     report = build_report(year, month)
     if report.get('error'):
         return HttpResponse(f"ERP 생산실적 조회 실패: {report['error']}", status=502,
                             content_type='text/plain; charset=utf-8')
-
-    wb = openpyxl.Workbook()
-    fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
-
-    def sheet(ws, title, headers, rows, formats):
-        ws.title = title
-        ws.append([f'{title} ({year}년 {month}월)'])
-        ws['A1'].font = Font(bold=True, size=12)
-        ws.append(headers)
-        for cell in ws[2]:
-            cell.fill = fill
-            cell.font = Font(bold=True, color='FFFFFF', size=10)
-            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-        for row in rows:
-            ws.append(row)
-        for col, fmt in formats.items():
-            for cells in ws.iter_rows(min_row=3, min_col=col, max_col=col):
-                cells[0].number_format = fmt
-        for i, h in enumerate(headers, 1):
-            ws.column_dimensions[get_column_letter(i)].width = max(10, min(32, len(str(h)) * 2 + 2))
-        ws.freeze_panes = 'A3'
-
-    kg, g, pct, ea = '#,##0.000', '#,##0.000', '0.0%', '#,##0'
-    lines = report['lines']
-    sheet(wb.active, '품번별 원단위', [
-        'NO', '품번', '품명', '재질', '재료구분', '재료품번', '재료명', 'C/V', '제품중량(g/EA)', '런너중량(g/SHOT)',
-        '기준 원단위(g/EA)', '생산수(EA)', '양품량(kg)', '공정불량(kg)', '검사불량(kg)', '런너량(kg)', '파지량(kg)',
-        '총 수지사용량(kg)', '스크랩량(kg)', '스크랩률', '실적 원단위(g/EA)',
-    ], [[i, r['part_no'], r['part_name'], r['resin'], r['material_type'], r['material_part_no'], r['material_name'],
-         r['cavity'], r['product_weight'], r['runner_weight'], r['unit_standard'], r['produced'], r['good_kg'],
-         r['bad_kg'], r['inspect_kg'], r['runner_kg'], r['scrap_kg'], r['total_kg'], r['loss_kg'], r['loss_rate'],
-         r['unit_actual']] for i, r in enumerate(lines, 1)],
-        {9: g, 10: g, 11: g, 12: ea, 13: kg, 14: kg, 15: kg, 16: kg, 17: kg, 18: kg, 19: kg, 20: pct, 21: g})
-
-    summary_headers = ['생산수(EA)', '양품량(kg)', '공정불량(kg)', '검사불량(kg)', '런너량(kg)', '파지량(kg)',
-                       '총 수지사용량(kg)', '스크랩량(kg)', '스크랩률']
-
-    def summary_values(s):
-        return [s['produced'], s['good_kg'], s['bad_kg'], s['inspect_kg'], s['runner_kg'], s['scrap_kg'],
-                s['total_kg'], s['loss_kg'], s['loss_rate']]
-
-    totals = [report['totals']] if report['totals'] else []
-    sheet(wb.create_sheet(), '재질별 집계', ['재질', '품번 수'] + summary_headers,
-          [[s['key'], s['part_count']] + summary_values(s) for s in report['by_resin']]
-          + [['합계', t['part_count']] + summary_values(t) for t in totals],
-          {3: ea, 4: kg, 5: kg, 6: kg, 7: kg, 8: kg, 9: kg, 10: kg, 11: pct})
-    sheet(wb.create_sheet(), '원재료별 사용량', ['재료품번', '재료명', '재질', '품번 수'] + summary_headers,
-          [[s['key'], s['material_name'], s['resin'], s['part_count']] + summary_values(s)
-           for s in report['by_material']],
-          {5: ea, 6: kg, 7: kg, 8: kg, 9: kg, 10: kg, 11: kg, 12: kg, 13: pct})
-    sheet(wb.create_sheet(), '확인 필요', ['구분', '품번', '품명', '설비', '실적일', '실적번호', '비고/내용', '반영'],
-          [['파지 비고 형식', i['part_no'], i['part_name'], i['equip'], i['date'], i['wr_no'], i['remark'],
-            f"{i['issue']} → {i['grams']:,}g" if i['grams'] else f"{i['issue']} → 0g"] for i in report['issues']]
-          + [['성형 마스터 미등록', u['part_no'], u['part_name'], '', '', '',
-              f"생산 {u['produced']:,.0f}EA / 파지 {u['scrap_kg']:,.3f}kg / 검사불량 {u['defect_qty']:,.0f}EA",
-              '집계 제외'] for u in report['unregistered']]
-          + [['C/V 미입력', r['part_no'], r['part_name'], '', '', '', r['material_part_no'], '런너량 0으로 계산']
-             for r in report['no_cavity']], {})
-
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    response['Content-Disposition'] = f"attachment; filename*=UTF-8''resin_yield_{year}{month:02d}.xlsx"
-    wb.save(response)
+    filename = f'원단위 중량 관리기준 ({year}년 {month}월).xlsx'
+    from urllib.parse import quote
+    response['Content-Disposition'] = f"attachment; filename*=UTF-8''{quote(filename)}"
+    build_workbook(report, year, month).save(response)
     return response

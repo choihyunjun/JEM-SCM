@@ -51,6 +51,13 @@
         [확인 필요] 탭의 품번을 성형 마스터에 등록하면 다음 조회부터 반영됩니다.
     </div>
     {% endif %}
+    {% if report.bom_parts %}
+    <div class="alert alert-info py-2 small">
+        <i class="bi bi-info-circle me-1"></i>
+        성형 마스터에 없는 품번 <b>{{ report.bom_parts|length }}개</b>는 BOM 원재료 소요량으로 계산했습니다(표의 <span class="dtl-pill amber">BOM</span>).
+        BOM 수량은 런너를 포함한 총소요량이라 런너가 양품·불량 중량에 들어가 <b>스크랩률이 실제보다 낮게</b> 나옵니다. 성형 마스터에 등록하면 정확한 계산으로 바뀝니다.
+    </div>
+    {% endif %}
 
     <ul class="nav nav-tabs ry-tabs mb-0" role="tablist">
         <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabPart" type="button">품번별 원단위 <span class="badge rounded-pill bg-light text-secondary border">{{ report.lines|length }}</span></button></li>
@@ -88,18 +95,18 @@
                             <td class="fw-bold">{{ r.part_no }}</td>
                             <td>{{ r.part_name|truncatechars:32 }}</td>
                             <td class="text-center">{{ r.resin }}</td>
-                            <td class="text-center">{{ r.material_type }}</td>
+                            <td class="text-center">{% if r.source == 'BOM' %}<span class="dtl-pill amber" title="성형 마스터 미등록: BOM 소요량(런너 포함)으로 계산">BOM</span>{% else %}{{ r.material_type }}{% endif %}</td>
                             <td title="{{ r.material_name }}">{{ r.material_part_no }}</td>
-                            <td class="text-center">{% if r.cavity %}{{ r.cavity }}{% else %}<span class="text-danger">-</span>{% endif %}</td>
-                            <td class="num">{{ r.product_weight|floatformat:"3g" }}</td>
-                            <td class="num">{{ r.runner_weight|floatformat:"3g" }}</td>
+                            <td class="text-center">{% if r.source == 'BOM' %}-{% elif r.cavity %}{{ r.cavity }}{% else %}<span class="text-danger">-</span>{% endif %}</td>
+                            <td class="num">{% if r.product_weight is None %}-{% else %}{{ r.product_weight|floatformat:"3g" }}{% endif %}</td>
+                            <td class="num">{% if r.runner_weight is None %}-{% else %}{{ r.runner_weight|floatformat:"3g" }}{% endif %}</td>
                             <td class="num">{{ r.unit_standard|floatformat:"3g" }}</td>
                             <td class="num fw-bold">{% if r.unit_actual is not None %}{{ r.unit_actual|floatformat:"3g" }}{% else %}-{% endif %}</td>
                             <td class="num">{{ r.produced|floatformat:"0g" }}</td>
                             <td class="num">{{ r.good_kg|floatformat:"3g" }}</td>
                             <td class="num">{{ r.bad_kg|floatformat:"3g" }}</td>
                             <td class="num">{{ r.inspect_kg|floatformat:"3g" }}</td>
-                            <td class="num">{{ r.runner_kg|floatformat:"3g" }}</td>
+                            <td class="num">{% if r.source == 'BOM' %}<span class="text-muted">포함</span>{% else %}{{ r.runner_kg|floatformat:"3g" }}{% endif %}</td>
                             <td class="num">{{ r.scrap_kg|floatformat:"3g" }}</td>
                             <td class="num fw-bold">{{ r.total_kg|floatformat:"3g" }}</td>
                             <td class="num text-danger">{{ r.loss_kg|floatformat:"3g" }}</td>
@@ -145,6 +152,21 @@
                     </tbody>
                 </table>
             </div>
+            <h6 class="fw-bold">재질 미분류 재료코드 <span class="text-muted small fw-normal">— 재질 표에 없고 재료명으로도 알 수 없음. 관리자 화면 [수지 재질]에 재료품번과 재질을 등록하면 재질별 집계에 반영됩니다</span></h6>
+            <div class="table-responsive mb-3">
+                <table class="table table-sm table-bordered dtl-table ry-table mb-0">
+                    <thead><tr class="text-center"><th>재료품번</th><th>재료명</th><th class="num">품번 수</th><th class="num">총 사용량(kg)</th></tr></thead>
+                    <tbody>
+                        {% for g in report.unclassified %}
+                        <tr><td class="fw-bold">{{ g.key }}</td><td>{{ g.material_name }}</td><td class="num">{{ g.part_count }}</td><td class="num">{{ g.total_kg|floatformat:"1g" }}</td></tr>
+                        {% empty %}<tr><td colspan="4" class="text-center text-muted">없음</td></tr>{% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if report.bom_parts %}
+            <h6 class="fw-bold">BOM으로 계산한 품번 <span class="text-muted small fw-normal">— 성형 마스터에 제품중량·런너중량을 등록하면 런너·스크랩이 정확해집니다</span></h6>
+            <p class="small">{{ report.bom_parts|join:", " }}</p>
+            {% endif %}
             {% if report.no_cavity %}
             <h6 class="fw-bold">C/V 미입력 <span class="text-muted small fw-normal">— 런너량을 0으로 계산함</span></h6>
             <ul class="small">{% for r in report.no_cavity %}<li>{{ r.part_no }} ({{ r.material_part_no }})</li>{% endfor %}</ul>

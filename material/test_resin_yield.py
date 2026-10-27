@@ -1,4 +1,4 @@
-"""성형 원단위 중량 관리: 파지 비고 해석, 재료 행별 중량 계산, 화면·엑셀."""
+"""성형 원단위 중량 관리: 파지 비고 해석, 재료 행별 중량 계산, BOM 보완, 화면·엑셀."""
 from datetime import datetime
 from io import BytesIO
 from unittest.mock import patch
@@ -10,7 +10,7 @@ from django.test import RequestFactory, TestCase
 from django.utils import timezone
 
 from orders.models import Part
-from .models import MaterialTransaction, MoldingMaster, ResinType, Warehouse
+from .models import BOMItem, MaterialTransaction, MoldingMaster, Product, ResinType, Warehouse
 from .resin_yield import build_report, parse_scrap, resin_yield, resin_yield_excel
 
 
@@ -88,9 +88,32 @@ class ReportTests(TestCase):
             self.assertEqual(resin_yield(request).status_code, 200)
             response = resin_yield_excel(request)
         wb = openpyxl.load_workbook(BytesIO(response.content))
-        self.assertEqual(wb.sheetnames, ['품번별 원단위', '재질별 집계', '원재료별 사용량', '확인 필요'])
-        self.assertEqual(wb['품번별 원단위']['B3'].value, 'P-1')
+        self.assertEqual(wb.sheetnames, ['원단위 중량 관리기준', '원재료별 사용량', '확인 필요'])
+        ws = wb['원단위 중량 관리기준']
+        self.assertEqual((ws['A1'].value, ws['B4'].value), ('생산품목별 원단위 중량 관리기준 자료 (2026년 10월)', 'P-1'))
+        self.assertIn('[ 수지별 소계 ]', [ws.cell(r, 1).value for r in range(1, ws.max_row + 1)])
 
     def test_erp_failure_is_reported(self):
         with patch('material.resin_yield.call_erp_api', return_value=(False, None, 'timeout')):
             self.assertEqual(build_report(2026, 9), {'error': 'timeout'})
+
+
+class BomFallbackTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        ResinType.objects.create(material_part_no='ZR276', resin_type='PC+ABS')
+        product = Product.objects.create(part_no='B-1', part_name='DECO COVER')
+        BOMItem.objects.create(product=product, child_part_no='ZR276-D', child_part_name='PC+ABS HP-1000XL',
+                               required_qty='0.348')
+        BOMItem.objects.create(product=product, child_part_no='SCREW-1', child_part_name='SCREW', required_qty=2)
+
+    def test_unregistered_part_uses_bom_resin_quantity_with_runner_included(self):
+        with patch('material.resin_yield.call_erp_api', return_value=erp_rows(('M702', 'B-1', 100, 2, '6100'))):
+            rep = build_report(2026, 10)
+        (row,) = rep['lines']
+        self.assertEqual((row['source'], row['material_part_no'], row['resin']), ('BOM', 'ZR276-D', 'PC+ABS'))
+        self.assertAlmostEqual(row['good_kg'], 34.8)
+        self.assertAlmostEqual(row['bad_kg'], 0.696)
+        self.assertEqual(row['runner_kg'], 0)
+        self.assertAlmostEqual(row['scrap_kg'], 6.1)
+        self.assertEqual((rep['bom_parts'], rep['unregistered']), (['B-1'], []))
