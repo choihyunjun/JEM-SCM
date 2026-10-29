@@ -569,6 +569,19 @@ def manual_incoming(request):
                 warehouse = Warehouse.objects.get(id=warehouse_id)
                 vendor = Vendor.objects.get(id=vendor_id) if vendor_id else None
 
+                # 검사 대기 재고는 ERP에 없으므로 ERP 창고(3000 등)에 두면 ERP 현재고 반영 때 깎인다.
+                # 검사 대상이면 항상 1000 수입검사 대기장에 받고, 고른 창고는 합격 후 창고로 쓴다.
+                from .stock_reconciliation import SCM_ONLY_WAREHOUSE_CODES
+                if needs_inspection and warehouse.code not in SCM_ONLY_WAREHOUSE_CODES:
+                    hold = Warehouse.objects.filter(code='1000').first()
+                    if hold is None:
+                        raise ValueError("수입검사 대기장(1000) 창고가 없어 검사 입고를 할 수 없습니다.")
+                    if not target_warehouse_id:
+                        target_warehouse_id = warehouse.id
+                    messages.info(request, f"수입검사 대상은 (1000) {hold.name}에 입고합니다. "
+                                           f"선택한 ({warehouse.code}) 창고는 합격 후 창고로 지정했습니다.")
+                    warehouse = hold
+
                 for i in range(len(part_ids)):
                     p_id = part_ids[i]
                     qty = int(quantities[i])

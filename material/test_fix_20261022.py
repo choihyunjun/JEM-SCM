@@ -197,3 +197,34 @@ class StockMovePerRowDateTests(Base):
                        for t in MaterialTransaction.objects.filter(transaction_type='TRANSFER'))
         self.assertEqual(dates, [('2026-10-21', 10), ('2026-10-25', 5)])
         self.assertEqual((self.qty(self.src), self.qty(self.dst)), (15, 15))
+
+
+class InspectionHoldWarehouseTests(Base):
+    """2026-10-29: 검사 대상 입고를 3000에 받아 ERP 현재고 반영 때 500→50으로 깎인 건."""
+    def setUp(self):
+        super().setUp()
+        self.hold = Warehouse.objects.create(code='1000', name='수입검사 대기장')
+
+    def test_inspection_receipt_goes_to_1000_and_chosen_warehouse_becomes_target(self):
+        from qms.models import ImportInspection
+        from .views import manual_incoming
+        data = {'date': '2026-10-29', 'warehouse_id': self.dst.pk, 'needs_inspection': 'on',
+                'part_ids[]': [self.part.pk], 'lot_nos[]': ['2026-10-29'], 'quantities[]': ['500']}
+        manual_incoming(self.request(data=data))
+        trx = MaterialTransaction.objects.get(transaction_type='IN_MANUAL')
+        self.assertEqual(trx.warehouse_to, self.hold)
+        self.assertEqual((self.qty(self.hold), self.qty(self.dst)), (500, 0))
+        self.assertEqual(ImportInspection.objects.get(inbound_transaction=trx).target_warehouse_code, '3000')
+
+    def test_reconcile_skips_parts_with_pending_inspection_in_erp_warehouse(self):
+        from qms.models import ImportInspection
+        from .stock_reconciliation import pending_part_ids
+        trx = MaterialTransaction.objects.create(transaction_no='IN-MAN-T', transaction_type='IN_MANUAL',
+                                                 date=timezone.now(), part=self.part, quantity=500,
+                                                 warehouse_to=self.dst)
+        inspection = ImportInspection.objects.create(inbound_transaction=trx, status='PENDING',
+                                                     target_warehouse_code='3000')
+        self.assertIn(self.part.pk, pending_part_ids(timezone.now()))
+        inspection.status = 'APPROVED'
+        inspection.save()
+        self.assertNotIn(self.part.pk, pending_part_ids(timezone.now()))

@@ -61,8 +61,15 @@ def pending_part_ids(since):
     from django.db.models import Q
     from .models import ERPIncomingOperation
     q = Q(status__in=['PENDING', 'RUNNING', 'FAILED', 'REVIEW']) | Q(updated_at__gte=since)
-    return set(ERPIncomingOperation.objects.filter(q).exclude(transaction__isnull=True)
-               .values_list('transaction__part_id', flat=True))
+    ids = set(ERPIncomingOperation.objects.filter(q).exclude(transaction__isnull=True)
+              .values_list('transaction__part_id', flat=True))
+    # 검사 대기 재고가 ERP 창고에 들어가 있으면 ERP에는 아직 없다: 판정 전까지 보정하지 않는다.
+    from qms.models import ImportInspection
+    ids |= set(ImportInspection.objects.filter(status='PENDING', inbound_transaction__isnull=False)
+               .exclude(inbound_transaction__warehouse_to__code__in=SCM_ONLY_WAREHOUSE_CODES)
+               .values_list('inbound_transaction__part_id', flat=True))
+    ids.discard(None)
+    return ids
 
 
 def _mark_tags_consumed(warehouse, part, decrease):
