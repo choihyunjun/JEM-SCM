@@ -9,6 +9,46 @@
         <span class="text-muted small">창고 간 재고를 이동하고 수불 이력을 생성합니다.</span>
     </div>
 
+    {% if move_suspects %}
+    <details class="mv-suspect mb-4">
+        <summary>
+            <i class="bi bi-exclamation-triangle-fill me-1"></i>
+            <b>이동 누락 의심 {{ move_suspects|length }}건</b>
+            <span class="ms-2">이동처리 전에 ERP 생산출고가 먼저 잡힌 품목입니다. 실제로 옮긴 재고를 이동처리해 주세요.</span>
+        </summary>
+        <div class="mv-suspect-body">
+            <table>
+                <thead><tr><th>창고</th><th>품번</th><th>품명</th><th class="r">먼저 출고된 양</th><th>재고가 남아 있는 창고</th></tr></thead>
+                <tbody>
+                    {% for s in move_suspects %}
+                    <tr>
+                        <td><span class="mv-wh">{{ s.wh }}</span> {{ s.wh_name }}</td>
+                        <td class="fw-bold">{{ s.part_no }}</td>
+                        <td class="text-muted">{{ s.name|truncatechars:30 }}</td>
+                        <td class="r fw-bold" style="color:#b91c1c;">{{ s.qty|floatformat:"-3" }}</td>
+                        <td>{% for wh, qty in s.sources %}<span class="mv-src">{{ wh }} · {{ qty|floatformat:"-3" }}</span>{% empty %}<span class="text-muted">다른 창고 재고 없음 (ERP 확인)</span>{% endfor %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <div class="mv-note">재고가 들어오면 다음 ERP 동기화 때 오래된 LOT부터 자동 정산되어 이 목록에서 빠집니다.</div>
+        </div>
+    </details>
+    <style>
+    .mv-suspect { border: 1px solid #fcd34d; background: #fffbeb; border-radius: 10px; font-size: 0.82rem; color: #92400e; }
+    .mv-suspect summary { padding: 10px 14px; cursor: pointer; list-style: none; }
+    .mv-suspect summary::-webkit-details-marker { display: none; }
+    .mv-suspect-body { padding: 0 14px 12px; max-height: 320px; overflow: auto; }
+    .mv-suspect table { width: 100%; background: #fff; border: 1px solid #fde68a; border-radius: 6px; border-collapse: separate; border-spacing: 0; color: #1e293b; }
+    .mv-suspect th, .mv-suspect td { padding: 6px 10px; border-bottom: 1px solid #fef3c7; white-space: nowrap; }
+    .mv-suspect th { background: #fef9e7; color: #92400e; font-weight: 600; font-size: 0.76rem; position: sticky; top: 0; }
+    .mv-suspect .r { text-align: right; font-variant-numeric: tabular-nums; }
+    .mv-wh { display: inline-block; background: #f1f5f9; border-radius: 4px; padding: 0 6px; font-weight: 600; font-size: 0.74rem; }
+    .mv-src { display: inline-block; background: #ecfdf5; color: #047857; border-radius: 4px; padding: 0 6px; margin-right: 4px; font-size: 0.76rem; }
+    .mv-note { margin-top: 6px; font-size: 0.76rem; }
+    </style>
+    {% endif %}
+
     <form method="post" id="transferForm">
         {% csrf_token %}
 

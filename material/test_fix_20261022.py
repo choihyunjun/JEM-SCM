@@ -283,3 +283,57 @@ class JudgedReceiptDateEditTests(Base):
             self.assertFalse(self.edit(date='2026-11-01')['success'])
         self.move.refresh_from_db()
         self.assertEqual(timezone.localtime(self.move.date).date(), date(2026, 10, 30))
+
+
+class NegativeUnassignedSettlementTests(Base):
+    """2026-10-30: 이동 전 생산출고로 생긴 음수 미지정을 뒤늦게 들어온 LOT에서 상계 (ZR704 사례)."""
+    def setUp(self):
+        super().setUp()
+        MaterialTransaction.objects.create(transaction_no='IN-LOT', transaction_type='IN_MANUAL',
+                                           date=timezone.now(), part=self.part, quantity=1, warehouse_to=self.src)
+        self.null = MaterialStock.objects.create(warehouse=self.dst, part=self.part, quantity=Decimal('-270.514'))
+        self.old = MaterialStock.objects.create(warehouse=self.dst, part=self.part, lot_no=date(2026, 8, 25), quantity=125)
+        self.new = MaterialStock.objects.create(warehouse=self.dst, part=self.part, lot_no=date(2026, 10, 7), quantity=500)
+
+    def rows(self):
+        return {s.lot_no: s.quantity for s in MaterialStock.objects.filter(warehouse=self.dst, part=self.part)}
+
+    def test_preview_changes_nothing(self):
+        from .stock_reconciliation import settle_negative_unassigned
+        [result] = settle_negative_unassigned(apply=False)
+        self.assertEqual(result['null_after'], 0)
+        self.assertEqual([(lot, after) for lot, _b, after, _l in result['lots']],
+                         [(date(2026, 8, 25), 0), (date(2026, 10, 7), Decimal('354.486'))])
+        self.assertEqual(self.rows()[None], Decimal('-270.514'))
+
+    def test_settles_oldest_lot_first_and_keeps_total(self):
+        from .stock_reconciliation import settle_negative_unassigned, missing_move_suspects
+        settle_negative_unassigned()
+        self.assertEqual(self.rows(), {None: 0, date(2026, 10, 7): Decimal('354.486')})
+        self.assertEqual(MaterialTransaction.objects.filter(transaction_type='LOT_CORRECT').count(), 3)
+        self.assertEqual(missing_move_suspects(), [])
+        self.assertEqual(settle_negative_unassigned(), [])  # 두 번 돌려도 그대로
+
+    def test_debt_larger_than_lots_leaves_rest_negative_and_lists_source(self):
+        from .stock_reconciliation import settle_negative_unassigned, missing_move_suspects
+        MaterialStock.objects.filter(pk=self.null.pk).update(quantity=-700)
+        MaterialStock.objects.create(warehouse=self.src, part=self.part, lot_no=date(2026, 10, 20), quantity=300)
+        settle_negative_unassigned()
+        self.assertEqual(self.rows(), {None: -75})
+        [suspect] = missing_move_suspects()
+        self.assertEqual((suspect['wh'], suspect['qty'], suspect['sources']), ('3000', 75, [('3200', 300)]))
+
+    def test_quantity_only_parts_and_hold_warehouses_are_untouched(self):
+        from .stock_reconciliation import settle_negative_unassigned
+        MaterialTransaction.objects.all().delete()  # LOT 관리 품목 아님
+        self.assertEqual(settle_negative_unassigned(), [])
+        self.assertEqual(self.rows()[None], Decimal('-270.514'))
+
+    def test_stock_move_page_shows_alert(self):
+        from django.test import Client
+        from django.urls import reverse
+        client = Client()
+        client.force_login(self.user)
+        MaterialStock.objects.filter(pk__in=[self.old.pk, self.new.pk]).delete()
+        response = client.get(reverse('material:stock_move'))
+        self.assertContains(response, '이동 누락 의심 1건')

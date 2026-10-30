@@ -3401,9 +3401,18 @@ def stock_move(request):
 
         production_codes = list(Warehouse.objects.filter(is_production=True).values_list('code', flat=True))
 
+        # 이동처리 전에 생산출고가 먼저 잡힌 품목 (음수 미지정): 이동을 빨리 처리하도록 알린다.
+        from .stock_reconciliation import missing_move_suspects
+        try:
+            move_suspects = missing_move_suspects()
+        except Exception as exc:  # 알림 조회 실패가 이동 화면을 막지 않게
+            logger.warning(f'이동 누락 의심 조회 실패: {exc}')
+            move_suspects = []
+
         context = {
             'warehouses': warehouses,
             'production_codes': production_codes,
+            'move_suspects': move_suspects,
             'today': timezone.now().strftime('%Y-%m-%d'),
             'history': history_page,
             'history_count': paginator.count,

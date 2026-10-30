@@ -110,13 +110,14 @@ class StockReconciliationTests(TestCase):
         self.assertEqual((b.quantity, self.total()), (20, 20))
         self.assertFalse(MaterialStock.objects.filter(production_lot='2633511').exists())
 
-    def test_matching_total_is_not_rewritten(self):
+    def test_matching_total_is_not_rewritten_but_negative_unassigned_is_settled(self):
         self.lot_managed()
         lot = self.stock(50, date(2026, 1, 1))
         bucket = self.stock(-20)
-        self.assertEqual(self.sync([self.row(30)])['adjusted'], 0)
+        result = self.sync([self.row(30)])
+        self.assertEqual((result['adjusted'], result['settled']), (0, 1))  # ERP 보정 없음, LOT 상계만
         lot.refresh_from_db(); bucket.refresh_from_db()
-        self.assertEqual((lot.quantity, bucket.quantity), (50, -20))
+        self.assertEqual((lot.quantity, bucket.quantity, self.total()), (30, 0, 30))
 
     def test_part_still_being_sent_to_erp_is_deferred(self):
         from .models import ERPIncomingOperation

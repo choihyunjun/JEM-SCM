@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from django.core.cache import cache
 from django.db import DatabaseError, transaction
+from django.db.models import Sum
 from django.utils import timezone
 
 from orders.models import Part
@@ -154,6 +155,84 @@ def _settle_lot_managed(warehouse, part, erp_qty, expected):
     return diff
 
 
+SETTLE_REMARK = 'ERP정합 선출고 정산'
+
+
+def settle_negative_unassigned(apply=True):
+    """같은 창고에 '음수 미지정'과 양수 LOT이 같이 있으면 오래된 LOT부터 상계한다.
+    음수 미지정 = 이동처리 전에 ERP 생산출고가 먼저 잡힌 양이고, 실물은 뒤늦게 이동된 LOT에서 쓰였다.
+    총량은 그대로라 ERP에는 보낼 것이 없다. apply=False면 바꾸지 않고 결과만 돌려준다 (미리보기).
+    Returns: [{'wh', 'part_no', 'name', 'null_before', 'null_after', 'lots': [(lot, before, after, labels)]}]"""
+    from .erp_api import _create_trx, fifo_sort_key
+    from .labels import LIVE
+    from .models import RawMaterialLabel
+    keys = (MaterialStock.objects.filter(lot_no__isnull=True, production_lot__isnull=True, quantity__lt=0,
+                                         part_id__in=lot_managed_part_ids())
+            .exclude(warehouse__code__in=SCM_ONLY_WAREHOUSE_CODES)
+            .values_list('warehouse_id', 'part_id').distinct())
+    results = []
+    for warehouse_id, part_id in sorted(set(keys)):
+        with transaction.atomic():
+            rows = list(MaterialStock.objects.select_for_update().select_related('warehouse', 'part')
+                        .filter(warehouse_id=warehouse_id, part_id=part_id).order_by('pk'))
+            bucket = next((s for s in rows if s.lot_no is None and s.production_lot is None), None)
+            lots = sorted((s for s in rows if (s.lot_no is not None or s.production_lot is not None)
+                           and s.quantity > 0), key=fifo_sort_key)
+            if bucket is None or bucket.quantity >= 0 or not lots:
+                continue
+            debt, settled, changes = -bucket.quantity, Decimal(0), []
+            for row in lots:
+                take = min(row.quantity, debt - settled)
+                if take <= 0:
+                    break
+                labels = RawMaterialLabel.objects.filter(warehouse_id=warehouse_id, part_id=part_id,
+                                                         lot_no=row.lot_no, status__in=LIVE).count()
+                changes.append((row, take, labels))
+                settled += take
+            warehouse, part = bucket.warehouse, bucket.part
+            results.append({
+                'wh': warehouse.code, 'part_no': part.part_no, 'name': part.part_name,
+                'null_before': bucket.quantity, 'null_after': bucket.quantity + settled,
+                'lots': [(row.lot_no or row.production_lot, row.quantity, row.quantity - take, labels)
+                         for row, take, labels in changes],
+            })
+            if not apply:
+                continue
+            now = timezone.now()
+            for row, take, _labels in changes:
+                MaterialStock.objects.filter(pk=row.pk).update(quantity=quantity_change(-take))
+                _create_trx(transaction_type='LOT_CORRECT', date=now, part=part, lot_no=row.lot_no,
+                            production_lot=row.production_lot, quantity=-take, warehouse_from=warehouse,
+                            result_stock=row.quantity - take,
+                            remark=f'{SETTLE_REMARK} (미지정 음수를 오래된 LOT에서 상계) [{row.lot_no} -{take:f}]'[:200])
+            MaterialStock.objects.filter(pk=bucket.pk).update(quantity=quantity_change(settled))
+            _create_trx(transaction_type='LOT_CORRECT', date=now, part=part, quantity=settled,
+                        warehouse_to=warehouse, result_stock=bucket.quantity + settled,
+                        remark=f'{SETTLE_REMARK} (미지정 {bucket.quantity:f} → {bucket.quantity + settled:f})'[:200])
+            MaterialStock.objects.filter(warehouse=warehouse, part=part, quantity=0).exclude(
+                lot_no__isnull=True, production_lot__isnull=True).delete()  # 다 쓴 LOT 행은 남기지 않는다
+    return results
+
+
+def missing_move_suspects():
+    """정산하고도 남은 음수 미지정 = 이동처리 전에 생산출고가 먼저 잡힌 양.
+    다른 창고에 남아 있는 재고를 같이 보여줘 어디서 옮겨야 하는지 알 수 있게 한다."""
+    negatives = list(MaterialStock.objects.filter(
+        lot_no__isnull=True, production_lot__isnull=True, quantity__lt=0, part_id__in=lot_managed_part_ids())
+        .exclude(warehouse__code__in=SCM_ONLY_WAREHOUSE_CODES)
+        .select_related('warehouse', 'part').order_by('warehouse__code', 'part__part_no'))
+    holders = defaultdict(list)
+    for row in (MaterialStock.objects.filter(part_id__in={s.part_id for s in negatives}, quantity__gt=0)
+                .exclude(warehouse__code__in=SCM_ONLY_WAREHOUSE_CODES)
+                .values('part_id', 'warehouse__code').annotate(total=Sum('quantity'))
+                .order_by('warehouse__code')):
+        holders[row['part_id']].append((row['warehouse__code'], row['total']))
+    return [{'wh': s.warehouse.code, 'wh_name': s.warehouse.name, 'part_no': s.part.part_no,
+             'name': s.part.part_name, 'qty': -s.quantity,
+             'sources': [(wh, qty) for wh, qty in holders[s.part_id] if wh != s.warehouse.code]}
+            for s in negatives]
+
+
 def reconcile_stock():
     """ERP 현재고 반영. 수량만 품목은 ERP 그대로(기록 없음). LOT 관리 품목은 쓰인 양을 오래된 LOT부터
     빼고, 설명 안 되는 차이만 'LOT 미확인'으로 남긴다. ERP로 보내는 중인 품목은 다음 회차로 미룬다."""
@@ -234,6 +313,12 @@ def reconcile_stock():
             except (ValueError, DatabaseError) as exc:
                 result['changed'].append(f'{key}: {exc}')
         result['missing'] = still_missing
+
+        # 이동처리 전에 생산출고가 먼저 잡혀 생긴 음수 미지정을 뒤늦게 들어온 LOT에서 상계한다 (총량 불변).
+        try:
+            result['settled'] = len(settle_negative_unassigned())
+        except DatabaseError as exc:
+            result['changed'].append(f'선출고 정산: {exc}')
 
         # 재고가 정해진 뒤 라벨을 맞춘다: 재고를 따라 옮기고, 다 쓴 포대 라벨은 소진 처리.
         try:
