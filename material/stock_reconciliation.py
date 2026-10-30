@@ -159,7 +159,8 @@ SETTLE_REMARK = 'ERP정합 선출고 정산'
 
 
 def settle_negative_unassigned(apply=True):
-    """같은 창고에 '음수 미지정'과 양수 LOT이 같이 있으면 오래된 LOT부터 상계한다.
+    """같은 창고에 '음수 미지정'과 양수 LOT이 같이 있으면 오래된 LOT부터 상계한다. 원재료(RAW)만:
+    제품·상품의 음수는 출하·생산입고 시점 차이 등 원인이 달라 LOT을 추정해 깎지 않는다.
     음수 미지정 = 이동처리 전에 ERP 생산출고가 먼저 잡힌 양이고, 실물은 뒤늦게 이동된 LOT에서 쓰였다.
     총량은 그대로라 ERP에는 보낼 것이 없다. apply=False면 바꾸지 않고 결과만 돌려준다 (미리보기).
     Returns: [{'wh', 'part_no', 'name', 'null_before', 'null_after', 'lots': [(lot, before, after, labels)]}]"""
@@ -167,7 +168,7 @@ def settle_negative_unassigned(apply=True):
     from .labels import LIVE
     from .models import RawMaterialLabel
     keys = (MaterialStock.objects.filter(lot_no__isnull=True, production_lot__isnull=True, quantity__lt=0,
-                                         part_id__in=lot_managed_part_ids())
+                                         part_id__in=lot_managed_part_ids(), part__account_type='RAW')
             .exclude(warehouse__code__in=SCM_ONLY_WAREHOUSE_CODES)
             .values_list('warehouse_id', 'part_id').distinct())
     results = []
@@ -218,7 +219,8 @@ def missing_move_suspects():
     """정산하고도 남은 음수 미지정 = 이동처리 전에 생산출고가 먼저 잡힌 양.
     다른 창고에 남아 있는 재고를 같이 보여줘 어디서 옮겨야 하는지 알 수 있게 한다."""
     negatives = list(MaterialStock.objects.filter(
-        lot_no__isnull=True, production_lot__isnull=True, quantity__lt=0, part_id__in=lot_managed_part_ids())
+        lot_no__isnull=True, production_lot__isnull=True, quantity__lt=0, part_id__in=lot_managed_part_ids(),
+        part__account_type='RAW')
         .exclude(warehouse__code__in=SCM_ONLY_WAREHOUSE_CODES)
         .select_related('warehouse', 'part').order_by('warehouse__code', 'part__part_no'))
     holders = defaultdict(list)

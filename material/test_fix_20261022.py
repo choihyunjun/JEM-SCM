@@ -329,6 +329,12 @@ class NegativeUnassignedSettlementTests(Base):
         self.assertEqual(settle_negative_unassigned(), [])
         self.assertEqual(self.rows()[None], Decimal('-270.514'))
 
+    def test_finished_goods_are_not_settled_or_flagged(self):
+        from .stock_reconciliation import settle_negative_unassigned, missing_move_suspects
+        Part.objects.filter(pk=self.part.pk).update(account_type='FINISHED')
+        self.assertEqual((settle_negative_unassigned(), missing_move_suspects()), ([], []))
+        self.assertEqual(self.rows()[None], Decimal('-270.514'))
+
     def test_stock_move_page_shows_alert(self):
         from django.test import Client
         from django.urls import reverse
