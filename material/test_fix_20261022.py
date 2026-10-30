@@ -228,3 +228,58 @@ class InspectionHoldWarehouseTests(Base):
         inspection.status = 'APPROVED'
         inspection.save()
         self.assertNotIn(self.part.pk, pending_part_ids(timezone.now()))
+
+
+class JudgedReceiptDateEditTests(Base):
+    """2026-10-30: 판정 완료 입고도 이월 때문에 입고일자는 바꿀 수 있어야 한다 (수량·LOT은 불가)."""
+    def setUp(self):
+        super().setUp()
+        from qms.models import ImportInspection
+        from orders.models import Vendor
+        self.hold = Warehouse.objects.create(code='1000', name='수입검사 대기장')
+        self.good = Warehouse.objects.create(code='2000', name='자재창고')
+        vendor = Vendor.objects.create(code='V1', name='Vendor', erp_code='V1')
+        old = timezone.make_aware(timezone.datetime(2026, 10, 30))
+        self.lot = date(2026, 10, 30)
+        self.trx = MaterialTransaction.objects.create(
+            transaction_no='IN-MAN-J', transaction_type='IN_MANUAL', date=old, part=self.part, quantity=1000,
+            lot_no=self.lot, warehouse_to=self.hold, vendor=vendor, remark='[수입검사 대상]')
+        self.move = MaterialTransaction.objects.create(
+            transaction_no='TRX-OK-J', transaction_type='TRANSFER', date=old, part=self.part, quantity=1000,
+            lot_no=self.lot, warehouse_from=self.hold, warehouse_to=self.good, vendor=vendor,
+            remark='[수입검사] 양품 입고', source_incoming=self.trx, erp_incoming_no='RV-OLD')
+        ImportInspection.objects.create(inbound_transaction=self.trx, lot_no=self.lot, status='APPROVED',
+                                        qty_good=1000, target_warehouse_code='2000')
+        MaterialStock.objects.create(warehouse=self.good, part=self.part, lot_no=self.lot, quantity=1000)
+
+    def edit(self, **changes):
+        from .views import edit_manual_incoming
+        body = {'quantity': 1000, 'date': '2026-10-30', 'lot_no': '2026-10-30', 'remark': '[수입검사 대상]'}
+        body.update(changes)
+        request = RequestFactory().post('/', json.dumps(body), content_type='application/json')
+        request.user = self.user
+        return json.loads(edit_manual_incoming(request, self.trx.pk).content)
+
+    def test_date_moves_receipt_and_inspection_transfer_and_reregisters_erp(self):
+        with patch('material.erp_api.delete_erp_incoming', return_value=(True, None)) as delete, \
+                patch('material.erp_api.register_erp_incoming', return_value=(True, 'RV-NEW', None)) as register:
+            result = self.edit(date='2026-11-01')
+        self.assertTrue(result['success'], result)
+        delete.assert_called_once_with('RV-OLD')
+        self.assertEqual(register.call_args.args[1:], (1000, '2000'))
+        for trx in (self.trx, self.move):
+            trx.refresh_from_db()
+            self.assertEqual(timezone.localtime(trx.date).date(), date(2026, 11, 1))
+        self.assertEqual(MaterialStock.objects.get(warehouse=self.good).quantity, 1000)  # 재고는 그대로
+
+    def test_quantity_or_lot_change_is_still_blocked(self):
+        with patch('material.erp_api.delete_erp_incoming') as delete:
+            self.assertFalse(self.edit(quantity=900)['success'])
+            self.assertFalse(self.edit(lot_no='2026-11-01')['success'])
+            delete.assert_not_called()
+
+    def test_failed_erp_delete_rolls_back_dates(self):
+        with patch('material.erp_api.delete_erp_incoming', return_value=(False, 'closed')):
+            self.assertFalse(self.edit(date='2026-11-01')['success'])
+        self.move.refresh_from_db()
+        self.assertEqual(timezone.localtime(self.move.date).date(), date(2026, 10, 30))

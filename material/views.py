@@ -1174,8 +1174,8 @@ def edit_manual_incoming(request, trx_id):
         except Exception:
             inspection = None
 
-    if inspection and inspection.status in ('APPROVED', 'REJECTED'):
-        return JsonResponse({'success': False, 'error': '검사 판정이 완료된 입고 건은 수정할 수 없습니다.'})
+    # 판정 완료 건은 날짜·비고만 바꿀 수 있다 (이월 처리). 수량·LOT은 검사 결과와 묶여 있어 막는다.
+    judged = bool(inspection and inspection.status in ('APPROVED', 'REJECTED'))
 
     # (4) 마감 기간 (기존 일자)
     is_closed, warning_msg, _ = check_closing_date(
@@ -1223,12 +1223,17 @@ def edit_manual_incoming(request, trx_id):
     warehouse = trx.warehouse_to
     qty_changed = (new_qty != old_qty)
     lot_changed = (new_lot_date != old_lot)
+    if judged and (qty_changed or lot_changed):
+        return JsonResponse({'success': False,
+                             'error': '검사 판정이 완료된 입고 건은 수량·LOT을 바꿀 수 없습니다. (입고일자·비고만 수정 가능)'})
 
     # === 재고 조정 + 저장 (atomic) ===
     try:
         with transaction.atomic():
             from .erp_outbox import guard_receipt_change
             had_pending_registration = guard_receipt_change(trx)
+            if judged and timezone.localtime(trx.date).date() != new_date.date():
+                _move_judged_receipt_date(trx, inspection, new_date)
             if qty_changed or lot_changed:
                 # (A) 기존 재고 차감
                 old_stock = MaterialStock.objects.filter(
@@ -1291,6 +1296,30 @@ def edit_manual_incoming(request, trx_id):
     except Exception as e:
         logger.error(f'입고 수정 오류: {e}', exc_info=True)
         return JsonResponse({'success': False, 'error': f'수정 처리 중 오류: {str(e)}'})
+
+
+def _move_judged_receipt_date(trx, inspection, new_date):
+    """판정 완료 입고의 일자 변경: 검사 이동(양품·불량) 기록도 같은 날짜로 옮기고,
+    ERP 입고 전표는 삭제 후 새 날짜로 다시 등록한다. 실패하면 호출한 쪽 트랜잭션째 롤백."""
+    from .cancellation import inspection_transfers_for_cancel
+    from .erp_outbox import guard_receipt_change
+    from material.erp_api import delete_erp_incoming, register_erp_incoming
+    for move in inspection_transfers_for_cancel(trx, inspection).select_related('warehouse_to'):
+        had_pending = guard_receipt_change(move)
+        move.date = new_date
+        move.save(update_fields=['date'])
+        if not (move.erp_incoming_no or had_pending):
+            continue  # 부적합(8200) 등 ERP에 없는 이동
+        if move.erp_incoming_no:
+            del_ok, del_err = delete_erp_incoming(move.erp_incoming_no)
+            if not del_ok:
+                raise ValueError(f'ERP 입고 삭제 실패: {del_err}')
+            move.erp_incoming_no = None
+            move.erp_sync_status = 'PENDING'
+            move.save(update_fields=['erp_incoming_no', 'erp_sync_status'])
+        reg_ok, _, reg_err = register_erp_incoming(move, move.quantity, move.warehouse_to.code)
+        if not reg_ok and not move.erp_operations.filter(kind='REGISTER', status='PENDING').exists():
+            raise ValueError(f'ERP 재등록 요청 저장 실패: {reg_err}')
 
 
 @login_required

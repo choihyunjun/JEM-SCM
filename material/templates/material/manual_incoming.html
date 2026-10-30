@@ -1001,6 +1001,15 @@
         document.getElementById('editLot').value = (lot !== '-') ? lot : '';
         document.getElementById('editRemark').value = remark;
 
+        // 검사 판정 완료 건: 수량·LOT은 잠그고 입고일자·비고만 수정 (이월 처리)
+        var judged = (inspStatus === 'APPROVED' || inspStatus === 'REJECTED');
+        ['editQty', 'editLot'].forEach(function(fid) {
+            var el = document.getElementById(fid);
+            el.readOnly = judged;
+            el.style.background = judged ? '#f1f5f9' : '';
+            el.title = judged ? '검사 판정이 끝난 입고 건은 입고일자·비고만 수정할 수 있습니다.' : '';
+        });
+
         // 삭제 버튼
         var cancelBtn = document.getElementById('detailCancelBtn');
         if (canCancel) {
