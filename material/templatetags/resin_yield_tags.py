@@ -1,4 +1,6 @@
 """원단위 중량 관리 화면의 숫자 표시: 큰 값은 정수, 작은 값만 소수, 0은 '–'."""
+from decimal import Decimal
+
 from django import template
 from django.utils.html import conditional_escape
 from django.utils.safestring import mark_safe
@@ -6,8 +8,16 @@ from django.utils.safestring import mark_safe
 register = template.Library()
 
 
+def _number(value):
+    """숫자가 아니면 None. 실적이 없는 달은 합계 칸이 비어 ''가 들어온다."""
+    if isinstance(value, bool) or not isinstance(value, (int, float, Decimal)):
+        return None
+    return value
+
+
 @register.filter
 def kg(value):
+    value = _number(value)
     if value is None or abs(value) < 0.005:
         return '–'
     if abs(value) >= 100:
@@ -17,6 +27,7 @@ def kg(value):
 
 @register.filter
 def grams(value):
+    value = _number(value)
     if value is None:
         return '–'
     return f'{value:,.0f}' if abs(value) >= 100 else f'{value:.2f}'
@@ -24,11 +35,13 @@ def grams(value):
 
 @register.filter
 def ea(value):
+    value = _number(value)
     return '–' if not value else f'{value:,.0f}'
 
 
 @register.filter
 def pct(value, digits=1):
+    value = _number(value)
     return '–' if value is None else f'{value:.{int(digits)}f}'
 
 

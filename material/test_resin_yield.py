@@ -122,6 +122,14 @@ class ReportTests(TestCase):
         self.assertIn('[ 수지별 소계 ]', [ws.cell(r, 1).value for r in range(1, ws.max_row + 1)])
         self.assertEqual((wb['재질별 집계']['B5'].value, wb['재질별 집계']['E4'].value), ('M/B', '①양품중량'))
 
+    def test_month_without_production_still_renders(self):
+        # 2026-11-02 운영 500: 실적 0건인 달은 합계 칸이 비어 숫자 필터가 '' 를 받았다
+        request = RequestFactory().get('/', {'month': '2026-11'})
+        request.user = User.objects.create(username='ry-empty', is_superuser=True)
+        with patch('material.resin_yield.call_erp_api', return_value=erp_rows()):
+            self.assertEqual(resin_yield(request).status_code, 200)
+            self.assertEqual(resin_yield_excel(request).status_code, 200)
+
     def test_erp_failure_is_reported(self):
         with patch('material.resin_yield.call_erp_api', return_value=(False, None, 'timeout')):
             self.assertEqual(build_report(2026, 9), {'error': 'timeout'})
