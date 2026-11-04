@@ -1042,6 +1042,7 @@ async function syncMissingBom() {
             if (data.success) {
                 synced++;
                 logDiv.innerHTML += '<div class="text-success"><i class="bi bi-check-circle me-1"></i>' + pno + ': BOM ' + data.bom_count + '개 등록</div>';
+                if (data.warning) logDiv.innerHTML += '<div class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>' + pno + ': ' + data.warning + '</div>';
             } else {
                 failed++;
                 logDiv.innerHTML += '<div class="text-danger"><i class="bi bi-x-circle me-1"></i>' + pno + ': ' + data.error + '</div>';

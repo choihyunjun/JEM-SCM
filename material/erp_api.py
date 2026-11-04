@@ -300,7 +300,9 @@ def sync_single_bom(part_no):
     단일 모품 BOM 동기화
     - ERP에서 해당 모품의 BOM 조회 후 DB 갱신
     - 기존 BOMItem 삭제 후 새로 생성
+    - 자품번 중 SCM에 없는 반제품 BOM도 하위까지 함께 등록
     Returns: (success: bool, item_count: int, error: str or None)
+      성공이어도 하위 반제품 조회가 실패하면 error에 경고 문구가 담긴다.
     """
     from material.models import Product, BOMItem
     from decimal import Decimal
@@ -354,8 +356,42 @@ def sync_single_bom(part_no):
             is_bom_active=use_yn,
         )
 
-    logger.info(f'단일 BOM 동기화 완료: {part_no} ({len(items)}개 자품)')
+    child_part_nos = [item.get('itemchildCd') for item in items if item.get('itemchildCd')]
+    sub_synced, sub_errors = sync_sub_boms(child_part_nos, {part_no})
+    logger.info(f'단일 BOM 동기화 완료: {part_no} ({len(items)}개 자품, 하위 반제품 {len(sub_synced)}건)')
+    if sub_errors:
+        return True, len(items), '하위 반제품 BOM 조회 실패: ' + ', '.join(sub_errors[:5])
     return True, len(items), None
+
+
+def sync_sub_boms(child_part_nos, synced_set=None):
+    """
+    자품번 중 SCM에 모품 등록이 없는 반제품을 ERP에서 찾아 하위까지 등록
+    - ERP에 BOM이 없는 자품(원재료·구매품)은 건너뜀
+    - 이미 등록된 모품은 건드리지 않음
+    Returns: (synced_part_nos, error_list)
+    """
+    from material.models import Product
+
+    synced_set = set() if synced_set is None else synced_set
+    pending, checked = list(child_part_nos), set()
+    synced, errors = [], []
+    while pending:
+        part_no = pending.pop(0)
+        if part_no in checked or part_no in synced_set:
+            continue
+        checked.add(part_no)
+        if Product.objects.filter(part_no=part_no).exists():
+            continue
+        try:
+            result, grandchildren = _sync_single_product(part_no, synced_set)
+        except Exception as e:
+            errors.append(f'{part_no}({e})')
+            continue
+        if result == 'synced':
+            synced.append(part_no)
+            pending.extend(grandchildren)
+    return synced, errors
 
 
 def _sync_single_product(part_no, synced_set):
@@ -372,7 +408,10 @@ def _sync_single_product(part_no, synced_set):
 
     ok, items, err = fetch_erp_bom(part_no)
 
-    if not ok or not items:
+    if not ok:
+        # 조회 실패를 'BOM 없음'으로 넘기면 반제품이 빠진 채 남는다
+        raise RuntimeError(err or 'ERP 조회 실패')
+    if not items:
         return 'skipped', []
 
     first = items[0]

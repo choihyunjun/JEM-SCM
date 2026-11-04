@@ -4521,6 +4521,8 @@ def bom_sync_single(request, part_no):
         ok, count, err = sync_single_bom(part_no)
         if ok:
             messages.success(request, f'[{part_no}] ERP 동기화 완료: 자품 {count}개')
+            if err:
+                messages.warning(request, f'[{part_no}] {err}')
         else:
             messages.error(request, f'[{part_no}] 동기화 실패: {err}')
     except Exception as e:
@@ -5358,7 +5360,8 @@ def bom_sync_missing(request):
             'success': True,
             'part_no': part_no,
             'bom_count': count,
-            'message': f'{part_no}: BOM {count}개 동기화 완료'
+            'message': f'{part_no}: BOM {count}개 동기화 완료',
+            'warning': err or '',
         })
     else:
         return JsonResponse({
