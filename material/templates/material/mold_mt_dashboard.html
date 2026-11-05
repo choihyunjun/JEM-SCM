@@ -289,7 +289,7 @@
                         <th class="sortable" data-col="2">기종 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th class="sortable" data-col="3">부품번호 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th>금형명</th>
-                        <th>최종 MT일</th>
+                        <th class="sortable" data-col="5">최종 MT일 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th class="sortable" data-col="6">구분 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
                         <th>재료</th>
                         <th class="sortable" data-col="8">누적숏트 <i class="bi bi-chevron-expand" style="font-size:0.6rem;"></i></th>
@@ -310,7 +310,7 @@
                         <td class="text-start">{{ m.item_group }}</td>
                         <td class="fw-bold text-primary">{{ m.part_no }}</td>
                         <td class="text-start" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;">{{ m.mold_name }}</td>
-                        <td>{{ m.c_last_mt_date|date:"Y-m-d"|default:"-" }}</td>
+                        <td data-value="{{ m.c_last_mt_date|date:"Ymd"|default:"0" }}">{{ m.c_last_mt_date|date:"Y-m-d"|default:"-" }}</td>
                         <td><span class="badge bg-secondary" style="font-size:0.65rem;">{{ m.grade|default:'-' }}</span></td>
                         <td>{{ m.material_type|default:'-' }}</td>
                         <td class="fw-bold erp-number" data-value="{{ m.c_total_shots }}">{{ m.c_total_shots|intcomma }}</td>
