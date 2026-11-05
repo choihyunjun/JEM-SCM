@@ -719,6 +719,7 @@ def manual_incoming(request):
         history_qs = history_qs.filter(
             Q(part__part_no__icontains=history_q) |
             Q(part__part_name__icontains=history_q) |
+            Q(vendor__name__icontains=history_q) |
             Q(transaction_no__icontains=history_q)
         )
 

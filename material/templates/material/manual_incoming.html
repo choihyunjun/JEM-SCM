@@ -244,7 +244,7 @@
                     </select>
                 </div>
                 <div class="col-md-2">
-                    <label class="dtl-form-label">검색 (품번/품명/수불번호)</label>
+                    <label class="dtl-form-label">검색 (품번/품명/거래처/수불번호)</label>
                     <input type="text" name="hq" class="form-control form-control-sm dtl-form-control" placeholder="검색어 입력" value="{{ history_q|default:'' }}">
                 </div>
                 <div class="col-md-1">
@@ -269,6 +269,7 @@
                             <th style="width:13%;">수불번호</th>
                             <th style="width:9%;">품번</th>
                             <th class="text-start">품명</th>
+                            <th style="width:11%;" class="text-start">거래처</th>
                             <th style="width:6%;" class="erp-number">수량</th>
                             <th style="width:8%;">LOT</th>
                             <th style="width:9%;">창고</th>
@@ -291,6 +292,7 @@
                             <td class="small fw-bold text-primary text-nowrap">{{ item.transaction_no }}</td>
                             <td class="small">{{ item.part.part_no }}</td>
                             <td class="text-start small text-truncate" style="max-width:200px;">{{ item.part.part_name }}</td>
+                            <td class="text-start small text-truncate" style="max-width:140px;" title="{{ item.vendor.name|default:'' }}">{{ item.vendor.name|default:"-" }}</td>
                             <td class="fw-bold text-end pe-3">{{ item.display_qty }}</td>
                             <td class="small">{{ item.lot_no|date:"Y-m-d"|default:"-" }}</td>
                             <td class="small">{{ item.display_warehouse|default:"-" }}</td>
@@ -314,7 +316,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="11" class="text-muted py-4">입고처리 내역이 없습니다.</td>
+                            <td colspan="12" class="text-muted py-4">입고처리 내역이 없습니다.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
