@@ -284,6 +284,39 @@ class JudgedReceiptDateEditTests(Base):
         self.move.refresh_from_db()
         self.assertEqual(timezone.localtime(self.move.date).date(), date(2026, 10, 30))
 
+    def test_vendor_change_updates_receipt_and_transfer_and_reregisters_erp(self):
+        # 2026-11-05: 검사 합격 후 공급처를 잘못 넣은 걸 알았을 때 입고 취소 없이 정정
+        from orders.models import Vendor
+        other = Vendor.objects.create(code='V2', name='Other', erp_code='V2')
+        seen = []
+        with patch('material.erp_api.delete_erp_incoming', return_value=(True, None)) as delete, \
+                patch('material.erp_api.register_erp_incoming',
+                      side_effect=lambda move, *a: seen.append(move.vendor_id) or (True, 'RV-NEW', None)):
+            result = self.edit(vendor_id=other.pk)
+        self.assertTrue(result['success'], result)
+        delete.assert_called_once_with('RV-OLD')
+        self.assertEqual(seen, [other.pk])  # ERP 전표는 새 거래처로
+        for trx in (self.trx, self.move):
+            trx.refresh_from_db()
+            self.assertEqual(trx.vendor, other)
+
+    def test_vendor_change_is_blocked_for_po_receipts_and_vendors_without_erp_code(self):
+        from orders.models import Vendor
+        no_code = Vendor.objects.create(code='V3', name='NoCode')
+        other = Vendor.objects.create(code='V2', name='Other', erp_code='V2')
+        with patch('material.erp_api.delete_erp_incoming') as delete:
+            self.assertIn('ERP 업체코드', self.edit(vendor_id=no_code.pk)['error'])
+            MaterialTransaction.objects.filter(pk=self.trx.pk).update(remark='[발주입고] ERP:PO2611000001-1')
+            self.assertIn('발주', self.edit(vendor_id=other.pk, remark='[발주입고] ERP:PO2611000001-1')['error'])
+            delete.assert_not_called()
+        self.move.refresh_from_db()
+        self.assertNotEqual(self.move.vendor, other)
+
+    def test_unchanged_vendor_does_not_touch_erp(self):
+        with patch('material.erp_api.delete_erp_incoming') as delete:
+            self.assertTrue(self.edit(vendor_id=self.trx.vendor_id, remark='메모')['success'])
+            delete.assert_not_called()
+
 
 class NegativeUnassignedSettlementTests(Base):
     """2026-10-30: 이동 전 생산출고로 생긴 음수 미지정을 뒤늦게 들어온 LOT에서 상계 (ZR704 사례)."""

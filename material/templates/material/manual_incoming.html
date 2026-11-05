@@ -280,7 +280,7 @@
                     <tbody>
                         {% for item in history_page %}
                         <tr style="cursor:pointer;"
-                            onclick="openHistoryDetail({{ item.id }}, '{{ item.transaction_no }}', '{{ item.date|date:"Y-m-d H:i" }}', '{{ item.part.part_no }}', '{{ item.part.part_name|escapejs }}', {{ item.display_qty }}, '{{ item.lot_no|date:"Y-m-d"|default:"-" }}', '{{ item.display_warehouse|default:"-"|escapejs }}', '{{ item.vendor.name|default:"-"|escapejs }}', '{{ item.actor.username|default:"-" }}', '{{ item.remark|default:""|escapejs }}', {{ item.label_count }}, '{{ item.inspection_status|default:"" }}', {{ item.can_cancel|yesno:"true,false" }}, {{ item.can_edit|yesno:"true,false" }})"
+                            onclick="openHistoryDetail({{ item.id }}, '{{ item.transaction_no }}', '{{ item.date|date:"Y-m-d H:i" }}', '{{ item.part.part_no }}', '{{ item.part.part_name|escapejs }}', {{ item.display_qty }}, '{{ item.lot_no|date:"Y-m-d"|default:"-" }}', '{{ item.display_warehouse|default:"-"|escapejs }}', '{{ item.vendor.name|default:"-"|escapejs }}', '{{ item.actor.username|default:"-" }}', '{{ item.remark|default:""|escapejs }}', {{ item.label_count }}, '{{ item.inspection_status|default:"" }}', {{ item.can_cancel|yesno:"true,false" }}, {{ item.can_edit|yesno:"true,false" }}, '{{ item.vendor_id|default:"" }}')"
                             class="">
                             <td onclick="event.stopPropagation();">
                                 {% if item.transaction_type != 'IN_ERP' %}
@@ -404,7 +404,17 @@
                             </td>
                         </tr>
                         <tr><th class="text-muted">입고 창고</th><td id="detailWarehouse"></td></tr>
-                        <tr><th class="text-muted">공급처</th><td id="detailVendor"></td></tr>
+                        <tr>
+                            <th class="text-muted">공급처</th>
+                            <td>
+                                <span id="detailVendor" class="view-field"></span>
+                                <div class="input-group edit-field" style="display:none;">
+                                    <input type="text" id="editVendorName" class="form-control form-control-sm bg-light" readonly onclick="openVendorModal('edit')" style="cursor: pointer;">
+                                    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="openVendorModal('edit')">변경</button>
+                                    <input type="hidden" id="editVendorId">
+                                </div>
+                            </td>
+                        </tr>
                         <tr><th class="text-muted">처리자</th><td id="detailActor"></td></tr>
                         <tr>
                             <th class="text-muted">비고</th>
@@ -523,9 +533,17 @@
             vendorModal = new bootstrap.Modal(vendorModalEl);
         }
 
-        window.openVendorModal = function() {
+        // target 'edit': 입고 정보 수정 창의 공급처 변경 (수정 창 위에 겹쳐 띄운다)
+        var vendorTarget = 'new';
+        window.openVendorModal = function(target) {
+            vendorTarget = target || 'new';
+            vendorModalEl.style.zIndex = vendorTarget === 'edit' ? 1065 : '';
             if (vendorModal) {
                 vendorModal.show();
+                if (vendorTarget === 'edit') {
+                    var backdrops = document.querySelectorAll('.modal-backdrop');
+                    if (backdrops.length) backdrops[backdrops.length - 1].style.zIndex = 1060;
+                }
                 setTimeout(() => document.getElementById('vendorSearchInput').focus(), 500);
             } else {
                 console.error("모달 요소를 찾을 수 없습니다.");
@@ -533,8 +551,9 @@
         };
 
         window.selectVendor = function(id, name, code) {
-            document.getElementById('hiddenVendorId').value = id;
-            document.getElementById('displayVendor').value = `[${code}] ${name}`;
+            var prefix = vendorTarget === 'edit' ? 'edit' : null;
+            document.getElementById(prefix ? 'editVendorId' : 'hiddenVendorId').value = id;
+            document.getElementById(prefix ? 'editVendorName' : 'displayVendor').value = `[${code}] ${name}`;
             if (vendorModal) vendorModal.hide();
         };
 
@@ -976,7 +995,7 @@
         if (cancelEl) cancelConfirmModal = new bootstrap.Modal(cancelEl);
     });
 
-    function openHistoryDetail(id, trxNo, date, partNo, partName, qty, lot, warehouse, vendor, actor, remark, labelCount, inspStatus, canCancel, canEdit) {
+    function openHistoryDetail(id, trxNo, date, partNo, partName, qty, lot, warehouse, vendor, actor, remark, labelCount, inspStatus, canCancel, canEdit, vendorId) {
         document.getElementById('editTrxId').value = id;
         document.getElementById('detailTrxNo').textContent = trxNo;
         document.getElementById('detailDate').textContent = date;
@@ -1000,14 +1019,16 @@
         document.getElementById('editQty').value = qty;
         document.getElementById('editLot').value = (lot !== '-') ? lot : '';
         document.getElementById('editRemark').value = remark;
+        document.getElementById('editVendorId').value = vendorId || '';
+        document.getElementById('editVendorName').value = vendor;
 
-        // 검사 판정 완료 건: 수량·LOT은 잠그고 입고일자·비고만 수정 (이월 처리)
+        // 검사 판정 완료 건: 수량·LOT은 잠그고 입고일자·공급처·비고만 수정 (이월·공급처 정정)
         var judged = (inspStatus === 'APPROVED' || inspStatus === 'REJECTED');
         ['editQty', 'editLot'].forEach(function(fid) {
             var el = document.getElementById(fid);
             el.readOnly = judged;
             el.style.background = judged ? '#f1f5f9' : '';
-            el.title = judged ? '검사 판정이 끝난 입고 건은 입고일자·비고만 수정할 수 있습니다.' : '';
+            el.title = judged ? '검사 판정이 끝난 입고 건은 입고일자·공급처·비고만 수정할 수 있습니다.' : '';
         });
 
         // 삭제 버튼
@@ -1075,6 +1096,7 @@
                     date: newDate,
                     lot_no: newLot || '',
                     remark: newRemark || '',
+                    vendor_id: document.getElementById('editVendorId').value,
                 })
             });
             var data = await res.json();

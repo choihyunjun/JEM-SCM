@@ -1137,7 +1137,7 @@ def bulk_cancel_manual_incoming(request):
 
 @wms_permission_required('can_wms_incoming_process')
 def edit_manual_incoming(request, trx_id):
-    """[WMS] 수기 입고 수정 - 수량/일자/LOT/비고 변경"""
+    """[WMS] 수기 입고 수정 - 수량/일자/LOT/공급처/비고 변경"""
     from django.http import JsonResponse
     import json
     from datetime import datetime
@@ -1217,23 +1217,42 @@ def edit_manual_incoming(request, trx_id):
 
     new_remark = data.get('remark', '')
 
+    # 공급처 (ERP 입고 전표의 거래처·단가가 함께 바뀐다)
+    new_vendor = trx.vendor
+    vendor_id = data.get('vendor_id')
+    if vendor_id not in (None, '') and str(vendor_id) != str(trx.vendor_id or ''):
+        from orders.models import Vendor
+        new_vendor = Vendor.objects.filter(pk=vendor_id).first()
+        if not new_vendor:
+            return JsonResponse({'success': False, 'error': '선택한 공급처를 찾을 수 없습니다.'})
+        if not new_vendor.erp_code:
+            return JsonResponse({'success': False, 'error': f'[{new_vendor.name}] ERP 업체코드가 없어 공급처로 지정할 수 없습니다.'})
+    vendor_changed = new_vendor != trx.vendor
+    if vendor_changed:
+        from .incoming import delivery_item_for_incoming
+        if trx.transaction_type != 'IN_MANUAL':
+            return JsonResponse({'success': False, 'error': '협력사 납품 입고는 공급처를 바꿀 수 없습니다.'})
+        if delivery_item_for_incoming(trx) or 'ERP:' in (trx.remark or ''):
+            return JsonResponse({'success': False, 'error': 'ERP 발주에 연결된 입고는 공급처를 바꿀 수 없습니다. (입고 취소 후 다시 입고해 주세요)'})
+
     # === 변경 감지 ===
     old_qty = trx.quantity
     old_lot = trx.lot_no
     warehouse = trx.warehouse_to
     qty_changed = (new_qty != old_qty)
     lot_changed = (new_lot_date != old_lot)
+    date_changed = timezone.localtime(trx.date).date() != new_date.date()
     if judged and (qty_changed or lot_changed):
         return JsonResponse({'success': False,
-                             'error': '검사 판정이 완료된 입고 건은 수량·LOT을 바꿀 수 없습니다. (입고일자·비고만 수정 가능)'})
+                             'error': '검사 판정이 완료된 입고 건은 수량·LOT을 바꿀 수 없습니다. (입고일자·공급처·비고만 수정 가능)'})
 
     # === 재고 조정 + 저장 (atomic) ===
     try:
         with transaction.atomic():
             from .erp_outbox import guard_receipt_change
             had_pending_registration = guard_receipt_change(trx)
-            if judged and timezone.localtime(trx.date).date() != new_date.date():
-                _move_judged_receipt_date(trx, inspection, new_date)
+            if judged and (date_changed or vendor_changed):
+                _rewrite_judged_receipt(trx, inspection, new_date, new_vendor)
             if qty_changed or lot_changed:
                 # (A) 기존 재고 차감
                 old_stock = MaterialStock.objects.filter(
@@ -1265,7 +1284,8 @@ def edit_manual_incoming(request, trx_id):
             trx.date = new_date
             trx.lot_no = new_lot_date
             trx.remark = new_remark
-            trx.save(update_fields=['quantity', 'date', 'lot_no', 'remark', 'result_stock'])
+            trx.vendor = new_vendor
+            trx.save(update_fields=['quantity', 'date', 'lot_no', 'remark', 'vendor', 'result_stock'])
 
             # (D) 검사 LOT 업데이트 (PENDING)
             if inspection and lot_changed:
@@ -1274,7 +1294,7 @@ def edit_manual_incoming(request, trx_id):
 
             # (E) ERP 재등록 (무검사 + ERP 연동 건)
             erp_no = trx.erp_incoming_no
-            if (erp_no and (qty_changed or lot_changed)) or had_pending_registration:
+            if (erp_no and (qty_changed or lot_changed or vendor_changed)) or had_pending_registration:
                 from material.erp_api import delete_erp_incoming, register_erp_incoming
                 if erp_no:
                     del_ok, del_err = delete_erp_incoming(erp_no)
@@ -1298,16 +1318,21 @@ def edit_manual_incoming(request, trx_id):
         return JsonResponse({'success': False, 'error': f'수정 처리 중 오류: {str(e)}'})
 
 
-def _move_judged_receipt_date(trx, inspection, new_date):
-    """판정 완료 입고의 일자 변경: 검사 이동(양품·불량) 기록도 같은 날짜로 옮기고,
-    ERP 입고 전표는 삭제 후 새 날짜로 다시 등록한다. 실패하면 호출한 쪽 트랜잭션째 롤백."""
+def _rewrite_judged_receipt(trx, inspection, new_date, new_vendor):
+    """판정 완료 입고의 일자·공급처 변경: 검사 이동(양품·불량) 기록도 같이 바꾸고,
+    ERP 입고 전표는 삭제 후 새 일자·거래처로 다시 등록한다. 실패하면 호출한 쪽 트랜잭션째 롤백."""
     from .cancellation import inspection_transfers_for_cancel
     from .erp_outbox import guard_receipt_change
+    from .models import RawMaterialLabel
     from material.erp_api import delete_erp_incoming, register_erp_incoming
     for move in inspection_transfers_for_cancel(trx, inspection).select_related('warehouse_to'):
+        if new_vendor != move.vendor and RawMaterialLabel.objects.filter(
+                incoming_transaction=move).exclude(status='CANCELLED').exists():
+            raise ValueError('라벨이 발행된 입고 건은 공급처를 바꿀 수 없습니다.')
         had_pending = guard_receipt_change(move)
         move.date = new_date
-        move.save(update_fields=['date'])
+        move.vendor = new_vendor
+        move.save(update_fields=['date', 'vendor'])
         if not (move.erp_incoming_no or had_pending):
             continue  # 부적합(8200) 등 ERP에 없는 이동
         if move.erp_incoming_no:
