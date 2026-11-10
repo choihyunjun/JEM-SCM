@@ -4751,6 +4751,7 @@ def bom_calculate(request):
                         'part_no': part_no,
                         'part_name': product.part_name,
                         'production_qty': production_qty,
+                        'items': result,
                         'structured_items': structured,
                     }
                 else:
@@ -4883,9 +4884,7 @@ def bom_calc_template(request):
 
 @wms_permission_required('can_wms_bom_calc')
 def bom_calc_export(request):
-    """
-    [WMS] 단일 제품 소요량 계산 결과 엑셀 다운로드
-    """
+    """Export a single calculation using the batch structured workbook format."""
     part_no = request.GET.get('part_no', '').strip()
     qty = int(request.GET.get('qty', 0) or 0)
 
@@ -4893,102 +4892,27 @@ def bom_calc_export(request):
         messages.error(request, "품번과 수량이 필요합니다.")
         return redirect('material:bom_calculate')
 
-    # 세션에서 structured_items 가져오기
     sk = request.GET.get('session_key', '')
-    session_data = request.session.get(f'single_calc_{sk}') if sk else None
-
-    if session_data and session_data.get('structured_items'):
-        structured_items = session_data['structured_items']
+    saved = request.session.get(f'single_calc_{sk}') if sk else None
+    if (saved and saved.get('part_no') == part_no
+            and saved.get('production_qty') == qty and saved.get('structured_items')):
+        batch = {
+            'part_no': part_no, 'part_name': saved['part_name'], 'qty': qty,
+            'need_date': '', 'items': saved.get('items', []),
+            'structured_items': saved['structured_items'],
+        }
     else:
-        # 세션 없으면 다시 계산
-        _, _, _, structured_items = _calculate_bom_requirements(part_no, qty)
+        product, part_name, items, structured = _calculate_bom_requirements(part_no, qty)
+        if not product or not items:
+            messages.error(request, "BOM 데이터가 없습니다.")
+            return redirect('material:bom_calculate')
 
-    product, part_name, items, _ = _calculate_bom_requirements(part_no, qty)
-
-    if not product or not items:
-        messages.error(request, "BOM 데이터가 없습니다.")
-        return redirect('material:bom_calculate')
-
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "소요량계산결과"
-
-    # 제목
-    ws.merge_cells('A1:K1')
-    ws['A1'] = f"소요량 계산 결과 - {part_no} ({part_name}) / 생산수량: {qty}개"
-    ws['A1'].font = openpyxl.styles.Font(bold=True, size=14)
-
-    # 헤더 (ERP 스타일)
-    headers = ['No', 'LEVEL', '순번', '자품번', '자품명', '단위', '정미수량', '필요수량', '현재고', '부족수량', '주거래처']
-    header_fill = openpyxl.styles.PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
-    header_font = openpyxl.styles.Font(bold=True, color="FFFFFF")
-    for col, header in enumerate(headers, 1):
-        cell = ws.cell(row=3, column=col, value=header)
-        cell.font = header_font
-        cell.fill = header_fill
-
-    # 반제품 헤더 스타일
-    semi_fill = openpyxl.styles.PatternFill(start_color="D9E2F3", end_color="D9E2F3", fill_type="solid")
-    semi_font = openpyxl.styles.Font(bold=True)
-    shortage_fill = openpyxl.styles.PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
-
-    # 데이터 (structured_items 기반)
-    row_idx = 4
-    seq_counter = {}  # level별 순번
-    no = 1
-    for sitem in structured_items:
-        level = sitem.get('level', 1)
-
-        if sitem.get('is_semi'):
-            # 반제품 헤더 행
-            ws.cell(row=row_idx, column=1, value=no)
-            ws.cell(row=row_idx, column=2, value=level)
-            ws.cell(row=row_idx, column=3, value='')
-            ws.cell(row=row_idx, column=4, value=sitem['child_part_no'])
-            ws.cell(row=row_idx, column=5, value=sitem['child_part_name'])
-            ws.cell(row=row_idx, column=6, value=sitem['child_unit'])
-            ws.cell(row=row_idx, column=7, value=sitem['unit_qty'])
-            ws.cell(row=row_idx, column=8, value=sitem['required_qty'])
-            ws.cell(row=row_idx, column=9, value='')
-            ws.cell(row=row_idx, column=10, value='')
-            ws.cell(row=row_idx, column=11, value=sitem.get('vendor_name') or '')
-            # 반제품 스타일
-            for col in range(1, 12):
-                ws.cell(row=row_idx, column=col).fill = semi_fill
-                ws.cell(row=row_idx, column=col).font = semi_font
-            seq_counter[level + 1] = 0
-        else:
-            # 원자재 행
-            seq_counter.setdefault(level, 0)
-            seq_counter[level] += 1
-            ws.cell(row=row_idx, column=1, value=no)
-            ws.cell(row=row_idx, column=2, value=level)
-            ws.cell(row=row_idx, column=3, value=seq_counter[level])
-            ws.cell(row=row_idx, column=4, value=sitem['child_part_no'])
-            ws.cell(row=row_idx, column=5, value=sitem['child_part_name'])
-            ws.cell(row=row_idx, column=6, value=sitem['child_unit'])
-            ws.cell(row=row_idx, column=7, value=sitem['unit_qty'])
-            ws.cell(row=row_idx, column=8, value=sitem['required_qty'])
-            ws.cell(row=row_idx, column=9, value=sitem.get('stock_qty', 0))
-            ws.cell(row=row_idx, column=10, value=sitem.get('shortage', 0))
-            ws.cell(row=row_idx, column=11, value=sitem.get('vendor_name') or '-')
-            # 부족분 강조
-            if sitem.get('shortage', 0) > 0:
-                for col in range(1, 12):
-                    ws.cell(row=row_idx, column=col).fill = shortage_fill
-
-        no += 1
-        row_idx += 1
-
-    # 컬럼 너비 조정
-    widths = [6, 8, 6, 18, 25, 8, 12, 12, 12, 12, 15]
-    for col, width in enumerate(widths, 1):
-        ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = width
-
-    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    response['Content-Disposition'] = f'attachment; filename="bom_calc_{part_no}.xlsx"'
-    wb.save(response)
-    return response
+        batch = {
+            'part_no': part_no, 'part_name': part_name, 'qty': qty,
+            'need_date': '', 'items': items, 'structured_items': structured,
+        }
+    return _bom_calc_workbook_response(
+        [batch], mode='structured', response_filename=f'bom_calc_{part_no}.xlsx')
 
 
 @wms_permission_required('can_wms_bom_calc')
@@ -5007,6 +4931,11 @@ def bom_calc_batch_export(request):
         return redirect('material:bom_calculate')
 
     stock_heading = '배분 전 가용재고' if session_key.startswith('job:') else '현재고'
+    return _bom_calc_workbook_response(batch_results, mode, stock_heading)
+
+
+def _bom_calc_workbook_response(batch_results, mode='flat', stock_heading='현재고', response_filename=None):
+    """Shared workbook layout for single and batch requirements exports."""
     wb = openpyxl.Workbook()
     ws = wb.active
     header_fill = openpyxl.styles.PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
@@ -5154,7 +5083,7 @@ def bom_calc_batch_export(request):
         filename = "bom_calc_batch_result.xlsx"
 
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    response['Content-Disposition'] = f'attachment; filename="{response_filename or filename}"'
     wb.save(response)
     return response
 

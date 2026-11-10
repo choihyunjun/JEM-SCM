@@ -1,4 +1,5 @@
 import io
+import re
 from datetime import date, timedelta
 from unittest.mock import patch
 
@@ -225,6 +226,85 @@ class BOMJobTests(TestCase):
                 sheet = openpyxl.load_workbook(io.BytesIO(response.content)).active
                 actual = {part: qty for _, part, qty in list(sheet.values)[1:]}
                 self.assertEqual(actual, {'FG': 5, 'RAW': 5} if include_structure else {'RAW': 5})
+
+    def test_single_screen_and_export_use_batch_structured_format(self):
+        semi = Product.objects.create(part_no='SEMI', part_name='Semi')
+        nested = Product.objects.create(part_no='NESTED', part_name='Nested')
+        BOMItem.objects.create(product=self.product, seq=2, child_part_no='SEMI', child_part_name='Semi', required_qty=2)
+        BOMItem.objects.create(product=semi, child_part_no='NESTED', child_part_name='Nested', required_qty=3)
+        BOMItem.objects.create(product=nested, child_part_no='FINE', child_part_name='Fine material', required_qty=0.00001)
+        page = self.client.post(reverse('material:bom_calculate'), {
+            'calc_type': 'single', 'part_no': 'FG', 'production_qty': 5,
+        })
+        self.assertEqual(page.status_code, 200)
+        table = page.content.decode().split('id="bomStructuredTable">', 1)[1].split('</table>', 1)[0]
+        headers = re.findall(r'<th(?:\s[^>]*)?>(.*?)</th>', table)
+        self.assertEqual(headers, ['모품번', '모품명', '생산수량', '필요일자', 'LEVEL', '자품번',
+                                   '자품명', '단위', '정미수량', '필요수량', '현재고', '부족수량', '거래처'])
+        rows = re.findall(r'<tr[^>]*>(.*?)</tr>', table.split('<tbody>', 1)[1], re.S)
+        self.assertEqual(len(rows), 5)
+        self.assertTrue(all(len(re.findall(r'<td(?:\s[^>]*)?>', row)) == 13 for row in rows))
+        self.assertIn('data-level="0"', table)
+        self.assertIn('data-level="3"', table)
+        self.assertContains(page, '소요량 변환')
+        response = self.client.get(reverse('material:bom_calc_export'), {
+            'part_no': 'FG', 'qty': 5, 'session_key': page.context['single_session_key'],
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('bom_calc_FG.xlsx', response['Content-Disposition'])
+        single = openpyxl.load_workbook(io.BytesIO(response.content)).active
+        self.assertEqual(list(single.values)[0], tuple(headers))
+        self.assertEqual(single.cell(2, 5).value, 0)
+        self.assertEqual(single.cell(2, 6).value, 'FG')
+        self.assertEqual(single.cell(2, 10).value, 5)
+        self.assertAlmostEqual(single.cell(6, 10).value, 0.0003)
+        job = self.job(',FG,5')
+        self.finish(job)
+        response = self.client.get(reverse('material:bom_calc_batch_export'), {
+            'session_key': f'job:{job.pk}', 'mode': 'structured',
+        })
+        self.assertEqual(response.status_code, 200)
+        batch = openpyxl.load_workbook(io.BytesIO(response.content)).active
+        # A single calculation shows current stock; jobs allocate stock by date.
+        self.assertEqual(batch.cell(1, 11).value, '배분 전 가용재고')
+        batch.cell(1, 11).value = '현재고'
+        self.assertEqual(list(single.values), list(batch.values))
+        for single_row, batch_row in zip(single, batch):
+            for left, right in zip(single_row, batch_row):
+                self.assertEqual(left._style, right._style)
+        self.assertEqual(single.freeze_panes, 'F2')
+        self.assertEqual(single.page_setup, batch.page_setup)
+        self.assertEqual(single.print_title_rows, batch.print_title_rows)
+        self.assertEqual([d.width for d in single.column_dimensions.values()],
+                         [d.width for d in batch.column_dimensions.values()])
+
+    def test_single_export_keeps_displayed_snapshot_and_recalculates_mismatched_request(self):
+        page = self.client.post(reverse('material:bom_calculate'), {
+            'calc_type': 'single', 'part_no': 'FG', 'production_qty': 5,
+        })
+        key = page.context['single_session_key']
+        BOMItem.objects.filter(product=self.product).update(required_qty=2)
+        self.stock.quantity = 0
+        self.stock.save()
+        with patch('material.views._calculate_bom_requirements', side_effect=AssertionError('must use snapshot')):
+            response = self.client.get(reverse('material:bom_calc_export'), {
+                'part_no': 'FG', 'qty': 5, 'session_key': key,
+            })
+        sheet = openpyxl.load_workbook(io.BytesIO(response.content)).active
+        self.assertEqual(sheet.cell(3, 10).value, 5)
+        self.assertEqual(sheet.cell(3, 11).value, 100)
+        for params in ({'qty': 6, 'session_key': key}, {'qty': 5}):
+            with self.subTest(params=params):
+                response = self.client.get(reverse('material:bom_calc_export'), {'part_no': 'FG', **params})
+                self.assertEqual(response.status_code, 200)
+                sheet = openpyxl.load_workbook(io.BytesIO(response.content)).active
+                self.assertEqual(sheet.cell(2, 10).value, params['qty'])
+                self.assertEqual(sheet.cell(3, 10).value, params['qty'] * 2)
+                self.assertEqual(sheet.cell(3, 11).value, 0)
+        response = self.client.get(reverse('material:bom_calc_export'), {
+            'part_no': 'UNKNOWN', 'qty': 5, 'session_key': key,
+        })
+        self.assertRedirects(response, reverse('material:bom_calculate'))
 
     def test_upload_replaces_large_legacy_session_and_progress_endpoint(self):
         session = self.client.session

@@ -308,8 +308,8 @@
             </span>
             <div>
                 <a href="{% url 'material:bom_calc_export' %}?part_no={{ product.part_no }}&qty={{ production_qty }}{% if single_session_key %}&session_key={{ single_session_key }}{% endif %}"
-                   class="btn btn-sm btn-outline-light me-2">
-                    <i class="bi bi-file-excel me-1"></i>엑셀
+                   class="btn btn-sm btn-outline-success me-2">
+                    <i class="bi bi-file-earmark-arrow-down me-1"></i>소요량 변환
                 </a>
                 <button class="btn btn-sm btn-outline-light" onclick="window.print()">
                     <i class="bi bi-printer me-1"></i>인쇄
@@ -318,35 +318,51 @@
         </div>
         <div class="card-body p-0">
             <style>
-                .bom-semi-row { background-color: #e9ecef !important; cursor: pointer; border-left: 3px solid #6c757d !important; }
-                .bom-semi-row:hover { background-color: #dee2e6 !important; }
-                .bom-semi-l2 { background-color: #f1f3f5 !important; border-left: 3px solid #adb5bd !important; }
-                .bom-semi-l2:hover { background-color: #e9ecef !important; }
-                .bom-semi-l3 { background-color: #f8f9fa !important; border-left: 3px solid #ced4da !important; }
-                .bom-semi-l3:hover { background-color: #f1f3f5 !important; }
+                #bomStructuredTable { min-width: 1500px; font-size: 0.85rem; }
+                #bomStructuredTable thead th { background: #243b53; color: #fff; white-space: nowrap; }
+                #bomStructuredTable .bom-root-row { --bs-table-bg: #dceaf2; font-weight: bold; }
+                #bomStructuredTable .bom-semi-row { --bs-table-bg: #edf3f8; cursor: pointer; font-weight: bold; }
                 .bom-semi-row.collapsed { opacity: 0.85; }
             </style>
-            <div class="table-responsive">
-                <table class="table table-hover mb-0" style="font-size: 0.85rem;" id="bomStructuredTable">
-                    <thead class="table-dark">
+            <div class="table-responsive" style="max-height: 70vh; overflow-y: auto;">
+                <table class="table table-hover mb-0" id="bomStructuredTable">
+                    <thead class="sticky-top">
                         <tr>
-                            <th style="width:4%">No</th>
-                            <th style="width:5%">LV</th>
-                            <th style="width:12%">자품번</th>
-                            <th style="width:20%">자품명</th>
-                            <th style="width:5%">단위</th>
-                            <th style="width:9%">정미수량</th>
-                            <th style="width:10%">필요수량</th>
-                            <th style="width:10%" class="erp-number">현재고</th>
-                            <th style="width:10%">부족수량</th>
-                            <th style="width:15%">주거래처</th>
+                            <th>모품번</th>
+                            <th>모품명</th>
+                            <th>생산수량</th>
+                            <th>필요일자</th>
+                            <th>LEVEL</th>
+                            <th>자품번</th>
+                            <th>자품명</th>
+                            <th>단위</th>
+                            <th>정미수량</th>
+                            <th>필요수량</th>
+                            <th class="erp-number">현재고</th>
+                            <th>부족수량</th>
+                            <th>거래처</th>
                         </tr>
                     </thead>
                     <tbody>
+                        <tr class="bom-root-row" data-level="0">
+                            <td>{{ product.part_no }}</td>
+                            <td>{{ product.part_name }}</td>
+                            <td class="text-end">{{ production_qty }}</td>
+                            <td></td>
+                            <td>0</td>
+                            <td>{{ product.part_no }}</td>
+                            <td>{{ product.part_name }}</td>
+                            <td></td>
+                            <td></td>
+                            <td class="text-end">{{ production_qty }}</td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                        </tr>
                         {% for item in structured_items %}
                         {% if item.is_semi %}
-                        <tr class="bom-semi-row {% if item.level == 2 %}bom-semi-l2{% elif item.level >= 3 %}bom-semi-l3{% endif %}" data-semi-id="semi-{{ forloop.counter }}" onclick="toggleSemiChildren(this)">
-                            <td class="text-muted">{{ forloop.counter }}</td>
+                        <tr class="bom-semi-row" data-level="{{ item.level }}" onclick="toggleSemiChildren(this)">
+                            <td></td><td></td><td></td><td></td>
                             <td><span class="dtl-pill slate">L{{ item.level }}</span></td>
                             <td style="padding-left: {{ item.level }}rem;">
                                 <i class="bi bi-chevron-down me-1 semi-toggle-icon text-secondary"></i>
@@ -358,14 +374,14 @@
                             </td>
                             <td>{{ item.child_unit }}</td>
                             <td class="text-end">{{ item.unit_qty }}</td>
-                            <td class="text-end fw-bold">{{ item.required_qty|floatformat:2 }}</td>
+                            <td class="text-end fw-bold">{{ item.required_qty }}</td>
                             <td class="text-end text-muted">-</td>
                             <td class="text-end text-muted">-</td>
                             <td class="text-muted">{{ item.vendor_name|default:"-" }}</td>
                         </tr>
                         {% else %}
-                        <tr class="{% if item.shortage > 0 %}table-danger{% endif %} bom-child-row {% if item.level == 2 %}bom-child-l2{% elif item.level >= 3 %}bom-child-l3{% endif %}" data-parent-level="{{ item.level }}">
-                            <td class="text-muted">{{ forloop.counter }}</td>
+                        <tr class="{% if item.shortage > 0 %}table-danger{% endif %} bom-child-row" data-level="{{ item.level }}">
+                            <td></td><td></td><td></td><td></td>
                             <td class="text-muted">{{ item.level }}</td>
                             <td style="padding-left: {{ item.level }}rem;">
                                 <span class="text-muted me-1">├</span>
@@ -374,7 +390,7 @@
                             <td>{{ item.child_part_name }}</td>
                             <td>{{ item.child_unit }}</td>
                             <td class="text-end">{{ item.unit_qty }}</td>
-                            <td class="text-end fw-bold">{{ item.required_qty|floatformat:2 }}</td>
+                            <td class="text-end fw-bold">{{ item.required_qty }}</td>
                             <td class="text-end">
                                 {% if item.stock_qty > 0 %}
                                 <span class="text-success fw-bold">{{ item.stock_qty }}</span>
@@ -384,7 +400,7 @@
                             </td>
                             <td class="text-end">
                                 {% if item.shortage > 0 %}
-                                <span class="dtl-pill red">{{ item.shortage|floatformat:0 }}</span>
+                                <span class="dtl-pill red">{{ item.shortage }}</span>
                                 {% else %}
                                 <span class="dtl-pill green">충족</span>
                                 {% endif %}
@@ -1600,30 +1616,20 @@ function toggleSemiChildren(semiRow) {
     var isCollapsed = semiRow.classList.contains('collapsed');
     var icon = semiRow.querySelector('.semi-toggle-icon');
 
-    // 이 반제품의 레벨을 파악 (badge 텍스트에서 L1 → 1)
-    var lvBadge = semiRow.querySelector('.badge');
-    var semiLevel = parseInt((lvBadge ? lvBadge.textContent : '').replace('L','')) || 1;
+    var semiLevel = Number(semiRow.dataset.level);
 
     var nextRow = semiRow.nextElementSibling;
 
     while (nextRow) {
-        // 다음 행의 레벨 확인
-        var nextBadge = nextRow.querySelector('.badge');
-        var nextText = nextBadge ? nextBadge.textContent : '';
-        var nextLevel = null;
-
-        if (nextRow.classList.contains('bom-semi-row')) {
-            nextLevel = parseInt(nextText.replace('L','')) || 1;
-            // 같거나 낮은 레벨의 반제품을 만나면 중지 (형제 또는 상위)
-            if (nextLevel <= semiLevel) break;
-        } else {
-            // 원자재 행의 레벨
-            var parentLevel = parseInt(nextRow.getAttribute('data-parent-level')) || 1;
-            if (parentLevel <= semiLevel) break;
-        }
+        // 같은 레벨 또는 상위 행부터는 이 반제품의 하위 항목이 아니다.
+        if (Number(nextRow.dataset.level) <= semiLevel) break;
 
         if (isCollapsed) {
             nextRow.style.display = '';
+            // 상위 행을 펼치면 하위 반제품도 펼친 상태로 맞춘다.
+            nextRow.classList.remove('collapsed');
+            var childIcon = nextRow.querySelector('.semi-toggle-icon');
+            if (childIcon) { childIcon.classList.remove('bi-chevron-right'); childIcon.classList.add('bi-chevron-down'); }
         } else {
             nextRow.style.display = 'none';
         }
