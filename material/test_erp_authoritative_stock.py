@@ -59,9 +59,11 @@ class ERPAuthoritativeStockTests(TestCase):
         with patch('material.erp_api.fetch_erp_stock', return_value=(True, [self.balance('677.3337')], None)):
             self.assertIsNone(sync_stock_from_erp()['error'])
             self.assertEqual(sync_stock_from_erp()['adjusted'], 0)
-        # 쓰인 4150.6663: 오래된 LOT 1000 → 다음 LOT 500.1234 → LOT 모르는 양 순서로 뺀다
-        self.assertFalse(MaterialStock.objects.filter(lot_no__isnull=False).exists())
-        self.assertEqual(MaterialStock.objects.get(lot_no=None).quantity, Decimal('677.3337'))
+        # 쓰인 4150.6663: LOT 미지정 3327.8766(가장 오래된 재고) → 오래된 LOT에서 822.7897 순서로 뺀다
+        # (2026-11 결정: 미지정 재고를 먼저 소진)
+        old.refresh_from_db(); recent.refresh_from_db()
+        self.assertEqual((old.quantity, recent.quantity), (Decimal('177.2103'), Decimal('500.1234')))
+        self.assertEqual(MaterialStock.objects.get(lot_no=None).quantity, 0)
         self.assertEqual(self.total(), Decimal('677.3337'))
         self.assertFalse(MaterialTransaction.objects.exists())
 

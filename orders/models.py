@@ -81,6 +81,9 @@ class Part(models.Model):
                                      verbose_name='단위중량')
     weight_unit = models.CharField(max_length=10, blank=True, default='',
                                    verbose_name='중량단위')
+    # 재고 맞추기(ERP 현재고 반영)에서 LOT 행을 유지할 품목. SCM 입고·라벨 이력으로 한 번
+    # 판정되면 고정된다 (이력이 취소·삭제돼도 '수량만' 품목으로 되돌아가 LOT가 지워지지 않게).
+    lot_managed = models.BooleanField(default=False, verbose_name='LOT 관리 품목')
 
     class Meta:
         verbose_name = "품목 마스터"
@@ -249,6 +252,42 @@ class DeliveryOrderItem(models.Model):
 
     def __str__(self):
         return f"{self.part_no} x{self.total_qty}"
+
+class LotExceptionRequest(models.Model):
+    """이전 납품보다 오래된 LOT(생산일)를 납품하려는 예외 승인 요청.
+
+    납품서 등록은 그 품목의 이전 납품서 LOT 중 가장 최근 날짜보다 오래된 LOT를 막는다(선입선출).
+    불량 반출 후 재납품처럼 정당한 경우는 내부 담당자가 이 요청을 승인하면 한 번 등록할 수 있다.
+    """
+    STATUS_CHOICES = [
+        ('PENDING', '승인 대기'),
+        ('APPROVED', '승인'),
+        ('REJECTED', '반려'),
+        ('USED', '사용 완료'),
+    ]
+    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, related_name='lot_exceptions', verbose_name="협력사")
+    part = models.ForeignKey(Part, on_delete=models.CASCADE, related_name='lot_exceptions', verbose_name="품목")
+    lot_no = models.DateField(verbose_name="요청 LOT(생산일)")
+    latest_lot = models.DateField(verbose_name="요청 당시 최근 납품 LOT")
+    status = models.CharField("상태", max_length=10, choices=STATUS_CHOICES, default='PENDING', db_index=True)
+    requested_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True,
+                                     related_name='lot_exception_requests', verbose_name="요청자")
+    requested_at = models.DateTimeField(auto_now_add=True, verbose_name="요청일시")
+    decided_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='lot_exception_decisions', verbose_name="처리자")
+    decided_at = models.DateTimeField(null=True, blank=True, verbose_name="처리일시")
+    decision_note = models.CharField("처리 메모", max_length=200, blank=True, default='')
+    delivery_item = models.ForeignKey('DeliveryOrderItem', on_delete=models.SET_NULL, null=True, blank=True,
+                                      related_name='lot_exceptions', verbose_name="사용된 납품서 품목")
+
+    class Meta:
+        verbose_name = "이전 LOT 납품 예외 요청"
+        verbose_name_plural = "이전 LOT 납품 예외 요청"
+        ordering = ['-requested_at', '-id']
+
+    def __str__(self):
+        return f"[{self.get_status_display()}] {self.part.part_no} LOT {self.lot_no}"
+
 
 # 9. 유저 프로필 확장
 class UserProfile(models.Model):

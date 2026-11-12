@@ -1,6 +1,8 @@
 # material/views.py
 import logging
-from .stock_safety import deduct_stock, quantity_change
+from .stock_safety import deduct_stock, quantity_change, unassigned_stock
+from .labels import relabel_lot
+from datetime import timedelta
 from .quantities import human_quantity, input_quantity, stock_quantity, stock_total
 from decimal import Decimal
 import re
@@ -600,9 +602,10 @@ def manual_incoming(request):
                     lot_date = None
                     if lot_no_str:
                         try:
-                            lot_date = datetime.strptime(lot_no_str, '%Y-%m-%d').date()
+                            lot_date = datetime.strptime(lot_no_str.strip(), '%Y-%m-%d').date()
                         except (ValueError, TypeError):
-                            pass
+                            # 형식이 틀린 LOT를 조용히 미지정 재고로 넣지 않는다.
+                            raise ValueError(f"[{part.part_no}] LOT 날짜 형식이 올바르지 않습니다: {lot_no_str} (YYYY-MM-DD)")
 
                     # (1) 재고 증가 (LOT별로 분리)
                     stock, _ = MaterialStock.objects.get_or_create(
@@ -2128,6 +2131,9 @@ def lot_allocation_plt_print(request):
 from django.http import JsonResponse
 import json
 
+# 같은 현품표를 연달아 읽었을 때 다시 처리하지 않는 시간(초)
+TAG_RESCAN_BLOCK_SECONDS = 10
+
 @wms_permission_required('can_wms_stock_view')
 def api_process_tag_scan(request):
     """
@@ -2326,6 +2332,16 @@ def api_process_tag_scan(request):
                 'error': f'취소된 태그입니다. ({tag.tag_id})',
             })
 
+        # 연속 스캔 방지: 방금 처리된 태그를 다시 읽으면 두 번 이동하거나(현장 외 창고),
+        # 투입 직후 곧바로 투입취소가 된다. 같은 태그는 잠깐 동안 다시 처리하지 않는다.
+        recent_cut = timezone.now() - timedelta(seconds=TAG_RESCAN_BLOCK_SECONDS)
+        if ((tag.used_at and tag.used_at >= recent_cut) or
+                ProcessTagScanLog.objects.filter(tag=tag, scanned_at__gte=recent_cut).exists()):
+            return JsonResponse({
+                'success': False, 'already_used': True,
+                'error': f'방금 처리된 태그입니다. 취소하거나 다시 옮기려면 {TAG_RESCAN_BLOCK_SECONDS}초 뒤에 스캔하세요. ({tag.tag_id})',
+            })
+
         # 3200 원재료창고 / 도착 창고 조회
         wh_from_tag = Warehouse.objects.filter(code='3200').first()
         wh_to_tag = Warehouse.objects.filter(code=target_warehouse_code).first()
@@ -2356,12 +2372,18 @@ def api_process_tag_scan(request):
                     'error': f'이동 이력을 찾을 수 없습니다. ({tag.tag_id})',
                 })
 
-            cancel_qty_t = float(last_trx_t.quantity)
+            cancel_qty_t = stock_quantity(last_trx_t.quantity)
             lot_no_tag = tag.lot_no
             wh_to_cancel = last_trx_t.warehouse_to  # 원래 투입처
 
             from django.db.models import F as _F
             with transaction.atomic():
+                # 같은 태그의 취소가 동시에 두 번 들어와도 한 번만 되돌린다.
+                if ProcessTag.objects.filter(pk=tag.pk, status='USED').update(
+                        status='PRINTED', used_at=None, used_by=None, used_warehouse=None, scan_count=0) != 1:
+                    return JsonResponse({'success': False, 'already_used': True,
+                                         'error': f'이미 취소되었거나 상태가 바뀐 태그입니다. ({tag.tag_id})'})
+
                 # 원래 투입처 재고 차감
                 src_t = MaterialStock.objects.filter(
                     warehouse=wh_to_cancel, part=tag.part, lot_no=lot_no_tag
@@ -2373,21 +2395,14 @@ def api_process_tag_scan(request):
 
                 # 3200 재고 복구
                 tgt_t, _c = MaterialStock.objects.get_or_create(
-                    warehouse=wh_from_tag, part=tag.part, lot_no=lot_no_tag,
+                    warehouse=wh_from_tag, part=tag.part, lot_no=lot_no_tag, production_lot=None,
                     defaults={'quantity': 0}
                 )
                 MaterialStock.objects.filter(pk=tgt_t.pk).update(
                     quantity=quantity_change(cancel_qty_t)
                 )
                 tgt_t.refresh_from_db()
-
-                # 태그 USED → PRINTED 복구
-                tag.status = 'PRINTED'
-                tag.used_at = None
-                tag.used_by = None
-                tag.used_warehouse = None
-                tag.scan_count = 0
-                tag.save(update_fields=['status', 'used_at', 'used_by', 'used_warehouse', 'scan_count'])
+                tag.refresh_from_db()  # 위에서 PRINTED로 되돌린 상태
 
                 # 취소 이력
                 trx_no_t = f"TAG-CANCEL-{timezone.now().strftime('%y%m%d%H%M%S%f')}-{request.user.id}"
@@ -2422,12 +2437,12 @@ def api_process_tag_scan(request):
             return JsonResponse({
                 'success': True,
                 'is_first_scan': True,
-                'message': f'투입 취소 완료 ({cancel_qty_t}) - 라벨 재사용 가능' + erp_msg_tc,
+                'message': f'투입 취소 완료 ({cancel_qty_t.normalize():f}) - 라벨 재사용 가능' + erp_msg_tc,
                 'tag_info': {
                     'tag_id': tag.tag_id,
                     'part_no': tag.part_no,
                     'part_name': tag.part_name,
-                    'quantity': cancel_qty_t,
+                    'quantity': float(cancel_qty_t),
                     'lot_no': str(lot_no_tag) if lot_no_tag else '',
                     'status': 'PRINTED',
                     'cancelled': True,
@@ -2497,7 +2512,7 @@ def api_process_tag_scan(request):
         null_stock_t = None
         available_total_t = max(avail_lot, 0)
 
-        tag_qty_t = float(tag.quantity)
+        tag_qty_t = stock_quantity(tag.quantity)
 
         # 부족 시 조정 수량 요청
         if override_qty is None and available_total_t < tag_qty_t:
@@ -2505,26 +2520,25 @@ def api_process_tag_scan(request):
                 'success': False,
                 'need_adjust': True,
                 'available_qty': float(available_total_t),
-                'label_qty': tag_qty_t,
-                'error': f'재고 부족: 태그 수량 {tag_qty_t} > 재고 {available_total_t}',
+                'label_qty': float(tag_qty_t),
+                'error': f'재고 부족: 태그 수량 {tag_qty_t.normalize():f} > 재고 {available_total_t.normalize():f}',
                 'tag_info': {
                     'tag_id': tag.tag_id,
                     'part_no': tag.part_no,
                     'part_name': tag.part_name,
-                    'quantity': tag_qty_t,
+                    'quantity': float(tag_qty_t),
                     'lot_no': str(lot_no_t) if lot_no_t else '',
                 }
             })
 
         if override_qty is not None:
             try:
-                move_qty_t = float(override_qty)
+                # 원재료 라벨과 같은 규칙: 사람이 넣는 수량은 정수, 소수는 남은 재고 전부일 때만
+                move_qty_t = human_quantity(input_quantity(override_qty), full=stock_total(available_total_t))
             except (ValueError, TypeError):
-                return JsonResponse({'success': False, 'error': '이동 수량이 올바르지 않습니다.'})
-            if move_qty_t <= 0:
-                return JsonResponse({'success': False, 'error': '이동 수량은 0보다 커야 합니다.'})
+                return JsonResponse({'success': False, 'error': '이동 수량은 정수로 입력하세요. (소수 잔량은 전량만)'})
             if move_qty_t > available_total_t:
-                return JsonResponse({'success': False, 'error': f'이동 수량({move_qty_t})이 재고({available_total_t})보다 큽니다.'})
+                return JsonResponse({'success': False, 'error': f'이동 수량({move_qty_t.normalize():f})이 재고({available_total_t.normalize():f})보다 큽니다.'})
         else:
             move_qty_t = tag_qty_t
 
@@ -2532,6 +2546,25 @@ def api_process_tag_scan(request):
         mark_used_t = (target_warehouse_code == '3000')
 
         with transaction.atomic():
+            # 같은 태그의 동시 스캔은 한 번만 성공한다 (원재료 라벨과 같은 선점 방식).
+            # 현장 투입은 상태를 USED로 바꾸며 선점하고, 그 외 창고 이동은 태그 행을 잠근 뒤
+            # 방금 처리된 스캔이 있는지 다시 확인한다.
+            if mark_used_t:
+                if ProcessTag.objects.filter(pk=tag.pk, status='PRINTED').update(
+                        status='USED', used_at=timezone.now(), used_by=request.user,
+                        used_warehouse=wh_to_tag, scan_count=F('scan_count') + 1) != 1:
+                    return JsonResponse({'success': False, 'already_used': True,
+                                         'error': f'이미 처리된 태그입니다. 이력을 다시 조회해주세요. ({tag.tag_id})'})
+                tag.refresh_from_db()
+            else:
+                if ProcessTag.objects.filter(pk=tag.pk, status='PRINTED').update(scan_count=F('scan_count')) != 1:
+                    return JsonResponse({'success': False, 'already_used': True,
+                                         'error': f'이미 처리된 태그입니다. 이력을 다시 조회해주세요. ({tag.tag_id})'})
+                if ProcessTagScanLog.objects.filter(
+                        tag=tag, scanned_at__gte=timezone.now() - timedelta(seconds=TAG_RESCAN_BLOCK_SECONDS)).exists():
+                    return JsonResponse({'success': False, 'already_used': True,
+                                         'error': f'방금 처리된 태그입니다. ({tag.tag_id})'})
+
             remaining = stock_quantity(move_qty_t)
             if lot_no_t and src_stock_t and src_stock_t.quantity > 0:
                 deduct_lot = min(src_stock_t.quantity, remaining)
@@ -2549,22 +2582,14 @@ def api_process_tag_scan(request):
 
             # 도착창고 재고 추가
             tgt_stock_t, _c = MaterialStock.objects.get_or_create(
-                warehouse=wh_to_tag, part=tag.part, lot_no=lot_no_t,
+                warehouse=wh_to_tag, part=tag.part, lot_no=lot_no_t, production_lot=None,
                 defaults={'quantity': 0}
             )
             MaterialStock.objects.filter(pk=tgt_stock_t.pk).update(
                 quantity=quantity_change(move_qty_t)
             )
             tgt_stock_t.refresh_from_db()
-
-            # 현장(3000) 이동 시에만 USED 처리
-            if mark_used_t:
-                tag.status = 'USED'
-                tag.used_at = timezone.now()
-                tag.used_by = request.user
-                tag.used_warehouse = wh_to_tag
-                tag.scan_count = (tag.scan_count or 0) + 1
-                tag.save(update_fields=['status', 'used_at', 'used_by', 'used_warehouse', 'scan_count'])
+            # (현장 3000 이동의 USED 처리는 위 선점 단계에서 끝났다)
 
             # 이력 생성
             trx_no_t = f"TAG-SCAN-{timezone.now().strftime('%y%m%d%H%M%S%f')}-{request.user.id}"
@@ -2606,7 +2631,7 @@ def api_process_tag_scan(request):
             erp_msg_t = f' (ERP 연동 예외)'
             logger.warning(f'TAG 스캔 ERP 예외: {_e}')
 
-        msg_t = f'{wh_to_tag.name}(으)로 이동 완료 ({move_qty_t})' + erp_msg_t
+        msg_t = f'{wh_to_tag.name}(으)로 이동 완료 ({move_qty_t.normalize():f})' + erp_msg_t
         return JsonResponse({
             'success': True,
             'is_first_scan': mark_used_t,
@@ -2615,7 +2640,7 @@ def api_process_tag_scan(request):
                 'tag_id': tag.tag_id,
                 'part_no': tag.part_no,
                 'part_name': tag.part_name,
-                'quantity': move_qty_t,
+                'quantity': float(move_qty_t),
                 'lot_no': str(lot_no_t) if lot_no_t else '',
                 'status': tag.get_status_display(),
                 'scan_count': tag.scan_count,
@@ -3896,8 +3921,13 @@ def _handle_lot_correct(request):
 
         with transaction.atomic():
             for stock_id, new_qty_str in zip(stock_ids, new_qtys):
-                new_qty = int(new_qty_str)
-                stock = MaterialStock.objects.select_for_update().get(pk=stock_id)
+                new_qty = input_quantity(new_qty_str, positive=False)  # 소수 LOT도 자르지 않는다
+                # 요청한 창고의 LOT만 고친다 (다른 창고 행을 고치면 두 창고 합계가 모두 틀어진다).
+                stock = MaterialStock.objects.select_for_update().filter(pk=stock_id, warehouse=warehouse).first()
+                if stock is None:
+                    raise ValueError("선택한 창고의 LOT가 아닙니다. 화면을 새로 고친 뒤 다시 시도하세요.")
+                if stock.lot_no is None and stock.production_lot is None:
+                    raise ValueError("LOT 미지정 재고는 직접 수정할 수 없습니다. LOT 배분을 사용하세요.")
                 old_qty = stock.quantity
                 delta = new_qty - old_qty
 
@@ -3905,18 +3935,15 @@ def _handle_lot_correct(request):
                     continue
 
                 if new_qty < 0:
-                    messages.error(request, f"{stock.part.part_no} LOT {stock.lot_no}: 음수 수량 불가")
-                    return redirect('material:lot_allocation')
+                    raise ValueError(f"{stock.part.part_no} LOT {stock.lot_no}: 음수 수량 불가")
 
                 # LOT 재고 업데이트
                 stock.quantity = new_qty
                 stock.save()
 
                 # NULL 재고 역보정 (LOT +100 → NULL -100)
-                null_stock, _ = MaterialStock.objects.select_for_update().get_or_create(
-                    warehouse=warehouse, part=stock.part, lot_no=None,
-                    defaults={'quantity': 0}
-                )
+                null_stock = MaterialStock.objects.select_for_update().get(
+                    pk=unassigned_stock(warehouse, stock.part).pk)
                 null_stock.quantity -= delta
                 null_stock.save()
 
@@ -4031,7 +4058,7 @@ def lot_allocation(request):
 
                     # ── 3. NULL 재고 검증 ──
                     null_stock = MaterialStock.objects.filter(
-                        warehouse=warehouse, part=part, lot_no__isnull=True
+                        warehouse=warehouse, part=part, lot_no__isnull=True, production_lot__isnull=True
                     ).first()
                     null_qty = null_stock.quantity if null_stock else 0
                     effective_null = null_qty - sum_correction_delta  # 수정 후 사용 가능한 NULL
@@ -4077,12 +4104,15 @@ def lot_allocation(request):
                             )
                             new_stock, _ = MaterialStock.objects.get_or_create(
                                 warehouse=warehouse, part=part, lot_no=new_date,
+                                production_lot=old_stock.production_lot,
                                 defaults={'quantity': 0}
                             )
                             MaterialStock.objects.filter(pk=new_stock.pk).update(
                                 quantity=quantity_change(new_qty)
                             )
                             new_stock.refresh_from_db()
+                            # 이 LOT의 살아있는 라벨도 새 날짜로 옮긴다.
+                            relabel_lot(warehouse, part, old_date, new_date)
                             MaterialTransaction.objects.create(
                                 transaction_no=trx_base + '-IN',
                                 transaction_type='LOT_CORRECT',
@@ -4297,7 +4327,7 @@ def api_lot_change(request):
         body = json.loads(request.body)
         stock_id = int(body['stock_id'])
         new_lot_date_str = body['new_lot_date'].strip()
-        new_qty = int(body['new_qty'])
+        new_qty = input_quantity(body['new_qty'], positive=False)  # 12.5를 12로 자르지 않는다
     except (KeyError, ValueError, TypeError) as e:
         return JsonResponse({'success': False, 'error': f'입력값 오류: {e}'}, status=400)
 
@@ -4323,10 +4353,11 @@ def api_lot_change(request):
             if old_lot == new_lot_date and old_qty == new_qty:
                 return JsonResponse({'success': True, 'message': '변경 사항 없음'})
 
-            null_stock, _ = MaterialStock.objects.select_for_update().get_or_create(
-                warehouse=warehouse, part=part, lot_no=None,
-                defaults={'quantity': 0}
-            )
+            if old_lot is None and old_stock.production_lot is None:
+                return JsonResponse({'success': False,
+                                     'error': 'LOT 미지정 재고는 직접 수정할 수 없습니다. LOT 배분을 사용하세요.'}, status=400)
+
+            null_stock = MaterialStock.objects.select_for_update().get(pk=unassigned_stock(warehouse, part).pk)
 
             if old_lot == new_lot_date:
                 # 날짜 동일 — 수량만 변경
@@ -4363,11 +4394,12 @@ def api_lot_change(request):
                     actor=request.user,
                     remark=f"LOT 날짜 변경 (출): {old_lot}→{new_lot_date}"
                 )
+                old_batch = old_stock.production_lot
                 old_stock.delete()
 
-                # 2) 새 날짜 LOT 생성 or 합산
+                # 2) 새 날짜 LOT 생성 or 합산 (배치 정보는 유지)
                 new_stock, created = MaterialStock.objects.select_for_update().get_or_create(
-                    warehouse=warehouse, part=part, lot_no=new_lot_date,
+                    warehouse=warehouse, part=part, lot_no=new_lot_date, production_lot=old_batch,
                     defaults={'quantity': 0}
                 )
                 prev_new_qty = new_stock.quantity
@@ -4391,6 +4423,10 @@ def api_lot_change(request):
                 delta = new_qty - old_qty
                 null_stock.quantity -= delta
                 null_stock.save()
+
+                # 4) 이 LOT의 살아있는 라벨도 새 날짜로 옮긴다
+                #    (안 옮기면 다음 재고 맞추기에서 전부 소진 처리된다)
+                relabel_lot(warehouse, part, old_lot, new_lot_date)
 
             return JsonResponse({
                 'success': True,
@@ -8590,11 +8626,22 @@ def cancel_manual_outgoing(request, trx_id):
         messages.error(request, f"마감된 기간의 출고 건은 삭제할 수 없습니다. ({warning_msg})")
         return redirect('material:manual_outgoing')
 
+    # 반품(반출) 출고는 반출 내역과 한 묶음이라 여기서 지우면 반출 기록과 어긋난다.
+    from orders.models import ReturnShipment
+    if trx.transaction_type == 'OUT_RETURN' and ReturnShipment.objects.filter(movement=trx).exists():
+        messages.error(request, "반출 처리로 생성된 출고 건은 반출 내역에서 취소해주세요.")
+        return redirect('material:manual_outgoing')
+
     trx_no = trx.transaction_no
     trx_qty = abs(trx.quantity)
 
     try:
         with transaction.atomic():
+            # 같은 취소 요청이 동시에 두 번 들어와도 재고는 한 번만 복원한다:
+            # 출고 행을 먼저 잠그고, 이미 지워졌으면 중단한다.
+            if MaterialTransaction.objects.filter(pk=trx.pk).update(remark=F('remark')) != 1:
+                raise Exception("이미 취소된 출고 건입니다.")
+
             # 재고 복원 (LOT 관리품목은 배치까지 일치해야 정확한 행으로 복원됨)
             stock, _ = MaterialStock.objects.get_or_create(
                 warehouse=trx.warehouse_from,

@@ -4,12 +4,41 @@ from datetime import date
 from uuid import uuid4
 
 from django.db import transaction
-from django.db.models import F
+from django.db.models import F, Max
 from django.utils import timezone
 
 from .access import scope_vendor_queryset
-from .models import DeliveryOrder, DeliveryOrderItem, LabelPrintLog, Order, Part
+from .models import DeliveryOrder, DeliveryOrderItem, LabelPrintLog, LotExceptionRequest, Order, Part
 from .remaining import manual_pools, order_progress
+
+
+class OlderLotError(ValueError):
+    """이전 납품보다 오래된 LOT가 포함되어 예외 승인이 필요하다. blocked = [(Part, lot, latest_lot)]."""
+
+    def __init__(self, blocked):
+        self.blocked = blocked
+        super().__init__('이전 납품보다 오래된 LOT가 포함되어 있습니다.')
+
+
+def latest_delivered_lots(part_nos):
+    """{품번: 이전 납품서에 등록된 LOT(생산일) 중 가장 최근 날짜}.
+
+    기준은 납품서뿐이다. ERP에서 들어온 입고의 LOT는 생산일이 아니라 입고일이라 비교하면 안 된다.
+    """
+    return dict(DeliveryOrderItem.objects.filter(part_no__in=part_nos, lot_no__isnull=False)
+                .values('part_no').annotate(latest=Max('lot_no')).values_list('part_no', 'latest'))
+
+
+def request_lot_exceptions(user, blocked):
+    """막힌 LOT마다 승인 대기 요청을 1건씩 둔다(이미 대기 중이면 그대로). 요청 목록을 돌려준다."""
+    requests = []
+    for part, lot, latest in blocked:
+        pending = LotExceptionRequest.objects.filter(part=part, lot_no=lot, status='PENDING').first()
+        if not pending:
+            pending = LotExceptionRequest.objects.create(
+                vendor=part.vendor, part=part, lot_no=lot, latest_lot=latest, requested_by=user)
+        requests.append(pending)
+    return requests
 
 
 def register_delivery(user, data):
@@ -32,6 +61,11 @@ def register_delivery(user, data):
             raise ValueError(f'[{part_no} / {lot}] 같은 품번·LOT는 한 납품서에 한 번만 등록할 수 있습니다.')
         seen.add((part_no, lot))
         lines.append((part_no, snp, boxes, order_id, lot))
+
+    today = timezone.localdate()
+    for part_no, snp, boxes, order_id, lot in lines:
+        if lot > today:  # 오타로 미래 날짜가 들어가면 이후 납품이 전부 '이전 LOT'로 막힌다.
+            raise ValueError(f'[{part_no} / {lot}] LOT(생산일)는 오늘 이후 날짜일 수 없습니다.')
 
     with transaction.atomic():
         # Lock the common part row before reading capacity, including manual PO aggregates.
@@ -71,6 +105,20 @@ def register_delivery(user, data):
             if quantity > remain:
                 raise ValueError(f'[{part_no}] 납품가능 수량 {remain:,}개를 초과했습니다. 다시 조회해주세요.')
 
+        # 선입선출: 그 품목의 이전 납품서 LOT보다 오래된 LOT는 예외 승인이 있어야 등록된다.
+        latest = latest_delivered_lots(part_nos)
+        approvals, blocked = {}, []
+        for part_no, snp, boxes, order_id, lot in lines:
+            if part_no in latest and lot < latest[part_no]:
+                approval = (LotExceptionRequest.objects.select_for_update()
+                            .filter(part=parts[part_no], lot_no=lot, status='APPROVED').order_by('pk').first())
+                if approval:
+                    approvals[(part_no, lot)] = approval
+                else:
+                    blocked.append((parts[part_no], lot, latest[part_no]))
+        if blocked:
+            raise OlderLotError(blocked)
+
         delivery = DeliveryOrder.objects.create(
             order_no='DO-' + timezone.now().strftime('%Y%m%d-%H%M%S') + '-' + uuid4().hex[:16])
         for part_no, snp, boxes, order_id, lot in lines:
@@ -87,4 +135,74 @@ def register_delivery(user, data):
                 erp_order_no=order.erp_order_no if order else '', erp_order_seq=order.erp_order_seq if order else '')
             LabelPrintLog.objects.create(delivery_item=item, vendor=part.vendor, part=part,
                 part_no=part_no, printed_qty=item.total_qty, snp=snp, order=order)
+            approval = approvals.get((part_no, lot))
+            if approval:  # 승인은 한 번 쓰면 끝난다.
+                approval.status, approval.delivery_item = 'USED', item
+                approval.save(update_fields=['status', 'delivery_item'])
         return delivery
+
+
+def released_items(delivery):
+    """입고 취소로 발주 잔량 예약(LabelPrintLog)이 풀린 납품서 품목.
+
+    연결 없는 과거 발행 이력이 남아 있는 품번은 예약 여부를 단정할 수 없으므로 제외한다
+    (과거 납품서를 이중으로 잡지 않기 위함).
+    """
+    items = list(delivery.items.filter(label_logs__isnull=True))
+    if not items:
+        return []
+    legacy = set(LabelPrintLog.objects.filter(
+        delivery_item__isnull=True, part_no__in={i.part_no for i in items}).values_list('part_no', flat=True))
+    return [i for i in items if i.part_no not in legacy]
+
+
+def reserve_released_items(delivery):
+    """다시 입고하려는 납품서의 풀린 품목에 대해 발주 잔량을 재검증하고 다시 예약한다.
+
+    호출자는 납품서 행을 잠근 트랜잭션 안에 있어야 한다. 잔량이 부족하면 ValueError.
+    """
+    items = released_items(delivery)
+    if not items:
+        return 0
+    part_nos = sorted({i.part_no for i in items})
+    for part_no in part_nos:  # register_delivery와 같은 순서로 잠근다.
+        Part.objects.filter(part_no=part_no).update(part_name=F('part_name'))
+    parts = {p.part_no: p for p in Part.objects.filter(part_no__in=part_nos)}
+    order_ids = sorted({i.linked_order_id for i in items if (i.erp_order_no or '').strip() and i.linked_order_id})
+    orders = {o.pk: o for o in Order.objects.select_for_update().filter(pk__in=order_ids).order_by('pk')}
+
+    requested = defaultdict(int)
+    for item in items:
+        part = parts.get(item.part_no)
+        if not part or not part.vendor_id:
+            raise ValueError(f'[{item.part_no}] 품목 또는 협력사 정보를 확인할 수 없습니다.')
+        if (item.erp_order_no or '').strip():
+            order = orders.get(item.linked_order_id)
+            if not order:
+                raise ValueError(f'[{item.part_no}] 원본 발주 연결을 확인할 수 없습니다. 납품서를 취소하고 다시 발행해주세요.')
+            if not order.approved_at or order.is_closed:
+                raise ValueError(f'[{item.part_no}] 발주가 마감되었거나 미승인 상태입니다. 납품서를 취소하고 다시 발행해주세요.')
+            requested[(item.part_no, order.pk)] += item.total_qty
+        else:
+            requested[(item.part_no, None)] += item.total_qty
+
+    progress = order_progress(orders.values())
+    pools = manual_pools({(part_no, parts[part_no].vendor_id)
+                          for (part_no, order_id) in requested if order_id is None})
+    for (part_no, order_id), quantity in requested.items():
+        if order_id is not None:
+            remain = progress[order_id].remaining
+        else:
+            pool = pools.get((part_no, parts[part_no].vendor_id))
+            remain = pool.remaining if pool else 0
+        if quantity > remain:
+            raise ValueError(
+                f'[{part_no}] 입고 취소 후 발주 잔량이 다른 납품서에 사용되어 {remain:,}개만 남았습니다 '
+                f'(이 납품서 {quantity:,}개). 납품서를 취소하고 잔량에 맞게 다시 발행해주세요.')
+
+    for item in items:
+        part = parts[item.part_no]
+        order = orders.get(item.linked_order_id) if (item.erp_order_no or '').strip() else None
+        LabelPrintLog.objects.create(delivery_item=item, vendor=part.vendor, part=part, part_no=item.part_no,
+                                     printed_qty=item.total_qty, snp=item.snp, order=order)
+    return len(items)

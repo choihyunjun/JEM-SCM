@@ -1442,12 +1442,28 @@ def label_list(request):
 
     label_data.sort(key=lambda x: x['due_date'])
 
+    # 이전 LOT 납품 예외 요청 (협력사는 자기 요청만, 대기 건이 위로)
+    from .access import scope_vendor_queryset
+    from .models import LotExceptionRequest
+    from django.db.models import Case, IntegerField, Value, When
+    lot_exception_qs = scope_vendor_queryset(user, LotExceptionRequest.objects.select_related(
+        'vendor', 'part', 'requested_by', 'decided_by'))
+    if selected_v and is_staff_or_admin:
+        lot_exception_qs = lot_exception_qs.filter(vendor_id=selected_v)
+    lot_exception_pending = lot_exception_qs.filter(status='PENDING').count()
+    lot_exceptions = lot_exception_qs.annotate(rank=Case(
+        When(status='PENDING', then=Value(0)), When(status='APPROVED', then=Value(1)),
+        default=Value(2), output_field=IntegerField())).order_by('rank', '-requested_at')[:50]
+
     # ✅✅✅ [요청 반영 1] 템플릿 경로만 orders/로 변경 ✅✅✅
     return render(request, 'label_list.html', {
         'label_data': label_data,
         'orders': recent_orders,
         'return_logs': return_logs,
         'return_pending_count': return_pending_count,
+        'lot_exceptions': lot_exceptions,
+        'lot_exception_pending': lot_exception_pending,
+        'can_decide_lot_exception': _can_decide_lot_exception(user),
         'vendor_list': vendor_list,
         'selected_vendor_id': selected_v,
         'status_filter': status_filter,
@@ -1490,7 +1506,11 @@ def delete_delivery_order(request, order_id):
         # Never infer ownership from quantity/date: identical deliveries are legitimate.
         # Unlinked legacy logs require reconciliation, not a broad delete.
         items = list(order.items.all())
-        if any(not LabelPrintLog.objects.filter(delivery_item=item).exists() for item in items):
+        # 입고 취소로 잔량 예약이 이미 풀린 품목은 지울 이력이 없을 뿐이므로 취소를 막지 않는다.
+        from .deliveries import released_items
+        released = {item.pk for item in released_items(order)}
+        if any(item.pk not in released and not LabelPrintLog.objects.filter(delivery_item=item).exists()
+               for item in items):
             messages.error(request, '과거 납품서의 발행 이력 연결을 확인한 뒤 취소해주세요.')
             return redirect('label_list')
         from material.models import ProcessTag
@@ -1514,9 +1534,15 @@ def create_delivery_order(request):
     if resp:
         return resp
 
-    from .deliveries import register_delivery
+    from .deliveries import OlderLotError, register_delivery, request_lot_exceptions
     try:
         register_delivery(request.user, request.POST)
+    except OlderLotError as exc:
+        # 등록은 통째로 취소됐다. 막힌 LOT마다 예외 승인 요청을 접수해 둔다.
+        request_lot_exceptions(request.user, exc.blocked)
+        for part, lot, latest in exc.blocked:
+            messages.error(request, f'[{part.part_no}] LOT {lot}는 이전 납품 LOT({latest})보다 오래되어 등록할 수 없습니다. '
+                                    f'예외 승인 요청을 접수했습니다. 진영전기 담당자가 승인하면 다시 등록해주세요.')
     except ValueError as exc:
         messages.error(request, str(exc))
     except OperationalError as exc:
@@ -1524,6 +1550,36 @@ def create_delivery_order(request):
             raise
         messages.error(request, '다른 사용자가 같은 발주를 처리 중입니다. 다시 조회 후 등록해주세요.')
     return redirect('label_list')
+
+def _can_decide_lot_exception(user):
+    """이전 LOT 예외 승인: 내부 직원 중 입고 처리 또는 SCM 관리 권한자."""
+    return _internal_perm(user, 'can_scm_incoming_edit') or _internal_perm(user, 'can_scm_admin')
+
+
+@login_required
+@require_POST
+def lot_exception_decide(request, pk):
+    """이전 LOT 납품 예외 요청을 승인/반려한다."""
+    from .models import LotExceptionRequest
+    if not _can_decide_lot_exception(request.user):
+        messages.error(request, '이전 LOT 예외를 승인할 권한이 없습니다.')
+        return redirect('label_list')
+    action = request.POST.get('action')
+    if action not in ('approve', 'reject'):
+        messages.error(request, '처리 방식을 선택해주세요.')
+        return redirect('label_list')
+    status = 'APPROVED' if action == 'approve' else 'REJECTED'
+    # 대기 중인 요청만, 한 번만 처리된다.
+    changed = LotExceptionRequest.objects.filter(pk=pk, status='PENDING').update(
+        status=status, decided_by=request.user, decided_at=timezone.now(),
+        decision_note=(request.POST.get('note') or '').strip()[:200])
+    if changed:
+        messages.success(request, '예외 요청을 승인했습니다. 협력사가 해당 LOT로 납품서를 한 번 등록할 수 있습니다.'
+                         if status == 'APPROVED' else '예외 요청을 반려했습니다.')
+    else:
+        messages.info(request, '이미 처리된 요청입니다.')
+    return redirect('label_list')
+
 
 @login_required
 @menu_permission_required('can_scm_label_view')
@@ -1726,13 +1782,23 @@ def incoming_cancel(request):
                         if not success:
                             raise Exception(message)
 
-                if do:
-                    DeliveryOrderItem.objects.filter(
-                        order=do, part_no=target_inc.part.part_no
-                    ).delete()
+                removed = DeliveryOrderItem.objects.filter(order=do, part_no=target_inc.part.part_no)
+                # 품목을 지우면 라벨 이력의 연결이 끊긴 채 남아 잔량을 계속 차지하므로 함께 지운다.
+                LabelPrintLog.objects.filter(delivery_item__in=removed).delete()
+                removed.delete()
 
                 Incoming.objects.filter(delivery_order_no=do_no, part=target_inc.part).delete()
-                messages.success(request, f"품목 {target_inc.part.part_no} 입고 취소 및 잔량이 복구되었습니다.")
+                # 상태는 품목을 지운 뒤에 다시 계산한다 (먼저 계산하면 '검사대기'로 굳는다).
+                if do.items.exists():
+                    from .returns import refresh_delivery_status
+                    refresh_delivery_status(do)
+                    messages.success(request, f"품목 {target_inc.part.part_no} 입고 취소 및 잔량이 복구되었습니다.")
+                else:
+                    from material.models import ProcessTag
+                    ProcessTag.objects.filter(tag_id__startswith=f'DLV-{do.pk:05d}-').update(status='CANCELLED')
+                    do.delete()
+                    messages.success(request, f"품목 {target_inc.part.part_no} 입고 취소 및 잔량이 복구되었습니다. "
+                                              f"남은 품목이 없어 납품서 {do_no}도 함께 취소되었습니다.")
 
             elif mode == 'all':
                 if MaterialTransaction is not None:
@@ -1750,7 +1816,10 @@ def incoming_cancel(request):
                             raise Exception(message)
 
                 Incoming.objects.filter(delivery_order_no=do_no).delete()
-                messages.success(request, f"납품서 {do_no} 입고 취소 완료. (품목 데이터는 보존됩니다)")
+                messages.success(request, f"납품서 {do_no} 입고 취소 완료. 발주 잔량이 복구되었고, "
+                                          f"이 납품서를 다시 입고하면 그때 잔량을 다시 확인합니다.")
+            else:
+                messages.error(request, "취소 방식을 선택해주세요.")
     except Exception as e:
         messages.error(request, f"취소 실패: {e}")
 
@@ -1952,6 +2021,11 @@ def receive_delivery_order_confirm(request):
 
             if not target_wh:
                 raise Exception("입고할 창고 정보를 찾을 수 없습니다.")
+
+            # 입고 취소로 발주 잔량이 풀린 납품서를 다시 입고하는 경우: 잔량을 다시 잡는다.
+            # (그 사이 다른 납품서가 잔량을 썼다면 여기서 막혀 발주량 초과 입고가 생기지 않는다.)
+            from .deliveries import reserve_released_items
+            reserve_released_items(do)
 
             do.save()
 
@@ -2315,6 +2389,12 @@ def vendor_delivery_report(request):
         target_vendors = Vendor.objects.filter(
             part__incoming__isnull=False
         ).distinct().order_by('name')
+
+    # 협력사 계정은 조회 조건과 무관하게 자기 업체만 본다.
+    from .access import vendor_identity
+    restricted, own_vendor, _ = vendor_identity(request.user)
+    if restricted:
+        target_vendors = Vendor.objects.filter(pk=own_vendor.pk) if own_vendor else Vendor.objects.none()
 
     # 협력사별 통계 계산 (범위 누적)
     for vendor in target_vendors:
@@ -4220,10 +4300,12 @@ def api_part_search(request):
         return JsonResponse({'results': []})
 
     # exact=1이면 품번 정확 일치, 아니면 부분 검색
+    # 협력사 계정은 자기 품목만 검색된다.
+    base_parts = scope_qs_for_user(request.user, Part.objects.all())
     if exact:
-        parts = Part.objects.filter(part_no=q).select_related('vendor')[:1]
+        parts = base_parts.filter(part_no=q).select_related('vendor')[:1]
     else:
-        parts = Part.objects.filter(
+        parts = base_parts.filter(
             Q(part_no__icontains=q) | Q(part_name__icontains=q)
         ).select_related('vendor')[:50]
 
@@ -4260,7 +4342,12 @@ def api_vendor_search(request):
     if len(q) < 1:
         return JsonResponse({'results': []})
 
-    vendors = Vendor.objects.filter(
+    from .access import vendor_identity
+    restricted, own_vendor, _ = vendor_identity(request.user)
+    vendor_qs = Vendor.objects.all()
+    if restricted:  # 협력사 계정은 자기 업체만
+        vendor_qs = vendor_qs.filter(pk=own_vendor.pk) if own_vendor else vendor_qs.none()
+    vendors = vendor_qs.filter(
         Q(name__icontains=q) | Q(code__icontains=q)
     )[:30]
 
@@ -4278,8 +4365,15 @@ def api_vendor_search(request):
 @login_required
 @require_POST
 def api_part_link_vendor(request):
-    """품목에 거래처 연결 AJAX API (소요량 계산 화면에서 인라인 연결용)"""
+    """품목에 거래처 연결 AJAX API (소요량 계산·발주 등록 화면에서 인라인 연결용)
+
+    납품서·입고 이력의 소유권을 품목의 협력사로 판정하므로, 내부 직원 중
+    이 화면들을 쓸 수 있는 권한자만 바꿀 수 있다. 협력사 계정은 항상 불가.
+    """
     import json
+    if not any(_internal_perm(request.user, perm) for perm in
+               ('can_scm_admin', 'can_scm_order_edit', 'can_wms_bom_calc')):
+        return JsonResponse({'success': False, 'error': '품목의 거래처를 변경할 권한이 없습니다.'}, status=403)
     try:
         data = json.loads(request.body)
     except Exception:
@@ -4315,10 +4409,12 @@ def api_organization_search(request):
     if len(q) < 1:
         return JsonResponse({'results': []})
 
-    orgs = Organization.objects.filter(
-        org_type='VENDOR',
-        name__icontains=q
-    )[:30]
+    from .access import vendor_identity
+    restricted, _, own_org = vendor_identity(request.user)
+    org_qs = Organization.objects.filter(org_type='VENDOR')
+    if restricted:  # 협력사 계정은 자기 조직만
+        org_qs = org_qs.filter(pk=own_org.pk) if own_org else org_qs.none()
+    orgs = org_qs.filter(name__icontains=q)[:30]
 
     results = []
     for org in orgs:

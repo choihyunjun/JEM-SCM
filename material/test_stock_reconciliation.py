@@ -78,14 +78,15 @@ class StockReconciliationTests(TestCase):
         self.assertEqual(StockSyncRun.objects.first().status, 'success')
 
     def test_lot_managed_usage_is_taken_from_oldest_lot_without_records(self):
-        # 현재 버전은 ERP 생산출고를 이력으로만 받는다: 쓰인 양은 재고 맞추기가 오래된 LOT부터 뺀다.
+        # 현재 버전은 ERP 생산출고를 이력으로만 받는다: 쓰인 양은 재고 맞추기가
+        # LOT 미지정 재고(가장 오래된 재고) → 오래된 LOT 순서로 뺀다 (2026-11 결정).
         self.lot_managed()
-        self.stock(50, date(2026, 1, 1))
+        oldest = self.stock(50, date(2026, 1, 1))
         recent = self.stock(70, date(2026, 2, 1))
-        self.stock(20)
+        bucket = self.stock(20)
         result = self.sync([self.row(90)])
-        self.assertFalse(MaterialStock.objects.filter(lot_no=date(2026, 1, 1)).exists())  # 다 쓴 LOT
-        recent.refresh_from_db()
+        oldest.refresh_from_db(); recent.refresh_from_db(); bucket.refresh_from_db()
+        self.assertEqual((bucket.quantity, oldest.quantity), (0, 20))  # 미지정 20 → 가장 오래된 LOT 30
         self.assertEqual((recent.quantity, self.total()), (70, 90))
         self.assertFalse(MaterialTransaction.objects.exists())  # 근거는 ERP 출고 이력
         self.assertEqual(result['lot_diffs'], [])

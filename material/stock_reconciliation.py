@@ -8,7 +8,7 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from orders.models import Part
-from .models import MaterialStock, ProcessTag, StockSyncRun, Warehouse
+from .models import LotConsumption, MaterialStock, ProcessTag, StockSyncRun, Warehouse
 from .stock_safety import quantity_change, unassigned_stock
 from .quantities import stock_quantity
 
@@ -45,16 +45,26 @@ def parse_balances(items):
     return balances
 
 
-def lot_managed_part_ids():
+def lot_managed_part_ids(remember=False):
     """SCM이 LOT를 책임지는 품목: SCM으로 입고·라벨 발행된 품목 + 릴레이(생산 LOT) 품목.
-    나머지는 ERP에 LOT가 없으므로 SCM도 ERP 수량을 그대로 보여준다."""
+    나머지는 ERP에 LOT가 없으므로 SCM도 ERP 수량을 그대로 보여준다.
+
+    이력에서 한 번 판정된 품목은 Part.lot_managed에 고정한다(remember=True, 재고 맞추기 때).
+    그렇지 않으면 유일한 입고 이력을 취소(삭제)한 품목이 '수량만' 품목으로 되돌아가
+    다음 재고 맞추기에서 남은 LOT 행이 기록 없이 지워진다.
+    """
     from .models import MaterialTransaction, ProductionLotItem, RawMaterialLabel
     ids = set(MaterialTransaction.objects.filter(transaction_type__in=['IN_SCM', 'IN_MANUAL'])
               .values_list('part_id', flat=True).distinct())
     ids |= set(RawMaterialLabel.objects.values_list('part_id', flat=True).distinct())
     ids |= set(ProductionLotItem.objects.values_list('part_id', flat=True))
     ids.discard(None)
-    return ids
+    flagged = set(Part.objects.filter(lot_managed=True).values_list('pk', flat=True))
+    if remember:
+        new = sorted(ids - flagged)
+        for start in range(0, len(new), 500):
+            Part.objects.filter(pk__in=new[start:start + 500]).update(lot_managed=True)
+    return ids | flagged
 
 
 def pending_part_ids(since):
@@ -110,9 +120,10 @@ def _mirror_quantity_only(warehouse, part, erp_qty, expected):
     return erp_qty - before
 
 
-def _settle_lot_managed(warehouse, part, erp_qty, expected):
+def _settle_lot_managed(warehouse, part, erp_qty, expected, run=None):
     """SCM이 LOT를 책임지는 품목.
-    - ERP가 더 적으면(생산출고·출고로 쓰인 양): 오래된 LOT부터 뺀다 (선입선출 소진, 근거는 ERP 출고 이력).
+    - ERP가 더 적으면(생산출고·출고로 쓰인 양): LOT 미지정 재고를 먼저, 그다음 오래된 LOT부터 뺀다
+      (선입선출 소진, 근거는 ERP 출고 이력. 미지정 재고가 가장 오래된 재고다 — 2026-11 결정).
     - 그래도 남거나 ERP가 더 많으면: 설명 안 되는 차이만 미지정(LOT 미확인)에 넣고 기록 1건.
     총량은 ERP와 같아진다. 돌려주는 값 = 미지정에 넣은 차이 (0이면 설명된 소진뿐)."""
     from .erp_api import _create_trx, fifo_sort_key
@@ -127,7 +138,7 @@ def _settle_lot_managed(warehouse, part, erp_qty, expected):
         if used > 0:
             pool = sorted((s for s in lots if s.quantity > 0), key=fifo_sort_key)
             if bucket.quantity > 0:
-                pool.append(bucket)  # LOT 모르는 양은 마지막에
+                pool.insert(0, bucket)  # LOT 미지정 재고가 가장 오래된 재고: 먼저 소진 (이동요청 승인과 같은 순서)
             for row in pool:
                 take = min(row.quantity, used - consumed)
                 if take <= 0:
@@ -135,6 +146,10 @@ def _settle_lot_managed(warehouse, part, erp_qty, expected):
                 MaterialStock.objects.filter(pk=row.pk).update(quantity=quantity_change(-take))
                 row.quantity -= take
                 consumed += take
+                # 어느 LOT에서 얼마나 소진됐는지 남긴다 (수불 합계와 무관한 추적 기록).
+                LotConsumption.objects.create(
+                    sync_run=run, warehouse=warehouse, part=part, lot_no=row.lot_no,
+                    production_lot=row.production_lot, quantity=take, remaining=row.quantity)
             MaterialStock.objects.filter(warehouse=warehouse, part=part, quantity=0).exclude(
                 lot_no__isnull=True, production_lot__isnull=True).delete()  # 다 쓴 LOT 행은 남기지 않는다
             if consumed:
@@ -247,7 +262,7 @@ def reconcile_stock():
         # Compare under row locks after the network request; never apply a total
         # to a balance that changed while the ERP response was in flight.
         snapshot = stock_snapshot()
-        lot_managed = lot_managed_part_ids()
+        lot_managed = lot_managed_part_ids(remember=True)
         cache.set('erp_sync_progress', {'stage': 'ERP 현재고 조회 중...', 'percent': 5}, 600)
         ok, items, error = fetch_erp_stock(year=str(timezone.localdate().year), month=None, total_fg='0')
         if not ok:
@@ -280,7 +295,7 @@ def reconcile_stock():
                 continue
             try:
                 if part.pk in lot_managed:
-                    diff = _settle_lot_managed(warehouses[wh], part, qty, expected)
+                    diff = _settle_lot_managed(warehouses[wh], part, qty, expected, run=run)
                     if diff:
                         result['lot_diffs'].append({'wh': wh, 'part_no': code, 'name': part.part_name,
                                                     'erp': float(qty), 'diff': float(diff)})

@@ -2420,10 +2420,23 @@ def sync_erp_stock_transfer(date_from=None, date_to=None):
                     Part.objects.select_for_update().get(pk=part.pk)
                     if MaterialTransaction.objects.filter(transaction_type='TRF_ERP', erp_incoming_no=trx_key).exists():
                         continue
-                    # ── 실제 재고 이동: LOT FIFO → 부족분은 NULL LOT에서 ──
+                    # ── 실제 재고 이동: LOT 미지정 재고(가장 오래된 재고) → LOT FIFO → 부족분은 미지정에서 ──
                     from material.models import MaterialStock
                     from django.db.models import F as _F
                     remaining = qty
+                    # 0) 남아 있는 LOT 미지정 재고를 먼저 옮긴다 (재고 맞추기·이동요청 승인과 같은 순서)
+                    first_null = MaterialStock.objects.select_for_update().filter(
+                        warehouse=from_wh, part=part, lot_no__isnull=True, production_lot__isnull=True,
+                        quantity__gt=0).first()
+                    if first_null:
+                        take = min(first_null.quantity, remaining)
+                        deduct_stock(first_null, take)
+                        dst_first, _cf = MaterialStock.objects.get_or_create(
+                            warehouse=to_wh, part=part, lot_no=None, production_lot=None,
+                            defaults={'quantity': 0}
+                        )
+                        MaterialStock.objects.filter(pk=dst_first.pk).update(quantity=quantity_change(take))
+                        remaining -= take
                     # 1) LOT 재고 FIFO (생산 LOT번호 → 입고일자 순). 이동 시 LOT/생산배치를 그대로 유지.
                     from_lots = sorted(MaterialStock.objects.select_for_update().filter(
                         Q(lot_no__isnull=False) | Q(production_lot__isnull=False),

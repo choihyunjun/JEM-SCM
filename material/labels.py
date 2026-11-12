@@ -129,3 +129,16 @@ def sync_all():
         moved += m
         consumed += c
     return {'moved': moved, 'consumed': consumed}
+
+
+def relabel_lot(warehouse, part, old_lot, new_lot):
+    """LOT 날짜를 바꿀 때 그 창고에 있는 살아있는 라벨도 새 날짜로 옮긴다.
+
+    재고 행만 옮기면 라벨은 옛 LOT를 가리킨 채 남고, 다음 sync_labels가
+    '옛 LOT 재고 0'을 보고 전부 소진 처리한다.
+    """
+    from .models import RawMaterialLabel
+    if old_lot is None or new_lot is None or old_lot == new_lot:
+        return 0
+    return RawMaterialLabel.objects.filter(
+        part=part, lot_no=old_lot, warehouse=warehouse, status__in=LIVE).update(lot_no=new_lot)

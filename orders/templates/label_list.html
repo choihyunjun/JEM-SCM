@@ -76,6 +76,14 @@
             {% endif %}
         </button>
     </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link fw-bold" id="lot-exception-tab" data-bs-toggle="tab" data-bs-target="#lot-exception-pane" type="button" role="tab">
+            <i class="bi bi-calendar-x me-1"></i> 이전 LOT 예외 요청
+            {% if lot_exception_pending %}
+                <span class="badge bg-warning text-dark rounded-pill ms-1">{{ lot_exception_pending }}</span>
+            {% endif %}
+        </button>
+    </li>
 </ul>
 
 
@@ -202,6 +210,65 @@
                             </tr>
                             {% empty %}
                             <tr><td colspan="6" class="text-center py-5 text-muted">부적합/반출 내역이 없습니다.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="lot-exception-pane" role="tabpanel">
+                <div class="alert alert-warning d-flex align-items-center mb-3">
+                    <i class="bi bi-info-circle-fill fs-4 me-3"></i>
+                    <div>
+                        <strong>이전 납품보다 오래된 LOT(생산일)는 선입선출을 위해 등록이 막힙니다.</strong><br>
+                        막힌 LOT는 예외 요청으로 자동 접수됩니다. 진영전기 담당자가 승인하면 그 LOT로 납품서를 <strong>한 번</strong> 등록할 수 있습니다.
+                    </div>
+                </div>
+
+                <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                    <table class="table table-hover mb-0 text-center align-middle scm-table">
+                        <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
+                            <tr>
+                                <th>요청 일시</th>
+                                <th>협력사</th>
+                                <th>품번</th>
+                                <th>요청 LOT</th>
+                                <th>당시 최근 납품 LOT</th>
+                                <th>상태</th>
+                                <th style="width: 22%;">처리</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for ex in lot_exceptions %}
+                            <tr class="{% if ex.status != 'PENDING' and ex.status != 'APPROVED' %}table-light text-muted{% endif %}">
+                                <td>{{ ex.requested_at|date:"Y-m-d H:i" }}<div class="small text-muted">{{ ex.requested_by.username|default:"-" }}</div></td>
+                                <td>{{ ex.vendor.name }}</td>
+                                <td class="fw-bold">{{ ex.part.part_no }}<div class="small text-muted">{{ ex.part.part_name }}</div></td>
+                                <td class="fw-bold text-danger">{{ ex.lot_no|date:"Y-m-d" }}</td>
+                                <td>{{ ex.latest_lot|date:"Y-m-d" }}</td>
+                                <td>
+                                    {% if ex.status == 'PENDING' %}<span class="badge bg-warning text-dark">승인 대기</span>
+                                    {% elif ex.status == 'APPROVED' %}<span class="badge bg-success">승인 · 등록 가능</span>
+                                    {% elif ex.status == 'REJECTED' %}<span class="badge bg-secondary">반려</span>
+                                    {% else %}<span class="badge bg-light text-dark border">사용 완료</span>{% endif %}
+                                    {% if ex.decided_at %}<div class="small text-muted">{{ ex.decided_by.username|default:"-" }} · {{ ex.decided_at|date:"m-d H:i" }}</div>{% endif %}
+                                    {% if ex.decision_note %}<div class="small">{{ ex.decision_note }}</div>{% endif %}
+                                </td>
+                                <td>
+                                    {% if ex.status == 'PENDING' and can_decide_lot_exception %}
+                                    <form action="{% url 'lot_exception_decide' ex.pk %}" method="post" class="d-flex gap-1 justify-content-center">
+                                        {% csrf_token %}
+                                        <input type="text" name="note" class="form-control form-control-sm" placeholder="메모(선택)" maxlength="200" style="max-width: 140px;">
+                                        <button class="btn btn-sm btn-success text-nowrap" name="action" value="approve">승인</button>
+                                        <button class="btn btn-sm btn-outline-secondary text-nowrap" name="action" value="reject">반려</button>
+                                    </form>
+                                    {% elif ex.status == 'PENDING' %}<span class="text-muted small">담당자 확인 중</span>
+                                    {% elif ex.status == 'APPROVED' %}<span class="text-success small">해당 LOT로 다시 등록하세요</span>
+                                    {% else %}-{% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="7" class="text-center py-5 text-muted">예외 요청이 없습니다.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>

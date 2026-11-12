@@ -192,3 +192,21 @@ class WMSConfigAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+from .models import LotConsumption
+
+
+@admin.register(LotConsumption)
+class LotConsumptionAdmin(admin.ModelAdmin):
+    list_display = ('consumed_at', 'warehouse', 'part', 'lot_no', 'production_lot', 'quantity', 'remaining')
+    list_filter = ('warehouse',)
+    search_fields = ('part__part_no', 'part__part_name', 'production_lot')
+    date_hierarchy = 'consumed_at'
+    raw_id_fields = ('part', 'sync_run')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False

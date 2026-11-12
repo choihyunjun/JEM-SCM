@@ -15,6 +15,33 @@ class StockSyncRun(models.Model):
         ordering = ['-id']
 
 
+class LotConsumption(models.Model):
+    """ERP 현재고 반영 때 선입선출로 소진 처리한 LOT 기록.
+
+    수불 대장(MaterialTransaction)과 별개다: ERP 출고 이력이 이미 수불에 있으므로 여기 기록은
+    재고 합계 계산에 쓰지 않고, '어느 LOT가 언제 얼마나 소진됐는가'를 추적하는 데만 쓴다.
+    한 번의 재고 맞추기에서 창고·품목·LOT당 1행.
+    """
+    sync_run = models.ForeignKey(StockSyncRun, on_delete=models.SET_NULL, null=True, blank=True,
+                                 related_name='lot_consumptions', verbose_name="재고 맞추기 회차")
+    warehouse = models.ForeignKey('Warehouse', on_delete=models.CASCADE, verbose_name="창고")
+    part = models.ForeignKey('orders.Part', on_delete=models.CASCADE, verbose_name="품목")
+    lot_no = models.DateField("LOT 번호(생산일)", null=True, blank=True)
+    production_lot = models.CharField("생산 LOT(배치)", max_length=20, null=True, blank=True)
+    quantity = models.DecimalField("소진 수량", max_digits=20, decimal_places=4)
+    remaining = models.DecimalField("소진 후 LOT 잔량", max_digits=20, decimal_places=4, default=0)
+    consumed_at = models.DateTimeField("소진 처리 시각", default=timezone.now, db_index=True)
+
+    class Meta:
+        verbose_name = "LOT 소진 기록"
+        verbose_name_plural = "LOT 소진 기록"
+        ordering = ['-consumed_at', '-id']
+        indexes = [models.Index(fields=['part', 'lot_no'], name='lotconsume_part_lot')]
+
+    def __str__(self):
+        return f"{self.part_id} {self.lot_no or self.production_lot or 'LOT 미확인'} -{self.quantity}"
+
+
 class BOMCalculationJob(models.Model):
     """Temporary, user-owned calculation snapshot; never changes actual stock."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
