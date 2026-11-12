@@ -1,4 +1,4 @@
-"""성형 가동률 종합보고서(엑셀) 회귀 테스트. 화면과 같은 집계로 여섯 시트가 만들어지는지 확인한다."""
+"""성형 가동률 종합보고서(엑셀) 회귀 테스트. 화면과 같은 집계로 시트들이 만들어지는지 확인한다."""
 import io
 from datetime import date
 
@@ -41,30 +41,54 @@ class MoldingReportTests(TestCase):
 
     def test_report_collects_all_three_tabs_and_the_machine_popups(self):
         wb = self.workbook()
-        self.assertEqual(wb.sheetnames, ['요약', '유실 분석', '호기별 종합', '호기별 생산 실적', '호기별 유실 내역', '품목군 생산'])
+        self.assertEqual(wb.sheetnames, ['종합', '호기별 종합', '호기별 상세', '유실 분석', '품목군 생산',
+                                         '원자료-생산', '원자료-유실', '_그래프자료'])
+        self.assertEqual(wb['_그래프자료'].sheet_state, 'hidden')
 
-        summary = {row[0]: row[1] for row in self.rows(wb['요약']) if len(row) > 1}
-        self.assertEqual(summary['설비가동률'], 0.9)                       # (900+1000+800) / 3000
-        self.assertEqual(len(wb['요약']._charts), 3)
+        board = wb['종합']
+        cards = {board.cell(5, col).value: board.cell(6, col).value for col in range(2, 14, 2)}
+        self.assertEqual(cards['설비가동률'], 0.9)                         # (900+1000+800) / 3000
+        self.assertEqual(cards['총 생산'], 15030)
+        self.assertEqual(len(board._charts), 4)
+        self.assertIn('M401', [row[1] for row in self.rows(board)])        # 눈여겨볼 호기
 
-        machines = {row[1]: row for row in self.rows(wb['호기별 종합']) if row[1] in ('M301', 'M401', 'M999')}
+        overview = wb['호기별 종합']
+        machines = {row[1]: row for row in self.rows(overview) if row[1] in ('M301', 'M401', 'M999')}
         self.assertEqual(set(machines), {'M301', 'M401', 'M999'})          # 실적 없는 호기도 한 줄
         m301 = machines['M301']
         self.assertEqual((m301[3], m301[5], m301[9]), (2, 1900, 0.95))     # 가동일수, 가동시간, 설비가동률
         self.assertEqual((m301[12], m301[13], m301[14]), (10020, 10000, 20))   # 총생산, 양품, 불량
         self.assertIn('설비고장', m301[16])                                # 가장 큰 유실 사유
         self.assertTrue(m301[17].startswith('MP-1'))
+        grand = [row for row in self.rows(overview) if row[0] == '전체'][0]
+        self.assertEqual((grand[5], grand[9], grand[12]), (2700, 0.9, 15030))
 
-        produced = [row for row in self.rows(wb['호기별 생산 실적']) if row[1] == 'M401' and row[2] == 'MP-1']
+        # 호기 번호를 누르면 그 호기의 카드로 이동한다
+        detail = wb['호기별 상세']
+        link = next(cell for cell in overview['B'] if cell.value == 'M301').hyperlink.location
+        self.assertTrue(link.startswith("'호기별 상세'!B"))
+        self.assertTrue(detail[link.split('!')[1]].value.startswith('M301'))
+        self.assertIsNone(next(cell for cell in overview['B'] if cell.value == 'M999').hyperlink)
+        card = self.rows(detail)
+        self.assertIn(['MP-1', 'Cap', 5010, 5000, 10], [row[1:6] for row in card])          # 생산 실적
+        self.assertIn(['설비고장', '시간LOSS', 160], [row[9:12] for row in card])            # M401 유실 내역
+        self.assertIn(['계획정지', '관리LOSS', 40], [row[9:12] for row in card])
+
+        produced = [row for row in self.rows(wb['원자료-생산']) if row[1] == 'M401' and row[2] == 'MP-1']
         self.assertEqual((produced[0][4], produced[0][5], produced[0][6]), (5010, 5000, 10))
 
-        losses = {(row[1], row[2]): row[4] for row in self.rows(wb['호기별 유실 내역']) if row[1] in ('M301', 'M401')}
+        losses = {(row[1], row[2]): row[4] for row in self.rows(wb['원자료-유실']) if row[1] in ('M301', 'M401')}
         self.assertEqual(losses[('M301', '설비고장')], 60)
         self.assertEqual(losses[('M401', '계획정지')], 40)
         self.assertEqual(losses[('M401', '합계')], 200)
 
-        groups = self.rows(wb['품목군 생산'])
-        self.assertIn(['GROUP-A', '합계', 15000, 1], groups)
+        reasons = {}
+        for row in self.rows(wb['유실 분석']):                              # 첫 표(사유별 합계)의 줄
+            reasons.setdefault(row[0], row)
+        self.assertEqual(reasons['설비고장'][1:3], ['시간LOSS', 220])
+
+        groups = [row for row in self.rows(wb['품목군 생산']) if row[1] == 'GROUP-A']
+        self.assertEqual((groups[0][0], groups[0][3], groups[0][4]), (1, 15000, 1))
 
     def test_screen_still_renders_with_the_shared_calculation(self):
         self.client.force_login(self.admin)
@@ -77,7 +101,7 @@ class MoldingReportTests(TestCase):
         self.client.force_login(self.admin)
         empty = self.client.get(reverse('material:molding_analytics_report'), {'year': 2025, 'month': 1})
         self.assertEqual(empty.status_code, 200)
-        self.assertEqual(len(load_workbook(io.BytesIO(empty.content)).sheetnames), 6)
+        self.assertEqual(len(load_workbook(io.BytesIO(empty.content)).sheetnames), 8)
         bad = self.client.get(reverse('material:molding_analytics_report'), {'year': 2026, 'month': 13})
         self.assertEqual(bad.status_code, 302)
 
