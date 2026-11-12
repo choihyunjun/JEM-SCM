@@ -24,82 +24,66 @@
     </div>
 
     <!-- 년/월 선택 -->
-    <div class="dtl-toolbar mb-4">
-        <div>
-            <form method="get" class="row g-2 align-items-center">
-                <div class="col-auto">
-                    <label class="dtl-form-label">년도</label>
-                    <select name="year" class="form-select form-select-sm dtl-form-control" style="width:100px;">
-                        <option value="2024" {% if year == 2024 %}selected{% endif %}>2024</option>
-                        <option value="2025" {% if year == 2025 %}selected{% endif %}>2025</option>
-                        <option value="2026" {% if year == 2026 %}selected{% endif %}>2026</option>
-                        <option value="2027" {% if year == 2027 %}selected{% endif %}>2027</option>
-                    </select>
-                </div>
-                <div class="col-auto">
-                    <label class="dtl-form-label">월</label>
-                    <select name="month" class="form-select form-select-sm dtl-form-control" style="width:80px;">
-                        <option value="1" {% if month == 1 %}selected{% endif %}>1월</option>
-                        <option value="2" {% if month == 2 %}selected{% endif %}>2월</option>
-                        <option value="3" {% if month == 3 %}selected{% endif %}>3월</option>
-                        <option value="4" {% if month == 4 %}selected{% endif %}>4월</option>
-                        <option value="5" {% if month == 5 %}selected{% endif %}>5월</option>
-                        <option value="6" {% if month == 6 %}selected{% endif %}>6월</option>
-                        <option value="7" {% if month == 7 %}selected{% endif %}>7월</option>
-                        <option value="8" {% if month == 8 %}selected{% endif %}>8월</option>
-                        <option value="9" {% if month == 9 %}selected{% endif %}>9월</option>
-                        <option value="10" {% if month == 10 %}selected{% endif %}>10월</option>
-                        <option value="11" {% if month == 11 %}selected{% endif %}>11월</option>
-                        <option value="12" {% if month == 12 %}selected{% endif %}>12월</option>
-                    </select>
-                </div>
-                <div class="col-auto">
-                    <label class="dtl-form-label">&nbsp;</label>
-                    <button type="submit" class="dtl-btn-dark btn-sm d-block"><i class="bi bi-search"></i> 조회</button>
-                </div>
-                <div class="col-auto d-flex align-items-end">
-                    <span class="dtl-pill slate">
-                        기준시간: 주간 {{ setting.day_shift_minutes }}분 / 야간 {{ setting.night_shift_minutes }}분 / 근무일 {{ setting.work_days }}일
-                    </span>
-                    <div class="btn-group btn-group-sm ms-2" role="group">
-                        <button type="button" class="btn btn-outline-secondary btn-sm active" id="btnTimeSettingU" onclick="toggleTimeBaseU('setting')" style="font-size:0.72rem;">
-                            설정 기준 ({{ setting.work_days }}일)
-                        </button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnTimeActualU" onclick="toggleTimeBaseU('actual')" style="font-size:0.72rem;">
-                            실적 기준 ({{ actual_work_days }}일)
-                        </button>
+    <div class="dtl-toolbar mb-3">
+        <form method="get" class="mu-filter">
+            <div class="mu-field">
+                <label for="muYear">년도</label>
+                <select name="year" id="muYear" class="form-select form-select-sm">
+                    <option value="2024" {% if year == 2024 %}selected{% endif %}>2024</option>
+                    <option value="2025" {% if year == 2025 %}selected{% endif %}>2025</option>
+                    <option value="2026" {% if year == 2026 %}selected{% endif %}>2026</option>
+                    <option value="2027" {% if year == 2027 %}selected{% endif %}>2027</option>
+                </select>
+            </div>
+            <div class="mu-field">
+                <label for="muMonth">월</label>
+                <select name="month" id="muMonth" class="form-select form-select-sm">
+                    <option value="1" {% if month == 1 %}selected{% endif %}>1월</option>
+                    <option value="2" {% if month == 2 %}selected{% endif %}>2월</option>
+                    <option value="3" {% if month == 3 %}selected{% endif %}>3월</option>
+                    <option value="4" {% if month == 4 %}selected{% endif %}>4월</option>
+                    <option value="5" {% if month == 5 %}selected{% endif %}>5월</option>
+                    <option value="6" {% if month == 6 %}selected{% endif %}>6월</option>
+                    <option value="7" {% if month == 7 %}selected{% endif %}>7월</option>
+                    <option value="8" {% if month == 8 %}selected{% endif %}>8월</option>
+                    <option value="9" {% if month == 9 %}selected{% endif %}>9월</option>
+                    <option value="10" {% if month == 10 %}selected{% endif %}>10월</option>
+                    <option value="11" {% if month == 11 %}selected{% endif %}>11월</option>
+                    <option value="12" {% if month == 12 %}selected{% endif %}>12월</option>
+                </select>
+            </div>
+            <button type="submit" class="dtl-btn-dark btn-sm mu-submit"><i class="bi bi-search me-1"></i>조회</button>
+            <div class="mu-basis">
+                <span class="mu-basis-text">기준시간 주간 {{ setting.day_shift_minutes }}분 · 야간 {{ setting.night_shift_minutes }}분 · 근무일 {{ setting.work_days }}일</span>
+                <div class="mu-field">
+                    <label>시간가동률 기준</label>
+                    <div class="seg-toggle" role="group" aria-label="시간가동률 기준">
+                        <button type="button" class="active" id="btnTimeSettingU" onclick="toggleTimeBaseU('setting')">설정 {{ setting.work_days }}일</button>
+                        <button type="button" id="btnTimeActualU" onclick="toggleTimeBaseU('actual')">실적 {{ actual_work_days }}일</button>
                     </div>
                 </div>
-            </form>
-        </div>
+            </div>
+        </form>
     </div>
 
-    <!-- 월간 요약 카드 -->
-    <div class="row g-3 mb-4">
-        <div class="col-md-4">
-            <div class="card shadow-sm border-start border-primary border-4">
-                <div class="card-body text-center">
-                    <div class="text-muted small">설비가동률</div>
-                    <div class="fs-2 fw-bold text-primary">{{ overall_util|floatformat:1 }}%</div>
-                </div>
-            </div>
+    <!-- 월간 요약 -->
+    <div class="mu-stats mb-4">
+        <div class="mu-stat">
+            <div class="mu-stat-label">설비가동률</div>
+            <div class="mu-stat-value">{{ overall_util|floatformat:1 }}%</div>
+            <div class="mu-stat-note">가동시간 ÷ 부하시간</div>
         </div>
-        <div class="col-md-4">
-            <div class="card shadow-sm border-start border-success border-4">
-                <div class="card-body text-center">
-                    <div class="text-muted small">시간가동률</div>
-                    <div class="fs-2 fw-bold text-success" id="kpiTimeValueU"
-                         data-setting="{{ overall_time|floatformat:1 }}" data-actual="{{ overall_time_actual|floatformat:1 }}">{{ overall_time|floatformat:1 }}%</div>
-                </div>
-            </div>
+        <div class="mu-stat">
+            <div class="mu-stat-label">시간가동률</div>
+            <div class="mu-stat-value" id="kpiTimeValueU"
+                 data-setting="{{ overall_time|floatformat:1 }}" data-actual="{{ overall_time_actual|floatformat:1 }}">{{ overall_time|floatformat:1 }}%</div>
+            <div class="mu-stat-note" id="kpiTimeNoteU"
+                 data-setting="설정 기준 · 근무일 {{ setting.work_days }}일" data-actual="실적 기준 · 실적이 있는 {{ actual_work_days }}일">설정 기준 · 근무일 {{ setting.work_days }}일</div>
         </div>
-        <div class="col-md-4">
-            <div class="card shadow-sm border-start border-info border-4">
-                <div class="card-body text-center">
-                    <div class="text-muted small">보유 설비</div>
-                    <div class="fs-2 fw-bold text-info">{{ total_machines }}대</div>
-                </div>
-            </div>
+        <div class="mu-stat">
+            <div class="mu-stat-label">보유 설비</div>
+            <div class="mu-stat-value">{{ total_machines }}<span class="mu-stat-unit">대</span></div>
+            <div class="mu-stat-note">사용 중인 성형기</div>
         </div>
     </div>
 
@@ -476,6 +460,37 @@
 .erp-synced { background: #fff3cd !important; }
 td[onclick] { transition: opacity 0.15s; }
 td[onclick]:hover { opacity: 0.7; }
+
+/* 조회 조건: 모든 칸을 같은 높이로 맞추고 아래쪽 기준으로 정렬한다 */
+.mu-filter { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; width: 100%; }
+.mu-field { display: flex; flex-direction: column; gap: 4px; }
+.mu-field > label { margin: 0; font-size: 0.75rem; font-weight: 600; color: #6b7280; line-height: 1; }
+.mu-filter .form-select, .mu-filter .mu-submit, .mu-filter .seg-toggle > button { height: 34px; font-size: 0.85rem; }
+.mu-filter .form-select { min-width: 96px; }
+.mu-filter .mu-submit { display: inline-flex; align-items: center; padding: 0 16px; white-space: nowrap; }
+.mu-basis { display: flex; align-items: flex-end; gap: 16px; margin-left: auto; }
+.mu-basis-text { height: 34px; display: inline-flex; align-items: center; font-size: 0.8rem; color: #6b7280; white-space: nowrap; }
+
+.seg-toggle { display: inline-flex; border: 1px solid #d1d5db; border-radius: 6px; overflow: hidden; background: #fff; }
+.seg-toggle > button { height: 32px; padding: 0 12px; border: 0; border-left: 1px solid #d1d5db; background: #fff; color: #4b5563; font-size: 0.8rem; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.seg-toggle > button:first-child { border-left: 0; }
+.seg-toggle > button:hover { background: #f3f4f6; }
+.seg-toggle > button.active, .seg-toggle > button.active:hover { background: #1f2937; color: #fff; }
+
+/* 월간 요약: 한 줄짜리 표처럼 */
+.mu-stats { display: grid; grid-template-columns: repeat(3, 1fr); background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; }
+.mu-stat { padding: 14px 20px; border-left: 1px solid #e5e7eb; min-width: 0; }
+.mu-stat:first-child { border-left: 0; }
+.mu-stat-label { font-size: 0.8rem; font-weight: 600; color: #6b7280; }
+.mu-stat-value { margin-top: 2px; font-size: 1.75rem; font-weight: 700; line-height: 1.25; color: #111827; font-variant-numeric: tabular-nums; }
+.mu-stat-unit { margin-left: 2px; font-size: 1rem; font-weight: 600; color: #4b5563; }
+.mu-stat-note { margin-top: 2px; font-size: 0.75rem; color: #9ca3af; }
+@media (max-width: 767.98px) {
+    .mu-basis { margin-left: 0; flex-wrap: wrap; }
+    .mu-stats { grid-template-columns: 1fr; }
+    .mu-stat { border-left: 0; border-top: 1px solid #e5e7eb; }
+    .mu-stat:first-child { border-top: 0; }
+}
 </style>
 
 <script>
@@ -764,6 +779,8 @@ function toggleTimeBaseU(mode) {
     // KPI 카드
     var kpi = document.getElementById('kpiTimeValueU');
     kpi.textContent = kpi.dataset[mode] + '%';
+    var note = document.getElementById('kpiTimeNoteU');
+    note.textContent = note.dataset[mode];
 
     // 호기별 + 소계 + 합계
     document.querySelectorAll('.machine-time-cell').forEach(function(td) {

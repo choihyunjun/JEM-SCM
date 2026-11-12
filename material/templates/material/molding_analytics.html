@@ -6,56 +6,25 @@
 {% block production_content %}
 <style>
     #tabMachine tbody tr[onclick]:hover { background:#ebf8ff !important; transition:background 0.15s; }
-    .analytics-header {
-        background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%);
-        color: white;
-        padding: 24px 28px;
-        border-radius: 12px;
-        margin-bottom: 24px;
-    }
-    .analytics-header h2 {
-        margin: 0;
-        font-size: 1.5rem;
-        font-weight: 700;
-    }
-    .analytics-header .subtitle {
-        opacity: 0.8;
-        font-size: 0.9rem;
-        margin-top: 4px;
-    }
-
-    /* Year/Month selector */
-    .period-selector {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-    .period-selector select {
-        background: rgba(255,255,255,0.15);
-        border: 1px solid rgba(255,255,255,0.3);
-        color: white;
-        padding: 6px 12px;
-        border-radius: 6px;
-        font-size: 0.9rem;
-        cursor: pointer;
-    }
-    .period-selector select option {
-        color: #333;
-        background: white;
-    }
-    .period-selector .btn-search {
-        background: rgba(255,255,255,0.2);
-        border: 1px solid rgba(255,255,255,0.4);
-        color: white;
-        padding: 6px 16px;
-        border-radius: 6px;
-        font-size: 0.9rem;
-        cursor: pointer;
-        transition: background 0.2s;
-    }
-    .period-selector .btn-search:hover {
-        background: rgba(255,255,255,0.35);
-    }
+    /* 머리 부분: 밝은 바탕에 어두운 글씨 (흰 글씨는 바탕이 밝아 보이지 않았다) */
+    .analytics-header { padding: 4px 0 16px; margin-bottom: 20px; border-bottom: 1px solid #e5e7eb; color: #111827; }
+    .analytics-header h2 { margin: 0; font-size: 1.35rem; font-weight: 700; color: #111827; }
+    .analytics-header .subtitle { margin-top: 4px; font-size: 0.85rem; color: #6b7280; }
+    .analytics-tools { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px; }
+    .period-selector { display: flex; align-items: flex-end; gap: 8px; }
+    .tool-field { display: flex; flex-direction: column; gap: 4px; }
+    .tool-field > label { margin: 0; font-size: 0.72rem; font-weight: 600; color: #6b7280; line-height: 1; }
+    .period-selector select { height: 32px; min-width: 88px; padding: 0 28px 0 10px; border: 1px solid #d1d5db; border-radius: 6px;
+        background-color: #fff; color: #111827; font-size: 0.85rem; cursor: pointer; }
+    .period-selector .tool-btn { height: 32px; display: inline-flex; align-items: center; padding: 0 14px; white-space: nowrap; }
+    .period-selector .dtl-btn-dark { background: var(--erp-brand, #8b0000); border: 1px solid transparent; border-radius: 4px; color: #fff; }
+    .period-selector .dtl-btn-dark:hover { background: var(--erp-brand-dark, #6f0000); color: #fff; }
+    .period-selector .dtl-btn-outline { border-radius: 4px; }
+    .seg-toggle { display: inline-flex; border: 1px solid #d1d5db; border-radius: 6px; overflow: hidden; background: #fff; }
+    .seg-toggle > button { height: 32px; padding: 0 12px; border: 0; border-left: 1px solid #d1d5db; background: #fff; color: #4b5563; font-size: 0.8rem; font-weight: 600; white-space: nowrap; cursor: pointer; }
+    .seg-toggle > button:first-child { border-left: 0; }
+    .seg-toggle > button:hover { background: #f3f4f6; }
+    .seg-toggle > button.active, .seg-toggle > button.active:hover { background: #1f2937; color: #fff; }
 
     /* KPI Cards */
     .kpi-row {
@@ -173,48 +142,44 @@
 </style>
 
 <!-- Header -->
-<div class="analytics-header d-flex justify-content-between align-items-start flex-wrap gap-3">
+<div class="analytics-header d-flex justify-content-between align-items-end flex-wrap gap-3">
     <div>
-        <h2><i class="bi bi-bar-chart-line me-2"></i>성형 가동률 분석</h2>
-        <div class="subtitle">{{ year }}년 {{ month }}월 종합 분석 리포트 &middot; 총 {{ total_records }}건 데이터</div>
+        <h2>성형 가동률 분석</h2>
+        <div class="subtitle">{{ year }}년 {{ month }}월 &middot; 실적 {{ total_records }}건</div>
         <a href="{% url 'material:molding_utilization' %}?year={{ year }}&month={{ month }}" class="back-link mt-1 d-inline-block">
             <i class="bi bi-arrow-left me-1"></i>가동률 입력 화면으로
         </a>
     </div>
-    <form method="get" class="period-selector">
-        <select name="year" id="selYear">
-            {% for y in year_range %}
-            <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}년</option>
-            {% endfor %}
-        </select>
-        <select name="month" id="selMonth">
-            <option value="1" {% if month == 1 %}selected{% endif %}>1월</option>
-            <option value="2" {% if month == 2 %}selected{% endif %}>2월</option>
-            <option value="3" {% if month == 3 %}selected{% endif %}>3월</option>
-            <option value="4" {% if month == 4 %}selected{% endif %}>4월</option>
-            <option value="5" {% if month == 5 %}selected{% endif %}>5월</option>
-            <option value="6" {% if month == 6 %}selected{% endif %}>6월</option>
-            <option value="7" {% if month == 7 %}selected{% endif %}>7월</option>
-            <option value="8" {% if month == 8 %}selected{% endif %}>8월</option>
-            <option value="9" {% if month == 9 %}selected{% endif %}>9월</option>
-            <option value="10" {% if month == 10 %}selected{% endif %}>10월</option>
-            <option value="11" {% if month == 11 %}selected{% endif %}>11월</option>
-            <option value="12" {% if month == 12 %}selected{% endif %}>12월</option>
-        </select>
-        <button type="submit" class="btn-search"><i class="bi bi-search me-1"></i>조회</button>
-        <a class="btn-search text-decoration-none" href="{% url 'material:molding_analytics_report' %}?year={{ year }}&month={{ month }}"
-           title="차트·표·호기별 세부분석(호기별 생산 실적과 유실 내역 포함)을 한 파일로 내려받습니다">
-            <i class="bi bi-file-earmark-excel me-1"></i>종합보고서
-        </a>
-    </form>
-    <div class="ms-3 d-flex align-items-center gap-1">
-        <div class="btn-group btn-group-sm" role="group">
-            <button type="button" class="btn btn-outline-light btn-sm active" id="btnTimeSetting" onclick="toggleTimeBase('setting')" style="font-size:0.75rem;padding:4px 10px;">
-                설정 기준 ({{ setting_work_days }}일)
-            </button>
-            <button type="button" class="btn btn-outline-light btn-sm" id="btnTimeActual" onclick="toggleTimeBase('actual')" style="font-size:0.75rem;padding:4px 10px;">
-                실적 기준 ({{ actual_work_days }}일)
-            </button>
+    <div class="analytics-tools">
+        <form method="get" class="period-selector">
+            <div class="tool-field">
+                <label for="selYear">년도</label>
+                <select name="year" id="selYear">
+                    {% for y in year_range %}
+                    <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}년</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="tool-field">
+                <label for="selMonth">월</label>
+                <select name="month" id="selMonth">
+                    {% for m in "123456789abc" %}
+                    <option value="{{ forloop.counter }}" {% if month == forloop.counter %}selected{% endif %}>{{ forloop.counter }}월</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="dtl-btn-dark btn-sm tool-btn"><i class="bi bi-search me-1"></i>조회</button>
+            <a class="dtl-btn-outline btn-sm tool-btn text-decoration-none" href="{% url 'material:molding_analytics_report' %}?year={{ year }}&month={{ month }}"
+               title="차트·표·호기별 세부분석(호기별 생산 실적과 유실 내역 포함)을 한 파일로 내려받습니다">
+                <i class="bi bi-file-earmark-excel me-1"></i>종합보고서
+            </a>
+        </form>
+        <div class="tool-field">
+            <label>시간가동률 기준</label>
+            <div class="seg-toggle" role="group" aria-label="시간가동률 기준">
+                <button type="button" class="active" id="btnTimeSetting" onclick="toggleTimeBase('setting')">설정 {{ setting_work_days }}일</button>
+                <button type="button" id="btnTimeActual" onclick="toggleTimeBase('actual')">실적 {{ actual_work_days }}일</button>
+            </div>
         </div>
     </div>
 </div>
