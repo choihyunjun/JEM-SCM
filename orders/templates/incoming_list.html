@@ -69,7 +69,9 @@
             </div>
             <div class="modal-body text-center py-4">
                 <p class="fw-bold mb-1" id="cancelTargetInfo" style="white-space: pre-wrap;"></p>
-                <p class="text-danger small fw-bold mb-4">(납품서가 단일 품목일 경우 전체취소를 눌러주세요)</p>
+                <p class="text-danger small fw-bold mb-2">(납품서가 단일 품목일 경우 전체취소를 눌러주세요)</p>
+                <p class="small text-muted mb-4">입고 취소는 <strong>잘못 입고한 건</strong>을 되돌릴 때만 사용합니다.<br>
+                    불량을 발견한 경우에는 WMS <a href="{% url 'material:incoming_history' %}">입고 내역 조회</a>의 <strong>[불량 등록]</strong>을 사용하세요.</p>
 
                 <div class="d-grid gap-3">
                     <button type="button" class="btn btn-outline-danger py-3" onclick="confirmCancel('item')">

@@ -60,8 +60,8 @@
                     <div class="dtl-field-value">{{ inspection.inbound_transaction.quantity|floatformat:"-4"|intcomma }} {{ inspection.inbound_transaction.part.weight_unit|default:"EA" }}</div>
                 </div>
                 <div class="col-md-3">
-                    <span class="dtl-field-label">현재위치</span>
-                    <div class="dtl-field-value" style="font-weight:500;">{{ inspection.inbound_transaction.warehouse_to.name }}</div>
+                    <span class="dtl-field-label">{% if inspection.status == 'PENDING' %}현재위치{% else %}검사 대기 입고 창고{% endif %}</span>
+                    <div class="dtl-field-value" style="font-weight:500;">{{ inspection.inbound_transaction.warehouse_to.name }}{% if inspection.status != 'PENDING' and inspection.qty_good %}<div class="small text-muted">합격분은 ({{ inspection.target_warehouse_code|default:"2000" }}) 창고로 입고됨</div>{% endif %}</div>
                 </div>
             </div>
         </div>
@@ -177,7 +177,8 @@
     {% if inspection.status != 'PENDING' and can_judge %}
     <div class="card mt-3"><div class="card-body">
         <h6>판정 정정</h6>
-        <p class="small text-muted">입력 오류가 있으면 검사대기로 되돌린 뒤 다시 판정할 수 있습니다. 이미 반출·이동·사용된 LOT은 정정할 수 없습니다.</p>
+        <p class="small text-muted">입력 오류가 있으면 검사대기로 되돌린 뒤 다시 판정할 수 있습니다. 이미 반출·이동·사용된 LOT은 정정할 수 없습니다.
+        합격 처리 후 일부 수량에서 불량을 발견한 경우에는 되돌리지 말고 <a href="{% url 'material:late_defect' inspection.inbound_transaction.pk %}"><strong>합격 후 불량 등록</strong></a>을 사용하세요. 그 수량만 부적합으로 옮기고 반출 대기 건을 만듭니다.</p>
         <form method="post" class="d-flex gap-2">{% csrf_token %}
             <input name="correction_reason" class="form-control" placeholder="정정 사유" aria-label="정정 사유" required>
             <button name="decision" value="CANCEL" class="btn btn-outline-danger text-nowrap" onclick="return confirm('판정을 검사대기로 되돌리시겠습니까?')">판정 되돌리기</button>

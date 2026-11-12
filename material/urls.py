@@ -1,7 +1,7 @@
 from django.urls import path
 from . import views
 from . import erp_recovery
-from . import label_reissue
+from . import label_reissue, late_defect
 from . import resin_yield
 from . import bom_jobs
 
@@ -29,6 +29,7 @@ urlpatterns = [
 
     # [핵심] views.incoming_history 함수와 연결하고, name도 'incoming_history'로 설정
     path('inbound/history/', views.incoming_history, name='incoming_history'),
+    path('inbound/defect/<int:trx_id>/', late_defect.late_defect, name='late_defect'),
     path('inbound/history/reregister/<int:trx_id>/', views.reregister_erp_price, name='reregister_erp_price'),
     path('inbound/history/cancel/<int:trx_id>/', views.cancel_manual_incoming, name='cancel_incoming_history'),
     path('inbound/history/edit/<int:trx_id>/', views.edit_manual_incoming, name='edit_incoming_history'),

@@ -28,7 +28,8 @@
     {% if unlinked_stocks %}
     <div class="alert alert-warning">
         <strong>검사·반출 이력 연결 확인이 필요한 재고</strong>
-        <p class="small mb-2">아래 수량은 반출 대기 건과 연결되지 않은 부적합 재고입니다. 담당자가 원본 검사와 과거 반출 여부를 확인해야 합니다.</p>
+        <p class="small mb-2">아래 수량은 반출 대기 건과 연결되지 않은 부적합 재고입니다. 담당자가 원본 검사와 과거 반출 여부를 확인해야 합니다.
+        앞으로 입고 후 발견한 불량은 재고이동이 아니라 <a href="{% url 'material:incoming_history' %}">입고 내역 조회</a>의 <strong>[불량 등록]</strong>으로 처리하면 반출 대기 건이 함께 만들어집니다.</p>
         {% for stock in unlinked_stocks %}<div class="small">{{ stock.part.part_no }} · LOT {{ stock.lot_no|date:"Y-m-d"|default:"-" }} / {{ stock.production_lot|default:"-" }} · {{ stock.unlinked_quantity|floatformat:"-4" }}개</div>{% endfor %}
     </div>
     {% endif %}

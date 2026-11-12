@@ -286,7 +286,12 @@
                     <button class="btn btn-outline-primary btn-sm" id="btnEdit" onclick="toggleEditMode(true)">
                         <i class="fas fa-edit me-1"></i>수정
                     </button>
-                    <button class="btn btn-outline-danger btn-sm" id="btnDelete" onclick="deleteFromModal()">
+                    <button class="btn btn-outline-secondary btn-sm" id="btnLateDefect" onclick="openLateDefect()"
+                            title="입고 후 발견한 불량을 그 수량만 부적합으로 돌립니다 (입고 기록은 유지)">
+                        <i class="fas fa-exclamation-triangle me-1"></i>불량 등록
+                    </button>
+                    <button class="btn btn-outline-danger btn-sm" id="btnDelete" onclick="deleteFromModal()"
+                            title="잘못 입고한 건을 없던 일로 되돌립니다">
                         <i class="fas fa-trash me-1"></i>삭제
                     </button>
                 </div>
@@ -598,6 +603,11 @@ function deleteFromModal() {
     if (!confirm(`[${trxNo}] 이 입고 건을 삭제하시겠습니까?\n재고가 차감되고 ERP 입고도 삭제됩니다.`)) return;
     bootstrap.Modal.getInstance(document.getElementById('detailModal')).hide();
     doDelete(id);
+}
+
+function openLateDefect() {
+    const id = document.getElementById('detailId').value;
+    window.location.href = "{% url 'material:late_defect' 0 %}".replace('/0/', `/${id}/`);
 }
 
 function doDelete(id) {

@@ -145,7 +145,8 @@ def guard_inspection_stock_usage(origin, transfers):
             part_id=origin.part_id, lot_no=origin.lot_no, production_lot=origin.production_lot,
             warehouse_from_id=transfer.warehouse_to_id, pk__gt=transfer.pk,
         ).exclude(pk__in=transfers.values_list('pk', flat=True)).exists():
-            raise ValueError('판정 후 이동·사용된 LOT이므로 자동 정정할 수 없습니다. 재고 이력을 확인해 주세요.')
+            raise ValueError('판정 후 이동·사용된 LOT이므로 취소·정정할 수 없습니다. '
+                             '불량을 발견한 경우에는 WMS 입고 내역 조회의 [불량 등록]을 사용해 주세요.')
 
 
 def reverse_inspection_summary(origin, inspection):

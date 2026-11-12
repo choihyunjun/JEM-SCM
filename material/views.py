@@ -925,7 +925,7 @@ def _do_cancel_incoming(trx, cancel_action, correction_reason='', correction_act
                 if delivery:
                     refresh_delivery_status(delivery)
 
-            msg = f"[{trx_no}] 입고만 취소 완료 — 수입검사가 대기 상태로 초기화되었습니다."
+            msg = f"[{trx_no}] 판정을 검사 대기로 되돌렸습니다. 입고 기록은 그대로이며 수입검사에서 다시 판정할 수 있습니다."
             if erp_notices:
                 msg += " (" + "; ".join(erp_notices) + ")"
             return True, msg
@@ -3546,6 +3546,11 @@ def stock_move(request):
                         to_wh = Warehouse.objects.get(code=t_loc_val)
                     except Warehouse.DoesNotExist:
                         raise ValueError(f"도착 창고를 찾을 수 없습니다: [{t_loc_val}]")
+                    # 부적합창고(8200)는 ERP에 없는 창고라 재고이동으로 옮기면 반출 건이 생기지 않고,
+                    # ERP 재고 맞추기 때 같은 수량이 원래 창고에 다시 잡힌다. 불량 등록 화면을 거치게 한다.
+                    if to_wh.code == '8200':
+                        raise ValueError("부적합창고(8200)로는 재고이동으로 옮길 수 없습니다. "
+                                         "입고 내역 조회의 [불량 등록]을 사용하면 반출 대기 건이 함께 만들어집니다.")
 
                     # 2-1. LOT별 재고(source_stock) 조회 및 차감
                     try:

@@ -184,7 +184,7 @@
                                 <td class="fw-bold text-danger">{{ log.delivery_order.order_no|default:"수기 입고" }}<div class="small text-muted">LOT {{ log.source_incoming.lot_no|date:"Y-m-d"|default:"미확인" }} / {{ log.source_incoming.production_lot|default:"-" }}</div></td>
                                 <td>{{ log.created_at|date:"Y-m-d" }}</td>
                                 <td class="fw-bold">{{ log.part.part_no }}</td>
-                                <td class="fw-bold text-danger">{{ log.quantity|intcomma }} / {{ log.shipped_quantity|floatformat:"-4"|intcomma }} / {{ log.confirmed_quantity|intcomma }}</td>
+                                <td class="fw-bold text-danger">{{ log.quantity|intcomma }} / {{ log.shipped_quantity|floatformat:"-4"|intcomma }} / {{ log.confirmed_quantity|floatformat:"-4"|intcomma }}</td>
                                 <td>{{ log.reason|default:"-" }}</td>
                                 <td>
                                     {% if not log.source_incoming_id or not log.delivery_item_id %}
@@ -345,7 +345,7 @@
                         <th style="width: 100px; background-color: #f8f9fa;">ERP 번호</th>
                         <th style="width: 50px; background-color: #f8f9fa;">순번</th>
                         <th style="width: 13%;">품번</th>
-                        <th>품명</th>
+                        <th style="min-width: 124px;">품명</th>
                         <th style="width: 80px;">납기일</th>
                         <th style="width: 80px;">총 발주</th>
                         <th style="width: 100px;" class="table-primary">납품가능</th>

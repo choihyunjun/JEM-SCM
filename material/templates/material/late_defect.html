@@ -1,0 +1,79 @@
+{% extends 'material/material_base.html' %}
+{% load humanize %}
+{% block title %}합격 후 불량 등록{% endblock %}
+{% block material_content %}
+<div class="container-fluid">
+    <h4 class="mb-2">합격 후 불량 등록</h4>
+    <p class="text-muted">입고가 끝난 뒤 발견한 불량을 그 수량만 부적합창고로 옮기고 반출 대기 건으로 등록합니다. 입고 기록과 나머지 양품은 그대로 둡니다.</p>
+
+    <div class="card mb-4"><div class="card-header fw-bold">대상 입고</div><div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-3"><div class="small text-muted">품번 / 품명</div><div class="fw-bold">{{ origin.part.part_no }}</div><div class="small">{{ origin.part.part_name }}</div></div>
+            <div class="col-md-3"><div class="small text-muted">납품서 / 입고 번호</div><div>{{ origin.ref_delivery_order|default:"-" }}</div><div class="small text-muted">{{ origin.transaction_no }}</div></div>
+            <div class="col-md-2"><div class="small text-muted">공급처</div><div>{{ origin.vendor.name|default:"-" }}</div></div>
+            <div class="col-md-2"><div class="small text-muted">LOT / 제조 LOT</div><div>{{ origin.lot_no|date:"Y-m-d"|default:"-" }} / {{ origin.production_lot|default:"-" }}</div></div>
+            <div class="col-md-2"><div class="small text-muted">입고 수량</div><div class="fw-bold erp-number">{{ origin.quantity|floatformat:"-4"|intcomma }}</div></div>
+        </div>
+        {% if not error %}
+        <hr>
+        <div class="row g-3">
+            <div class="col-md-3"><div class="small text-muted">남은 양품 수량</div><div class="fs-5 fw-bold erp-number">{{ accepted|floatformat:"-4"|intcomma }}</div></div>
+            <div class="col-md-3"><div class="small text-muted">지금까지 불량 수량</div><div class="fs-5 erp-number">{% if inspection %}{{ inspection.qty_bad|intcomma }}{% elif case %}{{ case.quantity|intcomma }}{% else %}0{% endif %}</div></div>
+            <div class="col-md-3"><div class="small text-muted">입고 창고</div><div>({{ target_wh.code }}) {{ target_wh.name }}</div></div>
+            <div class="col-md-3"><div class="small text-muted">검사</div><div>{% if inspection %}{{ inspection.get_status_display }}{% else %}무검사 입고{% endif %}</div></div>
+        </div>
+        {% endif %}
+    </div></div>
+
+    {% if error %}
+        <div class="alert alert-warning">{{ error }}</div>
+    {% elif accepted <= 0 %}
+        <div class="alert alert-secondary">이 입고에는 불량으로 돌릴 양품 수량이 남아 있지 않습니다.</div>
+    {% elif not stocks %}
+        <div class="alert alert-warning">이 LOT의 재고가 어느 창고에도 남아 있지 않습니다. 이미 모두 사용·출고된 경우 담당자와 협의해 주세요.</div>
+    {% else %}
+    <div class="card mb-4"><div class="card-header fw-bold">불량 등록</div><div class="card-body">
+        <form method="post" onsubmit="return confirm('입력한 수량을 불량으로 등록하시겠습니까?\n부적합창고로 이동하고 반출 대기 건이 만들어집니다.')">
+            {% csrf_token %}<input type="hidden" name="request_key" value="{{ request_key }}">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label" for="ld-stock">불량이 있는 창고</label>
+                    <select class="form-select" name="stock_id" id="ld-stock" required>
+                        {% for stock in stocks %}
+                        <option value="{{ stock.pk }}">({{ stock.warehouse.code }}) {{ stock.warehouse.name }} · 재고 {{ stock.quantity|floatformat:"-4"|intcomma }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label" for="ld-qty">불량 수량</label>
+                    <input class="form-control text-end" type="number" name="quantity" id="ld-qty" min="1" max="{{ accepted|floatformat:'0' }}" step="1" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="ld-reason">불량 사유</label>
+                    <input class="form-control" type="text" name="reason" id="ld-reason" maxlength="150" placeholder="예: 현장 투입 중 치수 불량" required>
+                </div>
+                <div class="col-md-2 d-grid">
+                    <button class="btn btn-danger text-nowrap">불량 등록</button>
+                </div>
+            </div>
+            <p class="small text-muted mt-3 mb-0">같은 날짜 LOT의 재고는 다른 납품분과 한 줄로 합쳐져 있습니다. 불량이 실제로 놓여 있는 창고를 선택해 주세요. ERP에는 이 입고의 수량이 불량 수량만큼 줄어든 것으로 다시 전송됩니다.</p>
+        </form>
+    </div></div>
+    {% endif %}
+
+    <div class="card"><div class="card-header fw-bold">이 입고의 사후 불량 등록 이력</div><div class="card-body p-0">
+        <div class="table-responsive"><table class="table align-middle mb-0">
+            <thead><tr><th>등록 일시</th><th>출발 창고</th><th class="erp-number">수량</th><th>사유</th><th>등록자</th></tr></thead>
+            <tbody>{% for trx in history %}<tr>
+                <td>{{ trx.date|date:"Y-m-d H:i" }}</td><td>{{ trx.warehouse_from.name }}</td>
+                <td class="erp-number">{{ trx.quantity|floatformat:"-4"|intcomma }}</td><td>{{ trx.remark }}</td><td>{{ trx.actor.username|default:"-" }}</td>
+            </tr>{% empty %}<tr><td colspan="5" class="text-center text-muted py-4">등록 이력이 없습니다.</td></tr>{% endfor %}</tbody>
+        </table></div>
+    </div></div>
+
+    <div class="d-flex gap-2 mt-3">
+        <a class="btn btn-outline-secondary" href="{% url 'material:incoming_history' %}">입고 내역으로</a>
+        <a class="btn btn-outline-secondary" href="{% url 'material:stock_return' %}?q={{ origin.part.part_no|urlencode }}">불량 반품 처리로</a>
+    </div>
+</div>
+{% endblock %}
