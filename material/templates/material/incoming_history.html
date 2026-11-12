@@ -103,6 +103,10 @@
                 <button class="dtl-btn-dark btn-sm" style="background:#b45309;" id="btnBatchReregister" onclick="batchReregister()" disabled>
                     <i class="fas fa-sync-alt me-1"></i>단가 재반영 (<span id="batchCount">0</span>건)
                 </button>
+                <button class="btn btn-outline-secondary btn-sm" id="btnBatchManual" onclick="openManualPriceModal()" disabled
+                        title="선택한 입고마다 단가를 직접 입력해 한 번에 재반영합니다">
+                    <i class="fas fa-pen me-1"></i>단가 직접 입력 (<span id="batchManualCount">0</span>건)
+                </button>
             </div>
         </div>
     </div>
@@ -226,6 +230,44 @@
 </div>
 
 <!-- 상세 모달 -->
+<div class="modal fade" id="manualPriceModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-pen me-2"></i>단가 직접 입력 재반영</h5>
+                <button type="button" class="btn-close" id="mpClose" onclick="closeManualPriceModal()" aria-label="닫기"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-3">선택한 입고마다 단가를 입력하면 한 건씩 차례로 ERP에 재반영합니다(기존 ERP 입고 삭제 후 재등록). 단가를 비워 둔 줄은 건너뜁니다.</p>
+                <div class="d-flex flex-wrap align-items-end gap-2 mb-3">
+                    <div>
+                        <label class="form-label small mb-1" for="mpFillValue">같은 단가를 여러 줄에 넣기</label>
+                        <input type="number" class="form-control form-control-sm text-end" id="mpFillValue" min="0" step="any" style="width:160px;" placeholder="단가">
+                    </div>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="fillManualPrices('all')">전체 줄에 적용</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="fillManualPrices('empty')">빈 줄에만 적용</button>
+                    <span class="small text-muted ms-auto" id="mpSummary"></span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead class="table-light"><tr>
+                            <th>일자</th><th>입고처</th><th>품번</th><th>품명</th><th class="text-end">수량</th>
+                            <th style="width:170px;" class="text-end">단가(원)</th><th style="width:30%;">결과</th>
+                        </tr></thead>
+                        <tbody id="mpRows"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="mpCancel" onclick="closeManualPriceModal()">닫기</button>
+                <button type="button" class="dtl-btn-dark btn-sm" style="background:#b45309;" id="mpRun" onclick="runManualPrices()">
+                    <i class="fas fa-sync-alt me-1"></i>입력한 단가로 재반영
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="detailModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered" style="max-width: 560px;">
         <div class="modal-content border-0 shadow-lg" style="border-radius: 12px;">
@@ -419,6 +461,8 @@ function updateBatchCount() {
 
     countEl.textContent = count;
     btn.disabled = (count === 0);
+    document.getElementById('batchManualCount').textContent = count;
+    document.getElementById('btnBatchManual').disabled = (count === 0);
     infoEl.textContent = count > 0 ? `${count}건 선택됨` : '전체 선택';
 
     // 전체 선택 체크박스 상태 동기화
@@ -426,8 +470,25 @@ function updateBatchCount() {
     document.getElementById('checkAll').checked = allChecks.length > 0 && checked.length === allChecks.length;
 }
 
-// ─── 일괄 단가 재반영 ───
-function batchReregister() {
+// ─── 단가 재반영 요청 1건 (자릿수 확인이 필요하면 한 번 물어보고 다시 보낸다) ───
+async function postReregister(id, body) {
+    const send = payload => fetch(`/wms/inbound/history/reregister/${id}/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': '{{ csrf_token }}', 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    }).then(r => r.json());
+    let data = await send(body);
+    if (!data.success && data.need_confirm) {
+        if (!confirm(data.error + '\n\n이 단가가 맞습니까?')) {
+            return { success: false, error: '단가 확인 후 취소함' };
+        }
+        data = await send({ ...body, confirmed: true });
+    }
+    return data;
+}
+
+// ─── 일괄 단가 재반영: 서버와 ERP에 한 건씩 차례로 보낸다 ───
+async function batchReregister() {
     const ids = Array.from(document.querySelectorAll('.row-check:checked')).map(cb => cb.value);
     if (ids.length === 0) return;
 
@@ -437,45 +498,140 @@ function batchReregister() {
 
     const btn = document.getElementById('btnBatchReregister');
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>처리 중...';
-
-    let completed = 0;
     let succeeded = 0;
-    let failed = [];
+    const failed = [];
+    for (let i = 0; i < ids.length; i++) {
+        btn.innerHTML = `<i class="fas fa-spinner fa-spin me-1"></i>처리 중... (${i + 1}/${ids.length})`;
+        const row = document.querySelector(`tr[data-id="${ids[i]}"]`);
+        const label = row ? `${row.dataset.partNo} (${row.dataset.date})` : ids[i];
+        try {
+            const data = await postReregister(ids[i], { use_integrated_only: useIntegratedOnly });
+            if (data.success) succeeded++; else failed.push(`${label}: ${data.error}`);
+        } catch (err) {
+            failed.push(`${label}: ${err}`);
+        }
+    }
+    let msg = `완료: ${succeeded}건 성공`;
+    if (failed.length > 0) msg += `, ${failed.length}건 실패\n\n실패 사유:\n${failed.join('\n')}`;
+    alert(msg);
+    location.reload();
+}
 
-    ids.forEach(id => {
-        fetch(`/wms/inbound/history/reregister/${id}/`, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': '{{ csrf_token }}',
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ use_integrated_only: useIntegratedOnly }),
-        })
-        .then(r => r.json())
-        .then(data => {
-            completed++;
-            if (data.success) {
-                succeeded++;
-            } else {
-                failed.push(data.error);
-            }
-            if (completed === ids.length) {
-                let msg = `완료: ${succeeded}건 성공`;
-                if (failed.length > 0) msg += `, ${failed.length}건 실패\n\n실패 사유:\n${failed.join('\n')}`;
-                alert(msg);
-                location.reload();
-            }
-        })
-        .catch(err => {
-            completed++;
-            failed.push(String(err));
-            if (completed === ids.length) {
-                alert(`완료: ${succeeded}건 성공, ${failed.length}건 실패`);
-                location.reload();
-            }
+// ─── 여러 건 단가 직접 입력 ───
+let manualPriceRunning = false;
+let manualPriceChanged = false;
+
+function openManualPriceModal() {
+    const checked = Array.from(document.querySelectorAll('.row-check:checked'));
+    if (checked.length === 0) return;
+    const body = document.getElementById('mpRows');
+    body.innerHTML = '';
+    checked.forEach(cb => {
+        const d = cb.closest('tr').dataset;
+        const tr = document.createElement('tr');
+        tr.dataset.id = cb.value;
+        const cells = [d.date, d.vendor || '-', d.partNo, d.partName];
+        cells.forEach((text, i) => {
+            const td = document.createElement('td');
+            td.textContent = text;
+            td.className = i === 2 ? 'fw-semibold text-nowrap' : 'small';
+            tr.appendChild(td);
         });
+        const qty = document.createElement('td');
+        qty.className = 'text-end erp-number'; qty.textContent = Number(d.qty).toLocaleString();
+        tr.appendChild(qty);
+        const priceTd = document.createElement('td');
+        const input = document.createElement('input');
+        input.type = 'number'; input.min = '0'; input.step = 'any';
+        input.className = 'form-control form-control-sm text-end mp-price';
+        input.setAttribute('aria-label', `${d.partNo} 단가`);
+        input.addEventListener('input', updateManualSummary);
+        input.addEventListener('keydown', e => {      // Enter로 다음 줄 단가 칸으로 이동
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            const all = Array.from(document.querySelectorAll('.mp-price'));
+            const next = all[all.indexOf(input) + 1];
+            if (next) next.focus();
+        });
+        priceTd.appendChild(input); tr.appendChild(priceTd);
+        const result = document.createElement('td');
+        result.className = 'small mp-result text-muted'; result.textContent = '';
+        tr.appendChild(result);
+        body.appendChild(tr);
     });
+    document.getElementById('mpFillValue').value = '';
+    document.getElementById('mpRun').disabled = false;
+    manualPriceChanged = false;
+    updateManualSummary();
+    new bootstrap.Modal(document.getElementById('manualPriceModal')).show();
+    setTimeout(() => { const first = document.querySelector('.mp-price'); if (first) first.focus(); }, 300);
+}
+
+function updateManualSummary() {
+    const inputs = Array.from(document.querySelectorAll('.mp-price'));
+    const filled = inputs.filter(i => i.value.trim() !== '' && !i.disabled).length;
+    document.getElementById('mpSummary').textContent = `${inputs.length}건 중 ${filled}건 입력됨`;
+}
+
+function fillManualPrices(mode) {
+    const value = document.getElementById('mpFillValue').value.trim();
+    if (value === '' || Number(value) <= 0) { alert('넣을 단가를 0보다 큰 숫자로 입력하세요.'); return; }
+    document.querySelectorAll('.mp-price').forEach(input => {
+        if (input.disabled) return;
+        if (mode === 'all' || input.value.trim() === '') input.value = value;
+    });
+    updateManualSummary();
+}
+
+async function runManualPrices() {
+    if (manualPriceRunning) return;
+    const rows = Array.from(document.querySelectorAll('#mpRows tr'))
+        .filter(tr => { const i = tr.querySelector('.mp-price'); return !i.disabled && i.value.trim() !== ''; });
+    if (rows.length === 0) { alert('단가를 입력한 줄이 없습니다.'); return; }
+    for (const tr of rows) {
+        if (!(Number(tr.querySelector('.mp-price').value) > 0)) {
+            alert('단가는 0보다 커야 합니다.'); tr.querySelector('.mp-price').focus(); return;
+        }
+    }
+    if (!confirm(`${rows.length}건을 입력한 단가로 재반영하시겠습니까?\n(ERP 입고 삭제 후 재등록됩니다)`)) return;
+
+    manualPriceRunning = true;
+    const runBtn = document.getElementById('mpRun');
+    runBtn.disabled = true;
+    document.getElementById('mpClose').disabled = true;
+    document.getElementById('mpCancel').disabled = true;
+    let done = 0, ok = 0;
+    for (const tr of rows) {
+        const input = tr.querySelector('.mp-price');
+        const result = tr.querySelector('.mp-result');
+        runBtn.innerHTML = `<i class="fas fa-spinner fa-spin me-1"></i>처리 중... (${done + 1}/${rows.length})`;
+        result.className = 'small mp-result text-muted'; result.textContent = '처리 중...';
+        try {
+            const data = await postReregister(tr.dataset.id, { unit_price: input.value.trim() });
+            if (data.success) {
+                ok++; manualPriceChanged = true;
+                input.disabled = true;      // 끝난 줄은 다시 보내지 않는다
+                result.className = 'small mp-result text-success'; result.textContent = data.message;
+            } else {
+                result.className = 'small mp-result text-danger'; result.textContent = '실패: ' + data.error;
+            }
+        } catch (err) {
+            result.className = 'small mp-result text-danger'; result.textContent = '오류: ' + err;
+        }
+        done++;
+    }
+    manualPriceRunning = false;
+    runBtn.innerHTML = '<i class="fas fa-sync-alt me-1"></i>실패한 줄 다시 재반영';
+    runBtn.disabled = (ok === rows.length);
+    document.getElementById('mpClose').disabled = false;
+    document.getElementById('mpCancel').disabled = false;
+    document.getElementById('mpSummary').textContent = `${rows.length}건 처리: ${ok}건 성공, ${rows.length - ok}건 실패`;
+}
+
+function closeManualPriceModal() {
+    if (manualPriceRunning) return;
+    bootstrap.Modal.getInstance(document.getElementById('manualPriceModal')).hide();
+    if (manualPriceChanged) location.reload();
 }
 
 // ─── 상세 모달에서 단일 건 단가 재반영 (직접입력 단가 지원) ───
@@ -500,15 +656,7 @@ function reregisterFromModal() {
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>처리 중...';
 
-    fetch(`/wms/inbound/history/reregister/${id}/`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': '{{ csrf_token }}',
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(body),
-    })
-    .then(r => r.json())
+    postReregister(id, body)
     .then(data => {
         if (data.success) {
             alert(data.message);

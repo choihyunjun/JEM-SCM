@@ -1308,7 +1308,8 @@ def edit_manual_incoming(request, trx_id):
                     trx.erp_sync_status = 'PENDING'
                     trx.save(update_fields=['erp_incoming_no', 'erp_sync_status'])
 
-                reg_ok, reg_no, reg_err = register_erp_incoming(trx, new_qty, warehouse.code)
+                from .late_defect import erp_receipt_quantity
+                reg_ok, reg_no, reg_err = register_erp_incoming(trx, erp_receipt_quantity(trx), warehouse.code)
                 if not reg_ok and not trx.erp_operations.filter(kind='REGISTER', status='PENDING').exists():
                     raise ValueError(f'ERP 재등록 요청 저장 실패: {reg_err}')
 
@@ -1346,25 +1347,89 @@ def _rewrite_judged_receipt(trx, inspection, new_date, new_vendor):
             move.erp_incoming_no = None
             move.erp_sync_status = 'PENDING'
             move.save(update_fields=['erp_incoming_no', 'erp_sync_status'])
-        reg_ok, _, reg_err = register_erp_incoming(move, move.quantity, move.warehouse_to.code)
+        from .late_defect import erp_receipt_quantity
+        reg_ok, _, reg_err = register_erp_incoming(move, erp_receipt_quantity(move), move.warehouse_to.code)
         if not reg_ok and not move.erp_operations.filter(kind='REGISTER', status='PENDING').exists():
             raise ValueError(f'ERP 재등록 요청 저장 실패: {reg_err}')
+
+
+def _price_target(trx):
+    """단가 재반영 대상 확정: (ERP 입고가 걸린 수불, 원본 입고, 발주번호, 발주순번). 읽기만 한다."""
+    from material.incoming import delivery_item_for_incoming
+    from material.cancellation import inspection_transfers_for_cancel
+    origin_trx = trx
+    if trx.source_incoming_id:
+        origin_trx = trx.source_incoming
+    elif trx.transaction_type == 'TRANSFER' and '수입검사' in (trx.remark or ''):
+        candidates = []
+        for inspection in ImportInspection.objects.filter(
+            inbound_transaction__part=trx.part,
+            inbound_transaction__lot_no=trx.lot_no,
+            inbound_transaction__production_lot=trx.production_lot,
+            status__in=['APPROVED', 'REJECTED'],
+        ).select_related('inbound_transaction'):
+            try:
+                if inspection_transfers_for_cancel(inspection.inbound_transaction, inspection).filter(pk=trx.pk).exists():
+                    candidates.append(inspection.inbound_transaction)
+            except ValueError:
+                continue
+        if len(candidates) != 1:
+            raise ValueError('검사 이동의 원본 입고 연결을 먼저 확인해 주세요.')
+        origin_trx = candidates[0]
+    inspection = getattr(origin_trx, 'inspection', None)
+    if inspection and trx.pk == origin_trx.pk:
+        if inspection.status == 'PENDING':
+            raise ValueError('검사 판정 후 ERP 입고를 등록해 주세요.')
+        targets = list(inspection_transfers_for_cancel(origin_trx, inspection).exclude(warehouse_to__code='8200'))
+        if len(targets) != 1:
+            raise ValueError('양품 입고 이력을 특정할 수 없습니다.')
+        trx = targets[0]
+    doi = delivery_item_for_incoming(origin_trx)
+    erp_order_no = (doi.erp_order_no or '') if doi else ''
+    erp_order_seq = (doi.erp_order_seq or '') if doi else ''
+    # 2순위(폴백): 수기입고 remark에서 정규식으로 추출
+    if not erp_order_no and origin_trx.remark:
+        import re as _re
+        m = _re.search(r'ERP:(\S+)-(\d+)', origin_trx.remark or '')
+        if m:
+            erp_order_no, erp_order_seq = m.group(1), m.group(2)
+    return trx, origin_trx, erp_order_no, erp_order_seq
+
+
+def _last_erp_unit_price(trx):
+    """이 입고가 마지막으로 ERP에 등록(요청)된 단가. 없으면 None."""
+    for job in trx.erp_operations.filter(kind='REGISTER').order_by('-created_at')[:5]:
+        try:
+            price = float(job.payload['detail'][0]['rcvUm'])
+        except (KeyError, IndexError, TypeError, ValueError):
+            continue
+        if price > 0:
+            return price
+    return None
 
 
 @login_required
 @wms_permission_required('can_wms_incoming_process')
 def reregister_erp_price(request, trx_id):
-    """[입고 내역] ERP 단가 재반영 - 기존 ERP 입고 삭제 후 최신 단가로 재등록"""
+    """[입고 내역] ERP 단가 재반영 - 기존 ERP 입고 삭제 후 최신(또는 직접 입력한) 단가로 재등록"""
     from django.http import JsonResponse
+    from decimal import InvalidOperation
 
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'POST만 허용'}, status=405)
 
-    trx = get_object_or_404(MaterialTransaction, pk=trx_id)
+    trx = get_object_or_404(MaterialTransaction.objects.select_related('part', 'vendor', 'warehouse_to'), pk=trx_id)
 
     # ERP입고(아마란스에서 온 건)는 제외
     if trx.transaction_type in ('IN_ERP', 'RCV_ERP'):
         return JsonResponse({'success': False, 'error': 'ERP입고 건은 아마란스에서 직접 수정하세요.'})
+    # 입고 기록만 대상: 수기·납품 입고와 수입검사 합격 이동. 일반 재고이동·출고에 ERP 입고가 생기면 안 된다.
+    is_inspection_move = trx.transaction_type == 'TRANSFER' and (
+        trx.source_incoming_id or '수입검사' in (trx.remark or ''))
+    if trx.transaction_type not in ('IN_MANUAL', 'IN_SCM') and not is_inspection_move:
+        return JsonResponse({'success': False, 'error': '입고 건만 단가를 재반영할 수 있습니다.'})
+    if trx.warehouse_to and trx.warehouse_to.code == '8200':
+        return JsonResponse({'success': False, 'error': '부적합 이동 건은 ERP 입고 대상이 아닙니다.'})
 
     import json as _json
     try:
@@ -1372,108 +1437,98 @@ def reregister_erp_price(request, trx_id):
     except Exception:
         body_data = {}
     use_integrated_only = body_data.get('use_integrated_only', False)
+    confirmed = bool(body_data.get('confirmed'))
 
     manual_unit_price = None
     raw_price = body_data.get('unit_price')
     if raw_price not in (None, ''):
         try:
-            manual_unit_price = float(raw_price)
-        except (TypeError, ValueError):
+            price_value = Decimal(str(raw_price).replace(',', '').strip())
+        except (InvalidOperation, TypeError, ValueError):
             return JsonResponse({'success': False, 'error': '단가는 숫자로 입력해주세요.'})
-        if manual_unit_price <= 0:
+        if not price_value.is_finite() or price_value <= 0:
             return JsonResponse({'success': False, 'error': '단가는 0보다 커야 합니다.'})
+        if price_value >= Decimal('10000000000') or price_value != price_value.quantize(Decimal('0.0001')):
+            return JsonResponse({'success': False, 'error': '단가는 100억 미만, 소수점 4자리까지 입력할 수 있습니다.'})
+        manual_unit_price = int(price_value) if price_value == price_value.to_integral_value() else float(price_value)
 
     try:
+        from material.erp_api import delete_erp_incoming, fetch_erp_item_price, register_erp_incoming
+        from material.erp_outbox import guard_receipt_change
+        from material.late_defect import erp_receipt_quantity
+        from material.models import ERPIncomingEvent
+
+        # ── 1단계 (DB 잠금 없음): 대상·수량 확정과 ERP 단가 조회 ──
+        trx, origin_trx, erp_order_no, erp_order_seq = _price_target(trx)
+        vendor = trx.vendor
+        if not vendor or not vendor.erp_code:
+            raise ValueError('공급처에 ERP 거래처 코드가 없어 ERP에 등록할 수 없습니다. 공급처 정보를 먼저 확인해 주세요.')
+        wh = trx.warehouse_to
+        warehouse_code = wh.code if wh else '2000'
+        quantity = erp_receipt_quantity(trx)   # 합격 후 불량으로 돌린 수량은 빼고 등록한다
+        if quantity <= 0:
+            raise ValueError('ERP에 등록할 양품 수량이 없습니다.')
+        previous_price = _last_erp_unit_price(trx)
+
+        vat_price = None
+        if manual_unit_price is None:
+            # ERP 조회는 여러 번의 외부 호출이라 트랜잭션 밖에서 한 번만 하고, 그 값을 그대로 등록에 쓴다.
+            unit_price, vat_price = fetch_erp_item_price(trx.part.part_no, vendor.erp_code,
+                                                         use_integrated_only=use_integrated_only)
+            if unit_price <= 0:
+                raise ValueError('단가 미등록: 기존 ERP 전표를 유지했습니다.')
+            price_mode = '통합단가' if use_integrated_only else '자동조회'
+        else:
+            unit_price = manual_unit_price
+            price_mode = '직접입력'
+            # 자릿수를 잘못 넣은 경우를 걸러낸다: 직전 등록 단가의 10배 이상/10분의 1 이하면 한 번 더 확인
+            if previous_price and not confirmed and (unit_price >= previous_price * 10 or unit_price * 10 <= previous_price):
+                return JsonResponse({
+                    'success': False, 'need_confirm': True,
+                    'error': f'[{trx.part.part_no}] 입력한 단가 {unit_price:,}원이 직전 단가 {previous_price:,.4g}원과 10배 이상 차이 납니다.',
+                })
+
+        # ── 2단계 (한 트랜잭션): 기존 ERP 입고 삭제 요청 + 새 단가로 등록 요청 + 변경 기록 ──
         with transaction.atomic():
-            from material.erp_api import delete_erp_incoming, register_erp_incoming
-
-            from material.erp_outbox import guard_receipt_change
             guard_receipt_change(trx)
             erp_no = trx.erp_incoming_no
-
-            from material.incoming import delivery_item_for_incoming
-            from material.cancellation import inspection_transfers_for_cancel
-            origin_trx = trx
-            if trx.source_incoming_id:
-                origin_trx = trx.source_incoming
-            elif trx.transaction_type == 'TRANSFER' and '수입검사' in (trx.remark or ''):
-                candidates = []
-                for inspection in ImportInspection.objects.filter(
-                    inbound_transaction__part=trx.part,
-                    inbound_transaction__lot_no=trx.lot_no,
-                    inbound_transaction__production_lot=trx.production_lot,
-                    status__in=['APPROVED', 'REJECTED'],
-                ).select_related('inbound_transaction'):
-                    try:
-                        if inspection_transfers_for_cancel(inspection.inbound_transaction, inspection).filter(pk=trx.pk).exists():
-                            candidates.append(inspection.inbound_transaction)
-                    except ValueError:
-                        continue
-                if len(candidates) != 1:
-                    raise ValueError('검사 이동의 원본 입고 연결을 먼저 확인해 주세요.')
-                origin_trx = candidates[0]
-            inspection = getattr(origin_trx, 'inspection', None)
-            if inspection and trx.pk == origin_trx.pk:
-                if inspection.status == 'PENDING':
-                    raise ValueError('검사 판정 후 ERP 입고를 등록해 주세요.')
-                targets = list(inspection_transfers_for_cancel(origin_trx, inspection).exclude(warehouse_to__code='8200'))
-                if len(targets) != 1:
-                    raise ValueError('양품 입고 이력을 특정할 수 없습니다.')
-                trx = targets[0]
-                erp_no = trx.erp_incoming_no
-            wh = trx.warehouse_to
-            warehouse_code = wh.code if wh else '2000'
-            doi = delivery_item_for_incoming(origin_trx)
-            erp_order_no = (doi.erp_order_no or '') if doi else ''
-            erp_order_seq = (doi.erp_order_seq or '') if doi else ''
-
-            # 2순위(폴백): 수기입고 remark에서 정규식으로 추출
-            if not erp_order_no and origin_trx.remark:
-                import re as _re
-                m = _re.search(r'ERP:(\S+)-(\d+)', origin_trx.remark or '')
-                if m:
-                    erp_order_no = m.group(1)
-                    erp_order_seq = m.group(2)
-
-            guard_receipt_change(trx)
-            erp_no = trx.erp_incoming_no
-            if manual_unit_price is None:
-                from material.erp_api import fetch_erp_item_price
-                price, _ = fetch_erp_item_price(trx.part.part_no, trx.vendor.erp_code if trx.vendor else '', use_integrated_only=use_integrated_only)
-                if price <= 0:
-                    raise ValueError('단가 미등록: 기존 ERP 전표를 유지했습니다.')
-            # 1) 기존 ERP 입고 삭제 (있는 경우만)
             if erp_no:
                 del_ok, del_err = delete_erp_incoming(erp_no)
                 if not del_ok:
-                    return JsonResponse({'success': False, 'error': f'ERP 입고 삭제 실패: {del_err}'})
-
+                    # 예외로 올려 위 guard가 취소해 둔 전송 대기 건까지 함께 되돌린다.
+                    raise ValueError(f'ERP 입고 삭제 실패: {del_err}')
                 trx.erp_incoming_no = None
                 trx.erp_sync_status = 'PENDING'
                 trx.save(update_fields=['erp_incoming_no', 'erp_sync_status'])
 
-            # 2) 최신 단가로 (재)등록
-            price_mode = f'수동입력({manual_unit_price})' if manual_unit_price is not None else ('통합단가전용' if use_integrated_only else '일반(fallback)')
-            print(f'[단가재반영] trx={trx.id}, part={trx.part.part_no}, qty={trx.quantity}, wh={warehouse_code}, vendor={trx.vendor.erp_code if trx.vendor else None}, 단가모드={price_mode}', flush=True)
             reg_ok, reg_no, reg_err = register_erp_incoming(
-                trx, trx.quantity, warehouse_code,
+                trx, quantity, warehouse_code,
                 erp_order_no=erp_order_no, erp_order_seq=erp_order_seq,
                 use_integrated_only=use_integrated_only,
-                manual_unit_price=manual_unit_price,
+                manual_unit_price=unit_price, manual_vat_price=vat_price,
             )
-            print(f'[단가재반영] 결과: ok={reg_ok}, no={reg_no}, err={reg_err}', flush=True)
+            job = trx.erp_operations.filter(kind='REGISTER').order_by('-created_at').first()
+            pending = bool(job and job.status == 'PENDING')
+            if not reg_ok and not pending:
+                raise ValueError(f'ERP 재등록 요청 저장 실패: {reg_err or "원인 미상"}')
+            if job:
+                before = f'{previous_price:,.4g}원' if previous_price else '없음'
+                ERPIncomingEvent.objects.create(
+                    operation=job, action='PRICE', actor=request.user,
+                    message=f'단가 재반영({price_mode}): {before} → {unit_price:,}원 / 수량 {quantity.normalize():f}'
+                    if hasattr(quantity, 'normalize') else
+                    f'단가 재반영({price_mode}): {before} → {unit_price:,}원 / 수량 {quantity}')
 
-            if not reg_ok and trx.erp_operations.filter(kind='REGISTER', status='PENDING').exists():
-                return JsonResponse({'success': True, 'pending': True, 'message': 'ERP 재반영 요청을 저장했습니다. ERP 입고 연동 관리에서 결과를 확인해 주세요.'})
-            if reg_ok:
-                action = '재반영' if erp_no else '등록'
-                return JsonResponse({
-                    'success': True,
-                    'message': f'ERP 단가 {action} 완료 (ERP번호: {reg_no})',
-                    'new_erp_no': reg_no
-                })
-            else:
-                raise ValueError(f'ERP 재등록 요청 저장 실패: {reg_err}')
+        logger.info('[단가재반영] trx=%s part=%s qty=%s wh=%s vendor=%s po=%s-%s mode=%s price=%s old_erp=%s by=%s',
+                    trx.id, trx.part.part_no, quantity, warehouse_code, vendor.erp_code, erp_order_no,
+                    erp_order_seq, price_mode, unit_price, erp_no, request.user.get_username())
+        if not reg_ok:
+            return JsonResponse({'success': True, 'pending': True, 'unit_price': unit_price,
+                                 'message': f'ERP 재반영 요청을 저장했습니다 (단가 {unit_price:,}원). ERP 입고 연동 관리에서 결과를 확인해 주세요.'})
+        action = '재반영' if erp_no else '등록'
+        return JsonResponse({'success': True, 'unit_price': unit_price,
+                             'message': f'ERP 단가 {action} 완료 (단가 {unit_price:,}원, ERP번호: {reg_no})',
+                             'new_erp_no': reg_no})
 
     except Exception as e:
         logger.error(f'단가 재반영 오류: {e}', exc_info=True)

@@ -230,3 +230,92 @@ class ErpQuantityTests(LateDefectBase):
         self.assertEqual((self.stock(self.store), self.stock(self.bad)), (1000, 0))
         self.assertFalse(ReturnLog.objects.exists())
         self.assertEqual(ImportInspection.objects.get(inbound_transaction=origin).qty_good, 1000)
+
+
+@override_settings(ERP_ENABLED=True)
+class PriceReregistrationTests(LateDefectBase):
+    """단가 재반영: 불량 등록으로 줄어든 수량 유지, 단가 1회 조회, 직접 입력 확인·이력, 입고 건만 대상."""
+
+    def setUp(self):
+        super().setUp()
+        from orders.models import Vendor
+        Vendor.objects.filter(pk=self.vendor.pk).update(erp_code='TR-A')
+        self.api = patch('material.erp_api.call_erp_api', side_effect=AssertionError('ERP call inside request')).start()
+        self.price = patch('material.erp_api.fetch_erp_item_price', return_value=(100, 110)).start()
+        self.addCleanup(patch.stopall)
+
+    def reprice(self, trx, **body):
+        import json
+        self.client.force_login(self.admin)
+        return self.client.post(reverse('material:reregister_erp_price', args=[trx.pk]),
+                                json.dumps(body), content_type='application/json').json()
+
+    def jobs(self, trx):
+        from material.models import ERPIncomingOperation
+        return ERPIncomingOperation.objects.filter(transaction=trx, kind='REGISTER').order_by('created_at')
+
+    def accepted_receipt(self):
+        _, origin = self.receive()
+        self.judge(origin, 1000)
+        ok_move = MaterialTransaction.objects.get(source_incoming=origin, remark__startswith='[수입검사] 양품')
+        return origin, ok_move
+
+    def test_quantity_reduced_by_a_late_defect_is_kept(self):
+        origin, ok_move = self.accepted_receipt()
+        self.defect(origin, self.store, 5)
+        self.price.reset_mock()
+        result = self.reprice(ok_move, use_integrated_only=True)
+        self.assertTrue(result['success'], result)
+        detail = self.jobs(ok_move).last().payload['detail'][0]
+        self.assertEqual((detail['rcvQt'], detail['rcvUm'], detail['rcvgAm']), (995, 100, 99500))
+        self.assertEqual(self.price.call_count, 1)             # 확인용·등록용으로 두 번 조회하지 않는다
+
+    def test_manual_price_is_logged_and_large_changes_need_confirmation(self):
+        from material.models import ERPIncomingEvent
+        _, ok_move = self.accepted_receipt()
+        self.price.reset_mock()                                  # 검사 판정 때의 최초 등록 조회는 세지 않는다
+        first = self.reprice(ok_move, unit_price='120')
+        self.assertTrue(first['success'], first)
+        self.assertEqual(self.jobs(ok_move).last().payload['detail'][0]['rcvUm'], 120)
+        event = ERPIncomingEvent.objects.filter(action='PRICE').latest('pk')
+        self.assertEqual(event.actor, self.admin)
+        self.assertIn('120', event.message)
+
+        typo = self.reprice(ok_move, unit_price='12000')        # 0을 두 개 더 붙임
+        self.assertFalse(typo['success'])
+        self.assertTrue(typo['need_confirm'])
+        self.assertEqual(self.jobs(ok_move).last().payload['detail'][0]['rcvUm'], 120)   # 바뀌지 않음
+        confirmed = self.reprice(ok_move, unit_price='12000', confirmed=True)
+        self.assertTrue(confirmed['success'], confirmed)
+        self.assertEqual(self.jobs(ok_move).last().payload['detail'][0]['rcvUm'], 12000)
+        self.price.assert_not_called()                           # 직접 입력은 ERP 단가를 조회하지 않는다
+
+    def test_invalid_prices_are_refused(self):
+        _, ok_move = self.accepted_receipt()
+        for bad in ('abc', '0', '-5', '1.23456'):
+            with self.subTest(price=bad):
+                self.assertFalse(self.reprice(ok_move, unit_price=bad)['success'])
+
+    def test_only_receipts_can_be_repriced(self):
+        _, origin = self.receive()
+        self.judge(origin, 1000)
+        self.move(self.store, self.line, 300)
+        plain_move = MaterialTransaction.objects.get(transaction_no__startswith='MV-')
+        result = self.reprice(plain_move, unit_price='120')
+        self.assertFalse(result['success'])
+        self.assertIn('입고 건만', result['error'])
+        self.assertFalse(self.jobs(plain_move).exists())
+
+    def test_erp_delete_refusal_keeps_the_existing_request(self):
+        _, ok_move = self.accepted_receipt()
+        self.reprice(ok_move, unit_price='120')
+        pending = self.jobs(ok_move).last()
+        MaterialTransaction.objects.filter(pk=ok_move.pk).update(erp_incoming_no='RV-OLD')
+        type(pending).objects.filter(pk=pending.pk).update(status='FAILED')
+        with patch('material.erp_api.delete_erp_incoming', return_value=(False, 'closed')):
+            result = self.reprice(ok_move, unit_price='130')
+        self.assertFalse(result['success'])
+        pending.refresh_from_db()
+        self.assertEqual(pending.status, 'FAILED')              # 취소로 바뀐 채 남지 않는다
+        ok_move.refresh_from_db()
+        self.assertEqual(ok_move.erp_incoming_no, 'RV-OLD')

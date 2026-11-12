@@ -39,6 +39,20 @@ def _return_case(origin):
     return ReturnLog.objects.filter(source_incoming=origin).first()
 
 
+def erp_receipt_quantity(erp_trx):
+    """ERP에 등록되어 있어야 할 이 입고의 수량 = 합격 후 불량으로 돌린 수량을 뺀 양품 수량.
+
+    단가 재반영·입고일 수정처럼 ERP 입고를 지우고 다시 등록하는 곳은 모두 이 값을 써야 한다.
+    수불 기록의 수량(처음 합격 수량)을 그대로 쓰면 불량 등록으로 줄여 둔 ERP 수량이 되돌아간다.
+    """
+    origin = erp_trx.source_incoming if erp_trx.source_incoming_id else erp_trx
+    inspection = _inspection(origin)
+    if inspection and erp_trx.pk != origin.pk:   # 검사 합격 이동
+        return inspection.qty_good if (erp_trx.remark or '').startswith(OK_REMARK) else erp_trx.quantity
+    case = None if inspection else _return_case(origin)
+    return erp_trx.quantity - (case.quantity if case else 0)
+
+
 def receipt_state(origin):
     """이 입고에서 지금 불량으로 돌릴 수 있는 범위를 계산한다 (화면과 처리 공용)."""
     if origin.transaction_type not in RECEIPT_TYPES:

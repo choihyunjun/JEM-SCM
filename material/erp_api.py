@@ -146,7 +146,8 @@ def _build_erp_remark(trx):
     return 'SCM 입고'
 
 
-def register_erp_incoming(trx, qty, warehouse_code, erp_order_no='', erp_order_seq='', use_integrated_only=False, manual_unit_price=None):
+def register_erp_incoming(trx, qty, warehouse_code, erp_order_no='', erp_order_seq='', use_integrated_only=False,
+                          manual_unit_price=None, manual_vat_price=None):
     """
     ERP 입고정보 등록
     - trx: MaterialTransaction 객체
@@ -156,6 +157,7 @@ def register_erp_incoming(trx, qty, warehouse_code, erp_order_no='', erp_order_s
     - erp_order_seq: ERP 발주순번
     - use_integrated_only: True면 거래처단가/품목단가를 건너뛰고 통합단가만 사용
     - manual_unit_price: 지정하면 ERP 단가 조회를 건너뛰고 이 값을 그대로 사용 (수동 단가 재반영용)
+    - manual_vat_price: manual_unit_price와 함께 넘기는 부가세 포함 단가 (호출자가 ERP에서 미리 조회한 경우)
     Returns: (success: bool, erp_no: str or None, error: str or None)
     """
     if not getattr(settings, 'ERP_ENABLED', False):
@@ -193,7 +195,7 @@ def register_erp_incoming(trx, qty, warehouse_code, erp_order_no='', erp_order_s
 
     # 품목 단가 조회 (manual_unit_price가 지정되면 ERP 조회 없이 그 값을 그대로 사용)
     if manual_unit_price is not None:
-        unit_price, vat_price = manual_unit_price, None
+        unit_price, vat_price = manual_unit_price, manual_vat_price
     else:
         unit_price, vat_price = fetch_erp_item_price(trx.part.part_no, vendor.erp_code, use_integrated_only=use_integrated_only)
     if unit_price <= 0:
@@ -206,7 +208,9 @@ def register_erp_incoming(trx, qty, warehouse_code, erp_order_no='', erp_order_s
             pass
         return False, None, error_msg
     qty = erp_quantity(qty)  # whole quantities keep the integer form ERP received before
-    supply_amount = round(float(unit_price) * qty)      # 공급가액
+    # 공급가액: 소수 단가·수량의 곱을 float로 구하면 끝자리가 틀어질 수 있어 십진수로 계산한다.
+    from decimal import Decimal as _D, ROUND_HALF_EVEN
+    supply_amount = int((_D(str(unit_price)) * _D(str(qty))).quantize(_D('1'), rounding=ROUND_HALF_EVEN))
     vat_amount = round(supply_amount * 0.1)      # 부가세 (10%)
     total_amount = supply_amount + vat_amount     # 합계액
 
