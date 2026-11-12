@@ -255,6 +255,13 @@ def late_defect(request, trx_id):
         context.update(receipt_state(origin))
     except ValueError as exc:
         context['error'] = str(exc)
-    context['history'] = MaterialTransaction.objects.filter(
-        source_incoming=origin, remark__startswith=LATE_REMARK, warehouse_to__code=BAD_WAREHOUSE).order_by('-date')
+    history = list(MaterialTransaction.objects.select_related('warehouse_from', 'actor').filter(
+        source_incoming=origin, remark__startswith=LATE_REMARK, warehouse_to__code=BAD_WAREHOUSE).order_by('-date'))
+    # 불량을 발견한 창고: 회수 이동(LDM-)이 있으면 그 출발 창고, 없으면 입고 창고에서 바로 격리한 것
+    recalls = {t.transaction_no[4:]: t for t in MaterialTransaction.objects.select_related('warehouse_from').filter(
+        source_incoming=origin, transaction_no__startswith='LDM-')}
+    for trx in history:
+        recall = recalls.get(trx.transaction_no[4:])
+        trx.found_warehouse = recall.warehouse_from if recall else trx.warehouse_from
+    context['history'] = history
     return render(request, 'material/late_defect.html', context)

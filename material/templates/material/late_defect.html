@@ -63,9 +63,9 @@
 
     <div class="card"><div class="card-header fw-bold">이 입고의 사후 불량 등록 이력</div><div class="card-body p-0">
         <div class="table-responsive"><table class="table align-middle mb-0">
-            <thead><tr><th>등록 일시</th><th>출발 창고</th><th class="erp-number">수량</th><th>사유</th><th>등록자</th></tr></thead>
+            <thead><tr><th>등록 일시</th><th>불량 발견 창고</th><th class="erp-number">수량</th><th>사유</th><th>등록자</th></tr></thead>
             <tbody>{% for trx in history %}<tr>
-                <td>{{ trx.date|date:"Y-m-d H:i" }}</td><td>{{ trx.warehouse_from.name }}</td>
+                <td>{{ trx.date|date:"Y-m-d H:i" }}</td><td>({{ trx.found_warehouse.code }}) {{ trx.found_warehouse.name }}</td>
                 <td class="erp-number">{{ trx.quantity|floatformat:"-4"|intcomma }}</td><td>{{ trx.remark }}</td><td>{{ trx.actor.username|default:"-" }}</td>
             </tr>{% empty %}<tr><td colspan="5" class="text-center text-muted py-4">등록 이력이 없습니다.</td></tr>{% endfor %}</tbody>
         </table></div>

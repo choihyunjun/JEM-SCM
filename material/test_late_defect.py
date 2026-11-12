@@ -95,6 +95,8 @@ class InspectedReceiptTests(LateDefectBase):
         isolate = MaterialTransaction.objects.get(transaction_no__startswith='LDF-')
         self.assertEqual((isolate.warehouse_from, isolate.warehouse_to), (self.store, self.bad))
         self.assertEqual(ReturnLog.objects.get(source_incoming=origin).quantity, 5)
+        page = self.client.get(reverse('material:late_defect', args=[origin.pk]))
+        self.assertEqual(page.context['history'][0].found_warehouse, self.line)   # 이력에는 발견한 창고가 보인다
 
     def test_return_flow_continues_to_po_remaining(self):
         _, origin = self.receive()

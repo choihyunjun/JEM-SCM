@@ -2130,7 +2130,7 @@ def confirm_return(request, pk):
         quantity = acknowledge_return(pk, request.POST.get('shipment_id'), request.user)
         if quantity:
             suffix = ' 해당 발주의 납품 가능 수량에 반영됩니다.' if case.delivery_order_id else ''
-            messages.success(request, f"반출 {quantity}개 인수 확인 완료.{suffix}")
+            messages.success(request, f"반출 {quantity.normalize():f}개 인수 확인 완료.{suffix}")
         else:
             messages.info(request, "이미 인수 확인된 반출입니다.")
     except (ValueError, TypeError) as exc:

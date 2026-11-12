@@ -187,8 +187,8 @@
     </div></div>
     {% endif %}
     {% if inspection.correction_history %}
-    <details class="mt-3"><summary>판정 정정 이력</summary>
-    {% for entry in inspection.correction_history %}<div class="small py-2">{{ entry.at }} / {{ entry.actor }} · 양품 {{ entry.qty_good }}, 불량 {{ entry.qty_bad }} → 검사대기<br>{{ entry.reason }}</div>{% endfor %}
+    <details class="mt-3"><summary>판정 정정 · 사후 불량 이력</summary>
+    {% for entry in inspection.correction_history %}<div class="small py-2">{{ entry.at|slice:":16" }} / {{ entry.actor }} · {% if entry.type == 'late_defect' %}등록 전 양품 {{ entry.qty_good }}, 불량 {{ entry.qty_bad }} (입고 기록 유지){% else %}양품 {{ entry.qty_good }}, 불량 {{ entry.qty_bad }} → 검사대기{% endif %}<br>{{ entry.reason }}</div>{% endfor %}
     </details>
     {% endif %}
     <div class="text-center mt-4">
