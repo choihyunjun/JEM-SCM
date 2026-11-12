@@ -1,7 +1,7 @@
 from django.urls import path
 from . import views
 from . import erp_recovery
-from . import label_reissue, late_defect
+from . import label_reissue, late_defect, molding_report
 from . import resin_yield
 from . import bom_jobs
 
@@ -156,6 +156,7 @@ urlpatterns = [
     # 성형 가동률 분석 대시보드
     path('molding/analytics/', views.molding_analytics, name='molding_analytics'),
     path('molding/analytics/ai/', views.molding_ai_analysis, name='molding_ai_analysis'),
+    path('molding/analytics/report/', molding_report.molding_analytics_report, name='molding_analytics_report'),
 
     # 성형 마스터
     path('molding/master/', views.molding_master_list, name='molding_master_list'),

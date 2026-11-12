@@ -9613,6 +9613,14 @@ def production_main(request):
 @login_required
 def molding_analytics(request):
     """성형 가동률 분석 대시보드 (6가지 차트 + KPI)"""
+    now = timezone.localtime()
+    year = int(request.GET.get('year', now.year))
+    month = int(request.GET.get('month', now.month))
+    return render(request, 'material/molding_analytics.html', _molding_analytics_context(year, month))
+
+
+def _molding_analytics_context(year, month):
+    """가동률 조회 화면의 집계. 화면과 엑셀 종합보고서(molding_report)가 같은 값을 쓴다."""
     from .models import (
         MoldingMachine, MoldingDailyRecord, MoldingLossDetail,
         MoldingWorkSetting, MOLDING_LOSS_CATEGORIES, MOLDING_MGMT_LOSS,
@@ -9626,8 +9634,6 @@ def molding_analytics(request):
     from dateutil.relativedelta import relativedelta
 
     now = timezone.localtime()
-    year = int(request.GET.get('year', now.year))
-    month = int(request.GET.get('month', now.month))
 
     # ─── 해당 월 레코드 조회 ───
     records = MoldingDailyRecord.objects.filter(
@@ -10074,7 +10080,7 @@ def molding_analytics(request):
         'monthly_utilization': json.dumps(monthly_utilization),
         'monthly_time_rate': json.dumps(monthly_time_rate),
     }
-    return render(request, 'material/molding_analytics.html', context)
+    return context
 
 
 # =============================================================================
