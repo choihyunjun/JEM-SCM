@@ -886,6 +886,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     formatter: v => v > 0 ? v + '%' : ''
                 }
             },
+            layout: { padding: { top: 22 } },   // 100% 근처 값의 숫자가 위에서 잘리지 않게
             scales: {
                 y: {
                     min: 0, max: 100,
@@ -940,9 +941,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     formatter: v => v > 0 ? v + '%' : ''
                 }
             },
+            layout: { padding: { top: 22 } },   // 100% 막대 위 숫자가 잘리지 않게
             scales: {
                 y: {
-                    min: Math.max(0, Math.floor((Math.min(...tonnageRates.filter(v=>v>0)) - 5) / 5) * 5),
+                    min: 0,   // 축을 0%부터 그려 톤수 간 차이가 실제 비율대로 보이게 한다
                     max: 100,
                     ticks: { callback: v => v + '%' },
                     grid: { color: 'rgba(0,0,0,0.04)' }
@@ -1239,14 +1241,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
             },
-            layout: { padding: { top: 20 } },
+            layout: { padding: { top: 20, right: 16 } },
             scales: {
                 y: {
                     min: 0, max: 100,
                     ticks: { callback: v => v + '%' },
                     grid: { color: 'rgba(0,0,0,0.04)' }
                 },
-                x: { grid: { display: false } }
+                // offset: 첫 달·마지막 달 점을 축에서 반 칸 안쪽으로 들인다
+                // (첫 값이 세로축 '100%'와 겹치지 않고, 마지막 '(집계중)' 표시가 오른쪽에서 잘리지 않는다)
+                x: { offset: true, grid: { display: false } }
             }
         },
         plugins: [noDataPlugin]
