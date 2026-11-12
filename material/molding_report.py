@@ -25,15 +25,15 @@ from openpyxl.chart.shapes import GraphicalProperties
 from openpyxl.chart.text import RichText
 from openpyxl.drawing.line import LineProperties
 from openpyxl.drawing.text import CharacterProperties, Font as DrawingFont, Paragraph, ParagraphProperties
-from openpyxl.formatting.rule import ColorScaleRule, DataBarRule
+from openpyxl.formatting.rule import ColorScaleRule
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 from .models import MOLDING_LOSS_CATEGORIES, MOLDING_MGMT_LOSS
 
 FACE = '맑은 고딕'
-NAVY, BLUE, TEAL, ORANGE, RED = '1F3A5F', '2F6FB0', '2A9D8F', 'E08A2E', 'C0392B'
-INK, MUTED, LINE = '22313F', '6B7B8C', 'D5DDE6'
+INK, MUTED, LINE = '1A1A1A', '666666', 'B5B5B5'
+ACCENT, SOFT, RED = '1F4E79', 'A6A6A6', 'C00000'      # 강조색은 하나만. 빨강은 나쁜 값에만 쓴다
 
 
 def _font(size=10, bold=False, color=INK, underline=None):
@@ -45,11 +45,13 @@ def _fill(color):
 
 
 F_BODY, F_BOLD, F_NOTE = _font(), _font(bold=True), _font(9, color=MUTED)
-F_HEAD = _font(bold=True, color='FFFFFF')
-F_LINK = _font(bold=True, color=BLUE, underline='single')
-F_OFF = _font(color='A3AEBA')
-FILL_HEAD, FILL_GROUP, FILL_SECTION = _fill(NAVY), _fill('3D5A80'), _fill('E6EDF5')
-FILL_TOTAL, FILL_ALT, FILL_CARD, FILL_GRAND = _fill('DCE6F1'), _fill('F6F8FB'), _fill('F6F8FB'), _fill('C9D7E8')
+F_HEAD = _font(bold=True)
+F_LINK = _font(color=ACCENT, underline='single')
+F_OFF = _font(color='A6A6A6')
+F_BAD = _font(bold=True, color=RED)
+FILL_HEAD, FILL_GROUP = _fill('E7E7E7'), _fill('F2F2F2')
+FILL_TOTAL, FILL_GRAND = _fill('F2F2F2'), _fill('E0E0E0')
+RULE = Side(style='medium', color=INK)
 THIN = Side(style='thin', color=LINE)
 BORDER = Border(top=THIN, bottom=THIN, left=THIN, right=THIN)
 CENTER = Alignment(horizontal='center', vertical='center', wrap_text=True)
@@ -96,27 +98,33 @@ def _widths(ws, widths):
 
 
 def _banner(ws, first_col, last_col, title, right='', note='', row=1):
-    """시트 맨 위의 남색 제목 띠. 다음에 쓸 행 번호를 돌려준다."""
+    """시트 맨 위의 제목 줄 (큰 글씨 + 굵은 밑줄). 다음에 쓸 행 번호를 돌려준다."""
     split = last_col - 2 if right else last_col
-    _put(ws, row, first_col, title, _font(15, True, 'FFFFFF'), FILL_HEAD, LEFT, None, span=split - first_col + 1)
+    under = Border(bottom=RULE)
+    _put(ws, row, first_col, title, _font(16, True), None, Alignment(horizontal='left', vertical='center'), under,
+         span=split - first_col + 1)
     if right:
-        _put(ws, row, split + 1, right, _font(12, True, 'CFE0F2'), FILL_HEAD, RIGHT, None, span=last_col - split)
-    for col in range(first_col, last_col + 1):
-        ws.cell(row, col).fill = FILL_HEAD
+        _put(ws, row, split + 1, right, _font(11, color=MUTED), None, Alignment(horizontal='right', vertical='bottom'),
+             under, span=last_col - split)
     ws.row_dimensions[row].height = 34
     if note:
-        _put(ws, row + 1, first_col, note, F_NOTE, None, LEFT, None, span=last_col - first_col + 1)
+        _put(ws, row + 1, first_col, note, F_NOTE, None, Alignment(horizontal='left', vertical='center'), None,
+             span=last_col - first_col + 1)
         ws.row_dimensions[row + 1].height = 20
     return row + 3
 
 
 def _section(ws, row, first_col, last_col, text, note=''):
-    """구역 제목 띠 (왼쪽에 파란 굵은 선)."""
-    label = f'{text}   ' if note else text
-    cell = _put(ws, row, first_col, label, _font(11, True, NAVY), FILL_SECTION, LEFT, None, span=last_col - first_col + 1)
-    cell.border = Border(left=Side(style='thick', color=BLUE))
-    if note:
-        cell.value = f'{text}  —  {note}'
+    """구역 제목 (굵은 글씨 + 가는 밑줄)."""
+    plain = Alignment(horizontal='left', vertical='bottom')
+    under = Border(bottom=Side(style='thin', color=INK))
+    width = last_col - first_col + 1
+    if note and width >= 6:
+        _put(ws, row, first_col, text, _font(11, True), None, plain, under, span=width // 2)
+        _put(ws, row, first_col + width // 2, note, F_NOTE, None, Alignment(horizontal='right', vertical='bottom'),
+             under, span=width - width // 2)
+    else:
+        _put(ws, row, first_col, text, _font(11, True), None, plain, under, span=width)
     ws.row_dimensions[row].height = 22
     return row + 1
 
@@ -131,9 +139,9 @@ def _header(ws, row, col, labels, spans=None, fill=FILL_HEAD, height=24):
 
 
 def _row(ws, row, col, values, formats, kind='body', spans=None, fonts=None):
-    """표의 한 줄. kind: body · alt(줄무늬) · total(소계) · grand(총계) · off(실적 없음)."""
+    """표의 한 줄. kind: body · total(소계) · grand(총계) · off(실적 없음)."""
     spans = spans or [1] * len(values)
-    fill = {'alt': FILL_ALT, 'total': FILL_TOTAL, 'grand': FILL_GRAND}.get(kind)
+    fill = {'total': FILL_TOTAL, 'grand': FILL_GRAND}.get(kind)
     base = F_BOLD if kind in ('total', 'grand') else F_OFF if kind == 'off' else F_BODY
     for index, (value, fmt, span) in enumerate(zip(values, formats, spans)):
         font = (fonts or {}).get(index, base)
@@ -181,9 +189,9 @@ def _chart(kind, width, height, value_format, horizontal=False):
     chart.graphical_properties = GraphicalProperties(ln=LineProperties(solidFill=LINE))
     chart.x_axis.delete = chart.y_axis.delete = False
     chart.x_axis.txPr = chart.y_axis.txPr = _text()
-    chart.x_axis.graphicalProperties = GraphicalProperties(ln=LineProperties(solidFill='AEB9C5'))
+    chart.x_axis.graphicalProperties = GraphicalProperties(ln=LineProperties(solidFill='8C8C8C'))
     chart.y_axis.graphicalProperties = GraphicalProperties(ln=LineProperties(noFill=True))
-    chart.y_axis.majorGridlines.spPr = GraphicalProperties(ln=LineProperties(solidFill='E7ECF1'))
+    chart.y_axis.majorGridlines.spPr = GraphicalProperties(ln=LineProperties(solidFill='E4E4E4'))
     chart.y_axis.number_format = value_format
     chart.x_axis.tickLblPos = 'low'
     if kind == 'bar':
@@ -270,23 +278,22 @@ def _dashboard(wb, ws, ctx, machines, loads, period, made):
     produced = sum(m['produced'] for m in machines)
     bad = sum(m['bad'] for m in machines)
     cards = [
-        ('설비가동률', _pct(ctx['kpi_utilization']), PCT, versus(ctx['kpi_utilization'], monthly_util), BLUE),
-        ('시간가동률 · 설정 기준', _pct(ctx['kpi_time_rate']), PCT, versus(ctx['kpi_time_rate'], monthly_time), BLUE),
-        ('시간가동률 · 실적 기준', _pct(ctx['kpi_time_rate_actual']), PCT, f'실적이 있는 {ctx["actual_work_days"]}일 기준', BLUE),
-        ('총 생산', produced, INT, f'불량 {bad:,}  ·  불량률 {_ratio(bad, produced):.2%}', TEAL),
-        ('실유실 시간', ctx['kpi_actual_loss_hours'], '#,##0.0"h"', '유실 합계 − 계획정지', ORANGE),
-        ('계획정지 시간', ctx['kpi_planned_hours'], '#,##0.0"h"', f'유실 합계 {ctx["kpi_total_loss_hours"]:,.1f}h', MUTED),
+        ('설비가동률', _pct(ctx['kpi_utilization']), PCT, versus(ctx['kpi_utilization'], monthly_util)),
+        ('시간가동률 (설정 기준)', _pct(ctx['kpi_time_rate']), PCT, versus(ctx['kpi_time_rate'], monthly_time)),
+        ('시간가동률 (실적 기준)', _pct(ctx['kpi_time_rate_actual']), PCT, f'실적이 있는 {ctx["actual_work_days"]}일 기준'),
+        ('총 생산', produced, INT, f'불량 {bad:,}  ·  불량률 {_ratio(bad, produced):.2%}'),
+        ('실유실 시간', ctx['kpi_actual_loss_hours'], '#,##0.0"h"', '유실 합계 − 계획정지'),
+        ('계획정지 시간', ctx['kpi_planned_hours'], '#,##0.0"h"', f'유실 합계 {ctx["kpi_total_loss_hours"]:,.1f}h'),
     ]
     row = 5
-    for index, (label, value, fmt, note, color) in enumerate(cards):
+    middle = Alignment(horizontal='center', vertical='center')
+    for index, (label, value, fmt, note) in enumerate(cards):
         col = first + index * 2
-        top = Border(top=Side(style='thick', color=color), left=THIN, right=THIN)
-        side = Border(left=THIN, right=THIN)
-        bottom = Border(left=THIN, right=THIN, bottom=THIN)
-        _put(ws, row, col, label, _font(9, True, MUTED), FILL_CARD, LEFT, top, span=2)
-        _put(ws, row + 1, col, value, _font(20, True, color if color != MUTED else INK), FILL_CARD, LEFT, side, fmt, span=2)
-        _put(ws, row + 2, col, note, _font(8.5, color=MUTED), FILL_CARD, LEFT, bottom, span=2)
-    ws.row_dimensions[row].height, ws.row_dimensions[row + 1].height, ws.row_dimensions[row + 2].height = 22, 38, 20
+        _put(ws, row, col, label, F_HEAD, FILL_HEAD, middle, BORDER, span=2)
+        _put(ws, row + 1, col, value, _font(17, True), None, middle, Border(left=THIN, right=THIN), fmt, span=2)
+        _put(ws, row + 2, col, note, _font(8.5, color=MUTED), None, middle,
+             Border(left=THIN, right=THIN, bottom=THIN), span=2)
+    ws.row_dimensions[row].height, ws.row_dimensions[row + 1].height, ws.row_dimensions[row + 2].height = 22, 36, 20
     ws.row_dimensions[row + 3].height = 10
 
     # 그래프용 값은 숨긴 시트에 둔다
@@ -332,16 +339,16 @@ def _dashboard(wb, ws, ctx, machines, loads, period, made):
         chart.add_data(ref(2, len(daily)), titles_from_data=True)
         chart.set_categories(ref(1, len(daily), False))
         chart.y_axis.scaling.max = 1
-        _paint(chart.series[0], BLUE, 'line', '0.0%')
+        _paint(chart.series[0], ACCENT, 'line', '0.0%')
         ws.add_chart(chart, f'B{row}')
     else:
         _put(ws, row, first, '이 달에는 실적이 없습니다.', F_NOTE, None, LEFT, None, span=12)
     row += chart_rows + 1
 
     # 작은 그래프 세 개
-    keys = [('■ 설비가동률', BLUE), ('■ 시간가동률 (설정)', TEAL)]
+    keys = [('■ 설비가동률', ACCENT), ('■ 시간가동률 (설정)', '8C8C8C')]
     for index, (text, legend) in enumerate([('톤수별 가동률', keys), ('월별 추이 (최근 6개월)', keys),
-                                            ('유실 사유별 시간 (상위 8개)', [('■ 유실 시간 (h)', ORANGE)])]):
+                                            ('유실 사유별 시간 (상위 8개)', [('■ 유실 시간 (h)', ACCENT)])]):
         col = first + index * 4
         _section(ws, row, col, col + 3, text)
         for n, (label, color) in enumerate(legend):                     # 범례는 그래프 위에 글자로 둔다
@@ -356,8 +363,8 @@ def _dashboard(wb, ws, ctx, machines, loads, period, made):
         chart.set_categories(ref(ton_col, len(tons), False))
         chart.y_axis.scaling.min, chart.y_axis.scaling.max = 0, 1
         few = len(tons) <= 6                                             # 톤수가 많으면 값은 아래 표에서 본다
-        _paint(chart.series[0], BLUE, 'bar', '0.0%' if few else None)
-        _paint(chart.series[1], TEAL, 'bar', '0.0%' if few else None)
+        _paint(chart.series[0], ACCENT, 'bar', '0.0%' if few else None)
+        _paint(chart.series[1], SOFT, 'bar', '0.0%' if few else None)
         ws.add_chart(chart, f'B{row}')
     if months:
         chart = _chart('line', 9.35, 7.3, '0%')
@@ -365,15 +372,15 @@ def _dashboard(wb, ws, ctx, machines, loads, period, made):
                        titles_from_data=True)
         chart.set_categories(ref(month_col, len(months), False))
         chart.y_axis.scaling.max = 1
-        _paint(chart.series[0], BLUE, 'line', '0.0%')
-        _paint(chart.series[1], TEAL, 'line', '0.0%', 'b')
+        _paint(chart.series[0], ACCENT, 'line', '0.0%')
+        _paint(chart.series[1], '8C8C8C', 'line', '0.0%', 'b')
         ws.add_chart(chart, f'F{row}')
     if losses:
         chart = _chart('bar', 9.35, 7.3, '#,##0', horizontal=True)
         chart.add_data(ref(loss_col + 1, len(losses)), titles_from_data=True)
         chart.set_categories(ref(loss_col, len(losses), False))
         chart.y_axis.scaling.min = 0
-        _paint(chart.series[0], ORANGE, 'bar', '#,##0.0')
+        _paint(chart.series[0], ACCENT, 'bar', '#,##0.0')
         ws.add_chart(chart, f'J{row}')
     row += chart_rows + 1
 
@@ -386,10 +393,8 @@ def _dashboard(wb, ws, ctx, machines, loads, period, made):
     for index, t in enumerate(tons):
         row = _row(ws, row, first, [f'{t["tonnage"]}t', t['count'], t['active_count'], _pct(t['util']),
                                     _pct(t['time_rate']), _pct(t['time_rate_actual'])], formats,
-                   'alt' if index % 2 else 'body', spans)
+                   'body', spans)
     if tons:
-        for letter in ('H', 'J', 'L'):
-            ws.conditional_formatting.add(f'{letter}{start}:{letter}{row - 1}', _bar('9DC3E6'))
         row = _row(ws, row, first, ['전체', ctx['total_machine_count'], sum(t['active_count'] for t in tons),
                                     _pct(ctx['kpi_utilization']), _pct(ctx['kpi_time_rate']),
                                     _pct(ctx['kpi_time_rate_actual'])], formats, 'grand', spans)
@@ -411,24 +416,17 @@ def _dashboard(wb, ws, ctx, machines, loads, period, made):
     top = _section(ws, row, first, last, '눈여겨볼 호기', '항목별 5대 · 자세한 내용은 [호기별 상세] 시트')
     for index, (text, heads, fmts, lines) in enumerate(blocks):
         col, r = first + index * 4, top
-        _put(ws, r, col, text, _font(10, True, NAVY), None, LEFT, None, span=4)
+        _put(ws, r, col, text, _font(10, True), None, LEFT, None, span=4)
         ws.row_dimensions[r].height = 22
         r = _header(ws, r + 1, col, heads, fill=FILL_GROUP, height=22)
         for n in range(5):
             if n < len(lines):
-                r = _row(ws, r, col, lines[n], fmts, 'alt' if n % 2 else 'body')
+                r = _row(ws, r, col, lines[n], fmts, 'body')
             else:
-                r = _row(ws, r, col, ['–' if n == 0 and not lines else '', '', '', ''], [None] * 4, 'alt' if n % 2 else 'body')
+                r = _row(ws, r, col, ['–' if n == 0 and not lines else '', '', '', ''], [None] * 4, 'body')
     ws.print_area = f'A1:N{top + 7}'
     _finish(ws, landscape=False)
     ws.page_setup.fitToHeight = 1
-
-
-def _bar(color, full=True):
-    """셀 안 막대. full=True면 100%가 가득 찬 막대, 아니면 가장 큰 값이 가득 찬 막대."""
-    if full:
-        return DataBarRule(start_type='num', start_value=0, end_type='num', end_value=1, color=color, showValue=True)
-    return DataBarRule(start_type='num', start_value=0, end_type='max', color=color, showValue=True)
 
 
 def _top_loss(machine, short=False):
@@ -452,11 +450,12 @@ def _details(ws, machines, period):
             continue
         anchors[m['code']] = row
         title = f'{m["code"]}    {_ton(m["tonnage"])}  ·  {m["shift_label"] if m["shift_label"] != "-" else "근무 기록 없음"}  ·  가동 {m["op_days"] or 0}일'
-        _put(ws, row, 2, title, _font(12, True, 'FFFFFF'), FILL_HEAD, LEFT, None, span=10)
-        back = _put(ws, row, 12, '↑ 호기별 종합', _font(9, True, 'CFE0F2'), FILL_HEAD, RIGHT, None, span=2)
+        under = Border(top=RULE, bottom=THIN)
+        _put(ws, row, 2, title, _font(12, True), FILL_GROUP, LEFT, under, span=10)
+        back = _put(ws, row, 12, '↑ 호기별 종합', _font(9, color=ACCENT, underline='single'), FILL_GROUP, RIGHT, under, span=2)
         _link(back, "'호기별 종합'!A1")
-        for col in range(2, 14):
-            ws.cell(row, col).fill = FILL_HEAD
+        ws.cell(row, 9).border = under
+        ws.cell(row, 9).fill = FILL_GROUP
         ws.row_dimensions[row].height = 26
         row += 1
         stats = [
@@ -468,9 +467,7 @@ def _details(ws, machines, period):
             (12, 2, f'관리 {m["mgmt_loss"]:,} · 시간 {m["time_loss"]:,}'),
         ]
         for col, span, text in stats:
-            _put(ws, row, col, text, _font(9.5, True, NAVY), FILL_SECTION, LEFT, None, span=span)
-        for col in range(2, 14):
-            ws.cell(row, col).fill = FILL_SECTION
+            _put(ws, row, col, text, _font(9.5, color=MUTED), None, LEFT, None, span=span)
         ws.row_dimensions[row].height = 22
         row += 1
 
@@ -481,7 +478,7 @@ def _details(ws, machines, period):
         for n, item in enumerate(m['items']):
             left = _row(ws, left, 2, [item['pno'], item.get('pname') or '', item['qty'], item['good_qty'], item['bad_qty'],
                                       _ratio(item['bad_qty'], item['qty']), _ratio(item['qty'], m['produced'])],
-                        [None, None, INT, INT, INT, PCT2, PCT], 'alt' if n % 2 else 'body')
+                        [None, None, INT, INT, INT, PCT2, PCT], 'body')
         if m['items']:
             left = _row(ws, left, 2, ['합계', f'{len(m["items"])}개 품번', m['produced'], m['good'], m['bad'],
                                       m['defect_rate'], 1], [None, None, INT, INT, INT, PCT2, PCT], 'total')
@@ -490,7 +487,7 @@ def _details(ws, machines, period):
         for n, loss in enumerate(m['losses']):
             right = _row(ws, right, 10, [LOSS_LABEL.get(loss['cat'], loss['cat']), _loss_kind(loss['cat']), loss['minutes'],
                                          _ratio(loss['minutes'], m['loss_total'])], [None, None, INT, PCT],
-                         'alt' if n % 2 else 'body')
+                         'body')
         if m['losses']:
             right = _row(ws, right, 10, ['합계', '', m['loss_total'], 1], [None, None, INT, PCT], 'total')
         else:
@@ -508,7 +505,7 @@ def _details(ws, machines, period):
 def _overview(ws, ctx, machines, anchors, period):
     _widths(ws, [8, 10, 10, 9, 11, 11, 11, 11, 11, 12, 12, 12, 12, 12, 10, 10, 22, 34])
     _banner(ws, 1, 18, '호기별 종합', period,
-            '호기마다 한 줄입니다. 파란 호기 번호를 누르면 그 호기의 생산 실적·유실 내역으로 이동합니다. 시간 단위는 분.')
+            '호기마다 한 줄입니다. 밑줄 친 호기 번호를 누르면 그 호기의 생산 실적·유실 내역으로 이동합니다. 빨간 글씨는 설비가동률이 가장 낮은 5대와 불량률이 가장 높은 5대. 시간 단위는 분.')
     row = 3
     col = 1
     for text, span in [('기본', 4), ('시간 (분)', 5), ('가동률', 3), ('생산', 4), ('주요 내용', 2)]:
@@ -522,6 +519,8 @@ def _overview(ws, ctx, machines, anchors, period):
     formats = [None, None, None, INT, INT, INT, INT, INT, INT, PCT, PCT, PCT, INT, INT, INT, PCT2, None, None]
     work_min = ctx['work_per_machine_min']
     by_code = {m['code']: m for m in machines}
+    low_util = {m['code'] for m in sorted((m for m in machines if m.get('base')), key=lambda m: m['util'])[:5]}
+    high_defect = {m['code'] for m in sorted((m for m in machines if m['bad']), key=lambda m: -m['defect_rate'])[:5]}
     start = row
     grand = [0] * 3
     for group in ctx['machine_analysis_table']:
@@ -531,13 +530,14 @@ def _overview(ws, ctx, machines, anchors, period):
             sums = [sums[0] + m['produced'], sums[1] + m['good'], sums[2] + m['bad']]
             item = m['items'][0] if m['items'] else None
             top_item = f'{item["pno"]} {item.get("pname") or ""}'.strip() if item else ''
-            kind = 'off' if not m['active'] else 'alt' if n % 2 else 'body'
+            kind = 'body' if m['active'] else 'off'
             linked = m['code'] in anchors
             row = _row(ws, row, 1, [_ton(m['tonnage']), m['code'], m['shift_label'], m['op_days'] or 0, work_min,
                                     m['operating'], m['mgmt_loss'], m['time_loss'], m['loss'], _pct(m['util']),
                                     _pct(m['time_rate']), _pct(m['time_rate_actual']), m['produced'], m['good'], m['bad'],
                                     m['defect_rate'], _top_loss(m), top_item], formats, kind,
-                       fonts={1: F_LINK} if linked else None)
+                       fonts={**({1: F_LINK} if linked else {}), **({9: F_BAD} if m['code'] in low_util else {}),
+                              **({15: F_BAD} if m['code'] in high_defect else {})})
             if linked:
                 _link(ws.cell(row - 1, 2), f"'호기별 상세'!B{anchors[m['code']]}")
         total = group['total']
@@ -555,9 +555,6 @@ def _overview(ws, ctx, machines, anchors, period):
                                 sum(t['loss'] for t in totals), _pct(ctx['kpi_utilization']), _pct(ctx['kpi_time_rate']),
                                 _pct(ctx['kpi_time_rate_actual']), grand[0], grand[1], grand[2],
                                 _ratio(grand[2], grand[0]), '', ''], formats, 'grand')
-        for letter, color in (('J', '9DC3E6'), ('K', 'A8DCD4'), ('L', 'A8DCD4')):
-            ws.conditional_formatting.add(f'{letter}{start}:{letter}{row - 1}', _bar(color))
-        ws.conditional_formatting.add(f'P{start}:P{row - 1}', _bar('F2B5A7', full=False))
     else:
         _put(ws, row, 1, '등록된 호기가 없습니다.', F_NOTE, None, LEFT, None, span=18)
     ws.freeze_panes = ws.cell(head + 1, 3)
@@ -583,9 +580,8 @@ def _loss_sheet(ws, ctx, loads, period):
         running += minutes
         row = _row(ws, row, 1, [LOSS_LABEL.get(label, label), _loss_kind(label), minutes, round(minutes / 60, 1),
                                 _ratio(minutes, total), _ratio(running, total)], [None, None, INT, DEC, PCT, PCT],
-                   'alt' if n % 2 else 'body')
+                   'body')
     if labels:
-        ws.conditional_formatting.add(f'E{start}:E{row - 1}', _bar('F4C28B', full=False))
         row = _row(ws, row, 1, ['합계', '', total, round(total / 60, 1), 1, ''], [None, None, INT, DEC, PCT, None], 'grand')
     else:
         row = _row(ws, row, 1, ['유실 내역 없음', '', '', '', '', ''], [None] * 6, 'off')
@@ -600,7 +596,7 @@ def _loss_sheet(ws, ctx, loads, period):
     if tonnages and row > start:
         area = f'C{start}:{get_column_letter(len(tonnages) + 2)}{row - 1}'
         ws.conditional_formatting.add(area, ColorScaleRule(start_type='num', start_value=0, start_color='FFFFFF',
-                                                           end_type='max', end_color='F2A65A'))
+                                                           end_type='max', end_color='A9BDD3'))
         sums = [sum(line['values'][i] for line in ctx['loss_category_table']) for i in range(len(tonnages))]
         row = _row(ws, row, 1, ['합계', ''] + sums + [sum(sums)], [None, None] + [INT] * (len(tonnages) + 1), 'grand')
     row += 1
@@ -610,7 +606,7 @@ def _loss_sheet(ws, ctx, loads, period):
     lines, overall = ctx['tonnage_time_table'], ctx['tonnage_time_total']
     formats = [None, None] + [DEC] * (len(tonnages) + 1)
     row = _row(ws, row, 1, ['보유 대수', ''] + [r['count'] for r in lines] + [ctx['total_machine_count']],
-               [None, None] + [INT] * (len(tonnages) + 1), 'alt')
+               [None, None] + [INT] * (len(tonnages) + 1), 'body')
     for label, key in [('근무시간', 'work_h'), ('가동시간', 'operating_h'), (MGMT, 'mgmt_loss_h'), (TIME, 'time_loss_h'),
                        ('유실 합계', 'loss_h')]:
         row = _row(ws, row, 1, [label, ''] + [r[key] for r in lines] + [overall[key]], formats,
@@ -636,10 +632,8 @@ def _group_sheet(ws, loads, period):
         ws.cell(row - 1, 3).font = F_NOTE
         for n, item in enumerate(items):
             row = _row(ws, row, 1, ['', '', item['name'], item['qty'], _ratio(item['qty'], quantity)],
-                       [None, None, None, INT, PCT], 'alt' if n % 2 else 'body')
-    if groups:
-        ws.conditional_formatting.add(f'E{start}:E{row - 1}', _bar('A8DCD4'))
-    else:
+                       [None, None, None, INT, PCT], 'body')
+    if not groups:
         _row(ws, row, 1, ['', '생산 실적 없음', '', '', ''], [None] * 5, 'off')
     ws.freeze_panes = ws.cell(start, 1)
     _finish(ws, landscape=False, title_rows=f'{start - 1}:{start - 1}')
@@ -658,7 +652,7 @@ def _raw_sheets(wb, machines, period):
         for n, item in enumerate(m['items']):
             row = _row(ws, row, 1, [_ton(m['tonnage']), m['code'], item['pno'], item.get('pname') or '', item['qty'],
                                     item['good_qty'], item['bad_qty'], _ratio(item['bad_qty'], item['qty']),
-                                    _ratio(item['qty'], m['produced'])], formats, 'alt' if n % 2 else 'body')
+                                    _ratio(item['qty'], m['produced'])], formats, 'body')
         if m['items']:
             row = _row(ws, row, 1, [_ton(m['tonnage']), m['code'], '합계', '', m['produced'], m['good'], m['bad'],
                                     m['defect_rate'], 1], formats, 'total')
@@ -676,7 +670,7 @@ def _raw_sheets(wb, machines, period):
         for n, loss in enumerate(m['losses']):
             row = _row(ws, row, 1, [_ton(m['tonnage']), m['code'], LOSS_LABEL.get(loss['cat'], loss['cat']),
                                     _loss_kind(loss['cat']), loss['minutes'], round(loss['minutes'] / 60, 1),
-                                    _ratio(loss['minutes'], m['loss_total'])], formats, 'alt' if n % 2 else 'body')
+                                    _ratio(loss['minutes'], m['loss_total'])], formats, 'body')
         if m['losses']:
             row = _row(ws, row, 1, [_ton(m['tonnage']), m['code'], '합계', '', m['loss_total'],
                                     round(m['loss_total'] / 60, 1), 1], formats, 'total')
@@ -706,8 +700,6 @@ def build_molding_report(ctx):
     _raw_sheets(wb, machines, period)
     _dashboard(wb, dashboard, ctx, machines, loads, period, made)
 
-    for ws, color in ((dashboard, NAVY), (overview, BLUE), (details, BLUE), (losses, ORANGE), (groups, TEAL)):
-        ws.sheet_properties.tabColor = color
     return wb
 
 
