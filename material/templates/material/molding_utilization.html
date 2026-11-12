@@ -468,8 +468,11 @@ td[onclick]:hover { opacity: 0.7; }
 .mu-filter .form-select, .mu-filter .mu-submit, .mu-filter .seg-toggle > button { height: 34px; font-size: 0.85rem; }
 .mu-filter .form-select { min-width: 96px; }
 .mu-filter .mu-submit { display: inline-flex; align-items: center; padding: 0 16px; white-space: nowrap; }
+/* 화면 너비에 따라 공용 서식이 단추만 키우는 일이 없도록 높이를 한 값으로 고정한다 */
+.mu-filter .form-select, .mu-filter .mu-submit { box-sizing: border-box; height: 36px !important; min-height: 0 !important; line-height: 1.2; }
+.mu-filter .seg-toggle > button { height: 34px !important; min-height: 0 !important; }  /* 테두리 2px 포함 36px */
 .mu-basis { display: flex; align-items: flex-end; gap: 16px; margin-left: auto; }
-.mu-basis-text { height: 34px; display: inline-flex; align-items: center; font-size: 0.8rem; color: #6b7280; white-space: nowrap; }
+.mu-basis-text { height: 36px; display: inline-flex; align-items: center; font-size: 0.8rem; color: #6b7280; white-space: nowrap; }
 
 .seg-toggle { display: inline-flex; border: 1px solid #d1d5db; border-radius: 6px; overflow: hidden; background: #fff; }
 .seg-toggle > button { height: 32px; padding: 0 12px; border: 0; border-left: 1px solid #d1d5db; background: #fff; color: #4b5563; font-size: 0.8rem; font-weight: 600; white-space: nowrap; cursor: pointer; }
