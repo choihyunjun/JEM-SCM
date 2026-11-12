@@ -1145,8 +1145,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // ─── Chart 6: Monthly Trend (multi-line) ───
-    // 마지막 달 = 현재 집계중 → 빨간색 포인트
-    var lastIdx = monthlyLabels.length - 1;
+    // 보고 있는 달이 이번 달일 때만 마지막 달 = 집계중 → 빨간색 포인트. 지난 달은 마감된 값이라 표시하지 않는다
+    var inProgress = {{ year }} === {% now "Y" %} && {{ month }} === {% now "n" %};
+    var lastIdx = inProgress ? monthlyLabels.length - 1 : -1;
     var bluePoints = monthlyUtilization.map((v, i) => i === lastIdx ? RED : BLUE);
     var blueRadius = monthlyUtilization.map((v, i) => i === lastIdx ? 6 : 4);
     var greenPoints = monthlyTimeRate.map((v, i) => i === lastIdx ? RED : GREEN);
@@ -1230,7 +1231,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 마지막 달 포인트 깜빡이 (빨강 ↔ 흰)
     var blinkOn = true;
-    setInterval(function() {
+    if (inProgress) setInterval(function() {
         blinkOn = !blinkOn;
         var c1 = blinkOn ? RED : '#fff';
         var c2 = blinkOn ? RED : '#fff';
