@@ -1,0 +1,32 @@
+{% load resin_yield_tags %}
+{# 한 원재료를 쓴 제품 목록 (사용량 큰 순). 원재료별·재질별 표에서 행을 펼치면 나온다 #}
+<table class="ry-sub">
+    <thead>
+        <tr>
+            <th>품번 / 품명</th>
+            <th class="r">생산수</th>
+            <th class="r">원단위 g/EA <span class="hs">기준 → 실적</span></th>
+            <th class="r">사용량</th>
+            <th class="r">양품</th>
+            <th class="r">불량</th>
+            <th class="r">런너</th>
+            <th class="r">파지</th>
+            <th class="r">스크랩률</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in lines %}
+        <tr data-search="{{ r.part_no|lower }} {{ r.part_name|lower }} {{ r.material_part_no|lower }} {{ r.material_name|lower }} {{ r.resin|lower }}">
+            <td><span class="pno">{{ r.part_no }}</span> <span class="pnm">{{ r.part_name|truncatechars:34 }}</span>{% if r.source == 'BOM' %}<span class="bom{% if r.runner_included %} runner{% endif %}" title="성형 마스터 미등록: BOM 소요량으로 계산">BOM</span>{% endif %}</td>
+            <td class="r">{{ r.produced|ea }}</td>
+            <td class="r"><span class="pnm">{{ r.unit_standard|grams }} →</span> {% if r.unit_actual is not None %}{{ r.unit_actual|grams }}{% else %}–{% endif %}</td>
+            <td class="r"><b>{{ r.total_kg|kg }}</b> <span class="pnm">kg</span></td>
+            <td class="r">{{ r.good_kg|kg }}</td>
+            <td class="r">{{ r.defect_kg|kg }}</td>
+            <td class="r">{% if r.runner_included %}<span class="pnm">포함</span>{% else %}{{ r.runner_kg|kg }}{% endif %}</td>
+            <td class="r">{{ r.scrap_kg|kg }}</td>
+            <td class="r"><span class="pill{% if r.loss_pct >= 50 %} bad{% elif r.loss_pct >= 30 %} warn{% endif %}">{{ r.loss_pct|pct }}%</span></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>

@@ -103,6 +103,25 @@ class ReportTests(TestCase):
         self.assertEqual(rep['unregistered_scrap_kg'], 0.5)
         self.assertEqual({g['key'] for g in rep['by_resin']}, {'PC', 'M/B'})
 
+    def test_groups_list_the_products_that_used_each_material(self):
+        rep = self.report()
+        zr1 = next(g for g in rep['by_material'] if g['key'] == 'ZR1')
+        self.assertEqual([r['part_no'] for r in zr1['lines']], ['P-1'])
+        self.assertAlmostEqual(sum(r['total_kg'] for r in zr1['lines']), zr1['total_kg'])
+        self.assertIn('p-1', zr1['search'])
+        pc = next(g for g in rep['by_resin'] if g['key'] == 'PC')
+        self.assertEqual([(m['key'], [r['part_no'] for r in m['lines']]) for m in pc['materials']], [('ZR1', ['P-1'])])
+        self.assertAlmostEqual(sum(m['total_kg'] for m in pc['materials']), pc['total_kg'])
+
+    def test_page_has_search_on_every_table_and_expandable_usage(self):
+        request = RequestFactory().get('/', {'month': '2026-10'})
+        request.user = User.objects.create(username='ry-search', is_superuser=True)
+        with patch('material.resin_yield.call_erp_api', return_value=erp_rows(('M311', 'P-1', 10, 0, '00100'))):
+            html = resin_yield(request).content.decode()
+        self.assertEqual(html.count('class="ry-q"'), 4)  # 품번별·생산량 대비·재질별·원재료별
+        self.assertEqual(html.count('<table class="ry-sub">'), 4)  # 원재료 2개 + 재질 2개(재질마다 원재료 1개)
+        self.assertEqual(html.count('class="ry-mat"'), 2)
+
     def test_prior_production_defects_are_kept_out_of_the_table(self):
         rep = self.report()
         self.assertNotIn('OLD-1', {r['part_no'] for r in rep['lines']})

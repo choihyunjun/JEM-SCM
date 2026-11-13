@@ -252,10 +252,13 @@ def build_report(year, month, refresh=False):
 
     bom_parts = sorted({r['part_no'] for r in lines if r['runner_included']})
     by_material = _summarize(lines, 'material_part_no')
+    by_resin = _summarize(lines, 'resin')
+    for g in by_resin:  # 재질 → 원재료 → 제품
+        g['materials'] = _summarize(g['lines'], 'material_part_no')
     return {
         'lines': lines,
         'by_variance': sorted(lines, key=lambda r: -r['over_kg']),
-        'by_resin': _summarize(lines, 'resin'),
+        'by_resin': by_resin,
         'by_material': by_material,
         'unclassified': [g for g in by_material if g['resin'] == '미분류'],
         'totals': _summarize(lines, None)[0] if lines else None,
@@ -311,12 +314,18 @@ def _bar(row):
             'scrap': _ratio(row['scrap_kg'], total) * 100}
 
 
+def _search_text(row):
+    return ' '.join(str(row.get(f) or '') for f in
+                    ('part_no', 'part_name', 'material_part_no', 'material_name', 'resin')).lower()
+
+
 def _summarize(lines, key):
+    """key별 합계. 각 그룹의 'lines'에는 그 그룹에 들어간 제품 행(사용량 큰 순)을 둔다."""
     groups = {}
     for row in lines:
         k = row[key] if key else '합계'
         g = groups.setdefault(k, {'key': k, 'parts': set(), 'produced': 0.0, 'good_net_qty': 0.0,
-                                  **{f: 0.0 for f in KG_FIELDS},
+                                  **{f: 0.0 for f in KG_FIELDS}, 'lines': [],
                                   'material_name': row['material_name'], 'resin': row['resin']})
         if row['part_no'] not in g['parts']:  # 재료가 여러 행인 품번의 생산수는 한 번만
             g['parts'].add(row['part_no'])
@@ -324,12 +333,15 @@ def _summarize(lines, key):
             g['good_net_qty'] += row['good_net_qty']
         for f in KG_FIELDS:
             g[f] += row[f]
+        g['lines'].append(row)
     result = []
     for g in sorted(groups.values(), key=lambda g: -g['total_kg']):
         g['part_count'] = len(g.pop('parts'))
         g['loss_rate'] = _ratio(g['loss_kg'], g['total_kg'])
         g['loss_pct'] = g['loss_rate'] * 100
         g['bar'] = _bar(g)
+        g['lines'].sort(key=lambda r: -r['total_kg'])
+        g['search'] = ' '.join(_search_text(r) for r in g['lines'])
         _finish_variance(g)
         result.append(g)
     largest = result[0]['total_kg'] if result else 0

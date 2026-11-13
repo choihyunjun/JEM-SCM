@@ -78,6 +78,19 @@
     .ry .cause.c-공정불량 { background: #fee2e2; color: #b91c1c; } .ry .cause.c-검사불량 { background: #ffe4e6; color: #9f1239; }
     .ry .cause.c-파지 { background: #ede9fe; color: #5b21b6; }
     .ry .seg-insp { background: #f43f5e; }
+    .ry .ry-caret { display: inline-block; margin-right: 6px; font-size: .7rem; color: #94a3b8; transition: transform .12s; }
+    .ry tbody.open .ry-caret { transform: rotate(90deg); }
+    .ry tr.detail table.ry-sub { width: 100%; font-size: .78rem; border-collapse: collapse; margin: 2px 0 6px; }
+    /* 원재료마다 표가 따로라서 칸 너비를 고정해야 위아래 표의 숫자가 같은 줄에 선다 */
+    .ry tr.detail table.ry-sub { table-layout: fixed; } .ry .ry-sub th:nth-child(n+2) { width: 8%; } .ry .ry-sub th:nth-child(3) { width: 15%; } .ry .ry-sub th:nth-child(4) { width: 10%; }
+    .ry .ry-sub td:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ry tr.detail .ry-sub thead th { position: static; background: transparent; padding: 4px 8px; font-size: .68rem; border-bottom: 1px solid var(--ry-line); }
+    .ry tr.detail .ry-sub td { padding: 5px 8px; border-bottom: 1px solid #eef2f6; }
+    .ry tr.detail .ry-sub tbody tr:last-child td { border-bottom: 0; }
+    .ry .ry-sub .bom { margin-left: 6px; }
+    .ry .ry-mat { margin-top: 10px; } .ry .ry-mat:first-child { margin-top: 2px; }
+    .ry .ry-mat-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; padding: 4px 8px; border-left: 3px solid #94a3b8; }
+    .ry .ry-mat-sum { margin-left: auto; font-size: .74rem; color: var(--ry-muted); } .ry .ry-mat-sum b { color: #0f172a; }
     .ry .vtxt { font-size: .7rem; color: var(--ry-muted); margin-top: 3px; white-space: nowrap; }
 </style>
 
@@ -141,7 +154,7 @@
         <div class="tab-pane fade show active" id="ryPart" role="tabpanel">
             <div class="ry-card">
                 <div class="ry-filter">
-                    <input type="text" id="ryQuery" placeholder="품번 · 품명 · 재료 검색" aria-label="검색">
+                    <input type="text" id="ryQuery" class="ry-q" placeholder="품번 · 품명 · 재료 검색" aria-label="검색">
                     <div class="d-flex flex-wrap gap-1" id="ryResinChips">
                         <button type="button" class="ry-chip on" data-resin="">전체</button>
                         {% for r in resins %}<button type="button" class="ry-chip" data-resin="{{ r }}">{{ r }}</button>{% endfor %}
@@ -166,7 +179,7 @@
                             </tr>
                         </thead>
                         {% for r in report.lines %}
-                        <tbody class="ry-row" data-search="{{ r.part_no|lower }} {{ r.part_name|lower }} {{ r.material_part_no|lower }} {{ r.material_name|lower }}"
+                        <tbody class="ry-row ry-item" data-search="{{ r.part_no|lower }} {{ r.part_name|lower }} {{ r.material_part_no|lower }} {{ r.material_name|lower }}"
                                data-resin="{{ r.resin }}" data-gap="{% if r.loss_gap is not None %}{{ r.loss_gap|stringformat:'.3f' }}{% else %}{{ r.loss_pct|stringformat:'.3f' }}{% endif %}">
                             <tr class="main" tabindex="0">
                                 <td class="first"><div class="pno">{{ r.part_no }}</div><div class="pnm">{{ r.part_name|truncatechars:34 }}</div></td>
@@ -206,7 +219,7 @@
                         {% empty %}
                         <tbody><tr><td colspan="9" class="ry-empty">이 달의 성형 생산실적이 없습니다.</td></tr></tbody>
                         {% endfor %}
-                        <tbody id="ryNoMatch" class="d-none"><tr><td colspan="9" class="ry-empty">조건에 맞는 품번이 없습니다.</td></tr></tbody>
+                        <tbody id="ryNoMatch" class="ry-nomatch d-none"><tr><td colspan="9" class="ry-empty">조건에 맞는 품번이 없습니다.</td></tr></tbody>
                     </table>
                 </div>
                 <div class="ry-foot">행을 누르면 중량 상세가 펼쳐집니다 · 기준 스크랩률 = 기준 원단위 중 런너 비중 · 검사불량 = 3공장 창고(3000)→불량창고 이동(양품에서 차감) · ERP 생산실적 {{ report.erp_rows }}건, {{ report.fetched_at }} 조회</div>
@@ -224,6 +237,9 @@
                     — 공정불량 {{ t.over_bad_kg|kg }} · 검사불량 {{ t.over_inspect_kg|kg }} · 파지 {{ t.over_scrap_kg|kg }} kg</p>
                 </div>
                 {% endwith %}
+                <div class="ry-filter">
+                    <input type="text" class="ry-q" placeholder="품번 · 품명 · 재료 검색" aria-label="검색">
+                </div>
                 <div class="ry-scroll">
                     <table class="ry-t">
                         <thead>
@@ -243,7 +259,7 @@
                         </thead>
                         <tbody>
                             {% for r in report.by_variance %}
-                            <tr>
+                            <tr class="ry-item" data-search="{{ r.part_no|lower }} {{ r.part_name|lower }} {{ r.material_part_no|lower }} {{ r.material_name|lower }} {{ r.resin|lower }}">
                                 <td class="first"><div class="pno">{{ r.part_no }}</div><div class="pnm">{{ r.part_name|truncatechars:30 }}</div></td>
                                 <td class="mat"><span class="ry-resin" data-r="{{ r.resin }}">{{ r.resin }}</span> {{ r.material_part_no }}{% if r.source == 'BOM' %}<span class="bom{% if r.runner_included %} runner{% endif %}">BOM</span>{% endif %}</td>
                                 <td class="r">{{ r.good_net_qty|ea }}</td>
@@ -260,6 +276,7 @@
                             {% empty %}
                             <tr><td colspan="9" class="ry-empty">이 달의 성형 생산실적이 없습니다.</td></tr>
                             {% endfor %}
+                            <tr class="ry-nomatch d-none"><td colspan="9" class="ry-empty">검색어에 맞는 품번이 없습니다.</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -341,21 +358,25 @@
     if (!table) return;
     const rows = Array.from(table.querySelectorAll('tbody.ry-row'));
     const original = rows.slice();
-    const query = document.getElementById('ryQuery');
+    const queries = Array.from(document.querySelectorAll('.ry .ry-q'));
+    const searchable = Array.from(document.querySelectorAll('.ry [data-search]'));
     const sort = document.getElementById('rySortRate');
     const noMatch = document.getElementById('ryNoMatch');
     let resin = '';
 
-    function apply() {
-        const q = query.value.trim().toLowerCase();
-        let shown = 0;
-        rows.forEach(tb => {
-            const ok = (!q || tb.dataset.search.includes(q)) && (!resin || tb.dataset.resin === resin);
-            tb.classList.toggle('d-none', !ok);
-            if (ok) shown += 1;
+    // 검색어는 모든 탭이 함께 쓴다. 펼친 내역 안의 제품 행도 같은 검색어로 걸러진다
+    function apply(q) {
+        searchable.forEach(el => {
+            const ok = (!q || el.dataset.search.includes(q))
+                && (!resin || el.dataset.resin === undefined || el.dataset.resin === resin);
+            el.classList.toggle('d-none', !ok);
         });
-        noMatch.classList.toggle('d-none', shown > 0 || rows.length === 0);
+        document.querySelectorAll('.ry .ry-nomatch').forEach(none => {
+            const items = Array.from(none.closest('table').querySelectorAll('.ry-item'));
+            none.classList.toggle('d-none', items.length === 0 || items.some(el => !el.classList.contains('d-none')));
+        });
     }
+    function current() { return queries[0].value.trim().toLowerCase(); }
     function order() {
         const list = sort.checked ? rows.slice().sort((a, b) => parseFloat(b.dataset.gap) - parseFloat(a.dataset.gap)) : original;
         list.forEach(tb => table.insertBefore(tb, noMatch));
@@ -365,15 +386,18 @@
         tb.querySelector('tr.detail').classList.toggle('d-none');
     }
 
-    query.addEventListener('input', apply);
+    queries.forEach(input => input.addEventListener('input', () => {
+        queries.forEach(other => { if (other !== input) other.value = input.value; });
+        apply(current());
+    }));
     sort.addEventListener('change', order);
     document.querySelectorAll('#ryResinChips .ry-chip').forEach(btn => btn.addEventListener('click', () => {
         document.querySelectorAll('#ryResinChips .ry-chip').forEach(b => b.classList.remove('on'));
         btn.classList.add('on');
         resin = btn.dataset.resin;
-        apply();
+        apply(current());
     }));
-    rows.forEach(tb => {
+    document.querySelectorAll('.ry tbody.ry-row').forEach(tb => {
         const main = tb.querySelector('tr.main');
         main.addEventListener('click', () => toggle(tb));
         main.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(tb); } });

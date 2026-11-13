@@ -1,4 +1,7 @@
 {% load resin_yield_tags %}
+<div class="ry-filter">
+    <input type="text" class="ry-q" placeholder="{% if show_name %}재료품번 · 재료명 · 제품 품번 검색{% else %}재질 · 재료 · 제품 품번 검색{% endif %}" aria-label="검색">
+</div>
 <div class="ry-scroll">
     <table class="ry-t">
         <thead>
@@ -14,10 +17,10 @@
                 <th class="r last">스크랩률</th>
             </tr>
         </thead>
-        <tbody>
-            {% for g in groups %}
-            <tr>
-                <td class="first">{% if show_name %}<span class="pno">{{ g.key|default:"(없음)" }}</span>{% else %}<span class="ry-resin" data-r="{{ g.key }}">{{ g.key }}</span>{% endif %}</td>
+        {% for g in groups %}
+        <tbody class="ry-row ry-item" data-search="{{ g.key|lower }} {{ g.search }}">
+            <tr class="main" tabindex="0">
+                <td class="first"><i class="bi bi-chevron-right ry-caret"></i>{% if show_name %}<span class="pno">{{ g.key|default:"(없음)" }}</span>{% else %}<span class="ry-resin" data-r="{{ g.key }}">{{ g.key }}</span>{% endif %}</td>
                 {% if show_name %}<td class="pnm">{{ g.material_name|truncatechars:38 }}</td><td><span class="ry-resin" data-r="{{ g.resin }}">{{ g.resin }}</span></td>{% endif %}
                 <td class="r">{{ g.part_count }}</td>
                 <td class="r">{{ g.produced|ea }}</td>
@@ -33,10 +36,29 @@
                 <td class="r loss">{{ g.loss_kg|kg }}</td>
                 <td class="r last"><span class="pill{% if g.loss_pct >= 50 %} bad{% elif g.loss_pct >= 30 %} warn{% endif %}">{{ g.loss_pct|pct }}%</span></td>
             </tr>
-            {% empty %}
-            <tr><td colspan="{% if show_name %}9{% else %}7{% endif %}" class="ry-empty">데이터 없음</td></tr>
-            {% endfor %}
+            <tr class="detail d-none">
+                <td colspan="{% if show_name %}9{% else %}7{% endif %}">
+                    {% if show_name %}
+                    {% include 'material/resin_yield_usage.html' with lines=g.lines %}
+                    {% else %}
+                    {% for m in g.materials %}
+                    <div class="ry-mat" data-search="{{ m.search }}">
+                        <div class="ry-mat-head">
+                            <span class="pno">{{ m.key|default:"(없음)" }}</span>
+                            <span class="pnm">{{ m.material_name }}</span>
+                            <span class="ry-mat-sum">제품 {{ m.part_count }}개 · 사용량 <b>{{ m.total_kg|kg }} kg</b> · 스크랩 {{ m.loss_kg|kg }} kg ({{ m.loss_pct|pct }}%)</span>
+                        </div>
+                        {% include 'material/resin_yield_usage.html' with lines=m.lines %}
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+                </td>
+            </tr>
         </tbody>
+        {% empty %}
+        <tbody><tr><td colspan="{% if show_name %}9{% else %}7{% endif %}" class="ry-empty">데이터 없음</td></tr></tbody>
+        {% endfor %}
+        <tbody class="ry-nomatch d-none"><tr><td colspan="{% if show_name %}9{% else %}7{% endif %}" class="ry-empty">검색어에 맞는 항목이 없습니다.</td></tr></tbody>
         {% if totals %}
         <tfoot>
             <tr style="background: #f8fafc; font-weight: 700;">
@@ -52,3 +74,4 @@
         {% endif %}
     </table>
 </div>
+<div class="ry-foot">{% if show_name %}행을 누르면 그 원재료를 쓴 제품과 제품별 사용량이 펼쳐집니다{% else %}행을 누르면 그 재질의 원재료와, 원재료마다 쓰인 제품이 펼쳐집니다{% endif %} · 합계는 검색과 관계없이 이 달 전체</div>
