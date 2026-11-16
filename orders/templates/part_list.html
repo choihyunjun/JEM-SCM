@@ -4,314 +4,185 @@
 
 {% block content %}
 <style>
-    .part-table th {
-        font-size: 0.85rem;
-        font-weight: 600;
-        letter-spacing: 0.03em;
-        padding: 12px 16px;
-        white-space: nowrap;
-        border-bottom: 2px solid #dee2e6;
-    }
-    .part-table td {
-        font-size: 0.9rem;
-        padding: 11px 16px;
-        vertical-align: middle;
-    }
-    .part-table tbody tr {
-        border-bottom: 1px solid #f0f0f0;
-    }
-    .part-table tbody tr:hover {
-        background-color: #f0f7ff !important;
-    }
-    .part-no-cell {
-        font-family: 'Consolas', 'Monaco', monospace;
-        font-weight: 700;
-        font-size: 0.88rem;
-        color: #1a56db;
-        letter-spacing: 0.02em;
-    }
-    .part-name-cell {
-        font-weight: 500;
-        color: #333;
-    }
-    .group-badge {
-        display: inline-block;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 0.78rem;
-        font-weight: 600;
-        letter-spacing: 0.03em;
-    }
-    .group-ERP { background: #e8f4fd; color: #1565c0; border: 1px solid #bbdefb; }
-    .group-WMS { background: #fff3e0; color: #e65100; border: 1px solid #ffcc80; }
-    .group-RAW { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
-    .group-default { background: #f5f5f5; color: #616161; border: 1px solid #e0e0e0; }
-    .vendor-connected {
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        padding: 3px 10px;
-        background: #e8f5e9;
-        border-radius: 6px;
-        color: #2e7d32;
-        font-weight: 500;
-        font-size: 0.85rem;
-    }
-    .vendor-disconnected {
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        padding: 3px 10px;
-        background: #fff8e1;
-        border-radius: 6px;
-        color: #f57f17;
-        font-weight: 600;
-        font-size: 0.85rem;
-    }
-    .status-active {
-        display: inline-block;
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background: #4caf50;
-        box-shadow: 0 0 4px rgba(76, 175, 80, 0.5);
-    }
-    .status-inactive {
-        display: inline-block;
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background: #bdbdbd;
-    }
-    .search-card {
-        border: 1px solid #e3e8ef;
-        border-radius: 12px;
-    }
-    .excel-card {
-        border-radius: 12px;
-        border: 1px solid #c8e6c9;
-    }
-    .table-card {
-        border-radius: 12px;
-        overflow: hidden;
-    }
-    .table-card .card-body {
-        padding: 0;
-    }
+    /* 글자는 두 단계(본문 / 보조), 색은 브랜드 색 하나와 '미연결' 경고에만 쓴다 */
+    .pl, .pl-modal { --pl-ink: var(--erp-ink, #292b31); --pl-muted: var(--erp-muted, #69717b); --pl-line: var(--erp-line, #e2e4e8); --pl-edge: #c9ced6; color: var(--pl-ink); }
+    .pl-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px; margin-bottom: 16px; }
+    .pl-head h1 { font-size: 1.5rem; font-weight: 700; margin: 0 0 4px; color: var(--pl-ink); }
+    .pl-count { font-size: .85rem; color: var(--pl-muted); } .pl-count b { font-weight: 600; color: var(--pl-ink); }
+    .pl-tools { display: flex; flex-wrap: wrap; gap: 8px; }
+    :is(.pl, .pl-modal) .pl-btn { box-sizing: border-box; height: 36px; min-height: 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 14px;
+        border: 1px solid var(--pl-edge); border-radius: 6px; background: #fff; color: var(--pl-ink); font-size: .85rem; font-weight: 500; line-height: 1;
+        text-decoration: none; white-space: nowrap; cursor: pointer; }
+    :is(.pl, .pl-modal) .pl-btn:hover { background: #f3f4f6; color: var(--pl-ink); }
+    :is(.pl, .pl-modal) .pl-btn.primary { background: var(--erp-brand, #900000); border-color: var(--erp-brand, #900000); color: #fff; font-weight: 600; }
+    :is(.pl, .pl-modal) .pl-btn.primary:hover { background: var(--erp-brand-dark, #6e0000); border-color: var(--erp-brand-dark, #6e0000); color: #fff; }
+    :is(.pl, .pl-modal) .pl-btn.dark { background: #2f343c; border-color: #2f343c; color: #fff; font-weight: 600; }
+    :is(.pl, .pl-modal) .pl-btn.dark:hover { background: #1f2329; border-color: #1f2329; color: #fff; }
+    :is(.pl, .pl-modal) .pl-btn.small { height: 28px; padding: 0 12px; font-size: .8rem; }
+    .pl-card { background: #fff; border: 1px solid var(--pl-line); border-radius: 8px; margin-bottom: 16px; }
+    .pl-filter { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; padding: 16px; }
+    .pl-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .pl-field > label, .pl-label { margin: 0; font-size: .78rem; font-weight: 600; color: var(--pl-muted); line-height: 1.2; }
+    .pl-filter input[type=text], .pl-filter select { box-sizing: border-box; height: 36px; border: 1px solid var(--pl-edge); border-radius: 6px; padding: 0 12px;
+        font-size: .875rem; color: var(--pl-ink); background-color: #fff; }
+    .pl-filter select { padding-right: 32px; }
+    .pl-field.q input { width: 280px; } .pl-field.vendor select { width: 200px; } .pl-field.group input { width: 200px; }
+    .pl-check { height: 36px; display: inline-flex; align-items: center; gap: 8px; margin: 0; font-size: .875rem; color: var(--pl-ink); cursor: pointer; }
+    .pl-check input { width: 16px; height: 16px; margin: 0; }
+    .pl-actions { margin-left: auto; display: flex; gap: 8px; }
+    .pl-drop { display: none; position: absolute; z-index: 1070; top: calc(100% + 4px); left: 0; width: 100%; max-height: 280px; overflow-y: auto;
+        background: #fff; border: 1px solid var(--pl-edge); border-radius: 6px; box-shadow: 0 4px 12px rgba(0, 0, 0, .1); }
+    .pl-clear { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: 0; font-size: 1.1rem; line-height: 1; color: var(--pl-muted); cursor: pointer; }
+    .pl-note { margin: 0 0 16px; padding: 4px 0 4px 12px; border-left: 3px solid var(--pl-edge); font-size: .82rem; color: var(--pl-muted); }
+    .pl-note b { font-weight: 600; color: var(--pl-ink); }
+    .pl-bulk { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px 32px; padding: 16px; }
+    .pl-bulk-title { font-size: .9rem; font-weight: 600; color: var(--pl-ink); }
+    .pl-bulk-desc { margin: 4px 0 8px; font-size: .82rem; color: var(--pl-muted); }
+    .pl-bulk form { margin-left: auto; display: flex; align-items: flex-end; gap: 8px; }
+    .pl-bulk input[type=file] { height: 36px; width: 320px; max-width: 100%; font-size: .85rem; }
+    table.pl-table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+    .pl-table th { padding: 8px 16px; font-size: .78rem; font-weight: 600; color: var(--pl-muted); white-space: nowrap; text-align: left;
+        border-bottom: 1px solid var(--pl-line); background: #fafafa; }
+    .pl-table td { padding: 8px 16px; vertical-align: middle; border-bottom: 1px solid #eff0f2; color: var(--pl-ink); }
+    .pl-table tbody tr:last-child td { border-bottom: 0; }
+    .pl-table tbody tr:hover td { background: var(--erp-hover, #fafafa); }
+    .pl-table .num { color: var(--pl-muted); font-variant-numeric: tabular-nums; }
+    .pl-table .pno { font-weight: 600; white-space: nowrap; }
+    .pl-table .end { text-align: right; }
+    .pl-warn { font-weight: 600; color: var(--erp-warning, #8b611c); }
+    .pl-empty { padding: 40px 16px !important; text-align: center; color: var(--pl-muted) !important; }
+    @media (max-width: 991.98px) { .pl-actions, .pl-bulk form { margin-left: 0; } .pl-field.q input { width: 220px; } }
 </style>
 
-<div class="container-fluid p-0">
+<div class="container-fluid p-0 pl">
 
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="pl-head">
     <div>
-        <h3 class="fw-bold mb-1">품목 마스터 관리</h3>
-        <span class="text-muted" style="font-size: 0.9rem;">
-            조회 결과 <strong class="text-dark">{{ parts|length }}</strong>건 <span class="text-secondary">(최대 200건)</span>
-        </span>
+        <h1>품목 마스터 관리</h1>
+        <div class="pl-count">조회 결과 <b>{{ parts|length }}</b>건 (최대 200건)</div>
     </div>
-    <div class="d-flex gap-2">
+    <div class="pl-tools">
         <a href="{% url 'part_export' %}?q={{ search_q|urlencode }}&vendor={{ vendor_filter }}&group={{ group_filter }}&wms_only={{ wms_only }}"
-           class="btn btn-outline-success btn-lg">
-            <i class="bi bi-file-earmark-excel me-1"></i>엑셀 다운로드
+           class="pl-btn" title="현재 검색 조건에 맞는 품목 전체를 내려받습니다 (200건 제한 없음)">
+            <i class="bi bi-download"></i>엑셀 다운로드
         </a>
-        <a href="{% url 'part_upload' %}" class="btn btn-success btn-lg">
-            <i class="bi bi-upload me-1"></i>품목 일괄 업로드
-        </a>
+        <a href="{% url 'part_upload' %}" class="pl-btn"><i class="bi bi-upload"></i>품목 일괄 업로드</a>
     </div>
 </div>
 
 <!-- 검색 및 필터 -->
-<div class="card search-card shadow-sm mb-4">
-    <div class="card-body py-3 px-4">
-        <form method="get" class="row g-3 align-items-end">
-            <div class="col-md-3">
-                <label class="form-label fw-semibold text-secondary" style="font-size: 0.8rem;">
-                    <i class="bi bi-search me-1"></i>품번/품명 검색
-                </label>
-                <div style="position:relative;">
-                    <input type="text" name="q" id="partSearchInput" class="form-control form-control-lg"
-                           placeholder="품번 또는 품명 입력" value="{{ search_q }}"
-                           style="font-size: 0.95rem;" autocomplete="off">
-                    <div id="partSearchDropdown"
-                         style="display:none;position:absolute;z-index:1070;width:100%;background:#fff;border:1px solid #dee2e6;border-radius:6px;box-shadow:0 6px 16px rgba(0,0,0,0.12);max-height:280px;overflow-y:auto;top:calc(100% + 4px);left:0;"></div>
-                </div>
+<div class="pl-card">
+    <form method="get" class="pl-filter">
+        <div class="pl-field q">
+            <label for="partSearchInput">품번 / 품명</label>
+            <div style="position:relative;">
+                <input type="text" name="q" id="partSearchInput" placeholder="품번 또는 품명" value="{{ search_q }}" autocomplete="off">
+                <div id="partSearchDropdown" class="pl-drop"></div>
             </div>
-            <div class="col-md-2">
-                <label class="form-label fw-semibold text-secondary" style="font-size: 0.8rem;">
-                    <i class="bi bi-building me-1"></i>업체
-                </label>
-                <select name="vendor" class="form-select" style="font-size: 0.95rem;">
-                    <option value="">전체 업체</option>
-                    {% for v in vendors %}
-                    <option value="{{ v.id }}" {% if vendor_filter == v.id|stringformat:"s" %}selected{% endif %}>
-                        {{ v.name }}
-                    </option>
-                    {% endfor %}
-                </select>
+        </div>
+        <div class="pl-field vendor">
+            <label for="plVendor">업체</label>
+            <select name="vendor" id="plVendor">
+                <option value="">전체 업체</option>
+                {% for v in vendors %}
+                <option value="{{ v.id }}" {% if vendor_filter == v.id|stringformat:"s" %}selected{% endif %}>
+                    {{ v.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="pl-field group">
+            <label for="groupFilterInput">품목군</label>
+            <input type="hidden" name="group" id="groupFilterVal" value="{{ group_filter }}">
+            <div style="position:relative;">
+                <input type="text" id="groupFilterInput" placeholder="전체 품목군" value="{{ group_filter }}" autocomplete="off">
+                <button type="button" onclick="clearGroupFilter()" id="groupFilterClear" class="pl-clear"
+                        style="display:{% if group_filter %}block{% else %}none{% endif %};">×</button>
+                <div id="groupFilterDropdown" class="pl-drop" style="z-index:1060;max-height:220px;"></div>
             </div>
-            <div class="col-md-2">
-                <label class="form-label fw-semibold text-secondary" style="font-size: 0.8rem;">
-                    <i class="bi bi-tag me-1"></i>품목군
-                </label>
-                <input type="hidden" name="group" id="groupFilterVal" value="{{ group_filter }}">
-                <div style="position:relative;">
-                    <input type="text" id="groupFilterInput" class="form-control" style="font-size: 0.95rem;"
-                           placeholder="품목군 검색..." value="{{ group_filter }}" autocomplete="off">
-                    <button type="button" onclick="clearGroupFilter()"
-                            id="groupFilterClear"
-                            style="display:{% if group_filter %}block{% else %}none{% endif %};position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:1.2rem;color:#999;cursor:pointer;line-height:1;">×</button>
-                    <div id="groupFilterDropdown"
-                         style="display:none;position:absolute;z-index:1060;width:100%;background:#fff;border:1px solid #dee2e6;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,0.15);max-height:220px;overflow-y:auto;"></div>
-                </div>
+        </div>
+        <label class="pl-check" for="wmsOnly">
+            <input type="checkbox" name="wms_only" value="1" id="wmsOnly" {% if wms_only == '1' %}checked{% endif %}>
+            업체 미연결만
+        </label>
+        <div class="pl-actions">
+            <button type="submit" class="pl-btn primary"><i class="bi bi-search"></i>검색</button>
+            <a href="{% url 'part_list' %}" class="pl-btn">초기화</a>
+        </div>
+    </form>
+</div>
+
+<!-- 안내 문구 -->
+<p class="pl-note">
+    <b>WMS 전용 품목</b> · WMS에서 재고를 올릴 때 품목 마스터에 없는 품번은 자동으로 등록됩니다. 발주하려면 그 품목에 업체를 연결해야 합니다.
+</p>
+
+<!-- 엑셀 일괄 업데이트 -->
+<div class="pl-card">
+    <div class="pl-bulk">
+        <div>
+            <div class="pl-bulk-title">엑셀로 품목군 · 업체 일괄 수정</div>
+            <p class="pl-bulk-desc">양식(품번 | 품목군 | 업체코드)을 채워 올리면 한 번에 적용됩니다.</p>
+            <div class="pl-tools">
+                <a href="{% url 'part_vendor_template' %}" class="pl-btn"><i class="bi bi-download"></i>빈 양식</a>
+                <a href="{% url 'part_vendor_template' %}?include_data=1" class="pl-btn"><i class="bi bi-download"></i>현재 데이터 포함</a>
             </div>
-            <div class="col-md-2">
-                <div class="form-check" style="margin-top: 28px;">
-                    <input type="checkbox" name="wms_only" value="1" class="form-check-input"
-                           id="wmsOnly" {% if wms_only == '1' %}checked{% endif %}
-                           style="width: 1.2em; height: 1.2em;">
-                    <label class="form-check-label fw-semibold" for="wmsOnly" style="font-size: 0.9rem;">
-                        <i class="bi bi-exclamation-circle text-warning me-1"></i>업체 미연결만
-                    </label>
-                </div>
+        </div>
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="upload_vendor_excel">
+            <div class="pl-field">
+                <label for="plExcelFile">엑셀 파일</label>
+                <input type="file" name="excel_file" id="plExcelFile" class="form-control" accept=".xlsx,.xls" required>
             </div>
-            <div class="col-md-3 text-end">
-                <button type="submit" class="btn btn-primary btn-lg px-4" style="font-size: 0.95rem;">
-                    <i class="bi bi-search me-1"></i>검색
-                </button>
-                <a href="{% url 'part_list' %}" class="btn btn-outline-secondary btn-lg px-3" style="font-size: 0.95rem;">
-                    <i class="bi bi-arrow-counterclockwise me-1"></i>초기화
-                </a>
-            </div>
+            <button type="submit" class="pl-btn dark"><i class="bi bi-upload"></i>적용</button>
         </form>
     </div>
 </div>
 
-<!-- 안내 문구 -->
-<div class="alert alert-info mb-3 d-flex align-items-center" style="border-radius: 10px; font-size: 0.9rem;">
-    <i class="bi bi-info-circle-fill fs-5 me-3 text-info"></i>
-    <div>
-        <strong>WMS 전용 품목:</strong> WMS에서 재고 업로드 시 품목 마스터에 없는 품번은 자동으로 등록됩니다.
-        발주를 위해서는 해당 품목에 업체를 연결해야 합니다.
-    </div>
-</div>
-
-<!-- 엑셀 일괄 업데이트 -->
-<div class="card excel-card shadow-sm mb-4">
-    <div class="card-header bg-success bg-opacity-10 border-bottom border-success border-opacity-25 py-2">
-        <span class="fw-bold text-success" style="font-size: 0.9rem;">
-            <i class="bi bi-file-earmark-excel me-2"></i>엑셀로 품목군/업체 일괄 수정
-        </span>
-    </div>
-    <div class="card-body py-3">
-        <div class="row align-items-center">
-            <div class="col-md-6">
-                <p class="mb-2 text-muted" style="font-size: 0.85rem;">
-                    <i class="bi bi-info-circle me-1"></i>
-                    양식: <strong>품번 | 품목군 | 업체코드</strong> &rarr; 업로드하면 일괄 적용됩니다.
-                </p>
-                <div class="btn-group" role="group">
-                    <a href="{% url 'part_vendor_template' %}" class="btn btn-outline-success">
-                        <i class="bi bi-download me-1"></i>빈 양식
-                    </a>
-                    <a href="{% url 'part_vendor_template' %}?include_data=1" class="btn btn-success">
-                        <i class="bi bi-download me-1"></i>현재 데이터 포함
-                    </a>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <form method="post" enctype="multipart/form-data" class="row g-2 align-items-end">
-                    {% csrf_token %}
-                    <input type="hidden" name="action" value="upload_vendor_excel">
-                    <div class="col-8">
-                        <label class="form-label text-muted" style="font-size: 0.8rem;">엑셀 파일 업로드</label>
-                        <input type="file" name="excel_file" class="form-control" accept=".xlsx,.xls" required>
-                    </div>
-                    <div class="col-4">
-                        <button type="submit" class="btn btn-primary w-100">
-                            <i class="bi bi-upload me-1"></i>적용
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
 <!-- 품목 목록 테이블 -->
-<div class="card table-card shadow-sm">
-    <div class="card-body">
-        <div class="table-responsive">
-            <table class="table table-hover part-table mb-0">
-                <thead>
-                    <tr style="background: #f8f9fb;">
-                        <th class="text-center text-secondary" style="width: 60px;">#</th>
-                        <th class="text-secondary" style="width: 170px;">품번</th>
-                        <th class="text-secondary">품명</th>
-                        <th class="text-center text-secondary" style="width: 110px;">품목군</th>
-                        <th class="text-secondary" style="width: 200px;">연결 업체</th>
-                        <th class="text-center text-secondary" style="width: 70px;">상태</th>
-                        <th class="text-center text-secondary" style="width: 110px;">관리</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for part in parts %}
-                    <tr>
-                        <td class="text-center text-muted" style="font-size: 0.8rem;">{{ part.id }}</td>
-                        <td class="part-no-cell">{{ part.part_no }}</td>
-                        <td class="part-name-cell">{{ part.part_name }}</td>
-                        <td class="text-center">
-                            {% if part.part_group == 'ERP' %}
-                            <span class="group-badge group-ERP">ERP</span>
-                            {% elif part.part_group == 'WMS' %}
-                            <span class="group-badge group-WMS">WMS</span>
-                            {% elif part.part_group == '원자재' or part.part_group == 'RAW' %}
-                            <span class="group-badge group-RAW">{{ part.part_group }}</span>
-                            {% else %}
-                            <span class="group-badge group-default">{{ part.part_group }}</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if part.vendor %}
-                            <span class="vendor-connected">
-                                <i class="bi bi-check-circle-fill"></i>{{ part.vendor.name }}
-                            </span>
-                            {% else %}
-                            <span class="vendor-disconnected">
-                                <i class="bi bi-exclamation-triangle-fill"></i>미연결
-                            </span>
-                            {% endif %}
-                        </td>
-                        <td class="text-center">
-                            {% if part.is_active %}
-                            <span class="status-active" title="활성"></span>
-                            {% else %}
-                            <span class="status-inactive" title="비활성"></span>
-                            {% endif %}
-                        </td>
-                        <td class="text-center">
-                            <button type="button" class="btn btn-sm btn-outline-secondary"
-                                    style="border-radius: 8px; font-size: 0.8rem; padding: 4px 12px; white-space: nowrap;"
-                                    data-bs-toggle="modal" data-bs-target="#editModal"
-                                    onclick="openEditModal({{ part.id }}, '{{ part.part_no|escapejs }}', '{{ part.part_name|escapejs }}', '{{ part.part_group|escapejs }}', '{{ part.vendor.id|default:"" }}', '{{ part.vendor.name|default:""|escapejs }}')">
-                                <i class="bi bi-pencil-square"></i> 수정
-                            </button>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="7" class="text-center text-muted py-5">
-                            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
-                            {% if search_q or vendor_filter or group_filter or wms_only %}
-                            검색 결과가 없습니다.
-                            {% else %}
-                            등록된 품목이 없습니다.
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+<div class="pl-card" style="overflow: hidden;">
+    <div class="table-responsive">
+        <table class="pl-table">
+            <thead>
+                <tr>
+                    <th style="width: 72px;">번호</th>
+                    <th style="width: 180px;">품번</th>
+                    <th>품명</th>
+                    <th style="width: 220px;">품목군</th>
+                    <th style="width: 240px;">연결 업체</th>
+                    <th class="end" style="width: 88px;">관리</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for part in parts %}
+                <tr>
+                    <td class="num">{{ part.id }}</td>
+                    <td class="pno">{{ part.part_no }}</td>
+                    <td>{{ part.part_name }}</td>
+                    <td>{{ part.part_group }}</td>
+                    <td>{% if part.vendor %}{{ part.vendor.name }}{% else %}<span class="pl-warn">미연결</span>{% endif %}</td>
+                    <td class="end">
+                        <button type="button" class="pl-btn small"
+                                data-bs-toggle="modal" data-bs-target="#editModal"
+                                onclick="openEditModal({{ part.id }}, '{{ part.part_no|escapejs }}', '{{ part.part_name|escapejs }}', '{{ part.part_group|escapejs }}', '{{ part.vendor.id|default:"" }}', '{{ part.vendor.name|default:""|escapejs }}')">
+                            수정
+                        </button>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="pl-empty">
+                        {% if search_q or vendor_filter or group_filter or wms_only %}
+                        검색 결과가 없습니다
+                        {% else %}
+                        등록된 품목이 없습니다
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
 </div>
 
@@ -320,10 +191,10 @@
 <!-- 품목 수정 모달 -->
 <div class="modal fade" id="editModal" tabindex="-1">
     <div class="modal-dialog">
-        <div class="modal-content" style="border-radius: 12px; overflow: hidden;">
-            <div class="modal-header bg-primary bg-gradient text-white">
-                <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>품목 정보 수정</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        <div class="modal-content pl-modal" style="border-radius: 8px; overflow: hidden;">
+            <div class="modal-header">
+                <h5 class="modal-title" style="font-size: 1.05rem; font-weight: 700;">품목 정보 수정</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="post">
                 {% csrf_token %}
@@ -333,7 +204,7 @@
                     <div class="mb-3">
                         <label class="form-label fw-semibold">품번</label>
                         <input type="text" class="form-control bg-light" id="editPartNo" readonly
-                               style="font-family: monospace; font-weight: 600;">
+                               style="font-weight: 600;">
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">품명</label>
@@ -345,29 +216,24 @@
                                placeholder="예: 일반, WMS, 원자재 등">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-bold text-primary">
-                            <i class="bi bi-building me-1"></i>연결 업체
-                        </label>
+                        <label class="form-label fw-semibold">연결 업체</label>
                         <input type="hidden" name="vendor_id" id="editVendorId">
                         <div style="position:relative;">
                             <input type="text" id="editVendorSearch" class="form-control"
-                                   placeholder="업체명 검색 (2자 이상)..." autocomplete="off">
+                                   placeholder="업체명 검색 (2자 이상)" autocomplete="off">
                             <button type="button" id="editVendorClear" onclick="clearVendor()"
                                     style="display:none;position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:1.1rem;color:#999;cursor:pointer;">×</button>
                             <div id="vendorDropdown"
                                  style="display:none;position:absolute;z-index:1060;width:100%;background:#fff;border:1px solid #dee2e6;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,0.15);max-height:220px;overflow-y:auto;"></div>
                         </div>
                         <div class="form-text">
-                            <i class="bi bi-info-circle me-1"></i>
-                            발주를 위해서는 업체 연결이 필요합니다. 미연결 시 검색창을 비워두세요.
+                            발주하려면 업체 연결이 필요합니다. 연결하지 않으려면 검색창을 비워 두세요.
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-check-lg me-1"></i>저장
-                    </button>
+                    <button type="button" class="pl-btn" data-bs-dismiss="modal">취소</button>
+                    <button type="submit" class="pl-btn primary">저장</button>
                 </div>
             </form>
         </div>
@@ -385,9 +251,9 @@
     function renderRow(p) {
         return '<div style="padding:9px 14px;cursor:pointer;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:10px;" '
             + 'onmousedown="selectPart(\'' + p.part_no.replace(/\\/g,'\\\\').replace(/'/g,"\\'") + '\')">'
-            + '<span style="font-family:monospace;font-weight:700;font-size:0.87rem;color:#1a56db;min-width:110px;">' + p.part_no + '</span>'
-            + '<span style="font-size:0.88rem;color:#333;flex:1;">' + p.part_name + '</span>'
-            + (p.vendor_name ? '<span style="font-size:0.78rem;color:#888;white-space:nowrap;">' + p.vendor_name + '</span>' : '')
+            + '<span style="font-weight:600;font-size:0.875rem;color:#292b31;min-width:120px;">' + p.part_no + '</span>'
+            + '<span style="font-size:0.875rem;color:#292b31;flex:1;">' + p.part_name + '</span>'
+            + (p.vendor_name ? '<span style="font-size:0.8rem;color:#69717b;white-space:nowrap;">' + p.vendor_name + '</span>' : '')
             + '</div>';
     }
 
