@@ -186,3 +186,75 @@ class BomFallbackTests(TestCase):
         self.assertTrue(row['runner_included'])
         self.assertEqual(row['runner_kg'], 0)
         self.assertEqual((rep['bom_parts'], rep['unregistered']), (['B-2'], []))
+
+
+class OrderCheckTests(TestCase):
+    """재고·발주 탭: 끝난 달 3개 평균 사용량과 3200·3000·2000 창고 재고를 견준다."""
+
+    def setUp(self):
+        cache.clear()
+        for no, material in (('P-1', 'ZR1'), ('P-2', 'ZR2'), ('P-3', 'ZR3')):
+            MoldingMaster.objects.create(part_no=no, part_name=no, material_type='재료1', material_part_no=material,
+                                         material_name=f'PC {material}', cavity=1, product_weight=1000,
+                                         runner_weight=0, total_material=1000)
+        self.warehouses = {code: Warehouse.objects.create(code=code, name=f'창고{code}')
+                           for code in ('3200', '3000', '2000', '4300')}
+        self.stock('ZR1', '3200', 40)
+        self.stock('ZR1', '3000', 20)
+        self.stock('ZR1', '4300', 500)  # 대상 창고가 아니라 세지 않는다
+        self.stock('ZR2', '2000', 500)
+        # ZR3은 SCM 품목 마스터에 없다 → 재고 없음
+
+    def stock(self, part_no, warehouse, quantity):
+        from .models import MaterialStock
+        part, _ = Part.objects.get_or_create(part_no=part_no, defaults={'part_name': part_no})
+        MaterialStock.objects.create(part=part, warehouse=self.warehouses[warehouse], quantity=quantity)
+
+    def order(self, year=2026, month=11):
+        from datetime import date
+        from .resin_order import build_order_report
+
+        def erp(path, params):  # 제품 1개 = 원재료 1kg. 8월 60 / 9월 90 / 10월 150 / 11월(진행 중) 30
+            made = {'202608': 60, '202609': 90, '202610': 150, '202611': 30}.get(params['wrDtFrom'][:6], 0)
+            return erp_rows(('M311', 'P-1', made, 0, None), ('M311', 'P-2', made, 0, None),
+                            ('M311', 'P-3', made, 0, None))
+        with patch('material.resin_yield.call_erp_api', side_effect=erp):
+            return build_order_report(year, month, today=date(2026, 11, 25))
+
+    def test_average_skips_the_month_in_progress(self):
+        from datetime import date
+        from .resin_order import average_months
+        self.assertEqual(average_months(2026, 11, date(2026, 11, 25)), [(2026, 8), (2026, 9), (2026, 10)])
+        self.assertEqual(average_months(2026, 10, date(2026, 11, 25)), [(2026, 8), (2026, 9), (2026, 10)])
+        self.assertEqual(average_months(2026, 2, date(2026, 11, 25)), [(2025, 12), (2026, 1), (2026, 2)])
+
+    def test_flags_materials_with_less_stock_than_a_month_of_use(self):
+        order = self.order()
+        rows = {r['material_part_no']: r for r in order['rows']}
+        self.assertEqual([r['material_part_no'] for r in order['rows']], ['ZR3', 'ZR1', 'ZR2'])
+        self.assertEqual((rows['ZR1']['month_kg'], rows['ZR1']['average_kg'], rows['ZR1']['monthly']),
+                         (30, 100, [60, 90, 150]))
+        self.assertEqual((rows['ZR1']['by_warehouse'], rows['ZR1']['stock_kg']), ([40, 20, 0], 60))
+        self.assertEqual((rows['ZR1']['status'], rows['ZR1']['short_kg'], rows['ZR1']['cover_months']),
+                         ('부족', 40, 0.6))
+        self.assertEqual((rows['ZR2']['status'], rows['ZR2']['need']), ('충분', False))
+        self.assertEqual((rows['ZR3']['status'], rows['ZR3']['short_kg'], rows['ZR3']['registered']),
+                         ('재고 없음', 100, False))
+        self.assertEqual((order['empty_count'], order['short_count'], order['need_count']), (1, 1, 2))
+
+    def test_tab_and_excel(self):
+        from .resin_order import resin_order, resin_order_excel
+        request = RequestFactory().get('/', {'month': '2026-10'})
+        request.user = User.objects.create(username='ry-order', is_superuser=True)
+        with patch('material.resin_yield.call_erp_api', return_value=erp_rows(('M311', 'P-1', 100, 0, None))):
+            html = resin_order(request).content.decode()
+            response = resin_order_excel(request)
+            page = resin_yield(request).content.decode()
+        self.assertIn('id="ryOrderBox"', page)
+        self.assertEqual(html.count('data-need="1"'), 1)
+        self.assertIn('3200', html)
+        wb = openpyxl.load_workbook(BytesIO(response.content))
+        self.assertEqual(wb.sheetnames, ['발주 필요', '전체 원재료'])
+        ws = wb['발주 필요']
+        self.assertEqual([ws.cell(4, c).value for c in (1, 2, 3)], ['●', '부족', 'ZR1'])
+        self.assertEqual(ws.max_row, 4)

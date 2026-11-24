@@ -1,0 +1,52 @@
+{% load resin_yield_tags %}
+{% if order.error %}
+<div class="ry-empty">{{ order.error }}</div>
+{% else %}
+<div class="ry-filter">
+    <input type="text" class="ry-q" placeholder="재료품번 · 재료명 · 업체 검색" aria-label="검색">
+    <label class="ry-sort" style="margin-left: 0;"><input type="checkbox" id="ryNeedOnly"> 발주 필요만 보기</label>
+    <span class="ry-order-sum">재고 없음 <b class="pill bad">{{ order.empty_count }}</b> · 부족 <b class="pill warn">{{ order.short_count }}</b> · 부족량 합계 <b>{{ order.short_kg|kg }} kg</b></span>
+    <a href="{% url 'material:resin_order_excel' %}?month={{ month }}" class="ry-ctl" style="margin-left: auto; height: 32px;"><i class="bi bi-download"></i>발주 목록 엑셀</a>
+</div>
+<div class="ry-scroll">
+    <table class="ry-t">
+        <thead>
+            <tr>
+                <th class="first">재료품번</th>
+                <th>재료명</th>
+                <th>재질</th>
+                <th>업체</th>
+                <th class="r">{{ mon }}월 사용량<div class="hs">kg</div></th>
+                <th class="r">3개월 평균<div class="hs">{% for m in order.months %}{{ m.label }}{% if not forloop.last %}·{% endif %}{% endfor %}</div></th>
+                {% for w in order.warehouses %}<th class="r">{{ w.code }}<div class="hs">{{ w.name|default:"–" }}</div></th>{% endfor %}
+                <th class="r">재고 합계<div class="hs">kg</div></th>
+                <th class="r">재고 개월수</th>
+                <th class="r">부족량<div class="hs">kg</div></th>
+                <th class="last">상태</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in order.rows %}
+            <tr class="ry-item" data-need="{% if r.need %}1{% else %}0{% endif %}" data-search="{{ r.material_part_no|lower }} {{ r.material_name|lower }} {{ r.resin|lower }} {{ r.vendor|lower }}"
+                title="{{ r.monthly_text }}">
+                <td class="first"><span class="pno">{{ r.material_part_no }}</span>{% if not r.registered %}<span class="bom runner" title="SCM 품목 마스터에 없어 재고를 찾지 못했습니다">미등록</span>{% endif %}</td>
+                <td class="pnm">{{ r.material_name|truncatechars:38 }}</td>
+                <td><span class="ry-resin" data-r="{{ r.resin }}">{{ r.resin }}</span></td>
+                <td class="pnm">{{ r.vendor|default:"–" }}</td>
+                <td class="r">{{ r.month_kg|kg }}</td>
+                <td class="r"><b>{{ r.average_kg|kg }}</b></td>
+                {% for qty in r.by_warehouse %}<td class="r">{{ qty|kg }}</td>{% endfor %}
+                <td class="r"><b>{{ r.stock_kg|kg }}</b></td>
+                <td class="r">{% if r.cover_months is not None %}{{ r.cover_months|pct }}{% else %}–{% endif %}</td>
+                <td class="r">{% if r.need %}<b>{{ r.short_kg|kg }}</b>{% else %}–{% endif %}</td>
+                <td class="last">{% if r.status == '재고 없음' %}<span class="pill bad">재고 없음</span>{% elif r.status == '부족' %}<span class="pill warn">부족</span>{% else %}<span class="pnm">충분</span>{% endif %}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="13" class="ry-empty">최근 사용한 원재료가 없습니다.</td></tr>
+            {% endfor %}
+            <tr class="ry-nomatch d-none"><td colspan="13" class="ry-empty">조건에 맞는 원재료가 없습니다.</td></tr>
+        </tbody>
+    </table>
+</div>
+<div class="ry-foot">3개월 평균 = 끝난 달 3개({% for m in order.months %}{{ m.label }}{% if not forloop.last %}·{% endif %}{% endfor %}) 사용량 ÷ 3, 진행 중인 달은 제외 · 재고 = {% for w in order.warehouses %}{{ w.code }}{% if not forloop.last %}+{% endif %}{% endfor %} 창고 현재고({{ order.checked_at }}) · 재고가 평균 한 달 사용량보다 적으면 부족, 부족량 = 평균 − 재고 · 행에 마우스를 올리면 달별 사용량이 보입니다</div>
+{% endif %}

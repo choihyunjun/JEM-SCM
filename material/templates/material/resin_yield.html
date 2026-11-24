@@ -88,6 +88,7 @@
     .ry .ry-mat-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; padding: 4px 8px; border-left: 3px solid #94a3b8; }
     .ry .ry-mat-sum { margin-left: auto; font-size: .75rem; color: var(--ry-muted); } .ry .ry-mat-sum b { font-weight: 600; color: var(--ry-ink); }
     .ry .ry-t td { color: var(--ry-ink); } .ry .ry-t b { font-weight: 600; }
+    .ry .ry-order-sum { font-size: .8rem; color: var(--ry-muted); } .ry .ry-order-sum b:not(.pill) { font-weight: 600; color: var(--ry-ink); }
     .ry .vtxt { font-size: .75rem; color: var(--ry-muted); margin-top: 3px; white-space: nowrap; }
 </style>
 
@@ -143,6 +144,7 @@
         <button data-bs-toggle="tab" data-bs-target="#ryVariance" type="button" role="tab">생산량 대비 사용량</button>
         <button data-bs-toggle="tab" data-bs-target="#ryResin" type="button" role="tab">재질별</button>
         <button data-bs-toggle="tab" data-bs-target="#ryMaterial" type="button" role="tab">원재료별</button>
+        <button data-bs-toggle="tab" data-bs-target="#ryOrder" type="button" role="tab">재고·발주</button>
         <button data-bs-toggle="tab" data-bs-target="#ryIssue" type="button" role="tab">확인 필요{% if issue_count %}<span class="cnt">{{ issue_count }}</span>{% endif %}</button>
     </div>
 
@@ -289,6 +291,11 @@
             <div class="ry-card">{% include 'material/resin_yield_summary.html' with groups=report.by_material totals=report.totals key_label='재료품번' show_name=True %}</div>
         </div>
 
+        {# 재고·발주: 탭을 처음 열 때 불러온다 #}
+        <div class="tab-pane fade" id="ryOrder" role="tabpanel">
+            <div class="ry-card" id="ryOrderBox" data-url="{% url 'material:resin_order' %}?month={{ month }}"><div class="ry-empty">최근 3개월 사용량과 현재 재고를 불러오는 중입니다…</div></div>
+        </div>
+
         {# 확인 필요 #}
         <div class="tab-pane fade" id="ryIssue" role="tabpanel">
             <div class="ry-card pb-2">
@@ -355,17 +362,18 @@
     if (!table) return;
     const rows = Array.from(table.querySelectorAll('tbody.ry-row'));
     const original = rows.slice();
-    const queries = Array.from(document.querySelectorAll('.ry .ry-q'));
-    const searchable = Array.from(document.querySelectorAll('.ry [data-search]'));
+    const root = document.querySelector('.ry');
     const sort = document.getElementById('rySortRate');
     const noMatch = document.getElementById('ryNoMatch');
     let resin = '';
 
     // 검색어는 모든 탭이 함께 쓴다. 펼친 내역 안의 제품 행도 같은 검색어로 걸러진다
     function apply(q) {
-        searchable.forEach(el => {
+        const needOnly = (document.getElementById('ryNeedOnly') || {}).checked;
+        root.querySelectorAll('[data-search]').forEach(el => {
             const ok = (!q || el.dataset.search.includes(q))
-                && (!resin || el.dataset.resin === undefined || el.dataset.resin === resin);
+                && (!resin || el.dataset.resin === undefined || el.dataset.resin === resin)
+                && (!needOnly || el.dataset.need === undefined || el.dataset.need === '1');
             el.classList.toggle('d-none', !ok);
         });
         document.querySelectorAll('.ry .ry-nomatch').forEach(none => {
@@ -373,7 +381,7 @@
             none.classList.toggle('d-none', items.length === 0 || items.some(el => !el.classList.contains('d-none')));
         });
     }
-    function current() { return queries[0].value.trim().toLowerCase(); }
+    function current() { return root.querySelector('.ry-q').value.trim().toLowerCase(); }
     function order() {
         const list = sort.checked ? rows.slice().sort((a, b) => parseFloat(b.dataset.gap) - parseFloat(a.dataset.gap)) : original;
         list.forEach(tb => table.insertBefore(tb, noMatch));
@@ -383,10 +391,30 @@
         tb.querySelector('tr.detail').classList.toggle('d-none');
     }
 
-    queries.forEach(input => input.addEventListener('input', () => {
-        queries.forEach(other => { if (other !== input) other.value = input.value; });
+    // 나중에 불러오는 [재고·발주] 탭의 검색 칸도 함께 듣도록 화면 전체에서 받는다
+    root.addEventListener('input', e => {
+        if (!e.target.classList.contains('ry-q')) return;
+        root.querySelectorAll('.ry-q').forEach(other => { if (other !== e.target) other.value = e.target.value; });
         apply(current());
-    }));
+    });
+    root.addEventListener('change', e => { if (e.target.id === 'ryNeedOnly') apply(current()); });
+    const orderBox = document.getElementById('ryOrderBox');
+    document.querySelector('.ry-tabs [data-bs-target="#ryOrder"]').addEventListener('shown.bs.tab', () => {
+        if (orderBox.dataset.loaded) return;
+        orderBox.dataset.loaded = '1';
+        fetch(orderBox.dataset.url, {credentials: 'same-origin'})
+            .then(res => { if (!res.ok) throw new Error(res.status); return res.text(); })
+            .then(html => {
+                const q = root.querySelector('.ry-q').value;
+                orderBox.innerHTML = html;
+                orderBox.querySelectorAll('.ry-q').forEach(input => { input.value = q; });
+                apply(current());
+            })
+            .catch(() => {
+                delete orderBox.dataset.loaded;
+                orderBox.innerHTML = '<div class="ry-empty">불러오지 못했습니다. 탭을 다시 눌러 주세요.</div>';
+            });
+    });
     sort.addEventListener('change', order);
     document.querySelectorAll('#ryResinChips .ry-chip').forEach(btn => btn.addEventListener('click', () => {
         document.querySelectorAll('#ryResinChips .ry-chip').forEach(b => b.classList.remove('on'));
