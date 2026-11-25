@@ -120,7 +120,7 @@
                                     <span class="text-muted">-</span>
                                 {% endif %}
                             </td>
-                            <td>{{ item.inbound_transaction.part.vendor.name }}</td>
+                            <td>{% if item.inbound_transaction.vendor %}{{ item.inbound_transaction.vendor.name }}{% else %}{{ item.inbound_transaction.part.vendor.name }}{% endif %}</td>
                             <td class="fw-bold">{{ item.inbound_transaction.quantity|floatformat:"-4"|intcomma }} {{ item.inbound_transaction.part.weight_unit|default:"EA" }}{% if item.status != 'PENDING' %}<div class="small fw-normal">양품 {{ item.qty_good|intcomma }} / <span class="text-danger">불량 {{ item.qty_bad|intcomma }}</span></div>{% endif %}</td>
                             <td>
                                 {% if item.inspector %}

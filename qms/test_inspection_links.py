@@ -51,3 +51,24 @@ class InspectionSourceLinkTests(TestCase):
         self.assertEqual(transfers.count(), 2)
         self.assertEqual(sorted(transfers.values_list('quantity', flat=True)), [2, 8])
         self.assertTrue(all(t.ref_delivery_order == trx.ref_delivery_order for t in transfers))
+
+
+@override_settings(ERP_ENABLED=False)
+class InspectionListSupplierTests(TestCase):
+    def test_list_shows_the_vendor_that_delivered_not_the_parts_default_vendor(self):
+        # 2026-11-25 ZR254-D: 입고는 하나엔프라인데 목록에는 품목 전담 업체(덴소코리아)가 나왔다
+        from .views import import_inspection_list
+        default_vendor = Vendor.objects.create(code='V-DEF', name='품목전담업체')
+        delivered_by = Vendor.objects.create(code='V-IN', name='실제입고업체')
+        part = Part.objects.create(part_no='ZR-T', part_name='Resin', vendor=default_vendor)
+        wh = Warehouse.objects.create(code='8100', name='Inspection')
+        for no, vendor in (('IN-A', delivered_by), ('IN-B', None)):
+            trx = MaterialTransaction.objects.create(
+                transaction_no=no, transaction_type='IN_MANUAL', part=part, quantity=10,
+                warehouse_to=wh, vendor=vendor)
+            ImportInspection.objects.create(inbound_transaction=trx, status='PENDING')
+        request = RequestFactory().get('/')
+        request.user = User.objects.create(username='list-viewer', is_superuser=True)
+        html = import_inspection_list(request).content.decode()
+        self.assertEqual(html.count('<td>실제입고업체</td>'), 1)
+        self.assertEqual(html.count('<td>품목전담업체</td>'), 1)  # 입고에 업체가 없으면 품목 전담 업체
