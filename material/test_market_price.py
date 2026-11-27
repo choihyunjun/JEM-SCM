@@ -277,7 +277,8 @@ class MonthlyAverageTests(TestCase):
         card = self.card('USD', date(2026, 11, 27))
         self.assertEqual((card['month'], card['average'], card['last_month'], card['last_average']),
                          (11, '1,332.73', 10, '1,300.00'))                      # (1320 + 1335.5 + 1342.7) / 3
-        self.assertEqual(card['average_delta'], {'direction': 'up', 'amount': '32.73', 'percent': '+2.52%'})
+        self.assertEqual(card['average_delta'],
+                         {'direction': 'up', 'amount': '32.73', 'percent': '+2.52%', 'percent_abs': '2.52%'})
         self.assertEqual((card['value'], card['delta']['amount']), ('1,342.70', '7.20'))   # 왼쪽 칸은 그대로
 
     def test_weekend_copies_from_the_gold_exchange_are_not_counted(self):
@@ -297,13 +298,20 @@ class MonthlyAverageTests(TestCase):
         self.assertEqual((empty['empty'], empty['average'], empty['last_average'], empty['average_delta']),
                          (True, '–', None, None))
 
-    def test_page_shows_both_halves(self):
+    def test_page_shows_the_average_line_under_every_value(self):
         today = timezone.localdate()
-        save_prices('USD', {today: (Decimal('1342.7'), None)}, 'BOK')
+        last_month = today.replace(day=1) - timedelta(days=1)
+        while last_month.weekday() >= 5:                                         # 평균은 평일 값만 센다
+            last_month -= timedelta(days=1)
+        save_prices('USD', {last_month: (Decimal('1300'), None), today: (Decimal('1339'), None)}, 'BOK')
         self.client.force_login(User.objects.create(username='avg', is_superuser=True))
         html = self.client.get(reverse('material:market_price')).content.decode()
-        self.assertEqual(html.count(f'{today.month}월 평균<span class="u">'), 7)
         self.assertEqual(html.count('<div class="avg">'), 7)
+        self.assertEqual(html.count(f'{today.month}월 평균 <b>'), 7)
+        if today.weekday() < 5:
+            self.assertIn(f'{today.month}월 평균 <b>1,339.00</b>', html)
+            self.assertIn('전월 대비 <span class="d up">▲ 3.00%</span>', html)
+            self.assertIn(f'{last_month.month}월 평균 1,300.00 대비 ▲ 39.00 (+3.00%)', html)   # 마우스를 올리면 보이는 글
 
 
 class ViewTests(TestCase):
@@ -320,13 +328,13 @@ class ViewTests(TestCase):
         save_prices('COPPER', {self.today - timedelta(days=9): (Decimal('11965'), None)}, 'KNFA')
         html = self.client.get(self.url).content.decode()
         self.assertIn('1,337.20', html)
-        self.assertIn('▲ 12.20', html)
-        self.assertIn('(+0.92%)', html)
+        self.assertIn('>▲ 0.92%</div>', html)               # 값 옆에는 %만
+        self.assertIn('▲ 12.20 (+0.92%)', html)             # 금액은 마우스를 올리면 보인다
         self.assertNotIn('국내기준가', html)                # 금·은 국내기준가는 받아 두기만 하고 화면에는 내지 않는다
         self.assertEqual(re.findall(r'data-key="(\w+)"', html), ['USD', 'JPY', 'CNY', 'EUR', 'GOLD', 'SILVER', 'COPPER'])
-        self.assertEqual(re.findall(r'<div class="l name">([^<]+)<', html),
+        self.assertEqual(re.findall(r'<span class="name">([^<]+)<', html),
                          ['미국 달러', '일본 엔 (100엔)', '중국 위안', '유로', '금 국제가', '은 국제가', '동 LME 현물'])
-        self.assertIn('(9일 전)</span></span>', html)                      # 오래된 값은 카드에 표시
+        self.assertIn('(9일 전)</span>', html)                      # 오래된 값은 카드에 표시
         self.assertIn(f'<td class="first"><span class="dl">{self.today:%Y-%m-%d}</span>', html)
         self.assertNotIn('자동 수집 확인', html)
 

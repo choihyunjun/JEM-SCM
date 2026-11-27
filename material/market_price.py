@@ -424,8 +424,9 @@ def _change(value, base, digits):
     if value is None or not base:
         return None
     diff = value - base
-    return {'direction': 'up' if diff > 0 else 'down' if diff < 0 else 'flat',
-            'amount': _fmt(abs(diff), digits), 'percent': f'{diff / base * 100:+.2f}%'}
+    percent = diff / base * 100
+    return {'direction': 'up' if diff > 0 else 'down' if diff < 0 else 'flat', 'amount': _fmt(abs(diff), digits),
+            'percent': f'{percent:+.2f}%', 'percent_abs': f'{abs(percent):.2f}%'}  # 화살표 옆에는 부호 없이 쓴다
 
 
 def month_average(item, year, month):
@@ -442,7 +443,7 @@ def month_average(item, year, month):
 
 
 def _card(item, label, unit, digits, source_name, today):
-    """지표 카드 한 장: 왼쪽은 가장 최근 값과 직전 값 대비, 오른쪽은 이번 달 평균과 전월 평균 대비."""
+    """지표 카드 한 장: 가장 최근 값과 직전 값 대비(크게), 이번 달 평균과 전월 평균 대비(아래 한 줄)."""
     latest = list(MarketPrice.objects.filter(item=item).order_by('-price_date')[:2])
     card = {'item': item, 'label': label, 'unit': unit, 'source': source_name, 'value': '–', 'empty': not latest}
     if latest:

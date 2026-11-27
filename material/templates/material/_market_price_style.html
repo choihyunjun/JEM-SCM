@@ -9,24 +9,22 @@
     .mk .mk-primary { background: var(--mk-brand); border-color: var(--mk-brand); color: #fff; font-weight: 600; }
     .mk .mk-primary:hover { background: #6f0000; color: #fff; }
     .mk .mk-hide { display: none; }
-    /* 카드 한 장에 두 칸(최신 값 | 월 평균)이 들어가서, 카드 너비는 화면이 아니라 카드 묶음의 너비로 정한다 */
+    /* 지표 카드: 최신 값 하나만 크게, 월 평균은 아래 한 줄. 한 줄에 몇 장 놓을지는 화면이 아니라 카드 묶음의 너비로 정한다 */
     .mk .mk-stats-box { container-type: inline-size; }
     .mk .mk-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-    @container (min-width: 1500px) { .mk .mk-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-    @container (max-width: 640px) { .mk .mk-stats { grid-template-columns: minmax(0, 1fr); } }
-    .mk .mk-stat { background: #fff; border: 1px solid var(--mk-line); border-radius: 8px; padding: 16px 0; min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .mk .mk-stat .now, .mk .mk-stat .avg { padding: 0 16px; min-width: 0; }
-    .mk .mk-stat .avg { border-left: 1px solid var(--mk-line); }
+    @container (min-width: 1140px) { .mk .mk-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+    @container (max-width: 560px) { .mk .mk-stats { grid-template-columns: minmax(0, 1fr); } }
+    .mk .mk-stat { background: #fff; border: 1px solid var(--mk-line); border-radius: 8px; padding: 14px 18px 12px; min-width: 0; }
     .mk .mk-stat .l { font-size: .8rem; font-weight: 600; color: var(--mk-muted); display: flex; justify-content: space-between; gap: 8px; white-space: nowrap; }
     .mk .mk-stat .l .u { font-weight: 500; }
-    .mk .mk-stat .v { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 4px; color: var(--mk-ink); white-space: nowrap; }
-    .mk .mk-stat .d { font-size: .82rem; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 2px; color: var(--mk-muted); }
+    .mk .mk-stat .l .old { color: #b45309; font-weight: 600; }
+    .mk .mk-stat .now { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 10px; margin-top: 2px; }
+    .mk .mk-stat .v { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--mk-ink); white-space: nowrap; }
+    .mk .mk-stat .d { font-size: .82rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--mk-muted); white-space: nowrap; }
     .mk .mk-stat .d.up { color: #b91c1c; } .mk .mk-stat .d.down { color: #1d4ed8; }
-    .mk .mk-stat .d span { font-weight: 500; }
-    .mk .mk-stat .s { font-size: .78rem; color: var(--mk-muted); margin-top: 4px; word-break: keep-all; }
-    .mk .mk-stat .s .nw { white-space: nowrap; }  /* 칸이 좁으면 '기준일'과 출처 사이에서만 줄을 바꾼다 */
-    .mk .mk-stat .s b { font-weight: 600; color: var(--mk-ink); font-variant-numeric: tabular-nums; }
-    .mk .mk-stat .s .old { color: #b45309; font-weight: 600; }
+    .mk .mk-stat .avg { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; margin-top: 10px; padding-top: 8px; border-top: 1px solid #f1f5f9; font-size: .8rem; color: var(--mk-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .mk .mk-stat .avg b { font-weight: 600; color: var(--mk-ink); }
+    .mk .mk-stat .avg .d { font-size: .8rem; }
     .mk .mk-status { margin-top: 12px; font-size: .78rem; color: var(--mk-muted); display: flex; flex-wrap: wrap; gap: 4px 16px; }
     .mk .mk-status b { font-weight: 600; color: var(--mk-ink); }
     .mk .mk-notice { margin-top: 12px; border: 1px solid var(--mk-line); border-left: 3px solid #d97706; background: #fff; border-radius: 4px; padding: 8px 16px; font-size: .84rem; color: #334155; }

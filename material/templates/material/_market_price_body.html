@@ -2,31 +2,25 @@
     <div class="mk-stats-box"><div class="mk-stats">
         {% for c in cards %}
         <div class="mk-stat">
+            <div class="l">
+                <span class="name">{{ c.label }}</span>
+                <span class="u">{{ c.unit }}{% if not c.empty %} · {{ c.date|date:'n/j' }}{% if c.stale %} <span class="old">({{ c.age }}일 전)</span>{% endif %}{% if c.manual %} 직접 입력{% endif %}{% endif %}</span>
+            </div>
             <div class="now">
-                <div class="l name">{{ c.label }}</div>
                 <div class="v">{{ c.value }}</div>
                 {% if c.delta %}
-                <div class="d {{ c.delta.direction }}" title="직전 값({{ c.delta.since|date:'n/j' }}) 대비">
-                    {% if c.delta.direction == 'up' %}▲ {{ c.delta.amount }}{% elif c.delta.direction == 'down' %}▼ {{ c.delta.amount }}{% else %}변동 없음{% endif %}
-                    {% if c.delta.direction != 'flat' %}<span>({{ c.delta.percent }})</span>{% endif %}
-                </div>
-                {% endif %}
-                {% if c.empty %}
-                <div class="s">저장된 값이 없습니다 · {{ c.source }}</div>
-                {% else %}
-                <div class="s"><span class="nw">기준일 {{ c.date|date:'n/j' }}{% if c.stale %} <span class="old">({{ c.age }}일 전)</span>{% endif %}</span> <span class="nw">· {{ c.source }}{% if c.manual %} 직접 입력{% endif %}</span></div>
+                <div class="d {{ c.delta.direction }}" title="직전 값({{ c.delta.since|date:'n/j' }}) 대비 {% if c.delta.direction == 'up' %}▲ {% elif c.delta.direction == 'down' %}▼ {% endif %}{{ c.delta.amount }} ({{ c.delta.percent }})">{% if c.delta.direction == 'up' %}▲ {{ c.delta.percent_abs }}{% elif c.delta.direction == 'down' %}▼ {{ c.delta.percent_abs }}{% else %}변동 없음{% endif %}</div>
+                {% elif c.empty %}
+                <div class="d">저장된 값이 없습니다</div>
                 {% endif %}
             </div>
             <div class="avg">
-                <div class="l">{{ c.month }}월 평균<span class="u">{{ c.unit }}</span></div>
-                <div class="v">{{ c.average }}</div>
+                <span>{{ c.month }}월 평균 <b>{{ c.average }}</b></span>
                 {% if c.average_delta %}
-                <div class="d {{ c.average_delta.direction }}" title="{{ c.last_month }}월 평균 대비">
-                    {% if c.average_delta.direction == 'up' %}▲ {{ c.average_delta.amount }}{% elif c.average_delta.direction == 'down' %}▼ {{ c.average_delta.amount }}{% else %}변동 없음{% endif %}
-                    {% if c.average_delta.direction != 'flat' %}<span>({{ c.average_delta.percent }})</span>{% endif %}
-                </div>
+                <span title="{{ c.last_month }}월 평균 {{ c.last_average }} 대비 {% if c.average_delta.direction == 'up' %}▲ {% elif c.average_delta.direction == 'down' %}▼ {% endif %}{{ c.average_delta.amount }} ({{ c.average_delta.percent }})">전월 대비 <span class="d {{ c.average_delta.direction }}">{% if c.average_delta.direction == 'up' %}▲ {{ c.average_delta.percent_abs }}{% elif c.average_delta.direction == 'down' %}▼ {{ c.average_delta.percent_abs }}{% else %}변동 없음{% endif %}</span></span>
+                {% elif not c.last_average %}
+                <span>{{ c.last_month }}월 값 없음</span>
                 {% endif %}
-                <div class="s">{% if c.last_average %}{{ c.last_month }}월 평균 {{ c.last_average }}{% else %}{{ c.last_month }}월 값 없음{% endif %}</div>
             </div>
         </div>
         {% endfor %}
