@@ -14,7 +14,8 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .market_price import (
-    MarketPriceError, collect, collect_metals, fetch_exchange, fetch_metal, parse_copper, parse_pasted, save_prices,
+    CARDS, MarketPriceError, _card, collect, collect_metals, fetch_exchange, fetch_metal, month_average,
+    parse_copper, parse_pasted, save_prices,
 )
 from .models import MarketPrice, MarketPriceSource
 
@@ -263,6 +264,48 @@ class CollectTests(TestCase):
         self.assertEqual(list(MarketPrice.objects.values_list('value', flat=True)), [Decimal('3580')])
 
 
+class MonthlyAverageTests(TestCase):
+    """카드 오른쪽 칸: 이번 달 평균과 전월 평균 대비."""
+
+    def card(self, item, today):
+        return _card(*next(c for c in CARDS if c[0] == item), today)
+
+    def test_this_month_average_and_change_from_last_month(self):
+        save_prices('USD', {date(2026, 10, 29): (Decimal('1290'), None), date(2026, 10, 30): (Decimal('1310'), None),
+                            date(2026, 11, 2): (Decimal('1320'), None), date(2026, 11, 26): (Decimal('1335.5'), None),
+                            date(2026, 11, 27): (Decimal('1342.7'), None)}, 'BOK')
+        card = self.card('USD', date(2026, 11, 27))
+        self.assertEqual((card['month'], card['average'], card['last_month'], card['last_average']),
+                         (11, '1,332.73', 10, '1,300.00'))                      # (1320 + 1335.5 + 1342.7) / 3
+        self.assertEqual(card['average_delta'], {'direction': 'up', 'amount': '32.73', 'percent': '+2.52%'})
+        self.assertEqual((card['value'], card['delta']['amount']), ('1,342.70', '7.20'))   # 왼쪽 칸은 그대로
+
+    def test_weekend_copies_from_the_gold_exchange_are_not_counted(self):
+        # 금거래소는 토·일에도 금요일 값을 그대로 올린다. 넣으면 금요일 값이 세 번 들어간다
+        save_prices('GOLD', {date(2026, 11, 19): (Decimal('3700'), None), date(2026, 11, 20): (Decimal('3600'), None),
+                             date(2026, 11, 21): (Decimal('3600'), None), date(2026, 11, 22): (Decimal('3600'), None)},
+                    'KGX')
+        self.assertEqual(month_average('GOLD', 2026, 11), Decimal('3650'))
+        self.assertIsNone(month_average('GOLD', 2026, 12))
+
+    def test_months_without_values_and_the_year_boundary(self):
+        save_prices('COPPER', {date(2026, 12, 30): (Decimal('12000'), None)}, 'KNFA')
+        january = self.card('COPPER', date(2027, 1, 4))                          # 새 달 값이 아직 없다
+        self.assertEqual((january['month'], january['average'], january['average_delta']), (1, '–', None))
+        self.assertEqual((january['last_month'], january['last_average']), (12, '12,000.0'))
+        empty = self.card('SILVER', date(2026, 11, 27))                          # 아무 값도 없는 항목
+        self.assertEqual((empty['empty'], empty['average'], empty['last_average'], empty['average_delta']),
+                         (True, '–', None, None))
+
+    def test_page_shows_both_halves(self):
+        today = timezone.localdate()
+        save_prices('USD', {today: (Decimal('1342.7'), None)}, 'BOK')
+        self.client.force_login(User.objects.create(username='avg', is_superuser=True))
+        html = self.client.get(reverse('material:market_price')).content.decode()
+        self.assertEqual(html.count(f'{today.month}월 평균<span class="u">'), 7)
+        self.assertEqual(html.count('<div class="avg">'), 7)
+
+
 class ViewTests(TestCase):
     def setUp(self):
         self.user = User.objects.create(username='planner', is_superuser=True)
@@ -281,9 +324,9 @@ class ViewTests(TestCase):
         self.assertIn('(+0.92%)', html)
         self.assertNotIn('국내기준가', html)                # 금·은 국내기준가는 받아 두기만 하고 화면에는 내지 않는다
         self.assertEqual(re.findall(r'data-key="(\w+)"', html), ['USD', 'JPY', 'CNY', 'EUR', 'GOLD', 'SILVER', 'COPPER'])
-        self.assertEqual(re.findall(r'<div class="l">([^<]+)<', html),
+        self.assertEqual(re.findall(r'<div class="l name">([^<]+)<', html),
                          ['미국 달러', '일본 엔 (100엔)', '중국 위안', '유로', '금 국제가', '은 국제가', '동 LME 현물'])
-        self.assertIn('(9일 전)', html)                      # 오래된 값은 카드에 표시
+        self.assertIn('(9일 전)</span></span>', html)                      # 오래된 값은 카드에 표시
         self.assertIn(f'<td class="first"><span class="dl">{self.today:%Y-%m-%d}</span>', html)
         self.assertNotIn('자동 수집 확인', html)
 

@@ -419,23 +419,48 @@ def _period(request):
     return period if period in PERIODS else DEFAULT_PERIOD
 
 
+def _change(value, base, digits):
+    """base 대비 value의 변동 (카드의 ▲▼ 줄). base가 없거나 0이면 None."""
+    if value is None or not base:
+        return None
+    diff = value - base
+    return {'direction': 'up' if diff > 0 else 'down' if diff < 0 else 'flat',
+            'amount': _fmt(abs(diff), digits), 'percent': f'{diff / base * 100:+.2f}%'}
+
+
+def month_average(item, year, month):
+    """그 달 평일 값의 평균. 값이 없으면 None.
+
+    금거래소는 주말에도 금요일 값을 그대로 올리므로, 주말을 넣으면 금요일 값이 세 번 들어간다. 그래서 평일만 센다.
+    소수 계산은 DB가 아니라 파이썬 Decimal로 한다 (SQLite의 평균은 실수 계산이다).
+    """
+    start = date(year, month, 1)
+    end = date(year + month // 12, month % 12 + 1, 1) - timedelta(days=1)
+    values = [value for day, value in MarketPrice.objects.filter(item=item, price_date__range=(start, end))
+              .values_list('price_date', 'value') if day.weekday() < 5]
+    return sum(values) / len(values) if values else None
+
+
 def _card(item, label, unit, digits, source_name, today):
+    """지표 카드 한 장: 왼쪽은 가장 최근 값과 직전 값 대비, 오른쪽은 이번 달 평균과 전월 평균 대비."""
     latest = list(MarketPrice.objects.filter(item=item).order_by('-price_date')[:2])
     card = {'item': item, 'label': label, 'unit': unit, 'source': source_name, 'value': '–', 'empty': not latest}
-    if not latest:
-        return card
-    current = latest[0]
-    card.update(value=_fmt(current.value, digits), date=current.price_date,
-                age=(today - current.price_date).days, manual=current.source == 'MANUAL')
-    card['stale'] = card['age'] >= STALE_DAYS
-    if len(latest) == 2 and latest[1].value:
-        diff = current.value - latest[1].value
-        card['delta'] = {
-            'direction': 'up' if diff > 0 else 'down' if diff < 0 else 'flat',
-            'amount': _fmt(abs(diff), digits),
-            'percent': f'{diff / latest[1].value * 100:+.2f}%',
-            'since': latest[1].price_date,
-        }
+    if latest:
+        current = latest[0]
+        card.update(value=_fmt(current.value, digits), date=current.price_date,
+                    age=(today - current.price_date).days, manual=current.source == 'MANUAL')
+        card['stale'] = card['age'] >= STALE_DAYS
+        if len(latest) == 2:
+            card['delta'] = _change(current.value, latest[1].value, digits)
+            if card['delta']:
+                card['delta']['since'] = latest[1].price_date
+
+    last_month = today.replace(day=1) - timedelta(days=1)
+    average = month_average(item, today.year, today.month)
+    last_average = month_average(item, last_month.year, last_month.month)
+    card.update(month=today.month, average=_fmt(average, digits), last_month=last_month.month,
+                last_average=_fmt(last_average, digits) if last_average is not None else None,
+                average_delta=_change(average, last_average, digits))
     return card
 
 

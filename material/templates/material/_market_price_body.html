@@ -1,23 +1,36 @@
 {# 시세·환율 화면 공용 본문: 지표 카드, 수집 상태, 추이 그래프, 날짜별 표. 값은 market_price.page_context() #}
-    <div class="mk-stats">
+    <div class="mk-stats-box"><div class="mk-stats">
         {% for c in cards %}
         <div class="mk-stat">
-            <div class="l">{{ c.label }}<span class="u">{{ c.unit }}</span></div>
-            <div class="v">{{ c.value }}</div>
-            {% if c.delta %}
-            <div class="d {{ c.delta.direction }}" title="직전 값({{ c.delta.since|date:'n/j' }}) 대비">
-                {% if c.delta.direction == 'up' %}▲ {{ c.delta.amount }}{% elif c.delta.direction == 'down' %}▼ {{ c.delta.amount }}{% else %}변동 없음{% endif %}
-                {% if c.delta.direction != 'flat' %}<span>({{ c.delta.percent }})</span>{% endif %}
+            <div class="now">
+                <div class="l name">{{ c.label }}</div>
+                <div class="v">{{ c.value }}</div>
+                {% if c.delta %}
+                <div class="d {{ c.delta.direction }}" title="직전 값({{ c.delta.since|date:'n/j' }}) 대비">
+                    {% if c.delta.direction == 'up' %}▲ {{ c.delta.amount }}{% elif c.delta.direction == 'down' %}▼ {{ c.delta.amount }}{% else %}변동 없음{% endif %}
+                    {% if c.delta.direction != 'flat' %}<span>({{ c.delta.percent }})</span>{% endif %}
+                </div>
+                {% endif %}
+                {% if c.empty %}
+                <div class="s">저장된 값이 없습니다 · {{ c.source }}</div>
+                {% else %}
+                <div class="s"><span class="nw">기준일 {{ c.date|date:'n/j' }}{% if c.stale %} <span class="old">({{ c.age }}일 전)</span>{% endif %}</span> <span class="nw">· {{ c.source }}{% if c.manual %} 직접 입력{% endif %}</span></div>
+                {% endif %}
             </div>
-            {% endif %}
-            {% if c.empty %}
-            <div class="s">저장된 값이 없습니다 · {{ c.source }}</div>
-            {% else %}
-            <div class="s">기준일 {{ c.date|date:'n/j' }}{% if c.stale %} <span class="old">({{ c.age }}일 전)</span>{% endif %} · {{ c.source }}{% if c.manual %} 직접 입력{% endif %}</div>
-            {% endif %}
+            <div class="avg">
+                <div class="l">{{ c.month }}월 평균<span class="u">{{ c.unit }}</span></div>
+                <div class="v">{{ c.average }}</div>
+                {% if c.average_delta %}
+                <div class="d {{ c.average_delta.direction }}" title="{{ c.last_month }}월 평균 대비">
+                    {% if c.average_delta.direction == 'up' %}▲ {{ c.average_delta.amount }}{% elif c.average_delta.direction == 'down' %}▼ {{ c.average_delta.amount }}{% else %}변동 없음{% endif %}
+                    {% if c.average_delta.direction != 'flat' %}<span>({{ c.average_delta.percent }})</span>{% endif %}
+                </div>
+                {% endif %}
+                <div class="s">{% if c.last_average %}{{ c.last_month }}월 평균 {{ c.last_average }}{% else %}{{ c.last_month }}월 값 없음{% endif %}</div>
+            </div>
         </div>
         {% endfor %}
-    </div>
+    </div></div>
 
     {% if has_failure %}
     <div class="mk-notice">
@@ -74,7 +87,7 @@
                 </tbody>
             </table>
         </div>
-        <div class="mk-foot">엔은 100엔당 원 · 평일 오전 9시에 하루 한 번 자동으로 받습니다 (그 뒤 값은 [지금 갱신]) · 금·은·동은 전날 값까지 올라옵니다 · 값이 없는 날은 – 로 표시</div>
+        <div class="mk-foot">엔은 100엔당 원 · 월 평균은 그 달 평일 값의 평균 · 평일 오전 9시에 하루 한 번 자동으로 받습니다 (그 뒤 값은 [지금 갱신]) · 금·은·동은 전날 값까지 올라옵니다 · 값이 없는 날은 – 로 표시</div>
     </div>
 {{ chart|json_script:"mkChartData" }}
 {{ series|json_script:"mkSeriesMeta" }}
