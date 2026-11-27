@@ -1,4 +1,5 @@
 """시세·환율 조회: 한국은행 응답 해석, 협회 표 읽기, 붙여넣기 해석, 수집 실패 처리, 화면·엑셀."""
+import re
 from contextlib import ExitStack
 from datetime import date, timedelta
 from decimal import Decimal
@@ -269,7 +270,7 @@ class ViewTests(TestCase):
         self.url = reverse('material:market_price')
         self.today = timezone.localdate()
 
-    def test_page_shows_latest_values_with_change_and_both_gold_prices(self):
+    def test_page_shows_latest_values_with_change_in_the_agreed_order(self):
         yesterday = self.today - timedelta(days=1)
         save_prices('USD', {yesterday: (Decimal('1325'), None), self.today: (Decimal('1337.2'), None)}, 'BOK')
         save_prices('GOLD', {yesterday: (Decimal('3575.65'), Decimal('154577'))}, 'MANUAL')
@@ -278,7 +279,10 @@ class ViewTests(TestCase):
         self.assertIn('1,337.20', html)
         self.assertIn('▲ 12.20', html)
         self.assertIn('(+0.92%)', html)
-        self.assertIn('국내기준가 <b>154,577</b> 원/g', html)
+        self.assertNotIn('국내기준가', html)                # 금·은 국내기준가는 받아 두기만 하고 화면에는 내지 않는다
+        self.assertEqual(re.findall(r'data-key="(\w+)"', html), ['USD', 'JPY', 'CNY', 'EUR', 'GOLD', 'SILVER', 'COPPER'])
+        self.assertEqual(re.findall(r'<div class="l">([^<]+)<', html),
+                         ['미국 달러', '일본 엔 (100엔)', '중국 위안', '유로', '금 국제가', '은 국제가', '동 LME 현물'])
         self.assertIn('(9일 전)', html)                      # 오래된 값은 카드에 표시
         self.assertIn(f'<td class="first"><span class="dl">{self.today:%Y-%m-%d}</span>', html)
         self.assertNotIn('자동 수집 확인', html)
@@ -294,16 +298,16 @@ class ViewTests(TestCase):
 
     def test_manual_input_saves_gold_and_silver(self):
         response = self.client.post(self.url, {'action': 'manual', 'price_date': f'{self.today:%Y-%m-%d}',
-                                               'gold': '3,575.65', 'gold_krw': '154,577', 'silver': '41.20'})
+                                               'gold': '3,575.65', 'silver': '41.20'})
         self.assertRedirects(response, f'{self.url}?period=3m')
         gold, silver = MarketPrice.objects.get(item='GOLD'), MarketPrice.objects.get(item='SILVER')
-        self.assertEqual((gold.value, gold.value_krw, gold.source, gold.updated_by), (Decimal('3575.65'), 154577, 'MANUAL', self.user))
+        self.assertEqual((gold.value, gold.value_krw, gold.source, gold.updated_by), (Decimal('3575.65'), None, 'MANUAL', self.user))
         self.assertEqual((silver.value, silver.value_krw), (Decimal('41.2'), None))
 
-    def test_manual_input_rejects_future_dates_and_a_domestic_price_alone(self):
+    def test_manual_input_rejects_future_dates_and_bad_numbers(self):
         tomorrow = self.today + timedelta(days=1)
         self.client.post(self.url, {'action': 'manual', 'price_date': f'{tomorrow:%Y-%m-%d}', 'gold': '3575'})
-        self.client.post(self.url, {'action': 'manual', 'price_date': f'{self.today:%Y-%m-%d}', 'gold_krw': '154577'})
+        self.client.post(self.url, {'action': 'manual', 'price_date': f'{self.today:%Y-%m-%d}', 'gold': '삼천'})
         self.client.post(self.url, {'action': 'manual', 'price_date': f'{self.today:%Y-%m-%d}', 'gold': '-5'})
         self.assertFalse(MarketPrice.objects.exists())
 
@@ -337,9 +341,10 @@ class ViewTests(TestCase):
         save_prices('GOLD', {self.today: (Decimal('3575.65'), Decimal('154577'))}, 'MANUAL')
         response = self.client.get(reverse('material:market_price_excel'), {'period': '1m'})
         ws = openpyxl.load_workbook(BytesIO(response.content))['시세·환율']
-        self.assertEqual([c.value.split('\n')[0] for c in ws[3]][:6], ['날짜', '달러', '유로', '위안', '엔 (100엔)', '금 국제가'])
+        self.assertEqual([c.value.split('\n')[0] for c in ws[3]],
+                         ['날짜', '달러', '엔 (100엔)', '위안', '유로', '금 국제가', '은 국제가', '동 LME 현물'])
         self.assertEqual((ws['A4'].value.date(), ws['B4'].value, ws['C4'].value, ws['F4'].value, ws['G4'].value),
-                         (self.today, 1337.2, None, 3575.65, 154577))
+                         (self.today, 1337.2, None, 3575.65, None))
 
     def test_login_and_permission_are_required(self):
         self.client.logout()
@@ -365,7 +370,8 @@ class PublicPageTests(TestCase):
         self.assertEqual(response.status_code, 200)
         html = response.content.decode()
         self.assertIn('1,337.20', html)
-        self.assertIn('국내기준가 <b>154,577</b> 원/g', html)
+        self.assertIn('3,575.65', html)
+        self.assertNotIn('국내기준가', html)
         self.assertEqual(html.count('class="mk-stat"'), 7)
         self.assertIn('지금 갱신', html)
         for scm_only in ('mkManual', '엑셀 다운로드', 'sb-sidenav', '/wms/'):   # 값 입력·엑셀·SCM 메뉴는 없다

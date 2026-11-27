@@ -51,14 +51,13 @@
                         <label class="form-label" for="mkDate">고시날짜</label>
                         <input type="date" class="form-control form-control-sm" id="mkDate" name="price_date" value="{{ today|date:'Y-m-d' }}" max="{{ today|date:'Y-m-d' }}" required>
                     </div>
-                    <table>
-                        <thead><tr><th></th><th>국제가 (USD/T.oz)</th><th>국내기준가 (원/g)</th></tr></thead>
+                    <table style="max-width: 320px;">
+                        <thead><tr><th></th><th>국제가 (USD/T.oz)</th></tr></thead>
                         <tbody>
                             {% for key, name in manual_items.items %}
                             <tr>
                                 <td>{{ name }}</td>
                                 <td><input type="text" inputmode="decimal" class="form-control form-control-sm" name="{{ key|lower }}" aria-label="{{ name }} 국제가" autocomplete="off"></td>
-                                <td><input type="text" inputmode="decimal" class="form-control form-control-sm" name="{{ key|lower }}_krw" aria-label="{{ name }} 국내기준가" autocomplete="off"></td>
                             </tr>
                             {% endfor %}
                         </tbody>

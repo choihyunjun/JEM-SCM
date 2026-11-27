@@ -52,30 +52,29 @@ SOURCE_NAMES = {'BOK': '환율', 'KNFA': '동', 'KGX': '금·은'}
 PERIODS = {'1m': ('1개월', 31), '3m': ('3개월', 92), '6m': ('6개월', 183), '1y': ('1년', 366)}
 DEFAULT_PERIOD = '3m'
 
-# 표·그래프·엑셀의 칸 순서: (키, 항목, 값이 든 칸, 이름, 단위, 소수 자리)
+# 표·그래프·엑셀의 칸 순서: (키, 항목, 값이 든 칸, 이름, 단위, 소수 자리). 환율은 사용자가 정한 순서(달러·엔·위안·유로).
+# 금·은의 국내기준가(value_krw)는 계속 받아 저장하지만 화면에는 내지 않는다 (2026-11-27 사용자 결정)
 SERIES = [
     ('USD', 'USD', 'value', '달러', '원', 2),
-    ('EUR', 'EUR', 'value', '유로', '원', 2),
-    ('CNY', 'CNY', 'value', '위안', '원', 2),
     ('JPY', 'JPY', 'value', '엔 (100엔)', '원', 2),
+    ('CNY', 'CNY', 'value', '위안', '원', 2),
+    ('EUR', 'EUR', 'value', '유로', '원', 2),
     ('GOLD', 'GOLD', 'value', '금 국제가', 'USD/T.oz', 2),
-    ('GOLD_KRW', 'GOLD', 'value_krw', '금 국내기준가', '원/g', 0),
     ('SILVER', 'SILVER', 'value', '은 국제가', 'USD/T.oz', 2),
-    ('SILVER_KRW', 'SILVER', 'value_krw', '은 국내기준가', '원/g', 0),
     ('COPPER', 'COPPER', 'value', '동 LME 현물', 'USD/톤', 1),
 ]
 # 지표 카드: (항목, 이름, 단위, 소수 자리, 출처 이름)
 CARDS = [
     ('USD', '미국 달러', '원', 2, '한국은행'),
-    ('EUR', '유로', '원', 2, '한국은행'),
-    ('CNY', '중국 위안', '원', 2, '한국은행'),
     ('JPY', '일본 엔 (100엔)', '원', 2, '한국은행'),
+    ('CNY', '중국 위안', '원', 2, '한국은행'),
+    ('EUR', '유로', '원', 2, '한국은행'),
     ('GOLD', '금 국제가', 'USD/T.oz', 2, '한국금거래소'),
     ('SILVER', '은 국제가', 'USD/T.oz', 2, '한국금거래소'),
     ('COPPER', '동 LME 현물', 'USD/톤', 1, '비철금속협회'),
 ]
 MANUAL_ITEMS = {'GOLD': '금', 'SILVER': '은'}
-GROUP_STARTS = {'GOLD', 'SILVER', 'COPPER'}  # 표에서 이 칸 앞에 구분선
+GROUP_STARTS = {'GOLD'}  # 표에서 이 칸 앞에 구분선 (환율 | 금속)
 
 ROW_RE = re.compile(r'<tr[^>]*>(.*?)</tr>', re.S | re.I)
 CELL_RE = re.compile(r'<t[dh][^>]*>(.*?)</t[dh]>', re.S | re.I)
@@ -366,7 +365,7 @@ def parse_pasted(text, today=None):
 
 
 def _save_manual(request):
-    """날짜 하나에 금·은 값을 직접 입력."""
+    """날짜 하나에 금·은 국제가를 직접 입력."""
     try:
         day = datetime.strptime(request.POST.get('price_date', ''), '%Y-%m-%d').date()
     except ValueError:
@@ -377,16 +376,15 @@ def _save_manual(request):
         return
     saved, rejected = [], False
     for item, name in MANUAL_ITEMS.items():
-        raw, raw_krw = (request.POST.get(f'{item.lower()}{suffix}', '').strip() for suffix in ('', '_krw'))
-        if not raw and not raw_krw:
+        raw = request.POST.get(item.lower(), '').strip()
+        if not raw:
             continue
         value = _decimal(raw)
-        value_krw = _decimal(raw_krw) if raw_krw else None
-        if value is None or value <= 0 or (raw_krw and (value_krw is None or value_krw <= 0)):
-            messages.error(request, f'{name}: 국제가는 꼭 넣고, 값은 0보다 큰 숫자로 입력해 주세요.')
+        if value is None or value <= 0:
+            messages.error(request, f'{name}: 0보다 큰 숫자로 입력해 주세요.')
             rejected = True
             continue
-        save_prices(item, {day: (value, value_krw)}, 'MANUAL', request.user)
+        save_prices(item, {day: (value, None)}, 'MANUAL', request.user)
         saved.append(name)
     if saved:
         messages.success(request, f"{day:%Y-%m-%d} {'·'.join(saved)} 값을 저장했습니다.")
@@ -430,8 +428,6 @@ def _card(item, label, unit, digits, source_name, today):
     card.update(value=_fmt(current.value, digits), date=current.price_date,
                 age=(today - current.price_date).days, manual=current.source == 'MANUAL')
     card['stale'] = card['age'] >= STALE_DAYS
-    if current.value_krw is not None:
-        card['krw'] = _fmt(current.value_krw, 0)
     if len(latest) == 2 and latest[1].value:
         diff = current.value - latest[1].value
         card['delta'] = {

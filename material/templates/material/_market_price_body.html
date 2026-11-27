@@ -10,7 +10,6 @@
                 {% if c.delta.direction != 'flat' %}<span>({{ c.delta.percent }})</span>{% endif %}
             </div>
             {% endif %}
-            {% if c.krw %}<div class="s">국내기준가 <b>{{ c.krw }}</b> 원/g</div>{% endif %}
             {% if c.empty %}
             <div class="s">저장된 값이 없습니다 · {{ c.source }}</div>
             {% else %}
