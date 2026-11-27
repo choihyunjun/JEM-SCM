@@ -40,6 +40,7 @@
         {% for s in sources %}
         <span><b>{{ s.name }}</b> {% if s.when %}{{ s.when|date:'n/j H:i' }} 수집{% else %}{{ s.never }}{% endif %}</span>
         {% endfor %}
+        <span><b>단위</b> 1 kg = 32.1507 T.oz (1 T.oz = 31.1035 g)</span>
     </div>
 
     <div class="mk-card">
