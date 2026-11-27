@@ -3,7 +3,7 @@ from .models import (
     Warehouse, MaterialStock, MaterialTransaction, Product, BOMItem,
     InventoryCheck,
     ProcessTag, ProcessTagScanLog, InventoryCheckSession, InventoryCheckSessionItem,
-    WMSConfig, MovementExpiryEvent, MovementVisibilityEvent, ResinType,
+    WMSConfig, MovementExpiryEvent, MovementVisibilityEvent, ResinType, MarketPrice,
 )
 
 
@@ -12,6 +12,14 @@ class ResinTypeAdmin(admin.ModelAdmin):
     list_display = ('material_part_no', 'resin_type')
     list_editable = ('resin_type',)
     search_fields = ('material_part_no', 'resin_type')
+
+
+@admin.register(MarketPrice)
+class MarketPriceAdmin(admin.ModelAdmin):
+    """잘못 넣은 시세를 고치거나 지울 때 쓴다."""
+    list_display = ('price_date', 'item', 'value', 'value_krw', 'source', 'updated_by', 'updated_at')
+    list_filter = ('item', 'source')
+    date_hierarchy = 'price_date'
 
 
 @admin.register(MovementExpiryEvent)

@@ -2,7 +2,7 @@ from django.urls import path
 from . import views
 from . import erp_recovery
 from . import label_reissue, late_defect, molding_report
-from . import resin_order, resin_yield
+from . import market_price, resin_order, resin_yield
 from . import bom_jobs
 
 app_name = 'material'
@@ -147,6 +147,10 @@ urlpatterns = [
 
     # 성형 가동률
     path('production/', views.production_main, name='production_main'),
+
+    # 생산기획팀: 시세·환율 조회
+    path('planning/market-price/', market_price.market_price, name='market_price'),
+    path('planning/market-price/excel/', market_price.market_price_excel, name='market_price_excel'),
     path('molding/', views.molding_utilization, name='molding_utilization'),
     path('molding/erp-sync/', views.molding_erp_sync, name='molding_erp_sync'),
     path('molding/settings/', views.molding_settings, name='molding_settings'),

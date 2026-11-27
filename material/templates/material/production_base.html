@@ -72,6 +72,23 @@
                                 </nav>
                             </div>
                             {% endif %}
+
+                            {# 생산기획팀 #}
+                            {% if user|has_perm:'can_wms_stock_view' %}
+                            <a class="nav-link collapsed {% if request.resolver_match.url_name == 'market_price' %}active{% endif %}"
+                               href="#" data-bs-toggle="collapse" data-bs-target="#collapsePlanning"
+                               aria-expanded="{% if request.resolver_match.url_name == 'market_price' %}true{% else %}false{% endif %}">
+                                <div class="sb-nav-link-icon"><i class="bi bi-graph-up"></i></div>
+                                생산기획팀
+                                <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
+                            </a>
+                            <div class="collapse {% if request.resolver_match.url_name == 'market_price' %}show{% endif %}"
+                                 id="collapsePlanning" data-bs-parent="#sidenavAccordion">
+                                <nav class="sb-sidenav-menu-nested nav">
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'market_price' %}active{% endif %}" href="{% url 'material:market_price' %}">시세·환율 조회</a>
+                                </nav>
+                            </div>
+                            {% endif %}
 {% endblock %}
 
 {% block content %}

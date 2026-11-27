@@ -1728,3 +1728,49 @@ class ResinType(models.Model):
 
     def __str__(self):
         return f"{self.material_part_no} ({self.resin_type})"
+
+
+# -----------------------------------------------------------------------------
+# 시세·환율 (생산기획팀)
+# -----------------------------------------------------------------------------
+class MarketPrice(models.Model):
+    """환율·금속 시세의 날짜별 값. 화면은 여기 저장된 값만 읽는다 (수집·입력은 material/market_price.py)."""
+    ITEM_CHOICES = [
+        ('USD', '미국 달러'), ('EUR', '유로'), ('CNY', '중국 위안'), ('JPY', '일본 엔(100엔)'),
+        ('GOLD', '금'), ('SILVER', '은'), ('COPPER', '동'),
+    ]
+    SOURCE_CHOICES = [('BOK', '한국은행'), ('KNFA', '한국비철금속협회'), ('MANUAL', '직접 입력')]
+
+    item = models.CharField("항목", max_length=10, choices=ITEM_CHOICES)
+    price_date = models.DateField("기준일")
+    # 환율: 원(엔은 100엔당) / 금·은: 국제가 USD/T.oz / 동: LME 현물 USD/톤
+    value = models.DecimalField("값", max_digits=16, decimal_places=4)
+    value_krw = models.DecimalField("국내기준가(원/g)", max_digits=16, decimal_places=4, null=True, blank=True)  # 금·은만
+    source = models.CharField("출처", max_length=10, choices=SOURCE_CHOICES)
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="입력자")
+    updated_at = models.DateTimeField("저장일시", auto_now=True)
+
+    class Meta:
+        verbose_name = "시세·환율"
+        verbose_name_plural = "18. 시세·환율"
+        ordering = ['-price_date', 'item']
+        constraints = [models.UniqueConstraint(fields=['item', 'price_date'], name='uniq_market_price_item_date')]
+
+    def __str__(self):
+        return f"{self.price_date} {self.get_item_display()} {self.value}"
+
+
+class MarketPriceSource(models.Model):
+    """자동 수집 출처별 마지막 결과 (출처마다 1행). 화면의 수집 상태 표시에 쓴다."""
+    source = models.CharField("출처", max_length=10, unique=True)
+    ok = models.BooleanField("성공", default=False)
+    message = models.CharField("결과", max_length=200, blank=True)
+    checked_at = models.DateTimeField("마지막 시도")
+    succeeded_at = models.DateTimeField("마지막 성공", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "시세 수집 상태"
+        verbose_name_plural = "시세 수집 상태"
+
+    def __str__(self):
+        return f"{self.source} ({'성공' if self.ok else '실패'})"

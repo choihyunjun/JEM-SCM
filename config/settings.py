@@ -217,6 +217,9 @@ ERP_DEFAULT_EMP_CODE = os.getenv("ERP_DEFAULT_EMP_CODE", "20240601")
 ERP_AUTO_SYNC_ENABLED = True          # 자동 동기화 on/off
 ERP_AUTO_SYNC_INTERVAL_MINUTES = 10   # 동기화 주기 (분)
 
+# 한국은행 경제통계(ECOS) API: 시세·환율 조회 화면의 환율 수집용. 키는 서버 .env에만 둔다
+ECOS_API_KEY = os.getenv("ECOS_API_KEY", "")
+
 # Anthropic Claude API
 ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
 
