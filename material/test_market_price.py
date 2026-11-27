@@ -1,4 +1,5 @@
 """시세·환율 조회: 한국은행 응답 해석, 협회 표 읽기, 붙여넣기 해석, 수집 실패 처리, 화면·엑셀."""
+from contextlib import ExitStack
 from datetime import date, timedelta
 from decimal import Decimal
 from io import BytesIO
@@ -11,7 +12,9 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from .market_price import MarketPriceError, collect, fetch_exchange, parse_copper, parse_pasted, save_prices
+from .market_price import (
+    MarketPriceError, collect, collect_metals, fetch_exchange, fetch_metal, parse_copper, parse_pasted, save_prices,
+)
 from .models import MarketPrice, MarketPriceSource
 
 # 한국비철금속협회 'LME시세' 표의 실제 모양 (2026-11-27 확인): 머리글 두 줄, 날짜는 '2026. 11. 26'
@@ -44,6 +47,36 @@ def fake_get(url, params=None, **kwargs):
     if 'ecos.bok.or.kr' in url:
         return FakeResponse(ecos(('20261126', '1335.5'), ('20261127', '1337.2')))
     return FakeResponse(text=COPPER_HTML)
+
+
+# 한국금거래소 '국제거래기준 시세' 화면이 받는 응답의 실제 모양 (2026-11-27 확인)
+GOLD_ROWS = {'list': [
+    {'date': '2026-11-26', 'exchangeRate': 1344.6200000000001, 'ask': 3575.65, 'domesticPrice': 154577.0,
+     'bid': 3572.85, 'domesticPriceDon': 579663.75},
+    {'date': '2026-11-25', 'exchangeRate': 1344.16, 'ask': 3536.35, 'domesticPrice': 152826.0,
+     'bid': 3533.75, 'domesticPriceDon': 573097.5},
+]}
+SILVER_ROWS = {'list': [
+    {'date': '2026-11-26', 'exchangeRate': 1344.69, 'ask': 41.82, 'domesticPrice': 1808.0, 'bid': 41.69,
+     'domesticPriceDon': 6780.0},
+]}
+
+
+def fake_post(url, json=None, **kwargs):
+    return FakeResponse(GOLD_ROWS if json['type'] == 'Au' else SILVER_ROWS)
+
+
+def sources(get=fake_get, post=fake_post):
+    """외부 세 곳을 가짜로 바꾼다. 금·은 두 번 사이의 쉬는 시간도 없앤다."""
+    stack = ExitStack()
+    stack.enter_context(patch('material.market_price.time.sleep'))
+    stack.enter_context(patch('material.market_price.requests.get', side_effect=get))
+    # 금거래소는 화면을 먼저 열어 받은 접속 정보(세션)로 값을 묻는다
+    session = stack.enter_context(patch('material.market_price.requests.Session')).return_value
+    session.get.return_value = FakeResponse(text='<html>국제거래기준 시세</html>')
+    session.post.side_effect = post
+    stack.page, stack.post = session.get, session.post
+    return stack
 
 
 class ParseTests(TestCase):
@@ -120,38 +153,100 @@ class ExchangeTests(TestCase):
     def test_connection_failure_does_not_leak_the_key(self):
         # requests 예외 글에는 인증키가 든 주소가 들어 있다. 화면·상태 표에 그대로 나가면 안 된다
         error = requests.exceptions.ConnectionError('Max retries exceeded with url: /api/StatisticSearch/test-key/json')
-        with patch('material.market_price.requests.get', side_effect=error):
+        with sources(get=error):
             results = collect()
         self.assertEqual(results[0][:2], ('BOK', False))
         self.assertNotIn('test-key', results[0][2])
         self.assertNotIn('test-key', MarketPriceSource.objects.get(source='BOK').message)
 
 
+class GoldExchangeTests(TestCase):
+    def test_request_looks_like_the_page_and_rows_are_read(self):
+        with sources() as mocks:
+            rows = fetch_metal('SILVER', days=10, today=date(2026, 11, 27))
+            fetch_metal('GOLD', days=400, today=date(2026, 11, 27))
+        self.assertEqual(rows, {date(2026, 11, 26): (Decimal('41.82'), Decimal('1808.0'))})
+        week, year = (call.kwargs['json'] for call in mocks.post.call_args_list)
+        self.assertEqual(week, {'srchDt': '1W', 'type': 'Ag', 'dataDateStart': '2026.11.20', 'dataDateEnd': '2026.11.27'})
+        self.assertEqual(year, {'srchDt': '1Y', 'type': 'Au', 'dataDateStart': '2025.11.27', 'dataDateEnd': '2026.11.27'})
+
+    def test_page_is_opened_once_before_both_metals_and_the_program_is_not_disguised(self):
+        # 2026-11-27 확인: 화면을 열지 않고 값만 물으면 403. 화면을 연 접속으로 물으면 프로그램 이름 그대로도 받아 준다
+        with sources() as mocks:
+            self.assertEqual(collect_metals(), 3)
+        self.assertEqual(mocks.page.call_count, 1)
+        self.assertIn('/price/global', mocks.page.call_args.args[0])
+        self.assertEqual(mocks.post.call_count, 2)
+        for call in mocks.post.call_args_list:
+            self.assertIn('market-price-viewer', call.kwargs['headers']['User-Agent'])
+
+    def test_page_that_does_not_open_stops_the_collection(self):
+        with sources() as mocks:
+            mocks.page.return_value = FakeResponse(status=503)
+            with self.assertRaisesMessage(MarketPriceError, 'HTTP 503'):
+                collect_metals()
+            mocks.post.assert_not_called()
+
+    def test_changed_or_empty_answer_is_an_error(self):
+        for payload in ({'list': []}, {'error': 'forbidden'}, [], {'list': [{'date': '2026-11-26', 'ask': None}]}):
+            with sources(post=lambda url, payload=payload, **kwargs: FakeResponse(payload)):
+                with self.assertRaisesMessage(MarketPriceError, '시세를 찾지 못했습니다'):
+                    fetch_metal('GOLD')
+        with sources(post=lambda url, **kwargs: FakeResponse(text='<html>차단</html>')):
+            with self.assertRaisesMessage(MarketPriceError, '읽지 못했습니다'):
+                fetch_metal('GOLD')
+
+
 @override_settings(ECOS_API_KEY='test-key')
 class CollectTests(TestCase):
     def test_saves_every_source_and_a_second_run_adds_nothing(self):
-        with patch('material.market_price.requests.get', side_effect=fake_get):
-            self.assertEqual(collect(), [('BOK', True, '새 값 8건'), ('KNFA', True, '새 값 2건')])
-            self.assertEqual(collect(), [('BOK', True, '새 값 0건'), ('KNFA', True, '새 값 0건')])
-        self.assertEqual(MarketPrice.objects.count(), 10)
+        with sources():
+            self.assertEqual(collect(), [('BOK', True, '새 값 8건'), ('KNFA', True, '새 값 2건'), ('KGX', True, '새 값 3건')])
+            self.assertEqual(collect(force=True),
+                             [('BOK', True, '새 값 0건'), ('KNFA', True, '새 값 0건'), ('KGX', True, '새 값 0건')])
+        self.assertEqual(MarketPrice.objects.count(), 13)
         self.assertEqual(MarketPrice.objects.get(item='JPY', price_date=date(2026, 11, 27)).value, Decimal('1337.2'))
         self.assertEqual(MarketPrice.objects.get(item='COPPER', price_date=date(2026, 11, 26)).source, 'KNFA')
+        gold = MarketPrice.objects.get(item='GOLD', price_date=date(2026, 11, 26))
+        self.assertEqual((gold.value, gold.value_krw, gold.source), (Decimal('3575.65'), Decimal('154577'), 'KGX'))
         self.assertTrue(all(s.ok and s.succeeded_at for s in MarketPriceSource.objects.all()))
+
+    def test_gold_exchange_is_asked_only_once_a_day_unless_a_person_asks(self):
+        # 금거래소는 자동 접근을 막아 둔 주소라, 주기 실행(하루 3번)에서는 그날 처음 성공한 뒤로 다시 묻지 않는다
+        with sources() as mocks:
+            collect()
+            self.assertEqual(mocks.post.call_count, 2)                       # 금, 은
+            self.assertEqual(collect()[-1], ('KGX', True, '오늘 이미 받음 (하루 한 번)'))
+            self.assertEqual(mocks.post.call_count, 2)
+            collect(force=True)                                              # 화면의 [지금 갱신]
+            self.assertEqual(mocks.post.call_count, 4)
+            yesterday = timezone.now() - timedelta(days=1)
+            MarketPriceSource.objects.filter(source='KGX').update(succeeded_at=yesterday)
+            collect()                                                        # 다음 날
+            self.assertEqual(mocks.post.call_count, 6)
+
+    def test_gold_exchange_failure_is_retried_later_the_same_day(self):
+        blocked = lambda url, **kwargs: FakeResponse(status=403)  # noqa: E731
+        with sources(post=blocked) as mocks:
+            self.assertEqual(collect()[-1], ('KGX', False, '한국금거래소 응답 오류 (HTTP 403)'))
+            collect()
+            self.assertEqual(mocks.post.call_count, 2)                       # 실패하면 금에서 멈추고, 다음 실행 때 다시 묻는다
+        self.assertEqual(set(MarketPrice.objects.values_list('item', flat=True)), {'USD', 'EUR', 'CNY', 'JPY', 'COPPER'})
 
     @override_settings(ECOS_API_KEY='')
     def test_one_failing_source_does_not_stop_the_other(self):
-        with patch('material.market_price.requests.get', side_effect=fake_get):
+        with sources():
             results = collect()
-        self.assertEqual([(source, ok) for source, ok, _ in results], [('BOK', False), ('KNFA', True)])
-        self.assertEqual(set(MarketPrice.objects.values_list('item', flat=True)), {'COPPER'})
+        self.assertEqual([(source, ok) for source, ok, _ in results], [('BOK', False), ('KNFA', True), ('KGX', True)])
+        self.assertEqual(set(MarketPrice.objects.values_list('item', flat=True)), {'COPPER', 'GOLD', 'SILVER'})
         bok = MarketPriceSource.objects.get(source='BOK')
         self.assertEqual((bok.ok, bok.succeeded_at), (False, None))
 
     def test_a_failure_keeps_the_time_of_the_last_success(self):
-        with patch('material.market_price.requests.get', side_effect=fake_get):
+        with sources():
             collect()
         succeeded = MarketPriceSource.objects.get(source='KNFA').succeeded_at
-        with patch('material.market_price.requests.get', return_value=FakeResponse(text='<html>점검</html>')):
+        with sources(get=lambda url, **kwargs: FakeResponse(text='<html>점검</html>')):
             collect()
         knfa = MarketPriceSource.objects.get(source='KNFA')
         self.assertEqual((knfa.ok, knfa.succeeded_at), (False, succeeded))
@@ -220,10 +315,12 @@ class ViewTests(TestCase):
         self.assertFalse(MarketPrice.objects.filter(item='COPPER').exists())
 
     def test_refresh_button_collects_and_reports_each_source(self):
-        with patch('material.market_price.collect', return_value=[('BOK', True, '새 값 4건'), ('KNFA', False, '접속 실패')]) as run:
+        result = [('BOK', True, '새 값 4건'), ('KNFA', False, '접속 실패'), ('KGX', True, '새 값 2건')]
+        with patch('material.market_price.collect', return_value=result) as run:
             response = self.client.post(self.url, {'action': 'refresh'}, follow=True)
-        run.assert_called_once_with()
-        self.assertEqual([str(m) for m in response.context['messages']], ['환율: 새 값 4건', '동: 접속 실패'])
+        run.assert_called_once_with(force=True)
+        self.assertEqual([str(m) for m in response.context['messages']],
+                         ['환율: 새 값 4건', '동: 접속 실패', '금·은: 새 값 2건'])
 
     def test_excel_has_one_row_per_date(self):
         save_prices('USD', {self.today: (Decimal('1337.2'), None)}, 'BOK')

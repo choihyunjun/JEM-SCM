@@ -3,7 +3,9 @@
 출처
 - 환율(달러·유로·위안·엔): 한국은행 경제통계 API, 통계표 731Y001 '주요국 통화의 대원화환율' 일별 값. 엔은 100엔당
 - 동: 한국비철금속협회 누리집 'LME시세' 표 (현물, US$/톤). API가 없어 로그인 없이 열리는 표를 읽는다
-- 금·은: 한국금거래소 '국제거래기준 시세'. 사이트가 자동 수집을 막아 두어(robots.txt) 사람이 입력하거나 표를 붙여 넣는다
+- 금·은: 한국금거래소 '국제거래기준 시세' 화면이 값을 받아 오는 주소. 국제가 = Ask(USD/T.oz), 국내기준가 = 원/g.
+  이 주소는 사이트의 robots.txt가 자동 접근을 막아 둔 곳이다. 2026-11-27 사용자가 위험을 듣고 자동 수집을 결정했다.
+  그래서 주기 실행에서는 하루 한 번만 받고, 막히면 우회하지 않는다 (화면의 직접 입력·붙여넣기로 돌아간다)
 
 화면은 저장된 값만 읽는다. 수집은 fetch_market_prices 명령(주기 실행)과 화면의 [지금 갱신]이 한다.
 한 출처가 실패해도 나머지는 계속 수집하고, 출처별 마지막 결과를 MarketPriceSource에 남긴다.
@@ -33,8 +35,11 @@ logger = logging.getLogger(__name__)
 ECOS_URL = 'https://ecos.bok.or.kr/api/StatisticSearch/{key}/json/kr/1/{count}/731Y001/D/{start}/{end}/{code}'
 ECOS_ITEMS = {'USD': '0000001', 'JPY': '0000002', 'EUR': '0000003', 'CNY': '0000053'}  # 731Y001 항목코드
 COPPER_URL = 'https://www.nonferrous.or.kr/stats/'
-COPPER_ROWS_PER_PAGE = 20
-MAX_COPPER_PAGES = 30
+MAX_COPPER_PAGES = 30  # 한 쪽에 20일
+KGX_PAGE = 'https://www.koreagoldx.co.kr/price/global'
+KGX_URL = 'https://www.koreagoldx.co.kr/api/price/market/period/list'
+KGX_TYPES = {'GOLD': 'Au', 'SILVER': 'Ag'}
+KGX_TERMS = ((10, '1W', 7), (31, '1M', 31), (153, '5M', 153))  # (요청 일수 상한, 기간 코드, 조회 일수). 그보다 길면 1년
 TIMEOUT = 15
 USER_AGENT = 'Mozilla/5.0 (compatible; market-price-viewer)'
 FOUR_PLACES = Decimal('0.0001')
@@ -96,9 +101,14 @@ def _decimal(text):
 
 
 def _get(url, what, params=None):
+    return _send('get', url, what, params=params)
+
+
+def _send(method, url, what, headers=None, client=None, **kwargs):
     """외부 조회. requests 예외 글에는 인증키가 든 주소가 섞이므로 그대로 내보내지 않는다."""
     try:
-        resp = requests.get(url, params=params, timeout=TIMEOUT, headers={'User-Agent': USER_AGENT})
+        resp = getattr(client or requests, method)(url, timeout=TIMEOUT,
+                                                   headers={'User-Agent': USER_AGENT, **(headers or {})}, **kwargs)
     except requests.exceptions.Timeout:
         raise MarketPriceError(f'{what} 응답 시간 초과') from None
     except requests.exceptions.RequestException:
@@ -184,6 +194,55 @@ def fetch_copper(pages=1):
     return rows
 
 
+def open_gold_exchange():
+    """금거래소 시세 화면을 연다. 값 요청은 이때 받은 접속 정보(세션)가 있어야 받아 준다 (없으면 403).
+
+    방문자가 화면을 여는 순서 그대로이고, 프로그램임을 숨기지 않는다 (User-Agent는 다른 출처와 같다).
+    """
+    session = requests.Session()
+    _send('get', KGX_PAGE, '한국금거래소', client=session)
+    return session
+
+
+def fetch_metal(item, days=10, today=None, session=None):
+    """한국금거래소 국제거래기준 시세 {날짜: (국제가, 국내기준가)}. 금거래소 화면이 보내는 요청과 같은 모양으로 묻는다."""
+    today = today or timezone.localdate()
+    term, span = next(((code, span) for limit, code, span in KGX_TERMS if days <= limit), ('1Y', 365))
+    body = {'srchDt': term, 'type': KGX_TYPES[item],
+            'dataDateStart': f'{today - timedelta(days=span):%Y.%m.%d}', 'dataDateEnd': f'{today:%Y.%m.%d}'}
+    try:
+        data = _send('post', KGX_URL, '한국금거래소', client=session or open_gold_exchange(), json=body,
+                     headers={'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest',
+                              'Referer': KGX_PAGE}).json()
+    except ValueError:
+        raise MarketPriceError('한국금거래소 응답을 읽지 못했습니다') from None
+    rows = {}
+    for row in (data.get('list') if isinstance(data, dict) else None) or []:
+        if not isinstance(row, dict):
+            continue
+        value, value_krw = _decimal(row.get('ask')), _decimal(row.get('domesticPrice'))
+        try:
+            day = datetime.strptime(str(row.get('date')), '%Y-%m-%d').date()
+        except ValueError:
+            continue
+        if value is not None and value > 0:
+            rows[day] = (value, value_krw if value_krw is not None and value_krw > 0 else None)
+    if not rows:
+        raise MarketPriceError('한국금거래소 응답에서 시세를 찾지 못했습니다 (형식이 바뀌었거나 접근이 막힘)')
+    return rows
+
+
+def collect_metals(days=10):
+    """금·은을 한 번의 접속으로 받는다: 화면 열기 1회 + 값 요청 2회."""
+    session = open_gold_exchange()
+    saved = 0
+    for index, item in enumerate(KGX_TYPES):
+        if index:
+            time.sleep(0.5)
+        saved += save_prices(item, fetch_metal(item, days, session=session), 'KGX')
+    return saved
+
+
 def save_prices(item, rows, source, user=None):
     """rows {날짜: (값, 국내기준가)}를 저장하고, 새로 들어오거나 바뀐 건수를 돌려준다. 같은 날짜는 덮어쓴다."""
     if not rows:
@@ -208,14 +267,21 @@ def save_prices(item, rows, source, user=None):
     return changed
 
 
-def collect(days=10, pages=1):
-    """자동 출처(환율·동)를 수집한다. 한 출처가 실패해도 다음 출처는 계속한다. [(출처, 성공 여부, 결과 글)]"""
+def collect(days=10, pages=1, force=False):
+    """환율·동·금·은을 수집한다. 한 출처가 실패해도 다음 출처는 계속한다. [(출처, 성공 여부, 결과 글)]
+
+    금·은(한국금거래소)은 오늘 이미 받았으면 건너뛴다. force는 사람이 [지금 갱신]을 눌렀을 때만 쓴다.
+    """
     end = timezone.localdate()
     start = end - timedelta(days=days)
-    jobs = (
+    jobs = [
         ('BOK', lambda: sum(save_prices(item, fetch_exchange(item, start, end), 'BOK') for item in ECOS_ITEMS)),
         ('KNFA', lambda: save_prices('COPPER', fetch_copper(pages), 'KNFA')),
-    )
+    ]
+    last = MarketPriceSource.objects.filter(source='KGX').values_list('succeeded_at', flat=True).first()
+    metals_done = bool(last) and timezone.localtime(last).date() == end and not force
+    if not metals_done:
+        jobs.append(('KGX', lambda: collect_metals(days)))
     results = []
     for source, job in jobs:
         try:
@@ -229,6 +295,8 @@ def collect(days=10, pages=1):
         MarketPriceSource.objects.update_or_create(source=source, defaults={
             'ok': ok, 'message': message[:200], 'checked_at': now, **({'succeeded_at': now} if ok else {})})
         results.append((source, ok, message))
+    if metals_done:
+        results.append(('KGX', True, '오늘 이미 받음 (하루 한 번)'))
     return results
 
 
@@ -357,17 +425,14 @@ def _card(item, label, unit, digits, source_name, today):
 
 
 def _source_status():
-    """화면 아래 수집 상태 줄. 자동 출처 2곳 + 직접 입력."""
+    """화면의 수집 상태 줄: 출처별 마지막 성공 시각과 실패 사유."""
     saved = {s.source: s for s in MarketPriceSource.objects.all()}
     lines = []
-    for source, name in (('BOK', '환율 · 한국은행'), ('KNFA', '동 · 한국비철금속협회')):
+    for source, name in (('BOK', '환율 · 한국은행'), ('KNFA', '동 · 한국비철금속협회'), ('KGX', '금·은 · 한국금거래소')):
         status = saved.get(source)
         failed = bool(status and not status.ok)
         lines.append({'name': name, 'status': status, 'failed': failed, 'when': status and status.succeeded_at,
-                      'done': '수집', 'never': '수집 실패' if failed else '수집 전'})
-    manual = MarketPrice.objects.filter(source='MANUAL').order_by('-updated_at').first()
-    lines.append({'name': '금·은 · 직접 입력', 'failed': False, 'when': manual and manual.updated_at,
-                  'done': '저장', 'never': '입력 전'})
+                      'never': '수집 실패' if failed else '수집 전'})
     return lines
 
 
@@ -397,8 +462,8 @@ def market_price(request):
     if request.method == 'POST':
         action = request.POST.get('action')
         if action == 'refresh':
-            names = {'BOK': '환율', 'KNFA': '동'}
-            for source, ok, message in collect():
+            names = {'BOK': '환율', 'KNFA': '동', 'KGX': '금·은'}
+            for source, ok, message in collect(force=True):
                 (messages.success if ok else messages.error)(request, f'{names[source]}: {message}')
         elif action == 'manual':
             _save_manual(request)

@@ -67,10 +67,10 @@
                     {% for key, label in periods %}<option value="{{ key }}"{% if key == period %} selected{% endif %}>최근 {{ label }}</option>{% endfor %}
                 </select>
             </form>
-            <button type="button" class="mk-ctl" data-bs-toggle="modal" data-bs-target="#mkManual"><i class="bi bi-pencil"></i>금·은 입력</button>
+            <button type="button" class="mk-ctl" data-bs-toggle="modal" data-bs-target="#mkManual" title="자동 수집이 안 될 때 금·은 값을 직접 넣습니다"><i class="bi bi-pencil"></i>금·은 입력</button>
             <form method="post">{% csrf_token %}
                 <input type="hidden" name="action" value="refresh"><input type="hidden" name="period" value="{{ period }}">
-                <button type="submit" class="mk-ctl" title="환율과 동 시세를 지금 다시 받아 옵니다"><i class="bi bi-arrow-clockwise"></i>지금 갱신</button>
+                <button type="submit" class="mk-ctl" title="환율·동·금·은 시세를 지금 다시 받아 옵니다"><i class="bi bi-arrow-clockwise"></i>지금 갱신</button>
             </form>
             <a href="{% url 'material:market_price_excel' %}?period={{ period }}" class="mk-ctl mk-primary"><i class="bi bi-download"></i>엑셀 다운로드</a>
         </div>
@@ -109,7 +109,7 @@
     {% endif %}
     <div class="mk-status">
         {% for s in sources %}
-        <span><b>{{ s.name }}</b> {% if s.when %}{{ s.when|date:'n/j H:i' }} {{ s.done }}{% else %}{{ s.never }}{% endif %}</span>
+        <span><b>{{ s.name }}</b> {% if s.when %}{{ s.when|date:'n/j H:i' }} 수집{% else %}{{ s.never }}{% endif %}</span>
         {% endfor %}
     </div>
 
@@ -147,12 +147,12 @@
                         {% for cell in row.cells %}<td class="{% if cell.value is None %}none{% endif %}{% if cell.sep %} sep{% endif %}{% if forloop.last %} last{% endif %}">{{ cell.text }}</td>{% endfor %}
                     </tr>
                     {% empty %}
-                    <tr><td colspan="{{ series|length|add:1 }}" class="mk-empty" style="text-align:center">이 기간에 저장된 값이 없습니다. [지금 갱신]으로 환율·동 시세를 받아 오거나 [금·은 입력]으로 값을 넣어 주세요.</td></tr>
+                    <tr><td colspan="{{ series|length|add:1 }}" class="mk-empty" style="text-align:center">이 기간에 저장된 값이 없습니다. [지금 갱신]으로 시세를 받아 오세요.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
-        <div class="mk-foot">엔은 100엔당 원 · 금·은은 직접 입력한 날만 값이 있습니다 · 동은 런던 영업일 다음 날 오전에 올라옵니다 · 값이 없는 날은 – 로 표시</div>
+        <div class="mk-foot">엔은 100엔당 원 · 금·은은 평일 오전에 하루 한 번 받아 옵니다 · 동은 런던 영업일 다음 날 오전에 올라옵니다 · 값이 없는 날은 – 로 표시</div>
     </div>
 </div>
 
@@ -164,7 +164,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
             </div>
             <div class="modal-body">
-                <p class="hint">한국금거래소 누리집 [시세조회 › 국제거래기준 시세]의 값을 넣습니다. 같은 날짜를 다시 넣으면 새 값으로 바뀝니다.</p>
+                <p class="hint">금·은은 평소에 자동으로 들어옵니다. 자동 수집이 멈췄을 때만 한국금거래소 누리집 [시세조회 › 국제거래기준 시세]의 값을 여기에 넣어 주세요. 같은 날짜를 다시 넣으면 새 값으로 바뀝니다.</p>
                 <form method="post" class="mb-4">{% csrf_token %}
                     <input type="hidden" name="action" value="manual"><input type="hidden" name="period" value="{{ period }}">
                     <div class="mb-2" style="max-width: 200px;">

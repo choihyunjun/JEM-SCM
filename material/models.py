@@ -1739,7 +1739,7 @@ class MarketPrice(models.Model):
         ('USD', '미국 달러'), ('EUR', '유로'), ('CNY', '중국 위안'), ('JPY', '일본 엔(100엔)'),
         ('GOLD', '금'), ('SILVER', '은'), ('COPPER', '동'),
     ]
-    SOURCE_CHOICES = [('BOK', '한국은행'), ('KNFA', '한국비철금속협회'), ('MANUAL', '직접 입력')]
+    SOURCE_CHOICES = [('BOK', '한국은행'), ('KNFA', '한국비철금속협회'), ('KGX', '한국금거래소'), ('MANUAL', '직접 입력')]
 
     item = models.CharField("항목", max_length=10, choices=ITEM_CHOICES)
     price_date = models.DateField("기준일")

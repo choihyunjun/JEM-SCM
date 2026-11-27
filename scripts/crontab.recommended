@@ -13,7 +13,7 @@ PY=/var/www/scm_project/venv/bin/python
 */5 * * * * cd $P && $PY manage.py process_erp_incoming >> /var/log/scm_erp_outbox.log 2>&1
 17 * * * * cd $P && $PY manage.py process_erp_incoming --reconcile >> /var/log/scm_erp_outbox.log 2>&1
 
-# 시세·환율(생산기획팀): 한국은행 환율 + 비철금속협회 동 시세. ERP와 무관해 잠금을 쓰지 않는다 (평일 9·11·15시 10분)
+# 시세·환율(생산기획팀): 한국은행 환율, 비철금속협회 동, 한국금거래소 금·은(그날 처음 성공한 뒤로는 건너뜀). ERP와 무관해 잠금을 쓰지 않는다 (평일 9·11·15시 10분)
 10 9,11,15 * * 1-5 cd $P && $PY manage.py fetch_market_prices >> /var/log/scm_market_price.log 2>&1
 
 # 생산현장지원(성형 가동률·금형 MT) — 기존 그대로 유지
