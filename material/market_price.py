@@ -21,6 +21,7 @@ import requests
 from django.conf import settings
 from django.contrib import messages
 from django.db import transaction
+from django.db.models import Max
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
@@ -44,6 +45,9 @@ TIMEOUT = 15
 USER_AGENT = 'Mozilla/5.0 (compatible; market-price-viewer)'
 FOUR_PLACES = Decimal('0.0001')
 STALE_DAYS = 5  # 기준일이 이만큼 지났으면 카드에 표시 (연휴에도 뜰 수 있다)
+REFRESH_GAP = timedelta(minutes=5)  # [지금 갱신]을 연달아 눌러도 이 간격 안에는 다시 받지 않는다
+METAL_GAP = timedelta(hours=1)      # 금거래소는 사람이 눌러도 한 시간에 한 번까지만 묻는다 (하루 한 번 올라오는 값이다)
+SOURCE_NAMES = {'BOK': '환율', 'KNFA': '동', 'KGX': '금·은'}
 
 PERIODS = {'1m': ('1개월', 31), '3m': ('3개월', 92), '6m': ('6개월', 183), '1y': ('1년', 366)}
 DEFAULT_PERIOD = '3m'
@@ -270,7 +274,7 @@ def save_prices(item, rows, source, user=None):
 def collect(days=10, pages=1, force=False):
     """환율·동·금·은을 수집한다. 한 출처가 실패해도 다음 출처는 계속한다. [(출처, 성공 여부, 결과 글)]
 
-    금·은(한국금거래소)은 오늘 이미 받았으면 건너뛴다. force는 사람이 [지금 갱신]을 눌렀을 때만 쓴다.
+    금·은(한국금거래소)은 주기 실행에서는 하루 한 번, 사람이 [지금 갱신]을 누른 경우(force)에도 한 시간에 한 번만 묻는다.
     """
     end = timezone.localdate()
     start = end - timedelta(days=days)
@@ -279,8 +283,13 @@ def collect(days=10, pages=1, force=False):
         ('KNFA', lambda: save_prices('COPPER', fetch_copper(pages), 'KNFA')),
     ]
     last = MarketPriceSource.objects.filter(source='KGX').values_list('succeeded_at', flat=True).first()
-    metals_done = bool(last) and timezone.localtime(last).date() == end and not force
-    if not metals_done:
+    if not last:
+        metals_skip = None
+    elif force:
+        metals_skip = '한 시간 안에 이미 받음' if timezone.now() - last < METAL_GAP else None
+    else:
+        metals_skip = '오늘 이미 받음 (하루 한 번)' if timezone.localtime(last).date() == end else None
+    if not metals_skip:
         jobs.append(('KGX', lambda: collect_metals(days)))
     results = []
     for source, job in jobs:
@@ -295,9 +304,19 @@ def collect(days=10, pages=1, force=False):
         MarketPriceSource.objects.update_or_create(source=source, defaults={
             'ok': ok, 'message': message[:200], 'checked_at': now, **({'succeeded_at': now} if ok else {})})
         results.append((source, ok, message))
-    if metals_done:
-        results.append(('KGX', True, '오늘 이미 받음 (하루 한 번)'))
+    if metals_skip:
+        results.append(('KGX', True, metals_skip))
     return results
+
+
+def refresh_now(request):
+    """사람이 [지금 갱신]을 눌렀을 때: 지금 받아 오고 결과를 화면 알림으로 남긴다. 방금 받았으면 다시 받지 않는다."""
+    latest = MarketPriceSource.objects.aggregate(latest=Max('checked_at'))['latest']
+    if latest and timezone.now() - latest < REFRESH_GAP:
+        messages.info(request, f'{timezone.localtime(latest):%H:%M}에 받은 값입니다. 5분 뒤에 다시 받을 수 있습니다.')
+        return
+    for source, ok, message in collect(force=True):
+        (messages.success if ok else messages.error)(request, f'{SOURCE_NAMES[source]}: {message}')
 
 
 # ---------------------------------------------------------------------------
@@ -455,26 +474,12 @@ def build_table(start, end):
     return rows, chart
 
 
-@wms_permission_required('can_wms_stock_view')
-@require_http_methods(['GET', 'POST'])
-def market_price(request):
-    period = _period(request)
-    if request.method == 'POST':
-        action = request.POST.get('action')
-        if action == 'refresh':
-            names = {'BOK': '환율', 'KNFA': '동', 'KGX': '금·은'}
-            for source, ok, message in collect(force=True):
-                (messages.success if ok else messages.error)(request, f'{names[source]}: {message}')
-        elif action == 'manual':
-            _save_manual(request)
-        elif action == 'paste':
-            _save_pasted(request)
-        return redirect(f"{reverse('material:market_price')}?period={period}")
-
+def page_context(period):
+    """화면에 보여 줄 값 전부. SCM 화면과 로그인 없이 보는 화면(market_public)이 같이 쓴다."""
     today = timezone.localdate()
     rows, chart = build_table(today - timedelta(days=PERIODS[period][1]), today)
     sources = _source_status()
-    return render(request, 'material/market_price.html', {
+    return {
         'cards': [_card(*card, today) for card in CARDS],
         'series': [{'key': key, 'label': label, 'unit': unit, 'digits': digits, 'sep': key in GROUP_STARTS}
                    for key, _item, _field, label, unit, digits in SERIES],
@@ -482,8 +487,25 @@ def market_price(request):
         'period': period, 'periods': [(key, label) for key, (label, _days) in PERIODS.items()],
         'period_label': PERIODS[period][0],
         'sources': sources, 'has_failure': any(s['failed'] for s in sources),
-        'today': today, 'manual_items': MANUAL_ITEMS,
-    })
+        'today': today,
+    }
+
+
+@wms_permission_required('can_wms_stock_view')
+@require_http_methods(['GET', 'POST'])
+def market_price(request):
+    period = _period(request)
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        if action == 'refresh':
+            refresh_now(request)
+        elif action == 'manual':
+            _save_manual(request)
+        elif action == 'paste':
+            _save_pasted(request)
+        return redirect(f"{reverse('material:market_price')}?period={period}")
+
+    return render(request, 'material/market_price.html', {**page_context(period), 'manual_items': MANUAL_ITEMS})
 
 
 @wms_permission_required('can_wms_stock_view')

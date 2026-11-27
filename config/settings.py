@@ -219,6 +219,8 @@ ERP_AUTO_SYNC_INTERVAL_MINUTES = 10   # 동기화 주기 (분)
 
 # 한국은행 경제통계(ECOS) API: 시세·환율 조회 화면의 환율 수집용. 키는 서버 .env에만 둔다
 ECOS_API_KEY = os.getenv("ECOS_API_KEY", "")
+# 로그인 없이 보는 시세 화면(/market/<열쇠>/)의 주소 열쇠. 비어 있으면 그 화면은 열리지 않는다
+MARKET_PUBLIC_KEY = os.getenv("MARKET_PUBLIC_KEY", "")
 
 # Anthropic Claude API
 ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')

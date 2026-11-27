@@ -1,0 +1,62 @@
+{# 시세·환율 화면 공용 그래프: 항목 단추를 누르면 그 항목의 추이로 바뀐다 #}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var data = JSON.parse(document.getElementById('mkChartData').textContent);
+    var meta = {};
+    JSON.parse(document.getElementById('mkSeriesMeta').textContent).forEach(function (s) { meta[s.key] = s; });
+    var canvas = document.getElementById('mkChart'), empty = document.getElementById('mkChartEmpty'), note = document.getElementById('mkChartNote');
+    var chips = document.querySelectorAll('#mkSeries .mk-chip');
+    var current = null, chart = null;
+    var number = function (v, digits) { return v.toLocaleString('ko-KR', { minimumFractionDigits: digits, maximumFractionDigits: digits }); };
+
+    // 가리킨 날짜에 세로 안내선
+    var guide = {
+        id: 'mkGuide',
+        afterDatasetsDraw: function (c) {
+            var active = c.tooltip && c.tooltip.getActiveElements();
+            if (!active || !active.length) return;
+            var x = active[0].element.x, area = c.chartArea, ctx = c.ctx;
+            ctx.save(); ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+            ctx.beginPath(); ctx.moveTo(x, area.top); ctx.lineTo(x, area.bottom); ctx.stroke(); ctx.restore();
+        }
+    };
+
+    function show(key) {
+        current = meta[key];
+        var points = data[key] || [];
+        chips.forEach(function (b) { b.classList.toggle('on', b.dataset.key === key); });
+        note.textContent = points.length ? current.label + ' · ' + current.unit + ' · ' + points.length + '일' : '';
+        canvas.classList.toggle('mk-hide', !points.length);
+        empty.classList.toggle('mk-hide', !!points.length);
+        if (typeof Chart === 'undefined' || !points.length) return;
+        var labels = points.map(function (p) { return p[0]; }), values = points.map(function (p) { return p[1]; });
+        if (chart) { chart.data.labels = labels; chart.data.datasets[0].data = values; chart.update(); return; }
+        chart = new Chart(canvas, {
+            type: 'line',
+            data: { labels: labels, datasets: [{ data: values, borderColor: '#8B0000', backgroundColor: '#8B0000', borderWidth: 2,
+                pointRadius: 0, pointHoverRadius: 4, pointHitRadius: 12, tension: 0, fill: false }] },
+            options: {
+                responsive: true, maintainAspectRatio: false, animation: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { displayColors: false, callbacks: {
+                        label: function (ctx) { return current.label + '  ' + number(ctx.parsed.y, current.digits) + ' ' + current.unit; }
+                    } }
+                },
+                scales: {
+                    x: { grid: { display: false }, ticks: { maxTicksLimit: 8, maxRotation: 0, color: '#4b5563',
+                        callback: function (value) { var d = this.getLabelForValue(value).split('-'); return Number(d[1]) + '/' + Number(d[2]); } } },
+                    y: { grid: { color: 'rgba(0,0,0,0.05)' }, border: { display: false }, ticks: { color: '#4b5563', maxTicksLimit: 6,
+                        callback: function (value) { return value.toLocaleString('ko-KR', { maximumFractionDigits: 2 }); } } }
+                }
+            },
+            plugins: [guide]
+        });
+    }
+
+    chips.forEach(function (b) { b.addEventListener('click', function () { show(b.dataset.key); }); });
+    if (chips.length) show(chips[0].dataset.key);
+});
+</script>

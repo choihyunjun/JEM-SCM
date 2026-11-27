@@ -203,7 +203,7 @@ class CollectTests(TestCase):
         with sources():
             self.assertEqual(collect(), [('BOK', True, '새 값 8건'), ('KNFA', True, '새 값 2건'), ('KGX', True, '새 값 3건')])
             self.assertEqual(collect(force=True),
-                             [('BOK', True, '새 값 0건'), ('KNFA', True, '새 값 0건'), ('KGX', True, '새 값 0건')])
+                             [('BOK', True, '새 값 0건'), ('KNFA', True, '새 값 0건'), ('KGX', True, '한 시간 안에 이미 받음')])
         self.assertEqual(MarketPrice.objects.count(), 13)
         self.assertEqual(MarketPrice.objects.get(item='JPY', price_date=date(2026, 11, 27)).value, Decimal('1337.2'))
         self.assertEqual(MarketPrice.objects.get(item='COPPER', price_date=date(2026, 11, 26)).source, 'KNFA')
@@ -211,18 +211,20 @@ class CollectTests(TestCase):
         self.assertEqual((gold.value, gold.value_krw, gold.source), (Decimal('3575.65'), Decimal('154577'), 'KGX'))
         self.assertTrue(all(s.ok and s.succeeded_at for s in MarketPriceSource.objects.all()))
 
-    def test_gold_exchange_is_asked_only_once_a_day_unless_a_person_asks(self):
-        # 금거래소는 자동 접근을 막아 둔 주소라, 주기 실행(하루 3번)에서는 그날 처음 성공한 뒤로 다시 묻지 않는다
+    def test_gold_exchange_is_asked_once_a_day_and_at_most_hourly_by_hand(self):
+        # 금거래소는 자동 접근을 막아 둔 주소다. 주기 실행은 하루 한 번, 사람이 [지금 갱신]을 눌러도 한 시간에 한 번만 묻는다
+        kgx = MarketPriceSource.objects.filter(source='KGX')
         with sources() as mocks:
             collect()
             self.assertEqual(mocks.post.call_count, 2)                       # 금, 은
             self.assertEqual(collect()[-1], ('KGX', True, '오늘 이미 받음 (하루 한 번)'))
+            self.assertEqual(collect(force=True)[-1], ('KGX', True, '한 시간 안에 이미 받음'))
             self.assertEqual(mocks.post.call_count, 2)
-            collect(force=True)                                              # 화면의 [지금 갱신]
+            kgx.update(succeeded_at=timezone.now() - timedelta(hours=2))
+            collect(force=True)                                              # 두 시간 뒤의 [지금 갱신]
             self.assertEqual(mocks.post.call_count, 4)
-            yesterday = timezone.now() - timedelta(days=1)
-            MarketPriceSource.objects.filter(source='KGX').update(succeeded_at=yesterday)
-            collect()                                                        # 다음 날
+            kgx.update(succeeded_at=timezone.now() - timedelta(days=1))
+            collect()                                                        # 다음 날 주기 실행
             self.assertEqual(mocks.post.call_count, 6)
 
     def test_gold_exchange_failure_is_retried_later_the_same_day(self):
@@ -278,7 +280,7 @@ class ViewTests(TestCase):
         self.assertIn('(+0.92%)', html)
         self.assertIn('국내기준가 <b>154,577</b> 원/g', html)
         self.assertIn('(9일 전)', html)                      # 오래된 값은 카드에 표시
-        self.assertIn(f'<td class="first">{self.today:%Y-%m-%d}', html)
+        self.assertIn(f'<td class="first"><span class="dl">{self.today:%Y-%m-%d}</span>', html)
         self.assertNotIn('자동 수집 확인', html)
 
     def test_empty_page_and_failed_source_are_shown(self):
@@ -322,6 +324,14 @@ class ViewTests(TestCase):
         self.assertEqual([str(m) for m in response.context['messages']],
                          ['환율: 새 값 4건', '동: 접속 실패', '금·은: 새 값 2건'])
 
+    def test_refresh_right_after_a_collection_does_not_ask_the_sources_again(self):
+        MarketPriceSource.objects.create(source='BOK', ok=True, message='새 값 4건', checked_at=timezone.now(),
+                                         succeeded_at=timezone.now())
+        with patch('material.market_price.collect') as run:
+            response = self.client.post(self.url, {'action': 'refresh'}, follow=True)
+        run.assert_not_called()
+        self.assertIn('5분 뒤에 다시 받을 수 있습니다', [str(m) for m in response.context['messages']][0])
+
     def test_excel_has_one_row_per_date(self):
         save_prices('USD', {self.today: (Decimal('1337.2'), None)}, 'BOK')
         save_prices('GOLD', {self.today: (Decimal('3575.65'), Decimal('154577'))}, 'MANUAL')
@@ -338,3 +348,51 @@ class ViewTests(TestCase):
         response = self.client.post(self.url, {'action': 'manual', 'price_date': f'{self.today:%Y-%m-%d}', 'gold': '3575'})
         self.assertEqual(response.status_code, 302)
         self.assertFalse(MarketPrice.objects.exists())
+
+
+@override_settings(MARKET_PUBLIC_KEY='k3y-for-test')
+class PublicPageTests(TestCase):
+    """로그인 없이 보는 화면 (/market/<열쇠>/): 링크를 받은 사람만, 보기와 갱신만."""
+
+    def setUp(self):
+        self.url = reverse('market_public', args=['k3y-for-test'])
+        self.today = timezone.localdate()
+        save_prices('USD', {self.today: (Decimal('1337.2'), None)}, 'BOK')
+        save_prices('GOLD', {self.today: (Decimal('3575.65'), Decimal('154577'))}, 'KGX')
+
+    def test_opens_without_login_and_only_shows(self):
+        response = self.client.get(self.url, {'period': '1m'})
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        self.assertIn('1,337.20', html)
+        self.assertIn('국내기준가 <b>154,577</b> 원/g', html)
+        self.assertEqual(html.count('class="mk-stat"'), 7)
+        self.assertIn('지금 갱신', html)
+        for scm_only in ('mkManual', '엑셀 다운로드', 'sb-sidenav', '/wms/'):   # 값 입력·엑셀·SCM 메뉴는 없다
+            self.assertNotIn(scm_only, html)
+        self.assertEqual(response['X-Robots-Tag'], 'noindex, nofollow')         # 검색에 잡히지 않게
+        self.assertEqual(response['Referrer-Policy'], 'same-origin')            # 주소 열쇠가 바깥으로 새지 않게
+
+    def test_wrong_or_unset_key_looks_like_a_missing_page(self):
+        self.assertEqual(self.client.get(reverse('market_public', args=['wrong'])).status_code, 404)
+        self.assertEqual(self.client.post(reverse('market_public', args=['wrong'])).status_code, 404)
+        with override_settings(MARKET_PUBLIC_KEY=''):
+            self.assertEqual(self.client.get(self.url).status_code, 404)
+
+    def test_refresh_works_without_login_and_keeps_the_period(self):
+        result = [('BOK', True, '새 값 4건'), ('KNFA', True, '새 값 1건'), ('KGX', True, '한 시간 안에 이미 받음')]
+        with patch('material.market_price.collect', return_value=result) as run:
+            response = self.client.post(self.url, {'period': '1m'}, follow=True)
+        self.assertEqual(response.redirect_chain, [(f'{self.url}?period=1m', 302)])
+        run.assert_called_once_with(force=True)
+        html = response.content.decode()
+        self.assertIn('환율: 새 값 4건', html)
+        self.assertIn('금·은: 한 시간 안에 이미 받음', html)
+
+    def test_scm_page_is_unchanged_and_still_needs_login(self):
+        scm = reverse('material:market_price')
+        self.assertRedirects(self.client.get(scm), reverse('login'), fetch_redirect_response=False)
+        self.client.force_login(User.objects.create(username='planner2', is_superuser=True))
+        html = self.client.get(scm).content.decode()
+        for part in ('mkManual', '엑셀 다운로드', '1,337.20', 'id="mkChart"', "getElementById('mkChartData')"):
+            self.assertIn(part, html)

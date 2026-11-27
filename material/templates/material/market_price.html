@@ -2,51 +2,8 @@
 {% block title %}시세·환율 조회{% endblock %}
 
 {% block production_content %}
+{% include 'material/_market_price_style.html' %}
 <style>
-    .mk { --mk-brand: #8B0000; --mk-line: #e2e8f0; --mk-ink: #111827; --mk-muted: #4b5563; --mk-soft: #f8fafc; color: #1e293b; }
-    .mk .mk-crumb { font-size: .75rem; font-weight: 600; color: var(--mk-muted); }
-    .mk h1 { font-size: 1.5rem; font-weight: 700; margin: 4px 0; color: var(--mk-ink); }
-    .mk .mk-sub { font-size: .82rem; color: var(--mk-muted); }
-    .mk .mk-ctl { height: 36px; min-height: 0; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; padding: 0 12px; font-size: .85rem; color: #475569; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
-    .mk .mk-ctl:hover { background: #f1f5f9; color: #1e293b; }
-    .mk .mk-primary { background: var(--mk-brand); border-color: var(--mk-brand); color: #fff; font-weight: 600; }
-    .mk .mk-primary:hover { background: #6f0000; color: #fff; }
-    .mk .mk-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-    @media (max-width: 1100px) { .mk .mk-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-    .mk .mk-stat { background: #fff; border: 1px solid var(--mk-line); border-radius: 8px; padding: 16px 20px; min-width: 0; }
-    .mk .mk-stat .l { font-size: .8rem; font-weight: 600; color: var(--mk-muted); display: flex; justify-content: space-between; gap: 8px; white-space: nowrap; }
-    .mk .mk-stat .l .u { font-weight: 500; }
-    .mk .mk-stat .v { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 4px; color: var(--mk-ink); white-space: nowrap; }
-    .mk .mk-stat .d { font-size: .82rem; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 2px; color: var(--mk-muted); }
-    .mk .mk-stat .d.up { color: #b91c1c; } .mk .mk-stat .d.down { color: #1d4ed8; }
-    .mk .mk-stat .d span { font-weight: 500; }
-    .mk .mk-stat .s { font-size: .78rem; color: var(--mk-muted); margin-top: 4px; }
-    .mk .mk-stat .s b { font-weight: 600; color: var(--mk-ink); font-variant-numeric: tabular-nums; }
-    .mk .mk-stat .s .old { color: #b45309; font-weight: 600; }
-    .mk .mk-status { margin-top: 12px; font-size: .78rem; color: var(--mk-muted); display: flex; flex-wrap: wrap; gap: 4px 16px; }
-    .mk .mk-status b { font-weight: 600; color: var(--mk-ink); }
-    .mk .mk-notice { margin-top: 12px; border: 1px solid var(--mk-line); border-left: 3px solid #d97706; background: #fff; border-radius: 4px; padding: 8px 16px; font-size: .84rem; color: #334155; }
-    .mk .mk-notice ul { margin: 4px 0 0; padding-left: 20px; font-size: .8rem; }
-    .mk .mk-card { background: #fff; border: 1px solid var(--mk-line); border-radius: 8px; margin-top: 16px; }
-    .mk .mk-filter { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px 16px; border-bottom: 1px solid #f1f5f9; }
-    .mk .mk-filter h6 { font-size: .88rem; font-weight: 700; margin: 0 8px 0 0; color: var(--mk-ink); }
-    .mk .mk-chip { height: 32px; min-height: 0; border: 1px solid #cbd5e1; border-radius: 6px; padding: 0 12px; font-size: .78rem; font-weight: 600; background: #fff; color: #475569; }
-    .mk .mk-chip:hover { background: #f1f5f9; } .mk .mk-chip.on { background: #1f2937; border-color: #1f2937; color: #fff; }
-    .mk .mk-note { margin-left: auto; font-size: .78rem; color: var(--mk-muted); }
-    .mk .mk-chart { position: relative; height: 300px; padding: 12px 16px 8px; }
-    .mk table.mk-t { width: 100%; font-size: .84rem; border-collapse: collapse; }
-    .mk .mk-t thead th { font-size: .78rem; font-weight: 600; color: var(--mk-muted); padding: 8px; border-bottom: 1px solid var(--mk-line); white-space: nowrap; vertical-align: bottom; background: #fff; position: sticky; top: 0; z-index: 1; text-align: right; }
-    .mk .mk-t thead th .hs { font-weight: 400; }
-    .mk .mk-t thead th.first { text-align: left; }
-    .mk .mk-t td { padding: 8px; border-bottom: 1px solid #f1f5f9; color: var(--mk-ink); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-    .mk .mk-t td.first { text-align: left; color: var(--mk-muted); }
-    .mk .mk-t td.none { color: #94a3b8; }
-    .mk .mk-t .first { padding-left: 16px; } .mk .mk-t .last { padding-right: 16px; }
-    .mk .mk-t .sep { border-left: 1px solid #f1f5f9; }
-    .mk .mk-t tbody tr:hover td { background: var(--mk-soft); }
-    .mk .mk-scroll { overflow: auto; max-height: 70vh; }
-    .mk .mk-foot { padding: 8px 16px; font-size: .75rem; color: var(--mk-muted); }
-    .mk .mk-empty { padding: 36px; text-align: center; font-size: .84rem; color: var(--mk-muted); }
     .mk-modal .form-label { font-size: .8rem; font-weight: 600; color: #4b5563; margin-bottom: 4px; }
     .mk-modal .hint { font-size: .8rem; color: #4b5563; }
     .mk-modal table { width: 100%; font-size: .84rem; } .mk-modal table th { font-size: .78rem; font-weight: 600; color: #4b5563; padding: 4px 8px 4px 0; }
@@ -76,84 +33,7 @@
         </div>
     </div>
 
-    <div class="mk-stats">
-        {% for c in cards %}
-        <div class="mk-stat">
-            <div class="l">{{ c.label }}<span class="u">{{ c.unit }}</span></div>
-            <div class="v">{{ c.value }}</div>
-            {% if c.delta %}
-            <div class="d {{ c.delta.direction }}" title="직전 값({{ c.delta.since|date:'n/j' }}) 대비">
-                {% if c.delta.direction == 'up' %}▲ {{ c.delta.amount }}{% elif c.delta.direction == 'down' %}▼ {{ c.delta.amount }}{% else %}변동 없음{% endif %}
-                {% if c.delta.direction != 'flat' %}<span>({{ c.delta.percent }})</span>{% endif %}
-            </div>
-            {% endif %}
-            {% if c.krw %}<div class="s">국내기준가 <b>{{ c.krw }}</b> 원/g</div>{% endif %}
-            {% if c.empty %}
-            <div class="s">저장된 값이 없습니다 · {{ c.source }}</div>
-            {% else %}
-            <div class="s">기준일 {{ c.date|date:'n/j' }}{% if c.stale %} <span class="old">({{ c.age }}일 전)</span>{% endif %} · {{ c.source }}{% if c.manual %} 직접 입력{% endif %}</div>
-            {% endif %}
-        </div>
-        {% endfor %}
-    </div>
-
-    {% if has_failure %}
-    <div class="mk-notice">
-        <b>자동 수집 확인</b>
-        <ul>
-            {% for s in sources %}{% if s.failed %}
-            <li>{{ s.name }}: {{ s.status.message }} ({{ s.status.checked_at|date:'n/j H:i' }} 시도{% if s.status.succeeded_at %}, 마지막 성공 {{ s.status.succeeded_at|date:'n/j H:i' }}{% endif %})</li>
-            {% endif %}{% endfor %}
-        </ul>
-    </div>
-    {% endif %}
-    <div class="mk-status">
-        {% for s in sources %}
-        <span><b>{{ s.name }}</b> {% if s.when %}{{ s.when|date:'n/j H:i' }} 수집{% else %}{{ s.never }}{% endif %}</span>
-        {% endfor %}
-    </div>
-
-    <div class="mk-card">
-        <div class="mk-filter">
-            <h6>추이</h6>
-            <div class="d-flex flex-wrap gap-1" id="mkSeries">
-                {% for s in series %}<button type="button" class="mk-chip{% if forloop.first %} on{% endif %}" data-key="{{ s.key }}">{{ s.label }}</button>{% endfor %}
-            </div>
-            <span class="mk-note" id="mkChartNote"></span>
-        </div>
-        <div class="mk-chart">
-            <canvas id="mkChart" aria-label="선택한 항목의 날짜별 추이 그래프"></canvas>
-            <div class="mk-empty d-none" id="mkChartEmpty">이 기간에 저장된 값이 없습니다.</div>
-        </div>
-    </div>
-
-    <div class="mk-card">
-        <div class="mk-filter">
-            <h6>날짜별 값</h6>
-            <span class="mk-note">최근 {{ period_label }} · {{ rows|length }}일</span>
-        </div>
-        <div class="mk-scroll">
-            <table class="mk-t">
-                <thead>
-                    <tr>
-                        <th class="first">날짜</th>
-                        {% for s in series %}<th class="{% if s.sep %}sep{% endif %}{% if forloop.last %} last{% endif %}">{{ s.label }}<div class="hs">{{ s.unit }}</div></th>{% endfor %}
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in rows %}
-                    <tr>
-                        <td class="first">{{ row.date|date:'Y-m-d' }} ({{ row.weekday }})</td>
-                        {% for cell in row.cells %}<td class="{% if cell.value is None %}none{% endif %}{% if cell.sep %} sep{% endif %}{% if forloop.last %} last{% endif %}">{{ cell.text }}</td>{% endfor %}
-                    </tr>
-                    {% empty %}
-                    <tr><td colspan="{{ series|length|add:1 }}" class="mk-empty" style="text-align:center">이 기간에 저장된 값이 없습니다. [지금 갱신]으로 시세를 받아 오세요.</td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        <div class="mk-foot">엔은 100엔당 원 · 금·은은 평일 오전에 하루 한 번 받아 옵니다 · 동은 런던 영업일 다음 날 오전에 올라옵니다 · 값이 없는 날은 – 로 표시</div>
-    </div>
+{% include 'material/_market_price_body.html' %}
 </div>
 
 <div class="modal fade mk-modal" id="mkManual" tabindex="-1" aria-labelledby="mkManualTitle" aria-hidden="true">
@@ -205,70 +85,8 @@
         </div>
     </div>
 </div>
-{{ chart|json_script:"mkChartData" }}
-{{ series|json_script:"mkSeriesMeta" }}
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    var data = JSON.parse(document.getElementById('mkChartData').textContent);
-    var meta = {};
-    JSON.parse(document.getElementById('mkSeriesMeta').textContent).forEach(function (s) { meta[s.key] = s; });
-    var canvas = document.getElementById('mkChart'), empty = document.getElementById('mkChartEmpty'), note = document.getElementById('mkChartNote');
-    var chips = document.querySelectorAll('#mkSeries .mk-chip');
-    var current = null, chart = null;
-    var number = function (v, digits) { return v.toLocaleString('ko-KR', { minimumFractionDigits: digits, maximumFractionDigits: digits }); };
-
-    // 가리킨 날짜에 세로 안내선
-    var guide = {
-        id: 'mkGuide',
-        afterDatasetsDraw: function (c) {
-            var active = c.tooltip && c.tooltip.getActiveElements();
-            if (!active || !active.length) return;
-            var x = active[0].element.x, area = c.chartArea, ctx = c.ctx;
-            ctx.save(); ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
-            ctx.beginPath(); ctx.moveTo(x, area.top); ctx.lineTo(x, area.bottom); ctx.stroke(); ctx.restore();
-        }
-    };
-
-    function show(key) {
-        current = meta[key];
-        var points = data[key] || [];
-        chips.forEach(function (b) { b.classList.toggle('on', b.dataset.key === key); });
-        note.textContent = points.length ? current.label + ' · ' + current.unit + ' · ' + points.length + '일' : '';
-        canvas.classList.toggle('d-none', !points.length);
-        empty.classList.toggle('d-none', !!points.length);
-        if (typeof Chart === 'undefined' || !points.length) return;
-        var labels = points.map(function (p) { return p[0]; }), values = points.map(function (p) { return p[1]; });
-        if (chart) { chart.data.labels = labels; chart.data.datasets[0].data = values; chart.update(); return; }
-        chart = new Chart(canvas, {
-            type: 'line',
-            data: { labels: labels, datasets: [{ data: values, borderColor: '#8B0000', backgroundColor: '#8B0000', borderWidth: 2,
-                pointRadius: 0, pointHoverRadius: 4, pointHitRadius: 12, tension: 0, fill: false }] },
-            options: {
-                responsive: true, maintainAspectRatio: false, animation: false,
-                interaction: { mode: 'index', intersect: false },
-                plugins: {
-                    legend: { display: false },
-                    tooltip: { displayColors: false, callbacks: {
-                        label: function (ctx) { return current.label + '  ' + number(ctx.parsed.y, current.digits) + ' ' + current.unit; }
-                    } }
-                },
-                scales: {
-                    x: { grid: { display: false }, ticks: { maxTicksLimit: 8, maxRotation: 0, color: '#4b5563',
-                        callback: function (value) { var d = this.getLabelForValue(value).split('-'); return Number(d[1]) + '/' + Number(d[2]); } } },
-                    y: { grid: { color: 'rgba(0,0,0,0.05)' }, border: { display: false }, ticks: { color: '#4b5563', maxTicksLimit: 6,
-                        callback: function (value) { return value.toLocaleString('ko-KR', { maximumFractionDigits: 2 }); } } }
-                }
-            },
-            plugins: [guide]
-        });
-    }
-
-    chips.forEach(function (b) { b.addEventListener('click', function () { show(b.dataset.key); }); });
-    if (chips.length) show(chips[0].dataset.key);
-});
-</script>
+{% include 'material/_market_price_script.html' %}
 {% endblock %}

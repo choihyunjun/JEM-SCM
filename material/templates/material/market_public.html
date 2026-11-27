@@ -1,0 +1,79 @@
+{% load static %}<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="referrer" content="same-origin">
+    <meta name="theme-color" content="#8B0000">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="시세·환율">
+    <title>시세·환율</title>
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css">
+    {% include 'material/_market_price_style.html' %}
+    <style>
+        /* SCM 뼈대 없이 혼자 뜨는 화면이라 바탕 서식을 여기서 정한다 */
+        *, *::before, *::after { box-sizing: border-box; }
+        html { -webkit-text-size-adjust: 100%; }
+        body { margin: 0; background: #f8fafc; font-family: "Pretendard Variable", Pretendard, "Malgun Gothic", sans-serif; line-height: 1.5; }
+        .mk button, .mk select { font-family: inherit; cursor: pointer; }
+        .mp-bar { background: #8B0000; color: #fff; height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 20px; }
+        .mp-bar img { height: 26px; display: block; filter: brightness(0) invert(1); }  /* 붉은 띠 위에서 보이게 흰색으로 */
+        .mp-bar span { font-size: 1.05rem; font-weight: 600; }
+        .mp-wrap { max-width: 1320px; margin: 0 auto; padding: 20px 20px 40px; }
+        .mp-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px; margin-bottom: 16px; }
+        .mp-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+        .mp-actions form { margin: 0; }
+        .mp-actions svg { width: 14px; height: 14px; }
+        .mp-msg { border: 1px solid #e2e8f0; border-left: 3px solid #64748b; background: #fff; border-radius: 4px; padding: 8px 16px; margin-bottom: 8px; font-size: .84rem; color: #334155; }
+        .mp-msg.success { border-left-color: #15803d; } .mp-msg.error { border-left-color: #b91c1c; }
+        @media (max-width: 640px) {
+            .mp-bar { height: 48px; padding: 0 14px; }
+            .mp-wrap { padding: 14px 12px 32px; }
+            .mk h1 { font-size: 1.25rem; }
+            .mp-actions { width: 100%; } .mp-actions form { flex: 1; } .mp-actions .mk-ctl { width: 100%; justify-content: center; height: 40px; }
+            .mk .mk-stats { gap: 8px; }
+            .mk .mk-stat { padding: 12px 14px; }
+            .mk .mk-stat .v { font-size: 1.3rem; }
+            .mk .mk-chart { height: 240px; padding: 8px 8px 4px; }
+            .mk .mk-chip { height: 36px; }
+            .mk .mk-note { width: 100%; margin-left: 0; }
+            .mk .mk-t .first { padding-left: 12px; }
+        }
+    </style>
+</head>
+<body>
+<header class="mp-bar">
+    <img src="{% static 'images/LOGO.png' %}" alt="JEM">
+    <span>진영전기(주)</span>
+</header>
+<main class="mk mp-wrap">
+    {% for message in messages %}
+    <div class="mp-msg {{ message.level_tag }}" role="status">{{ message }}</div>
+    {% endfor %}
+    <div class="mp-head">
+        <div>
+            <h1>시세·환율</h1>
+            <div class="mk-sub">환율은 한국은행 매매기준율, 금·은은 한국금거래소 국제거래기준 시세, 동은 한국비철금속협회 LME 현물가</div>
+        </div>
+        <div class="mp-actions">
+            <form method="get">
+                <select name="period" class="mk-ctl" onchange="this.form.submit()" aria-label="조회 기간">
+                    {% for key, label in periods %}<option value="{{ key }}"{% if key == period %} selected{% endif %}>최근 {{ label }}</option>{% endfor %}
+                </select>
+            </form>
+            <form method="post">{% csrf_token %}
+                <input type="hidden" name="period" value="{{ period }}">
+                <button type="submit" class="mk-ctl mk-primary" title="환율·동·금·은 시세를 지금 다시 받아 옵니다">
+                    <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466"/></svg>지금 갱신
+                </button>
+            </form>
+        </div>
+    </div>
+
+{% include 'material/_market_price_body.html' %}
+</main>
+{% include 'material/_market_price_script.html' %}
+</body>
+</html>

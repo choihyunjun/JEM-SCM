@@ -6,6 +6,7 @@ from django.conf.urls.static import static
 
 # [수정] material_views는 이제 include를 쓰므로 필요 없지만, 에러 방지를 위해 지우지 않아도 됨
 from material import views as material_views 
+from material import market_public
 
 # 관리자 페이지 제목 설정
 admin.site.site_header = "JEM SCM 관리자 시스템"
@@ -137,6 +138,9 @@ urlpatterns = [
 
     # SCM 기준정보관리 - ERP 마스터 동기화 (SCM 레이아웃으로 표시)
     path('master-sync/', material_views.erp_master_sync, name='erp_master_sync'),
+
+    # 로그인 없이 보는 시세·환율 화면 (주소 열쇠가 맞아야 열린다)
+    path('market/<str:key>/', market_public.market_public, name='market_public'),
 
     # ------------------------------------------------------------------
     # 6. 품질관리 (QMS)

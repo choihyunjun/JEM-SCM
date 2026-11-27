@@ -1,0 +1,52 @@
+{# 시세·환율 화면 공용 서식: SCM 화면(market_price.html)과 로그인 없이 보는 화면(market_public.html)이 같이 쓴다 #}
+<style>
+    .mk { --mk-brand: #8B0000; --mk-line: #e2e8f0; --mk-ink: #111827; --mk-muted: #4b5563; --mk-soft: #f8fafc; color: #1e293b; }
+    .mk .mk-crumb { font-size: .75rem; font-weight: 600; color: var(--mk-muted); }
+    .mk h1 { font-size: 1.5rem; font-weight: 700; margin: 4px 0; color: var(--mk-ink); }
+    .mk .mk-sub { font-size: .82rem; color: var(--mk-muted); }
+    .mk .mk-ctl { height: 36px; min-height: 0; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; padding: 0 12px; font-size: .85rem; color: #475569; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+    .mk .mk-ctl:hover { background: #f1f5f9; color: #1e293b; }
+    .mk .mk-primary { background: var(--mk-brand); border-color: var(--mk-brand); color: #fff; font-weight: 600; }
+    .mk .mk-primary:hover { background: #6f0000; color: #fff; }
+    .mk .mk-hide { display: none; }
+    .mk .mk-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    @media (max-width: 1100px) { .mk .mk-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    .mk .mk-stat { background: #fff; border: 1px solid var(--mk-line); border-radius: 8px; padding: 16px 20px; min-width: 0; }
+    .mk .mk-stat .l { font-size: .8rem; font-weight: 600; color: var(--mk-muted); display: flex; justify-content: space-between; gap: 8px; white-space: nowrap; }
+    .mk .mk-stat .l .u { font-weight: 500; }
+    .mk .mk-stat .v { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 4px; color: var(--mk-ink); white-space: nowrap; }
+    .mk .mk-stat .d { font-size: .82rem; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 2px; color: var(--mk-muted); }
+    .mk .mk-stat .d.up { color: #b91c1c; } .mk .mk-stat .d.down { color: #1d4ed8; }
+    .mk .mk-stat .d span { font-weight: 500; }
+    .mk .mk-stat .s { font-size: .78rem; color: var(--mk-muted); margin-top: 4px; }
+    .mk .mk-stat .s b { font-weight: 600; color: var(--mk-ink); font-variant-numeric: tabular-nums; }
+    .mk .mk-stat .s .old { color: #b45309; font-weight: 600; }
+    .mk .mk-status { margin-top: 12px; font-size: .78rem; color: var(--mk-muted); display: flex; flex-wrap: wrap; gap: 4px 16px; }
+    .mk .mk-status b { font-weight: 600; color: var(--mk-ink); }
+    .mk .mk-notice { margin-top: 12px; border: 1px solid var(--mk-line); border-left: 3px solid #d97706; background: #fff; border-radius: 4px; padding: 8px 16px; font-size: .84rem; color: #334155; }
+    .mk .mk-notice ul { margin: 4px 0 0; padding-left: 20px; font-size: .8rem; }
+    .mk .mk-card { background: #fff; border: 1px solid var(--mk-line); border-radius: 8px; margin-top: 16px; }
+    .mk .mk-filter { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px 16px; border-bottom: 1px solid #f1f5f9; }
+    .mk .mk-filter h6 { font-size: .88rem; font-weight: 700; margin: 0 8px 0 0; color: var(--mk-ink); }
+    .mk .mk-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+    .mk .mk-chip { height: 32px; min-height: 0; border: 1px solid #cbd5e1; border-radius: 6px; padding: 0 12px; font-size: .78rem; font-weight: 600; background: #fff; color: #475569; }
+    .mk .mk-chip:hover { background: #f1f5f9; } .mk .mk-chip.on { background: #1f2937; border-color: #1f2937; color: #fff; }
+    .mk .mk-note { margin-left: auto; font-size: .78rem; color: var(--mk-muted); }
+    .mk .mk-chart { position: relative; height: 300px; padding: 12px 16px 8px; }
+    .mk table.mk-t { width: 100%; font-size: .84rem; border-collapse: collapse; }
+    .mk .mk-t thead th { font-size: .78rem; font-weight: 600; color: var(--mk-muted); padding: 8px; border-bottom: 1px solid var(--mk-line); white-space: nowrap; vertical-align: bottom; background: #fff; position: sticky; top: 0; z-index: 1; text-align: right; }
+    .mk .mk-t thead th .hs { font-weight: 400; }
+    .mk .mk-t thead th.first { text-align: left; left: 0; z-index: 2; }
+    .mk .mk-t td { padding: 8px; border-bottom: 1px solid #f1f5f9; color: var(--mk-ink); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    /* 날짜 칸은 옆으로 밀어도 남는다 (휴대폰에서 칸이 많아 가로로 넘긴다) */
+    .mk .mk-t td.first { text-align: left; color: var(--mk-muted); position: sticky; left: 0; background: #fff; }
+    .mk .mk-t td.none { color: #94a3b8; }
+    .mk .mk-t .ds { display: none; }
+    @media (max-width: 640px) { .mk .mk-t .dl { display: none; } .mk .mk-t .ds { display: inline; } }  /* 좁은 화면에서는 연도를 두 자리로 */
+    .mk .mk-t .first { padding-left: 16px; } .mk .mk-t .last { padding-right: 16px; }
+    .mk .mk-t .sep { border-left: 1px solid #f1f5f9; }
+    .mk .mk-t tbody tr:hover td { background: var(--mk-soft); }
+    .mk .mk-scroll { overflow: auto; max-height: 70vh; }
+    .mk .mk-foot { padding: 8px 16px; font-size: .75rem; color: var(--mk-muted); }
+    .mk .mk-empty { padding: 36px; text-align: center; font-size: .84rem; color: var(--mk-muted); }
+</style>
